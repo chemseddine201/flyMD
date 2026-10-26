@@ -180,6 +180,10 @@ const electronAPI = {
     ipcRenderer.invoke('agent:get-checkpoints'),
   restoreAgentCheckpoint: (checkpointId: string): Promise<string> =>
     ipcRenderer.invoke('agent:restore-checkpoint', checkpointId),
+  removeAgentProfile: (agentId: string): Promise<AgentProfile[]> =>
+    ipcRenderer.invoke('agent:remove-profile', agentId),
+  completeWebTaskWithReply: (taskId: string, replyMarkdown: string): Promise<AgentTaskRecord> =>
+    ipcRenderer.invoke('agent:complete-web-task', taskId, replyMarkdown),
   onAgentProfilesUpdated: (callback: (profiles: AgentProfile[]) => void) => {
     const handler = (_: any, data: AgentProfile[]) => callback(data);
     ipcRenderer.on('agent:profiles-updated', handler);

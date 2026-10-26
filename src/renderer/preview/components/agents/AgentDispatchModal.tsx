@@ -18,6 +18,7 @@ import {
   KeyRound,
   Globe,
   Terminal,
+  Plus,
 } from 'lucide-react';
 import { usePreviewStore } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
@@ -91,8 +92,15 @@ export const AgentDispatchModal: React.FC = () => {
 
   if (!dispatchDraft || !dispatchDraft.isOpen) return null;
 
+  const visibleAgents =
+    agentProfiles.filter((a) => a.enabled).length > 0
+      ? agentProfiles.filter((a) => a.enabled)
+      : agentProfiles;
+
   const targetAgent =
-    agentProfiles.find((a) => a.id === targetAgentId) || agentProfiles[0];
+    visibleAgents.find((a) => a.id === targetAgentId) ||
+    agentProfiles.find((a) => a.id === targetAgentId) ||
+    visibleAgents[0];
 
   const resolvedWorkspace =
     folderPath ||
@@ -135,6 +143,16 @@ export const AgentDispatchModal: React.FC = () => {
             .filter((item) => selectedTasks[item.index])
             .map((item) => item.text)
         : undefined;
+
+      if (executionMode === 'web') {
+        const presetMeta = AGENT_INTENT_PRESETS.find((p) => p.id === intent);
+        const promptHeader =
+          customPrompt.trim() || presetMeta?.promptTemplate || 'Process this Markdown document.';
+        const clipboardPayload = `# FlyMD Task (${intent.toUpperCase()})\n\n${promptHeader}\n\n---\n\n## Source File: ${dispatchDraft.sourceFileName}\n\n${dispatchDraft.markdownContent}`;
+        try {
+          await navigator.clipboard.writeText(clipboardPayload);
+        } catch {}
+      }
 
       await window.electronAPI.dispatchAgentTask({
         targetAgentId,
@@ -225,13 +243,13 @@ export const AgentDispatchModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowAgentAccountsModal(true)}
-                className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1"
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold"
               >
-                <KeyRound size={11} /> Manage Agent Accounts & Logins
+                <Plus size={12} /> Add Custom Agent / Manage Logins
               </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {agentProfiles.map((agent) => {
+              {visibleAgents.map((agent) => {
                 const isSelected = agent.id === targetAgentId;
                 return (
                   <button
@@ -253,13 +271,14 @@ export const AgentDispatchModal: React.FC = () => {
                         <span className="text-xs font-bold text-white truncate">
                           {agent.name}
                         </span>
+                        {agent.isCustom && (
+                          <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300">
+                            Custom
+                          </span>
+                        )}
                       </div>
                       <span className="text-[10px] text-slate-400 block truncate mt-0.5">
-                        {agent.authStatus === 'web-connected' || agent.webAuthConnected
-                          ? '🌐 Web Connected (Free Tier)'
-                          : agent.authStatus === 'connected' || agent.authStatus === 'api-key-ready'
-                          ? 'Ready & Authenticated'
-                          : 'Free Web & IDE Bridge Ready'}
+                        {agent.webUrl || agent.vendor}
                       </span>
                     </div>
                   </button>
@@ -267,7 +286,7 @@ export const AgentDispatchModal: React.FC = () => {
               })}
             </div>
 
-            {/* Execution Mode Selector: Free-Tier Web App vs Local CLI/IDE */}
+            {/* Execution Mode Selector: System Default Browser (Free Tier) vs Local CLI/IDE */}
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
@@ -281,13 +300,13 @@ export const AgentDispatchModal: React.FC = () => {
                 <Globe size={16} className="text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    Free-Tier Web App Mode
+                    Open in System Browser (Free Tier)
                     <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">
-                      No CMD / Free
+                      Recommended
                     </span>
                   </div>
                   <div className="text-[10px] text-slate-300 mt-0.5">
-                    Opens {targetAgent?.shortName}&apos;s built-in web workspace, auto-fills your Markdown task, and lets you send the reply back to FlyMD with 1 click.
+                    Copies your Markdown prompt automatically &amp; opens {targetAgent?.shortName} in your default browser (just press <strong>Ctrl+V</strong> in chat!).
                   </div>
                 </div>
               </button>

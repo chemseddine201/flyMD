@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Bot,
   Users,
   KeyRound,
   Activity,
   Loader2,
-  Sparkles,
   RotateCcw,
+  Plus,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import { AgentId } from '../../../../shared/types';
@@ -29,6 +29,10 @@ export const AgentDock: React.FC = () => {
 
   const runningTasks = agentTasks.filter((t) => t.status === 'running');
   const latestUnrestoredCheckpoint = agentCheckpoints.find((c) => !c.restored);
+  const visibleAgents = useMemo(() => {
+    const enabled = agentProfiles.filter((a) => a.enabled);
+    return enabled.length > 0 ? enabled : agentProfiles;
+  }, [agentProfiles]);
 
   const handleAssignToAgent = async (
     agentId: AgentId,
@@ -164,17 +168,19 @@ export const AgentDock: React.FC = () => {
         </span>
       </div>
 
-      {/* Center: 6 Agent Drop Targets */}
+      {/* Center: Active & Custom Agent Drop Targets */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-        {agentProfiles.map((agent) => {
+        {visibleAgents.map((agent) => {
           const isRunning = runningTasks.some(
             (t) => t.targetAgentId === agent.id
           );
           const isDragOver = dragOverAgentId === agent.id;
           const isReady =
             agent.authStatus === 'connected' ||
+            agent.authStatus === 'web-connected' ||
             agent.authStatus === 'api-key-ready' ||
-            agent.installed;
+            agent.installed ||
+            agent.webAuthConnected;
 
           return (
             <button
@@ -215,7 +221,7 @@ export const AgentDock: React.FC = () => {
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{
                     backgroundColor: agent.accentColor,
-                    opacity: isReady ? 1 : 0.45,
+                    opacity: isReady ? 1 : 0.7,
                   }}
                 />
               )}
@@ -230,6 +236,16 @@ export const AgentDock: React.FC = () => {
             </button>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => setShowAgentAccountsModal(true)}
+          title="Add a Custom Agent or manage shown agents"
+          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-[11px] font-semibold shrink-0 transition-colors"
+        >
+          <Plus size={12} />
+          <span className="hidden md:inline">Custom Agent</span>
+        </button>
       </div>
 
       {/* Right Actions: Undo Time-Machine, Council Broadcast, Accounts */}

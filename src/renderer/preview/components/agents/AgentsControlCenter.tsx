@@ -21,6 +21,8 @@ import {
   Workflow,
   StopCircle,
   Globe,
+  Plus,
+  ClipboardPaste,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import {
@@ -50,6 +52,10 @@ export const AgentsControlCenter: React.FC = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [restoringCheckpointId, setRestoringCheckpointId] = useState<string | null>(null);
+  const [pastingTaskId, setPastingTaskId] = useState<string | null>(null);
+
+  const enabledProfiles = agentProfiles.filter((a) => a.enabled);
+  const visibleAgents = enabledProfiles.length > 0 ? enabledProfiles : agentProfiles;
 
   const resolvedWorkspace =
     folderPath ||
@@ -150,6 +156,32 @@ export const AgentsControlCenter: React.FC = () => {
     }
   };
 
+  const handlePasteReplyFromClipboard = async (task: AgentTaskRecord) => {
+    setPastingTaskId(task.id);
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) {
+        alert(
+          'Your clipboard is currently empty. Copy the reply from your browser agent first, then click "Paste Reply (.md)".'
+        );
+        return;
+      }
+      if (window.electronAPI.completeWebTaskWithReply) {
+        await window.electronAPI.completeWebTaskWithReply(task.id, text);
+      }
+      const tasks = await window.electronAPI.getAgentTasks();
+      setAgentTasks(tasks);
+      const updated = tasks.find((t) => t.id === task.id);
+      if (updated?.outputReportPath) {
+        await handleOpenFileInEditor(updated.outputReportPath);
+      }
+    } catch (err) {
+      console.error('Failed to paste reply from clipboard:', err);
+    } finally {
+      setPastingTaskId(null);
+    }
+  };
+
   const handleOpenSharedMemory = async () => {
     if (!resolvedWorkspace) return;
     const sep = resolvedWorkspace.includes('\\') ? '\\' : '/';
@@ -197,7 +229,7 @@ export const AgentsControlCenter: React.FC = () => {
   const handleRelayTaskToAnotherAgent = (task: AgentTaskRecord) => {
     const nextFallback =
       task.nextAgentInChain ||
-      agentProfiles.find((a) => a.id !== task.targetAgentId)?.id ||
+      visibleAgents.find((a) => a.id !== task.targetAgentId)?.id ||
       'claude-code';
     handleAssignFileToAgent(nextFallback, {
       filePath: task.outputReportPath || task.filePath,
@@ -220,18 +252,21 @@ export const AgentsControlCenter: React.FC = () => {
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-lg font-extrabold text-white tracking-tight">
-                Multi-Agent Workspace Supervisor & Handoff Hub
+                AI Agents Workspace Supervisor & Handoff Hub
               </h1>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                6 Agents Supported
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {visibleAgents.length} Active Agents • Custom Agents Supported
               </span>
             </div>
-            <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-              Collect Markdown plans and reports across your workspace, review them with human-in-the-loop confirmation, and drag-and-drop tasks between{' '}
-              <span className="text-white font-semibold">
-                Antigravity, Claude Code, OpenCode, ZCode, Cursor, and Codex
-              </span>{' '}
-              with 1-click safety restore points.
+            <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+              <strong>Simple 3-Step Workflow:</strong>{' '}
+              <span className="text-sky-300 font-semibold">1.</span> Drag any{' '}
+              <code className="text-white">.md</code> file onto an agent card (or click{' '}
+              <strong className="text-white">Send File</strong>) •{' '}
+              <span className="text-emerald-300 font-semibold">2.</span> FlyMD opens your{' '}
+              <strong className="text-white">System Default Browser</strong> with the task copied to your clipboard (just press <code className="text-white">Ctrl+V</code>) •{' '}
+              <span className="text-violet-300 font-semibold">3.</span> Click{' '}
+              <strong className="text-white">Paste Reply (.md)</strong> or let CLI agents write directly to your folder!
             </p>
           </div>
         </div>
@@ -243,7 +278,7 @@ export const AgentsControlCenter: React.FC = () => {
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold shadow-lg shadow-sky-500/15 transition-all"
           >
             <KeyRound size={14} />
-            Connect Agent Accounts
+            Manage Logins & Custom Agents
           </button>
 
           <button
@@ -278,12 +313,12 @@ export const AgentsControlCenter: React.FC = () => {
         </div>
       </div>
 
-      {/* Section 1: 6-Agent Drag & Drop Command Grid */}
+      {/* Section 1: Agent Drag & Drop Command Grid */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
             <Sparkles size={14} className="text-sky-400" />
-            1. Connected Agents & IDEs — Drag Any .md File Onto an Agent or Click &ldquo;Assign File&rdquo;
+            1. Your AI Agents & Custom Agents — Drag Any .md File Onto an Agent or Click &ldquo;Send File&rdquo;
           </h2>
           {activeTab && (
             <span className="text-xs text-slate-400">
@@ -294,7 +329,7 @@ export const AgentsControlCenter: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {agentProfiles.map((agent) => {
+          {visibleAgents.map((agent) => {
             const activeAgentTasks = agentTasks.filter(
               (t) => t.targetAgentId === agent.id && t.status === 'running'
             );
@@ -349,8 +384,13 @@ export const AgentsControlCenter: React.FC = () => {
                         style={{ backgroundColor: agent.accentColor }}
                       />
                       <div>
-                        <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-1.5 flex-wrap">
                           {agent.name}
+                          {agent.isCustom && (
+                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/25 text-violet-300 border border-violet-500/40">
+                              Custom
+                            </span>
+                          )}
                           <span className="text-[10px] font-normal text-slate-400">
                             ({agent.vendor})
                           </span>
@@ -359,7 +399,7 @@ export const AgentsControlCenter: React.FC = () => {
                     </div>
 
                     <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${
                         isConnected
                           ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                           : agent.installed
@@ -368,12 +408,12 @@ export const AgentsControlCenter: React.FC = () => {
                       }`}
                     >
                       {agent.authStatus === 'web-connected' || agent.webAuthConnected
-                        ? 'Web Connected (Free)'
+                        ? 'Browser Ready'
                         : isConnected
                         ? 'Connected'
                         : agent.installed
-                        ? 'CLI Detected'
-                        : 'Free Web & IDE Ready'}
+                        ? 'CLI Installed'
+                        : 'Free Web Ready'}
                     </span>
                   </div>
 
@@ -390,11 +430,8 @@ export const AgentsControlCenter: React.FC = () => {
                         Working on {activeAgentTasks[0].fileName}
                       </span>
                     ) : (
-                      <span>
-                        Watch:{' '}
-                        <code className="text-slate-300">
-                          {agent.artifactWatchPaths[0]}
-                        </code>
+                      <span className="truncate">
+                        {agent.webUrl}
                       </span>
                     )}
                   </div>
@@ -407,25 +444,42 @@ export const AgentsControlCenter: React.FC = () => {
                         const updated = await window.electronAPI.discoverAgents();
                         setAgentProfiles(updated);
                       }}
-                      title={`Open ${agent.name} Free-Tier Web App inside FlyMD (No CMD or paid API key needed)`}
+                      title={`Open ${agent.name} in your System Default Browser (${agent.webUrl})`}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-[11px] font-semibold text-emerald-300 transition-colors"
                     >
                       <Globe size={11} />
-                      Web Sign-In
+                      Open Browser
                     </button>
                     <button
                       type="button"
                       onClick={() => handleAssignFileToAgent(agent.id)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 text-[11px] font-bold transition-colors"
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-[11px] font-bold transition-colors"
                     >
                       <Send size={11} />
-                      Assign File
+                      Send File
                     </button>
                   </div>
                 </div>
               </div>
             );
           })}
+
+          {/* Add Custom Agent Card */}
+          <button
+            type="button"
+            onClick={() => setShowAgentAccountsModal(true)}
+            className="rounded-2xl border border-dashed border-violet-500/40 bg-violet-950/15 hover:bg-violet-950/30 hover:border-violet-400 p-4 transition-all flex flex-col items-center justify-center text-center gap-2 min-h-[148px] group"
+          >
+            <div className="w-10 h-10 rounded-full bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-violet-300 group-hover:scale-110 transition-transform">
+              <Plus size={20} />
+            </div>
+            <div className="text-xs font-bold text-violet-200">
+              + Add Your Own Custom Agent
+            </div>
+            <p className="text-[11px] text-slate-400 max-w-xs">
+              Add DeepSeek, Perplexity, Bolt.new, Windsurf, Aider, or any custom Web URL / CLI tool — or hide predefined agents.
+            </p>
+          </button>
         </div>
       </div>
 
@@ -513,7 +567,7 @@ export const AgentsControlCenter: React.FC = () => {
 
           {agentTasks.length === 0 ? (
             <div className="flex-1 py-10 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
-              No tasks dispatched yet. Drag any Markdown file onto an agent above or click &ldquo;Assign File&rdquo; to start!
+              No tasks dispatched yet. Drag any Markdown file onto an agent above or click &ldquo;Send File&rdquo; to start!
             </div>
           ) : (
             <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
@@ -605,6 +659,22 @@ export const AgentsControlCenter: React.FC = () => {
                     {/* Action Buttons Row */}
                     <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          disabled={pastingTaskId === task.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePasteReplyFromClipboard(task);
+                          }}
+                          title="Copy the reply from your browser agent, then click here to save it as a .md file and open it in FlyMD"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold transition-colors"
+                        >
+                          <ClipboardPaste size={11} />
+                          {pastingTaskId === task.id
+                            ? 'Saving .md...'
+                            : 'Paste Reply (.md)'}
+                        </button>
+
                         {task.outputReportPath && (
                           <button
                             type="button"
@@ -643,7 +713,7 @@ export const AgentsControlCenter: React.FC = () => {
                           className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 text-[11px] font-semibold transition-colors"
                         >
                           <ArrowRight size={11} />
-                          Relay to Another Agent
+                          Relay to Next Agent
                         </button>
                       </div>
 
@@ -764,15 +834,18 @@ export const AgentsControlCenter: React.FC = () => {
                   <button
                     type="button"
                     onClick={() =>
-                      handleAssignFileToAgent('claude-code', {
-                        filePath: file.path,
-                        fileName: file.name,
-                        sourceAgent: file.sourceAgent,
-                      })
+                      handleAssignFileToAgent(
+                        visibleAgents[0]?.id || 'claude-code',
+                        {
+                          filePath: file.path,
+                          fileName: file.name,
+                          sourceAgent: file.sourceAgent,
+                        }
+                      )
                     }
                     className="text-[11px] text-sky-400 hover:text-sky-300 font-semibold shrink-0 ml-2"
                   >
-                    Assign →
+                    Send →
                   </button>
                 </div>
               ))}

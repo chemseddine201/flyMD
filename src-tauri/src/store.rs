@@ -319,6 +319,13 @@ impl AppStore {
         self.save();
     }
 
+    pub fn remove_agent_credential(&self, agent_id: &str) {
+        let mut guard = self.data.lock().unwrap();
+        guard.agent_credentials.remove(agent_id);
+        drop(guard);
+        self.save();
+    }
+
     pub fn get_agent_tasks(&self) -> Vec<crate::agents::AgentTaskRecord> {
         self.data.lock().unwrap().agent_tasks.clone()
     }

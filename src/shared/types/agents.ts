@@ -62,6 +62,7 @@ export interface AgentProfile {
   connectedAccountLabel?: string;
   artifactWatchPaths: string[];
   enabled: boolean;
+  isCustom?: boolean;
 }
 
 export interface AgentCredentialConfig {
@@ -72,6 +73,14 @@ export interface AgentCredentialConfig {
   oauthVerified?: boolean;
   webSessionVerified?: boolean;
   preferredMode?: 'web' | 'cli' | 'ide';
+  isCustomAgent?: boolean;
+  customName?: string;
+  customVendor?: string;
+  customDescription?: string;
+  customAccentColor?: string;
+  customWebUrl?: string;
+  customLoginCommand?: string;
+  disabled?: boolean;
 }
 
 export type AgentCredentialsMap = Record<string, AgentCredentialConfig>;

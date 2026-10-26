@@ -35,6 +35,9 @@ export const CouncilModal: React.FC = () => {
 
   if (!showCouncilModal) return null;
 
+  const enabledProfiles = agentProfiles.filter((a) => a.enabled);
+  const visibleAgents = enabledProfiles.length > 0 ? enabledProfiles : agentProfiles;
+
   const toggleAgent = (agentId: AgentId) => {
     setSelectedAgents((prev) =>
       prev.includes(agentId)
@@ -133,7 +136,7 @@ export const CouncilModal: React.FC = () => {
               1. Select Council Members (2 or more recommended)
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {agentProfiles.map((agent) => {
+              {visibleAgents.map((agent) => {
                 const isSelected = selectedAgents.includes(agent.id);
                 return (
                   <button
@@ -155,6 +158,11 @@ export const CouncilModal: React.FC = () => {
                         <span className="text-xs font-bold text-white truncate">
                           {agent.name}
                         </span>
+                        {agent.isCustom && (
+                          <span className="text-[9px] font-bold uppercase px-1 rounded bg-violet-500/25 text-violet-300">
+                            Custom
+                          </span>
+                        )}
                       </div>
                       <span className="text-[10px] text-slate-400 block truncate mt-0.5">
                         {agent.vendor}

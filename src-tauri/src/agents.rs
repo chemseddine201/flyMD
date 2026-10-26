@@ -26,6 +26,22 @@ pub struct AgentCredentialConfig {
     pub web_session_verified: bool,
     #[serde(rename = "preferredMode")]
     pub preferred_mode: Option<String>,
+    #[serde(rename = "isCustomAgent", default)]
+    pub is_custom_agent: bool,
+    #[serde(rename = "customName")]
+    pub custom_name: Option<String>,
+    #[serde(rename = "customVendor")]
+    pub custom_vendor: Option<String>,
+    #[serde(rename = "customDescription")]
+    pub custom_description: Option<String>,
+    #[serde(rename = "customAccentColor")]
+    pub custom_accent_color: Option<String>,
+    #[serde(rename = "customWebUrl")]
+    pub custom_web_url: Option<String>,
+    #[serde(rename = "customLoginCommand")]
+    pub custom_login_command: Option<String>,
+    #[serde(rename = "disabled", default)]
+    pub disabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -65,6 +81,8 @@ pub struct AgentProfile {
     #[serde(rename = "artifactWatchPaths")]
     pub artifact_watch_paths: Vec<String>,
     pub enabled: bool,
+    #[serde(rename = "isCustom", default)]
+    pub is_custom: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -716,6 +734,18 @@ impl AgentOrchestrator {
                 "not-installed"
             };
 
+            let resolved_web_url = user_cred
+                .and_then(|c| c.custom_web_url.clone())
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| web_url.map(|s| s.to_string()));
+
+            let resolved_login_cmd = user_cred
+                .and_then(|c| c.custom_login_command.clone())
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| login_cmd.map(|s| s.to_string()));
+
+            let is_disabled = user_cred.map(|c| c.disabled).unwrap_or(false);
+
             profiles.push(AgentProfile {
                 id: id.to_string(),
                 name: name.to_string(),
@@ -730,18 +760,118 @@ impl AgentOrchestrator {
                 installed,
                 auth_status: auth_status.to_string(),
                 tier: tier.to_string(),
-                login_command: login_cmd.map(|s| s.to_string()),
-                web_url: web_url.map(|s| s.to_string()),
+                login_command: resolved_login_cmd,
+                web_url: resolved_web_url,
                 env_key_name: env_key.map(|s| s.to_string()),
                 has_api_key,
                 web_auth_connected: web_session_verified,
                 connected_account_label: user_cred.and_then(|c| c.connected_account_label.clone()),
                 artifact_watch_paths: watch_paths.iter().map(|s| s.to_string()).collect(),
-                enabled: true,
+                enabled: !is_disabled,
+                is_custom: false,
+            });
+        }
+
+        // Also include user-created Custom Agents
+        let mut custom_entries: Vec<(String, AgentCredentialConfig)> = creds
+            .into_iter()
+            .filter(|(_, c)| c.is_custom_agent)
+            .collect();
+        custom_entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (cid, cred) in custom_entries {
+            let cname = cred
+                .custom_name
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "Custom Agent".to_string());
+            let short_name = cname
+                .split_whitespace()
+                .next()
+                .unwrap_or(&cname)
+                .to_string();
+            let cvendor = cred
+                .custom_vendor
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "Custom Agent".to_string());
+            let cdesc = cred
+                .custom_description
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "User-defined custom AI agent for Markdown handoffs.".to_string());
+            let caccent = cred
+                .custom_accent_color
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "#10b981".to_string());
+            let cbin = cred
+                .custom_binary_path
+                .clone()
+                .filter(|s| !s.trim().is_empty());
+            let cweb = cred
+                .custom_web_url
+                .clone()
+                .filter(|s| !s.trim().is_empty());
+            let clogin = cred
+                .custom_login_command
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| cbin.clone());
+            let has_key = cred
+                .api_key
+                .as_ref()
+                .map(|k| !k.trim().is_empty())
+                .unwrap_or(false);
+
+            let status = if cred.web_session_verified || cweb.is_some() {
+                "web-connected"
+            } else if cred.oauth_verified || cbin.is_some() {
+                "connected"
+            } else if has_key {
+                "api-key-ready"
+            } else {
+                "needs-login"
+            };
+
+            profiles.push(AgentProfile {
+                id: cid.clone(),
+                name: cname,
+                short_name,
+                vendor: cvendor,
+                description: cdesc,
+                accent_color: caccent,
+                badge_bg: "bg-emerald-500/15 border-emerald-500/40".to_string(),
+                badge_text: "text-emerald-300".to_string(),
+                binary_names: cbin.iter().cloned().collect(),
+                detected_binary_path: cbin.clone(),
+                installed: cbin.is_some() || cweb.is_some() || has_key,
+                auth_status: status.to_string(),
+                tier: if cbin.is_some() {
+                    "cli-pty".to_string()
+                } else {
+                    "web-session".to_string()
+                },
+                login_command: clogin,
+                web_url: cweb,
+                env_key_name: Some("CUSTOM_AGENT_API_KEY".to_string()),
+                has_api_key: has_key,
+                web_auth_connected: cred.web_session_verified || cred.custom_web_url.is_some(),
+                connected_account_label: cred.connected_account_label.clone(),
+                artifact_watch_paths: vec![format!(".flymd/custom/{}", cid)],
+                enabled: !cred.disabled,
+                is_custom: true,
             });
         }
 
         profiles
+    }
+
+    pub fn remove_agent_profile(&self, agent_id: &str) -> Vec<AgentProfile> {
+        self.store.remove_agent_credential(agent_id);
+        let updated = self.discover_agents();
+        self.app_handle.emit("agent:profiles-updated", &updated).ok();
+        updated
     }
 
     pub fn save_agent_credential(
@@ -765,14 +895,81 @@ impl AgentOrchestrator {
         let login_cmd = profile
             .login_command
             .clone()
-            .unwrap_or_else(|| profile.binary_names.first().cloned().unwrap_or_default());
+            .or_else(|| profile.detected_binary_path.clone())
+            .unwrap_or_else(|| {
+                profile
+                    .binary_names
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| profile.id.clone())
+            });
+
+        let bin_name = login_cmd
+            .split_whitespace()
+            .next()
+            .unwrap_or(&login_cmd)
+            .to_string();
 
         #[cfg(target_os = "windows")]
         {
-            Command::new("cmd")
-                .args(["/C", "start", "cmd", "/K", &format!("echo Connecting {} Account with FlyMD... && {}", profile.name, login_cmd)])
+            use std::os::windows::process::CommandExt;
+            const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+
+            let safe_id: String = agent_id
+                .chars()
+                .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' })
+                .collect();
+            let bat_path = std::env::temp_dir().join(format!("flymd-cli-login-{}.cmd", safe_id));
+            let web_fallback = profile
+                .web_url
+                .clone()
+                .unwrap_or_else(|| "https://claude.ai".to_string());
+
+            let bat_content = format!(
+                "@echo off\r\n\
+                title FlyMD CLI Login - {name}\r\n\
+                color 0B\r\n\
+                echo ============================================================\r\n\
+                echo   FlyMD Multi-Agent Supervisor - Official CLI Login\r\n\
+                echo   Agent:   {name} ({vendor})\r\n\
+                echo   Command: {cmd}\r\n\
+                echo ============================================================\r\n\
+                echo.\r\n\
+                where \"{bin}\" >nul 2>nul\r\n\
+                if %ERRORLEVEL% NEQ 0 (\r\n\
+                    if not exist \"{bin}\" (\r\n\
+                        color 0E\r\n\
+                        echo [Notice] The CLI tool \"{bin}\" was not found on your system PATH.\r\n\
+                        echo.\r\n\
+                        echo You do NOT need the CLI tool to use {name} with FlyMD!\r\n\
+                        echo Opening {name} in your default web browser ({url}) so you can sign in for free...\r\n\
+                        echo.\r\n\
+                        rundll32.exe url.dll,FileProtocolHandler \"{url}\"\r\n\
+                        pause\r\n\
+                        exit /b 0\r\n\
+                    )\r\n\
+                )\r\n\
+                echo Running: {cmd}\r\n\
+                echo.\r\n\
+                call {cmd}\r\n\
+                echo.\r\n\
+                echo [FlyMD] CLI Login session finished.\r\n\
+                pause\r\n",
+                name = profile.name,
+                vendor = profile.vendor,
+                cmd = login_cmd,
+                bin = bin_name,
+                url = web_fallback
+            );
+
+            fs::write(&bat_path, bat_content)
+                .map_err(|e| format!("Failed to prepare CLI login script: {}", e))?;
+
+            Command::new("cmd.exe")
+                .args(["/C", &bat_path.to_string_lossy()])
+                .creation_flags(CREATE_NEW_CONSOLE)
                 .spawn()
-                .map_err(|e| format!("Failed to launch login terminal: {}", e))?;
+                .map_err(|e| format!("Failed to launch CLI login terminal: {}", e))?;
         }
 
         #[cfg(target_os = "macos")]
@@ -805,15 +1002,15 @@ impl AgentOrchestrator {
         let updated = self.discover_agents();
         self.app_handle.emit("agent:profiles-updated", &updated).ok();
 
-        Ok(format!("Launched official login flow for {}", profile.name))
+        Ok(format!("Opened CLI login terminal for {}", profile.name))
     }
 
     pub fn launch_agent_web_auth(
         &self,
         agent_id: &str,
         task_prompt: Option<String>,
-        task_id: Option<String>,
-        report_path: Option<String>,
+        _task_id: Option<String>,
+        _report_path: Option<String>,
     ) -> Result<String, String> {
         let profiles = self.discover_agents();
         let profile = profiles
@@ -825,41 +1022,63 @@ impl AgentOrchestrator {
         let target_url = profile
             .web_url
             .clone()
+            .filter(|u| !u.trim().is_empty())
             .unwrap_or_else(|| "https://claude.ai/new".to_string());
 
-        let init_script = build_web_companion_script(
-            &profile.id,
-            &profile.name,
-            &profile.accent_color,
-            task_prompt.as_deref(),
-            task_id.as_deref(),
-        );
-
-        let win_label = format!("agent-web-{}", profile.id);
-
-        if let Some(existing) = self.app_handle.get_webview_window(&win_label) {
-            existing.eval(&init_script).ok();
-            existing.show().ok();
-            existing.set_focus().ok();
-            return Ok(format!("Opened {} Free-Tier Web Workspace", profile.name));
+        // If a task prompt was provided, copy it to the OS clipboard so the user can press Ctrl+V in their browser
+        if let Some(ref prompt_text) = task_prompt {
+            if !prompt_text.trim().is_empty() {
+                #[cfg(target_os = "windows")]
+                {
+                    use std::io::Write;
+                    use std::os::windows::process::CommandExt;
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
+                    if let Ok(mut child) = Command::new("clip.exe")
+                        .stdin(Stdio::piped())
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .spawn()
+                    {
+                        if let Some(mut stdin) = child.stdin.take() {
+                            let _ = stdin.write_all(prompt_text.as_bytes());
+                        }
+                        let _ = child.wait();
+                    }
+                }
+            }
         }
 
-        let parsed_url: tauri::Url = target_url
-            .parse()
-            .map_err(|e| format!("Invalid agent web URL: {}", e))?;
+        // Open target_url directly in the System Default Browser (Chrome, Edge, Brave, Firefox, Safari)
+        #[cfg(target_os = "windows")]
+        {
+            Command::new("rundll32.exe")
+                .args(["url.dll,FileProtocolHandler", &target_url])
+                .spawn()
+                .or_else(|_| Command::new("explorer.exe").arg(&target_url).spawn())
+                .map_err(|e| format!("Failed to open system default browser: {}", e))?;
+        }
 
-        let app_clone = self.app_handle.clone();
-        let store_clone = Arc::clone(&self.store);
-        let agent_id_owned = profile.id.clone();
-        let short_name_owned = profile.short_name.clone();
-        let report_path_owned = report_path.clone();
+        #[cfg(target_os = "macos")]
+        {
+            Command::new("open")
+                .arg(&target_url)
+                .spawn()
+                .map_err(|e| format!("Failed to open default browser: {}", e))?;
+        }
+
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            Command::new("xdg-open")
+                .arg(&target_url)
+                .spawn()
+                .map_err(|e| format!("Failed to open default browser: {}", e))?;
+        }
 
         let mut creds = self.store.get_agent_credentials();
         let mut entry = creds.remove(agent_id).unwrap_or_default();
         entry.web_session_verified = true;
         if entry.connected_account_label.is_none() {
             entry.connected_account_label =
-                Some(format!("{} Web Account (Free Tier)", profile.short_name));
+                Some(format!("{} Browser Session (Free Tier)", profile.short_name));
         }
         self.store.set_agent_credential(agent_id, entry);
         let updated_profiles = self.discover_agents();
@@ -867,99 +1086,85 @@ impl AgentOrchestrator {
             .emit("agent:profiles-updated", &updated_profiles)
             .ok();
 
-        WebviewWindowBuilder::new(&self.app_handle, &win_label, WebviewUrl::External(parsed_url))
-            .title(format!(
-                "FlyMD Web Companion — {} (Free Tier Sign-In & Workspace)",
+        Ok(if task_prompt.is_some() {
+            format!(
+                "Opened {} in your default browser and copied the Markdown task prompt to your clipboard (Press Ctrl+V in the chat)!",
                 profile.name
-            ))
-            .inner_size(1100.0, 800.0)
-            .min_inner_size(700.0, 500.0)
-            .initialization_script(&init_script)
-            .on_navigation(move |url| {
-                if url.host_str() == Some("flymd-bridge.local") {
-                    let path = url.path();
-                    let query = url.query().unwrap_or("");
+            )
+        } else {
+            format!(
+                "Opened {} ({}) in your system default browser!",
+                profile.name, target_url
+            )
+        })
+    }
 
-                    if path == "/confirm-login" {
-                        let mut c_map = store_clone.get_agent_credentials();
-                        let mut cred_entry = c_map.remove(&agent_id_owned).unwrap_or_default();
-                        cred_entry.web_session_verified = true;
-                        cred_entry.connected_account_label =
-                            Some(format!("{} Web Account (Free Tier)", short_name_owned));
-                        store_clone.set_agent_credential(&agent_id_owned, cred_entry);
-                    } else if path == "/capture-reply" {
-                        let captured_text = parse_query_param(query, "text").unwrap_or_default();
-                        let q_task_id = parse_query_param(query, "task").unwrap_or_default();
+    pub fn complete_web_task_with_reply(
+        &self,
+        task_id: &str,
+        reply_markdown: &str,
+    ) -> Result<AgentTaskRecord, String> {
+        let mut tasks = self.store.get_agent_tasks();
+        let idx = tasks
+            .iter()
+            .position(|t| t.id == task_id)
+            .ok_or_else(|| format!("Task not found: {}", task_id))?;
 
-                        if !captured_text.trim().is_empty() {
-                            let md_report = format!(
-                                "# {} Web Response Report\n\n\
-                                > Captured from **{} Free-Tier Web Session** via FlyMD Supervisor\n\n\
-                                ---\n\n\
-                                {}\n",
-                                short_name_owned, short_name_owned, captured_text
-                            );
+        let agent_id = tasks[idx].target_agent_id.clone();
+        let file_name = tasks[idx].file_name.clone();
+        let report_path = tasks[idx].output_report_path.clone();
 
-                            let target_report_path = if !q_task_id.is_empty() {
-                                let tasks = store_clone.get_agent_tasks();
-                                tasks
-                                    .iter()
-                                    .find(|t| t.id == q_task_id)
-                                    .and_then(|t| t.output_report_path.clone())
-                                    .or_else(|| report_path_owned.clone())
-                            } else {
-                                report_path_owned.clone()
-                            };
+        let formatted_report = format!(
+            "# {} Response Report — `{}`\n\n\
+            > Imported from **{} Browser Session (Free Tier)** into FlyMD\n\n\
+            ---\n\n\
+            {}\n",
+            agent_id.to_uppercase(),
+            file_name,
+            agent_id,
+            reply_markdown.trim()
+        );
 
-                            if let Some(ref r_path) = target_report_path {
-                                fs::write(r_path, &md_report).ok();
-                            }
+        if let Some(ref r_path) = report_path {
+            if let Some(parent) = Path::new(r_path).parent() {
+                fs::create_dir_all(parent).ok();
+            }
+            fs::write(r_path, &formatted_report).ok();
+        }
 
-                            if !q_task_id.is_empty() {
-                                Self::finalize_task(
-                                    &store_clone,
-                                    &app_clone,
-                                    &q_task_id,
-                                    "completed",
-                                    None,
-                                );
-                            }
+        tasks[idx].status = "completed".to_string();
+        tasks[idx].completed_at = Some(now_ms());
+        if tasks[idx].checklist_total > 0 {
+            tasks[idx].checklist_completed = tasks[idx].checklist_total;
+        }
+        tasks[idx].logs.push(
+            "[Browser Free Tier] Imported agent Markdown reply and saved report to workspace."
+                .to_string(),
+        );
 
-                            let file_name = target_report_path
-                                .as_ref()
-                                .and_then(|p| Path::new(p).file_name())
-                                .map(|n| n.to_string_lossy().to_string())
-                                .unwrap_or_else(|| format!("{}-Web-Reply.md", short_name_owned));
+        let updated_record = tasks[idx].clone();
+        self.store.save_agent_tasks(tasks.clone());
+        self.app_handle.emit("agent:tasks-updated", &tasks).ok();
 
-                            app_clone
-                                .emit(
-                                    "file:loaded",
-                                    serde_json::json!({
-                                        "path": target_report_path.unwrap_or_default(),
-                                        "name": file_name,
-                                        "content": md_report,
-                                        "lastModified": now_ms()
-                                    }),
-                                )
-                                .ok();
+        let report_tab_name = report_path
+            .as_ref()
+            .and_then(|p| Path::new(p).file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| format!("Report-{}.md", file_name));
 
-                            if let Some(prev_win) = app_clone.get_webview_window("preview") {
-                                prev_win.show().ok();
-                                prev_win.set_focus().ok();
-                            }
-                        }
-                    }
-                    return false;
-                }
-                true
-            })
-            .build()
-            .map_err(|e| format!("Failed to open WebAuth window: {}", e))?;
+        self.app_handle
+            .emit(
+                "file:loaded",
+                serde_json::json!({
+                    "path": report_path.unwrap_or_default(),
+                    "name": report_tab_name,
+                    "content": formatted_report,
+                    "lastModified": now_ms()
+                }),
+            )
+            .ok();
 
-        Ok(format!(
-            "Opened {} Free-Tier Web Session in FlyMD",
-            profile.name
-        ))
+        Ok(updated_record)
     }
 
     pub fn create_safety_checkpoint(
@@ -1682,4 +1887,21 @@ pub fn cmd_restore_agent_checkpoint(
     checkpoint_id: String,
 ) -> Result<String, String> {
     orchestrator.restore_checkpoint(&checkpoint_id)
+}
+
+#[tauri::command]
+pub fn cmd_remove_agent_profile(
+    orchestrator: tauri::State<'_, SharedAgentOrchestrator>,
+    agent_id: String,
+) -> Vec<AgentProfile> {
+    orchestrator.remove_agent_profile(&agent_id)
+}
+
+#[tauri::command]
+pub fn cmd_complete_web_task_with_reply(
+    orchestrator: tauri::State<'_, SharedAgentOrchestrator>,
+    task_id: String,
+    reply_markdown: String,
+) -> Result<AgentTaskRecord, String> {
+    orchestrator.complete_web_task_with_reply(&task_id, &reply_markdown)
 }

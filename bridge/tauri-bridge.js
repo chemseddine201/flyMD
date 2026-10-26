@@ -254,6 +254,15 @@
     restoreAgentCheckpoint: function (checkpointId) {
       return invoke('cmd_restore_agent_checkpoint', { checkpointId: checkpointId });
     },
+    removeAgentProfile: function (agentId) {
+      return invoke('cmd_remove_agent_profile', { agentId: agentId });
+    },
+    completeWebTaskWithReply: function (taskId, replyMarkdown) {
+      return invoke('cmd_complete_web_task_with_reply', {
+        taskId: taskId,
+        replyMarkdown: replyMarkdown,
+      });
+    },
     onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
     onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),
     onAgentCheckpointsUpdated: makeEventListener('agent:checkpoints-updated'),
