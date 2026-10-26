@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   KeyRound,
@@ -6,6 +6,11 @@ import {
   RefreshCw,
   BrainCircuit,
   SlidersHorizontal,
+  Trash2,
+  AlertTriangle,
+  Check,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import {
@@ -61,6 +66,11 @@ export const AgentsControlCenter: React.FC = () => {
   const [restoringCheckpointId, setRestoringCheckpointId] = useState<
     string | null
   >(null);
+  const [showClearCacheModal, setShowClearCacheModal] = useState(false);
+  const [clearMemoryLedger, setClearMemoryLedger] = useState(true);
+  const [clearCompletedSessions, setClearCompletedSessions] = useState(true);
+  const [clearingCache, setClearingCache] = useState(false);
+  const [cacheNotification, setCacheNotification] = useState<string | null>(null);
 
   // Track automated multi-step repeater runs
   const activePipelineRunRef = useRef<{
@@ -553,6 +563,42 @@ export const AgentsControlCenter: React.FC = () => {
     }
   };
 
+  const cleanWorkspaceFiles = useMemo(() => {
+    return folderFiles.filter(
+      (f) =>
+        !f.path.includes('/.') &&
+        !f.path.includes('\\.') &&
+        !f.name.startsWith('.') &&
+        !f.name.startsWith('report-task-')
+    );
+  }, [folderFiles]);
+
+  const handleExecuteClearCache = async () => {
+    if (!resolvedWorkspace) return;
+    setClearingCache(true);
+    try {
+      if (window.electronAPI.clearWorkspaceCache) {
+        const result = await window.electronAPI.clearWorkspaceCache(
+          resolvedWorkspace,
+          clearMemoryLedger
+        );
+        if (clearCompletedSessions) {
+          const remaining = await window.electronAPI.clearAgentTasks();
+          setAgentTasks(remaining);
+        }
+        setCacheNotification(result || 'Workspace cache cleared successfully.');
+        setTimeout(() => setCacheNotification(null), 4000);
+      }
+      setShowClearCacheModal(false);
+    } catch (err: any) {
+      console.error('Failed to clear workspace cache:', err);
+      setCacheNotification(`Error: ${err?.message || err}`);
+      setTimeout(() => setCacheNotification(null), 4000);
+    } finally {
+      setClearingCache(false);
+    }
+  };
+
   const handleOpenSharedMemory = async () => {
     if (!resolvedWorkspace) return;
     const sep = resolvedWorkspace.includes('\\') ? '\\' : '/';
@@ -616,6 +662,18 @@ export const AgentsControlCenter: React.FC = () => {
             >
               <BrainCircuit size={12} className="text-amber-400" />
               <span className="hidden lg:inline">Shared Memory</span>
+            </button>
+          )}
+
+          {resolvedWorkspace && (
+            <button
+              type="button"
+              onClick={() => setShowClearCacheModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[11px] font-semibold transition-colors"
+              title="Clean temporary handoffs, agent reports, checkpoints, and optionally reset memory ledger"
+            >
+              <Trash2 size={12} className="text-rose-400" />
+              <span className="hidden lg:inline">Clear Memory &amp; Cache</span>
             </button>
           )}
 
@@ -685,20 +743,16 @@ export const AgentsControlCenter: React.FC = () => {
           activeFileName={
             activeTab?.filePath
               ? activeTab.fileName
-              : folderFiles.find(
-                  (f) => !f.path.includes('.flymd') && !f.name.startsWith('report-task-')
-                )?.name ||
+              : cleanWorkspaceFiles[0]?.name ||
                 activeTab?.fileName ||
                 'Workspace-Specification.md'
           }
           activeFilePath={
             activeTab?.filePath ||
-            folderFiles.find(
-              (f) => !f.path.includes('.flymd') && !f.name.startsWith('report-task-')
-            )?.path ||
+            cleanWorkspaceFiles[0]?.path ||
             ''
           }
-          watchedFiles={folderFiles}
+          watchedFiles={cleanWorkspaceFiles}
           selectedSourceFile={selectedSourceFile}
           onSelectSourceFile={(path) => setSelectedSourceFile(path)}
           onSendChatTask={async (text) => {
@@ -712,7 +766,7 @@ export const AgentsControlCenter: React.FC = () => {
           submitting={submitting}
         />
 
-        {/* Right Pane: Live 5-Stage Progress View, Checklist & Execution Log */}
+        {/* Right Pane: Live Progress, Antigravity Files Deck & Activity/Terminal Inspector */}
         <AgentProgressInspector
           selectedTask={selectedTask}
           checkpoints={agentCheckpoints}
@@ -720,7 +774,7 @@ export const AgentsControlCenter: React.FC = () => {
           onRestoreCheckpoint={handleRestoreCheckpoint}
           onClearTaskLogs={handleClearTaskLogs}
           activeMarkdownContent={activeTab?.content || ''}
-          watchedFiles={folderFiles}
+          watchedFiles={cleanWorkspaceFiles}
           onRunSingleChecklistItem={(itemText) =>
             handleSendInAppChatTask(`Execute checklist step: "${itemText}"`, {
               intent: 'build',
@@ -738,6 +792,138 @@ export const AgentsControlCenter: React.FC = () => {
           onDeleteWorkspaceFile={handleDeleteWorkspaceFile}
         />
       </div>
+
+      {/* Floating Cache Operation Feedback Banner */}
+      {cacheNotification && (
+        <div className="absolute top-14 right-4 z-40 bg-emerald-950/90 border border-emerald-500/40 text-emerald-200 text-xs px-3.5 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-fade-in">
+          <Check size={14} className="text-emerald-400 shrink-0" />
+          <span>{cacheNotification}</span>
+        </div>
+      )}
+
+      {/* Clear Memory & Cache Confirmation Modal */}
+      {showClearCacheModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in select-none">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/60">
+              <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
+                <Trash2 size={15} />
+                <span>Clear Workspace Memory &amp; Cache</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => !clearingCache && setShowClearCacheModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3.5 text-xs">
+              <p className="text-slate-300 leading-relaxed">
+                Clean temporary workspace agent data for{' '}
+                <strong className="text-white font-mono break-all">
+                  {resolvedWorkspace}
+                </strong>
+                :
+              </p>
+
+              <div className="space-y-2 p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2">
+                  <Check size={12} className="text-emerald-400 shrink-0" />
+                  <span>
+                    Temporary agent handoff packages (
+                    <code className="text-slate-400">.flymd/handoffs</code>)
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2">
+                  <Check size={12} className="text-emerald-400 shrink-0" />
+                  <span>
+                    Temporary agent execution reports (
+                    <code className="text-slate-400">.flymd/reports</code>)
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2">
+                  <Check size={12} className="text-emerald-400 shrink-0" />
+                  <span>
+                    Safety checkpoint backups (
+                    <code className="text-slate-400">.flymd/checkpoints</code>)
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={clearMemoryLedger}
+                    onChange={(e) => setClearMemoryLedger(e.target.checked)}
+                    className="rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-200 text-[11px]">
+                      Reset Shared Agent Memory Ledger
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Re-initializes{' '}
+                      <code className="text-amber-300">.flymd/MEMORY.md</code> to
+                      a clean slate.
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={clearCompletedSessions}
+                    onChange={(e) =>
+                      setClearCompletedSessions(e.target.checked)
+                    }
+                    className="rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-200 text-[11px]">
+                      Clear Finished Task Sessions
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Removes completed agent sessions and execution logs from memory.
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-800 bg-slate-950/60">
+              <button
+                type="button"
+                disabled={clearingCache}
+                onClick={() => setShowClearCacheModal(false)}
+                className="px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={clearingCache}
+                onClick={handleExecuteClearCache}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors shadow-lg shadow-rose-950/50"
+              >
+                {clearingCache ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Clearing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={13} />
+                    <span>Clear Cache &amp; Memory</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

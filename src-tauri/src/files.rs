@@ -259,3 +259,45 @@ pub fn cmd_delete_file_path(target_path: String) -> Result<bool, String> {
     }
     Ok(true)
 }
+
+#[tauri::command]
+pub fn cmd_open_external_path(target_path: String) -> Result<bool, String> {
+    let trimmed = target_path.trim();
+    if trimmed.is_empty() {
+        return Err("Empty path provided".to_string());
+    }
+    let p = Path::new(trimmed);
+    if !p.exists() {
+        return Err(format!("Path does not exist: {}", trimmed));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        let win_path = trimmed.replace('/', "\\");
+        Command::new("cmd")
+            .args(["/C", "start", "", &win_path])
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        Command::new("open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        use std::process::Command;
+        Command::new("xdg-open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
+    }
+
+    Ok(true)
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   CheckCircle2,
   Loader2,
@@ -11,6 +11,12 @@ import {
   Play,
   ExternalLink,
   Trash2,
+  Globe,
+  FileCode,
+  FolderOpen,
+  Activity,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import {
   AgentCheckpoint,
@@ -29,18 +35,26 @@ interface AgentProgressInspectorProps {
   onRestoreCheckpoint: (checkpointId: string) => void;
   onClearTaskLogs: (taskId: string) => void;
   activeMarkdownContent: string;
-  watchedFiles: ScannedMdFile[];
+  watchedFiles?: ScannedMdFile[];
   onRunSingleChecklistItem: (itemText: string) => void;
   onOpenFileInEditor: (filePath?: string) => void;
-  onSelectWatchedFileForDispatch: (file: ScannedMdFile) => void;
-  onDeleteWorkspaceFile: (filePath: string) => Promise<void> | void;
+  onSelectWatchedFileForDispatch?: (file: ScannedMdFile) => void;
+  onDeleteWorkspaceFile?: (filePath: string) => Promise<void> | void;
+}
+
+interface TouchedFile {
+  name: string;
+  fullPath: string;
+  isHtml: boolean;
+  status: 'created' | 'modified';
+  toolLabel?: string;
 }
 
 const PROGRESS_STAGES = [
   { id: 'snapshot', label: '1. Safety Snapshot & Git Guard', minPct: 15 },
   { id: 'context', label: '2. Workspace & IDE Workflow Sync', minPct: 35 },
   { id: 'reasoning', label: '3. Agent Context Reasoning', minPct: 55 },
-  { id: 'executing', label: '4. Synthesizing Markdown Output', minPct: 80 },
+  { id: 'executing', label: '4. Synthesizing Output & Files', minPct: 80 },
   { id: 'completed', label: '5. Verified & Saved to Workspace', minPct: 100 },
 ];
 
@@ -51,14 +65,13 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   onRestoreCheckpoint,
   onClearTaskLogs,
   activeMarkdownContent,
-  watchedFiles,
   onRunSingleChecklistItem,
   onOpenFileInEditor,
-  onSelectWatchedFileForDispatch,
   onDeleteWorkspaceFile,
 }) => {
   const [contextTarget, setContextTarget] =
     useState<SidebarContextMenuTarget | null>(null);
+  const [viewTab, setViewTab] = useState<'activity' | 'terminal'>('activity');
 
   const pct = selectedTask
     ? selectedTask.progressPercent ??
@@ -69,7 +82,8 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
     ? checkpoints.find((c) => c.id === selectedTask.checkpointId)
     : undefined;
 
-  const parsedChecklist = React.useMemo(() => {
+  // Extract checklist items from markdown source
+  const parsedChecklist = useMemo(() => {
     const source =
       selectedTask?.responseMarkdown || activeMarkdownContent || '';
     const items: { text: string; done: boolean }[] = [];
@@ -89,10 +103,122 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
     return items;
   }, [selectedTask?.responseMarkdown, activeMarkdownContent]);
 
+  // Antigravity-Style: Extract files touched and created by the agent
+  const touchedFiles = useMemo<TouchedFile[]>(() => {
+    if (!selectedTask) return [];
+    const map = new Map<string, TouchedFile>();
+    const ws = (selectedTask.workspacePath || '').replace(/\\/g, '/');
+
+    // 1. Inspect toolActions
+    if (selectedTask.toolActions) {
+      for (const action of selectedTask.toolActions) {
+        if (action.targetPath) {
+          const rawPath = action.targetPath.replace(/\\/g, '/');
+          // Ignore internal dot-folders and dot-files
+          if (
+            rawPath.includes('/.flymd') ||
+            rawPath.includes('/.') ||
+            rawPath.startsWith('.')
+          ) {
+            continue;
+          }
+          const name = rawPath.split('/').pop() || rawPath;
+          const isHtml =
+            name.toLowerCase().endsWith('.html') ||
+            name.toLowerCase().endsWith('.htm');
+          const fullPath =
+            action.targetPath.includes(':') || action.targetPath.startsWith('/')
+              ? action.targetPath
+              : ws
+              ? `${ws}/${action.targetPath}`
+              : action.targetPath;
+
+          const status: 'created' | 'modified' = action.label
+            .toLowerCase()
+            .includes('create')
+            ? 'created'
+            : 'modified';
+
+          map.set(name.toLowerCase(), {
+            name,
+            fullPath,
+            isHtml,
+            status,
+            toolLabel: action.label,
+          });
+        }
+      }
+    }
+
+    // 2. Inspect logs for file creation notices
+    if (selectedTask.logs) {
+      for (const log of selectedTask.logs) {
+        const createdMatch = log.match(/Created file:\s*`?([^`\r\n]+)`?/i);
+        if (createdMatch && createdMatch[1]) {
+          const raw = createdMatch[1].trim().replace(/\\/g, '/');
+          if (!raw.includes('/.') && !raw.startsWith('.')) {
+            const name = raw.split('/').pop() || raw;
+            const fullPath =
+              raw.includes(':') || raw.startsWith('/')
+                ? raw
+                : ws
+                ? `${ws}/${raw}`
+                : raw;
+            const isHtml =
+              name.toLowerCase().endsWith('.html') ||
+              name.toLowerCase().endsWith('.htm');
+            if (!map.has(name.toLowerCase())) {
+              map.set(name.toLowerCase(), {
+                name,
+                fullPath,
+                isHtml,
+                status: 'created',
+                toolLabel: `Created ${name}`,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Fallback: If markdown contains HTML code block and no html file registered yet, link index.html
+    if (
+      selectedTask.responseMarkdown &&
+      selectedTask.responseMarkdown.includes('```html')
+    ) {
+      if (!map.has('index.html')) {
+        map.set('index.html', {
+          name: 'index.html',
+          fullPath: ws ? `${ws}/index.html` : 'index.html',
+          isHtml: true,
+          status: 'created',
+          toolLabel: 'Synthesized HTML block',
+        });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [selectedTask]);
+
+  // Live preview handler: open in system default browser & in editor
+  const handleLivePreview = async (file: TouchedFile) => {
+    try {
+      if (window.electronAPI?.openExternalPath) {
+        await window.electronAPI.openExternalPath(file.fullPath);
+      } else if (window.electronAPI?.revealInExplorer) {
+        await window.electronAPI.revealInExplorer(file.fullPath);
+      }
+      onOpenFileInEditor(file.fullPath);
+    } catch (err) {
+      console.error('Failed to open live preview:', err);
+      onOpenFileInEditor(file.fullPath);
+    }
+  };
+
   return (
-    <aside className="w-80 shrink-0 h-full border-l border-slate-800/90 bg-slate-900/75 flex flex-col overflow-y-auto p-3.5 space-y-4 select-none">
-      {/* 1. Live 5-Stage Progress Tracker */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-3">
+    <aside className="w-80 shrink-0 h-full border-l border-slate-800/90 bg-slate-900/75 flex flex-col p-3.5 space-y-3.5 select-none overflow-hidden">
+      {/* 1. Live Progress & Git Guard Stepper */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 space-y-2.5 shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
             <ShieldCheck size={13} className="text-sky-400" />
@@ -102,7 +228,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 transition-all duration-300"
             style={{ width: `${pct}%` }}
@@ -110,9 +236,10 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
         </div>
 
         {/* 5 Stages Stepper */}
-        <div className="space-y-1.5 pt-1">
+        <div className="space-y-1 pt-0.5">
           {PROGRESS_STAGES.map((stage) => {
-            const isDone = pct >= stage.minPct || selectedTask?.status === 'completed';
+            const isDone =
+              pct >= stage.minPct || selectedTask?.status === 'completed';
             const isCurrent =
               selectedTask?.status === 'running' &&
               selectedTask?.progressStage === stage.id;
@@ -120,7 +247,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
             return (
               <div
                 key={stage.id}
-                className={`flex items-center gap-2 text-[11px] px-2 py-1 rounded-lg ${
+                className={`flex items-center gap-2 text-[11px] px-2 py-1 rounded-lg transition-colors ${
                   isCurrent
                     ? 'bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30'
                     : isDone
@@ -141,11 +268,11 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
           })}
         </div>
 
-        {/* Safety Checkpoint Undo Button */}
+        {/* Checkpoint Safety Restore Point */}
         {checkpoint && !checkpoint.restored && (
           <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
             <span className="text-[10px] text-emerald-300 flex items-center gap-1">
-              <ShieldCheck size={11} /> Restore Point Active
+              <ShieldCheck size={11} /> Restore Point Ready
             </span>
             <button
               type="button"
@@ -162,95 +289,29 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
         )}
       </div>
 
-      {/* 2. Interactive Checklist Tracker */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2.5">
+      {/* 2. Antigravity-Style Files Progress Deck (Files Touched & Created) */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 space-y-2 shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-            <ListChecks size={13} className="text-emerald-400" />
-            Task Checklist ({parsedChecklist.filter((i) => i.done).length}/
-            {parsedChecklist.length})
+            <Globe size={13} className="text-emerald-400" />
+            Files Touched &amp; Created ({touchedFiles.length})
           </span>
+          {touchedFiles.some((f) => f.isHtml) && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              Web Ready
+            </span>
+          )}
         </div>
 
-        {parsedChecklist.length === 0 ? (
-          <div className="text-[11px] text-slate-500 py-3 text-center">
-            No `- [ ]` checklist items in current document. Ask an agent to{' '}
-            <strong>Refine Plan</strong> to generate a step-by-step checklist!
+        {touchedFiles.length === 0 ? (
+          <div className="text-[11px] text-slate-500 py-2.5 text-center border border-dashed border-slate-800/80 rounded-xl px-2">
+            Files created or edited by the agent (e.g. <span className="text-sky-300 font-mono">index.html</span>) appear here with 1-click live preview.
           </div>
         ) : (
-          <div className="max-h-44 overflow-y-auto space-y-1.5 pr-0.5">
-            {parsedChecklist.map((item, idx) => (
+          <div className="max-h-40 overflow-y-auto space-y-1.5 pr-0.5">
+            {touchedFiles.map((file) => (
               <div
-                key={idx}
-                className="group flex items-start justify-between gap-2 p-2 rounded-xl bg-slate-900/90 border border-slate-800/80 text-[11px]"
-              >
-                <div className="flex items-start gap-1.5 min-w-0">
-                  {item.done ? (
-                    <CheckCircle2
-                      size={12}
-                      className="text-emerald-400 shrink-0 mt-0.5"
-                    />
-                  ) : (
-                    <Circle
-                      size={12}
-                      className="text-slate-500 shrink-0 mt-0.5"
-                    />
-                  )}
-                  <span
-                    className={
-                      item.done
-                        ? 'text-slate-400 line-through'
-                        : 'text-slate-200'
-                    }
-                  >
-                    {item.text}
-                  </span>
-                </div>
-                {!item.done && (
-                  <button
-                    type="button"
-                    onClick={() => onRunSingleChecklistItem(item.text)}
-                    title="Execute this specific step in the chat studio"
-                    className="opacity-0 group-hover:opacity-100 shrink-0 px-1.5 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-[10px] font-bold flex items-center gap-0.5 transition-all"
-                  >
-                    <Play size={9} fill="currentColor" /> Run
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 3. Supervised Workspace Files (Drag, Click or Right-Click) */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-            <FileText size={13} className="text-sky-400" />
-            Workspace .md Files ({watchedFiles.length})
-          </span>
-        </div>
-
-        <div className="max-h-36 overflow-y-auto space-y-1 pr-0.5">
-          {watchedFiles.length === 0 ? (
-            <div className="text-[11px] text-slate-500 py-2 text-center">
-              Enable <strong>Supervise</strong> to watch project `.md` files automatically.
-            </div>
-          ) : (
-            watchedFiles.slice(0, 20).map((file) => (
-              <div
-                key={file.path}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(
-                    'application/flymd-file',
-                    JSON.stringify({
-                      filePath: file.path,
-                      fileName: file.name,
-                      sourceAgent: file.sourceAgent,
-                    })
-                  );
-                }}
+                key={file.fullPath}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -258,56 +319,128 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                     x: e.clientX,
                     y: e.clientY,
                     title: file.name,
-                    subtitle: 'Workspace Markdown File',
-                    filePath: file.path,
+                    subtitle: file.isHtml
+                      ? 'Web Application Page'
+                      : 'Workspace File',
+                    filePath: file.fullPath,
                     deleteLabel: 'Delete File from Disk...',
-                    onOpen: () => onOpenFileInEditor(file.path),
+                    onOpen: () => onOpenFileInEditor(file.fullPath),
                     onDeleteConfirm: async () => {
-                      await onDeleteWorkspaceFile(file.path);
+                      if (onDeleteWorkspaceFile) {
+                        await onDeleteWorkspaceFile(file.fullPath);
+                      } else if (window.electronAPI?.deleteFilePath) {
+                        await window.electronAPI.deleteFilePath(file.fullPath);
+                      }
                     },
                   });
                 }}
-                title="Right-click to Open in Directory or Delete"
-                className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 text-[11px] cursor-grab"
+                className="group flex flex-col gap-1.5 p-2 rounded-xl bg-slate-900/90 border border-slate-800/90 hover:border-slate-700 transition-colors"
               >
-                <span className="truncate text-slate-200 font-medium">
-                  {file.name}
-                </span>
-                <div className="flex items-center gap-1 shrink-0 ml-1.5">
+                <div className="flex items-center justify-between gap-1.5 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {file.isHtml ? (
+                      <Globe size={13} className="text-emerald-400 shrink-0" />
+                    ) : file.name.endsWith('.css') ? (
+                      <Layers size={13} className="text-sky-400 shrink-0" />
+                    ) : file.name.endsWith('.js') || file.name.endsWith('.ts') ? (
+                      <FileCode size={13} className="text-amber-400 shrink-0" />
+                    ) : (
+                      <FileText size={13} className="text-slate-400 shrink-0" />
+                    )}
+                    <span
+                      className="truncate text-[11px] font-semibold text-slate-200"
+                      title={file.fullPath}
+                    >
+                      {file.name}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide shrink-0 ${
+                      file.status === 'created'
+                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    {file.status}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  {file.isHtml && (
+                    <button
+                      type="button"
+                      onClick={() => handleLivePreview(file)}
+                      title="Launch live web preview in browser"
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold transition-all"
+                    >
+                      <Globe size={10} />
+                      <span>Live Preview</span>
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => onOpenFileInEditor(file.path)}
-                    title="Open in Preview"
-                    className="text-slate-400 hover:text-white p-0.5"
+                    onClick={() => onOpenFileInEditor(file.fullPath)}
+                    title="Open file in FlyMD editor"
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-300 hover:text-white text-[10px] font-medium transition-colors"
                   >
                     <ExternalLink size={10} />
+                    <span>FlyMD</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => onSelectWatchedFileForDispatch(file)}
-                    className="text-[10px] text-sky-400 hover:text-sky-300 font-bold"
+                    onClick={async () => {
+                      if (window.electronAPI?.revealInExplorer) {
+                        await window.electronAPI.revealInExplorer(file.fullPath);
+                      }
+                    }}
+                    title="Reveal in File Explorer"
+                    className="p-1 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-400 hover:text-white transition-colors"
                   >
-                    Use
+                    <FolderOpen size={11} />
                   </button>
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* 4. Live Execution Stream Log */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/90 p-3 flex-1 flex flex-col min-h-[130px]">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-            <Terminal size={11} className="text-emerald-400" />
-            Execution Stream Log
-          </span>
-          {selectedTask && selectedTask.logs.length > 0 && (
+      {/* 3. Combined Clean Activity & Process Inspector (Human Feed + Terminal Stream) */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/90 flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Navigation Tabs */}
+        <div className="flex items-center justify-between border-b border-slate-800/90 px-3 py-2 bg-slate-950/60">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setViewTab('activity')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                viewTab === 'activity'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Activity size={11} />
+              <span>Activity &amp; Process</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewTab('terminal')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                viewTab === 'terminal'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Terminal size={11} />
+              <span>Terminal Stream</span>
+            </button>
+          </div>
+
+          {viewTab === 'terminal' && selectedTask && selectedTask.logs.length > 0 && (
             <button
               type="button"
               onClick={() => onClearTaskLogs(selectedTask.id)}
-              title="Clear Execution Stream Log"
+              title="Clear Terminal Execution Log"
               className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-rose-500/20 text-[9px] font-bold text-slate-400 hover:text-rose-300 transition-colors"
             >
               <Trash2 size={9} />
@@ -315,16 +448,133 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
             </button>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto font-mono text-[10px] text-slate-400 space-y-1 max-h-36">
-          {selectedTask && selectedTask.logs.length > 0 ? (
-            selectedTask.logs.map((line, i) => (
-              <div key={i} className="leading-relaxed break-words">
-                {line}
+
+        {/* Tab Content */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          {viewTab === 'activity' ? (
+            <div className="space-y-3">
+              {/* Context Reasoning Trace */}
+              {selectedTask?.thinkingTrace && selectedTask.thinkingTrace.length > 0 && (
+                <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-2.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-300 uppercase tracking-wider">
+                    <Sparkles size={11} className="text-indigo-400" />
+                    Agent Context Reasoning
+                  </div>
+                  <div className="space-y-1">
+                    {selectedTask.thinkingTrace.map((step, idx) => (
+                      <div
+                        key={idx}
+                        className="text-[11px] text-indigo-200/90 leading-relaxed pl-2 border-l border-indigo-500/30"
+                      >
+                        {step}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Task Checklist Tracker */}
+              <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                    <ListChecks size={12} className="text-emerald-400" />
+                    Task Checklist ({parsedChecklist.filter((i) => i.done).length}/
+                    {parsedChecklist.length})
+                  </span>
+                </div>
+
+                {parsedChecklist.length === 0 ? (
+                  <div className="text-[11px] text-slate-500 py-1 text-center italic">
+                    No active checklist steps in document.
+                  </div>
+                ) : (
+                  <div className="space-y-1 max-h-48 overflow-y-auto pr-0.5">
+                    {parsedChecklist.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="group flex items-start justify-between gap-1.5 p-1.5 rounded-lg bg-slate-950/60 border border-slate-800/60 text-[11px]"
+                      >
+                        <div className="flex items-start gap-1.5 min-w-0">
+                          {item.done ? (
+                            <CheckCircle2
+                              size={12}
+                              className="text-emerald-400 shrink-0 mt-0.5"
+                            />
+                          ) : (
+                            <Circle
+                              size={12}
+                              className="text-slate-500 shrink-0 mt-0.5"
+                            />
+                          )}
+                          <span
+                            className={
+                              item.done
+                                ? 'text-slate-400 line-through'
+                                : 'text-slate-200'
+                            }
+                          >
+                            {item.text}
+                          </span>
+                        </div>
+                        {!item.done && (
+                          <button
+                            type="button"
+                            onClick={() => onRunSingleChecklistItem(item.text)}
+                            title="Execute this specific step"
+                            className="opacity-0 group-hover:opacity-100 shrink-0 px-1.5 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-[9px] font-bold flex items-center gap-0.5 transition-all"
+                          >
+                            <Play size={8} fill="currentColor" /> Run
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            ))
+
+              {/* Status Outcome */}
+              {selectedTask && (
+                <div
+                  className={`rounded-xl p-2.5 border text-[11px] flex items-center gap-2 ${
+                    selectedTask.status === 'completed'
+                      ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                      : selectedTask.status === 'running'
+                      ? 'bg-sky-950/20 border-sky-500/30 text-sky-300'
+                      : selectedTask.status === 'failed'
+                      ? 'bg-rose-950/20 border-rose-500/30 text-rose-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  {selectedTask.status === 'running' ? (
+                    <Loader2 size={13} className="animate-spin shrink-0" />
+                  ) : selectedTask.status === 'completed' ? (
+                    <CheckCircle2 size={13} className="shrink-0" />
+                  ) : null}
+                  <span>
+                    {selectedTask.status === 'completed'
+                      ? 'Task completed successfully. Workspace changes verified.'
+                      : selectedTask.status === 'running'
+                      ? 'Agent actively processing instructions...'
+                      : selectedTask.status === 'failed'
+                      ? `Task encountered an error: ${selectedTask.error || 'Execution halted.'}`
+                      : `Task status: ${selectedTask.status}`}
+                  </span>
+                </div>
+              )}
+            </div>
           ) : (
-            <div className="text-slate-600 italic">
-              Real-time agent stream events appear here...
+            <div className="font-mono text-[10px] text-slate-400 space-y-1">
+              {selectedTask && selectedTask.logs.length > 0 ? (
+                selectedTask.logs.map((line, i) => (
+                  <div key={i} className="leading-relaxed break-words">
+                    {line}
+                  </div>
+                ))
+              ) : (
+                <div className="text-slate-600 italic">
+                  Raw terminal stream events will appear here...
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -338,4 +588,3 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
     </aside>
   );
 };
-

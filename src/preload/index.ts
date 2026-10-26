@@ -192,6 +192,10 @@ const electronAPI = {
     ipcRenderer.invoke('file:reveal-in-explorer', targetPath),
   deleteFilePath: (targetPath: string): Promise<boolean> =>
     ipcRenderer.invoke('file:delete-path', targetPath),
+  openExternalPath: (targetPath: string): Promise<boolean> =>
+    ipcRenderer.invoke('file:open-external-path', targetPath),
+  clearWorkspaceCache: (workspacePath: string, clearMemory: boolean): Promise<string> =>
+    ipcRenderer.invoke('agent:clear-workspace-cache', workspacePath, clearMemory),
   onAgentProfilesUpdated: (callback: (profiles: AgentProfile[]) => void) => {
     const handler = (_: any, data: AgentProfile[]) => callback(data);
     ipcRenderer.on('agent:profiles-updated', handler);

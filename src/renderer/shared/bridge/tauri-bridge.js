@@ -269,6 +269,15 @@
     deleteFilePath: function (targetPath) {
       return invoke('cmd_delete_file_path', { targetPath: targetPath });
     },
+    openExternalPath: function (targetPath) {
+      return invoke('cmd_open_external_path', { targetPath: targetPath });
+    },
+    clearWorkspaceCache: function (workspacePath, clearMemory) {
+      return invoke('cmd_clear_workspace_cache', {
+        workspacePath: workspacePath,
+        clearMemory: clearMemory,
+      });
+    },
     onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
     onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),
     onAgentCheckpointsUpdated: makeEventListener('agent:checkpoints-updated'),

@@ -155,3 +155,81 @@ pub fn read_project_memory(workspace_path: &str) -> String {
         String::new()
     }
 }
+
+/// Clears temporary agent handoffs, reports, checkpoints, and optionally resets .flymd/MEMORY.md
+pub fn clear_workspace_memory_and_cache(
+    workspace_path: &str,
+    clear_memory: bool,
+) -> Result<String, String> {
+    let ws = Path::new(workspace_path);
+    if !ws.exists() {
+        return Err(format!("Workspace path does not exist: {}", workspace_path));
+    }
+    let flymd_dir = ws.join(".flymd");
+    if !flymd_dir.exists() {
+        return Ok("No .flymd cache directory found to clean.".to_string());
+    }
+
+    let mut cleared_items = Vec::new();
+
+    // 1. Clean handoffs
+    let handoffs_dir = flymd_dir.join("handoffs");
+    if handoffs_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&handoffs_dir) {
+            let count = entries
+                .flatten()
+                .filter(|e| fs::remove_file(e.path()).is_ok())
+                .count();
+            if count > 0 {
+                cleared_items.push(format!("{} handoff package(s)", count));
+            }
+        }
+    }
+
+    // 2. Clean reports
+    let reports_dir = flymd_dir.join("reports");
+    if reports_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&reports_dir) {
+            let count = entries
+                .flatten()
+                .filter(|e| fs::remove_file(e.path()).is_ok())
+                .count();
+            if count > 0 {
+                cleared_items.push(format!("{} temporary report(s)", count));
+            }
+        }
+    }
+
+    // 3. Clean checkpoints
+    let checkpoints_dir = flymd_dir.join("checkpoints");
+    if checkpoints_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&checkpoints_dir) {
+            let count = entries
+                .flatten()
+                .filter(|e| fs::remove_dir_all(e.path()).is_ok())
+                .count();
+            if count > 0 {
+                cleared_items.push(format!("{} checkpoint backup(s)", count));
+            }
+        }
+    }
+
+    // 4. Optionally clear MEMORY.md
+    if clear_memory {
+        let mem_file = flymd_dir.join("MEMORY.md");
+        if mem_file.exists() {
+            let clean_content = "# FlyMD Shared Agent Memory Ledger\n\n> Auto-maintained context ledger across Antigravity, Claude Code, OpenCode, ZCode, Cursor, Codex, and Custom Agents.\n\n";
+            let _ = fs::write(mem_file, clean_content);
+            cleared_items.push("shared memory ledger".to_string());
+        }
+    }
+
+    if cleared_items.is_empty() {
+        Ok("Workspace cache was already clean.".to_string())
+    } else {
+        Ok(format!(
+            "Successfully cleared: {}",
+            cleared_items.join(", ")
+        ))
+    }
+}

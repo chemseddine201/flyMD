@@ -255,8 +255,10 @@ pub fn run() {
             cmd_complete_web_task_with_reply,
             cmd_clear_agent_task_logs,
             cmd_delete_agent_task,
+            cmd_clear_workspace_cache,
             cmd_reveal_in_explorer,
             cmd_delete_file_path,
+            cmd_open_external_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

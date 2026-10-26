@@ -60,17 +60,8 @@ fn is_markdown(name: &str) -> bool {
         || lower.ends_with(".txt")
 }
 
-fn is_allowed_agent_dot_dir(name: &str) -> bool {
-    matches!(
-        name,
-        ".flymd" | ".agent" | ".claude" | ".opencode" | ".cursor" | ".codex" | ".zed" | ".gemini"
-    )
-}
-
 fn is_ignored_dir(name: &str) -> bool {
-    if is_allowed_agent_dot_dir(name) {
-        return false;
-    }
+    // Ignore all hidden/dot directories (.flymd, .agent, .claude, .git, .vscode, etc.)
     if name.starts_with('.') {
         return true;
     }
@@ -86,7 +77,8 @@ fn is_ignored_dir(name: &str) -> bool {
             | "vendor"
             | "coverage"
             | "target"
-            | ".system_generated"
+            | "bin"
+            | "obj"
     )
 }
 
@@ -178,7 +170,7 @@ impl WorkspaceManager {
                     let path = entry.path();
                     if path.is_file() {
                         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                            if is_markdown(file_name) {
+                            if !file_name.starts_with('.') && is_markdown(file_name) {
                                 if let Ok(meta) = entry.metadata() {
                                     let mtime = meta
                                         .modified()

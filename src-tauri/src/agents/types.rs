@@ -257,4 +257,3 @@ pub struct CouncilBroadcastResponse {
     pub consensus: String,
     pub summary: String,
 }
-
