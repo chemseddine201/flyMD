@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Workflow,
   StopCircle,
+  Globe,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import {
@@ -300,7 +301,9 @@ export const AgentsControlCenter: React.FC = () => {
             const isDragOver = dragOverAgentId === agent.id;
             const isConnected =
               agent.authStatus === 'connected' ||
-              agent.authStatus === 'api-key-ready';
+              agent.authStatus === 'web-connected' ||
+              agent.authStatus === 'api-key-ready' ||
+              agent.webAuthConnected;
 
             return (
               <div
@@ -364,11 +367,13 @@ export const AgentsControlCenter: React.FC = () => {
                           : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
                       }`}
                     >
-                      {isConnected
+                      {agent.authStatus === 'web-connected' || agent.webAuthConnected
+                        ? 'Web Connected (Free)'
+                        : isConnected
                         ? 'Connected'
                         : agent.installed
                         ? 'CLI Detected'
-                        : 'IDE Bridge Ready'}
+                        : 'Free Web & IDE Ready'}
                     </span>
                   </div>
 
@@ -397,10 +402,16 @@ export const AgentsControlCenter: React.FC = () => {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
-                      onClick={() => setShowAgentAccountsModal(true)}
-                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-medium text-slate-300 transition-colors"
+                      onClick={async () => {
+                        await window.electronAPI.launchAgentWebAuth(agent.id);
+                        const updated = await window.electronAPI.discoverAgents();
+                        setAgentProfiles(updated);
+                      }}
+                      title={`Open ${agent.name} Free-Tier Web App inside FlyMD (No CMD or paid API key needed)`}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-[11px] font-semibold text-emerald-300 transition-colors"
                     >
-                      Account
+                      <Globe size={11} />
+                      Web Sign-In
                     </button>
                     <button
                       type="button"

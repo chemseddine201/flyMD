@@ -229,6 +229,13 @@
     launchAgentLogin: function (agentId) {
       return invoke('cmd_launch_agent_login', { agentId: agentId });
     },
+    launchAgentWebAuth: function (agentId, taskPrompt, taskId) {
+      return invoke('cmd_launch_agent_web_auth', {
+        agentId: agentId,
+        taskPrompt: taskPrompt || null,
+        taskId: taskId || null,
+      });
+    },
     dispatchAgentTask: function (request) {
       return invoke('cmd_dispatch_agent_task', { request: request });
     },

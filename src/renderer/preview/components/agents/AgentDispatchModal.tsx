@@ -16,6 +16,8 @@ import {
   ArrowRight,
   FileText,
   KeyRound,
+  Globe,
+  Terminal,
 } from 'lucide-react';
 import { usePreviewStore } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
@@ -42,6 +44,7 @@ export const AgentDispatchModal: React.FC = () => {
   const [nextIntentInChain, setNextIntentInChain] = useState<AgentTaskIntent>('review');
   const [selectedTasks, setSelectedTasks] = useState<Record<number, boolean>>({});
   const [filterSelectedOnly, setFilterSelectedOnly] = useState(false);
+  const [executionMode, setExecutionMode] = useState<'web' | 'auto'>('web');
   const [submitting, setSubmitting] = useState(false);
 
   const checklistItems = useMemo(() => {
@@ -66,8 +69,15 @@ export const AgentDispatchModal: React.FC = () => {
 
   useEffect(() => {
     if (dispatchDraft) {
-      setTargetAgentId(dispatchDraft.targetAgentId || 'claude-code');
+      const targetId = dispatchDraft.targetAgentId || 'claude-code';
+      setTargetAgentId(targetId);
       setNextAgentInChain(dispatchDraft.nextAgentInChain || '');
+      const prof = agentProfiles.find((a) => a.id === targetId);
+      if (prof?.detectedBinaryPath && !prof?.webAuthConnected) {
+        setExecutionMode('auto');
+      } else {
+        setExecutionMode('web');
+      }
       const initialSelected: Record<number, boolean> = {};
       checklistItems.forEach((item) => {
         if (!item.checked) {
@@ -140,6 +150,7 @@ export const AgentDispatchModal: React.FC = () => {
         createSafetyCheckpoint,
         safeParallelMode,
         attachSharedMemory,
+        executionMode,
         pipelineId: dispatchDraft.pipelineId,
         nextAgentInChain: nextAgentInChain ? nextAgentInChain : undefined,
         nextIntentInChain: nextAgentInChain ? nextIntentInChain : undefined,
@@ -244,14 +255,62 @@ export const AgentDispatchModal: React.FC = () => {
                         </span>
                       </div>
                       <span className="text-[10px] text-slate-400 block truncate mt-0.5">
-                        {agent.authStatus === 'connected' || agent.authStatus === 'api-key-ready'
+                        {agent.authStatus === 'web-connected' || agent.webAuthConnected
+                          ? '🌐 Web Connected (Free Tier)'
+                          : agent.authStatus === 'connected' || agent.authStatus === 'api-key-ready'
                           ? 'Ready & Authenticated'
-                          : 'IDE Workflow Ready'}
+                          : 'Free Web & IDE Bridge Ready'}
                       </span>
                     </div>
                   </button>
                 );
               })}
+            </div>
+
+            {/* Execution Mode Selector: Free-Tier Web App vs Local CLI/IDE */}
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setExecutionMode('web')}
+                className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
+                  executionMode === 'web'
+                    ? 'bg-emerald-500/15 border-emerald-500/50 text-white ring-1 ring-emerald-500/30'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Globe size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    Free-Tier Web App Mode
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">
+                      No CMD / Free
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 mt-0.5">
+                    Opens {targetAgent?.shortName}&apos;s built-in web workspace, auto-fills your Markdown task, and lets you send the reply back to FlyMD with 1 click.
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExecutionMode('auto')}
+                className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
+                  executionMode === 'auto'
+                    ? 'bg-sky-500/15 border-sky-500/50 text-white ring-1 ring-sky-500/30'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Terminal size={16} className="text-sky-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-xs font-bold text-white">
+                    Local IDE &amp; CLI Mode (For Developers)
+                  </div>
+                  <div className="text-[10px] text-slate-300 mt-0.5">
+                    Injects native IDE workflow files (`.agent/workflows/`, `.claude/commands/`, `.cursor/rules/`) and runs local CLI if installed.
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
 

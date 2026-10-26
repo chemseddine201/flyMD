@@ -166,6 +166,8 @@ const electronAPI = {
     ipcRenderer.invoke('agent:get-credentials'),
   launchAgentLogin: (agentId: string): Promise<string> =>
     ipcRenderer.invoke('agent:launch-login', agentId),
+  launchAgentWebAuth: (agentId: string, taskPrompt?: string, taskId?: string): Promise<string> =>
+    ipcRenderer.invoke('agent:launch-web-auth', agentId, taskPrompt, taskId),
   dispatchAgentTask: (request: AgentTaskRequest): Promise<AgentTaskRecord> =>
     ipcRenderer.invoke('agent:dispatch-task', request),
   getAgentTasks: (): Promise<AgentTaskRecord[]> =>

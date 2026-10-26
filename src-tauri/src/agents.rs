@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AgentCredentialConfig {
@@ -22,6 +22,10 @@ pub struct AgentCredentialConfig {
     pub connected_account_label: Option<String>,
     #[serde(rename = "oauthVerified", default)]
     pub oauth_verified: bool,
+    #[serde(rename = "webSessionVerified", default)]
+    pub web_session_verified: bool,
+    #[serde(rename = "preferredMode")]
+    pub preferred_mode: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -48,10 +52,14 @@ pub struct AgentProfile {
     pub tier: String,
     #[serde(rename = "loginCommand")]
     pub login_command: Option<String>,
+    #[serde(rename = "webUrl")]
+    pub web_url: Option<String>,
     #[serde(rename = "envKeyName")]
     pub env_key_name: Option<String>,
     #[serde(rename = "hasApiKey")]
     pub has_api_key: bool,
+    #[serde(rename = "webAuthConnected", default)]
+    pub web_auth_connected: bool,
     #[serde(rename = "connectedAccountLabel")]
     pub connected_account_label: Option<String>,
     #[serde(rename = "artifactWatchPaths")]
@@ -86,6 +94,8 @@ pub struct AgentTaskRequest {
     pub safe_parallel_mode: bool,
     #[serde(rename = "attachSharedMemory", default)]
     pub attach_shared_memory: bool,
+    #[serde(rename = "executionMode")]
+    pub execution_mode: Option<String>,
     #[serde(rename = "pipelineId")]
     pub pipeline_id: Option<String>,
     #[serde(rename = "nextAgentInChain")]
@@ -330,6 +340,213 @@ fn intent_instructions(intent: &str, custom_prompt: Option<&str>) -> String {
     }
 }
 
+fn percent_decode(input: &str) -> String {
+    let mut bytes = Vec::with_capacity(input.len());
+    let mut chars = input.as_bytes().iter().copied();
+    while let Some(b) = chars.next() {
+        if b == b'%' {
+            let hi = chars.next();
+            let lo = chars.next();
+            if let (Some(h), Some(l)) = (hi, lo) {
+                let hex = [h, l];
+                if let Ok(s) = std::str::from_utf8(&hex) {
+                    if let Ok(val) = u8::from_str_radix(s, 16) {
+                        bytes.push(val);
+                        continue;
+                    }
+                }
+            }
+            bytes.push(b'%');
+        } else if b == b'+' {
+            bytes.push(b' ');
+        } else {
+            bytes.push(b);
+        }
+    }
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
+fn parse_query_param(query: &str, key: &str) -> Option<String> {
+    for pair in query.split('&') {
+        let mut parts = pair.splitn(2, '=');
+        let k = parts.next().unwrap_or("");
+        let v = parts.next().unwrap_or("");
+        if k == key {
+            return Some(percent_decode(v));
+        }
+    }
+    None
+}
+
+fn build_web_companion_script(
+    agent_id: &str,
+    agent_name: &str,
+    accent_color: &str,
+    task_prompt: Option<&str>,
+    task_id: Option<&str>,
+) -> String {
+    let prompt_json = serde_json::to_string(&task_prompt.unwrap_or("")).unwrap_or_else(|_| "\"\"".to_string());
+    let task_id_json = serde_json::to_string(&task_id.unwrap_or("")).unwrap_or_else(|_| "\"\"".to_string());
+    let agent_id_json = serde_json::to_string(&agent_id).unwrap_or_else(|_| "\"\"".to_string());
+    let agent_name_json = serde_json::to_string(&agent_name).unwrap_or_else(|_| "\"Agent\"".to_string());
+    let accent_json = serde_json::to_string(&accent_color).unwrap_or_else(|_| "\"#38bdf8\"".to_string());
+
+    format!(
+        r#"(function() {{
+  window.__FLYMD_AGENT_ID__ = {agent_id_json};
+  window.__FLYMD_AGENT_NAME__ = {agent_name_json};
+  window.__FLYMD_ACCENT__ = {accent_json};
+  if ({prompt_json}) {{
+    window.__FLYMD_TASK_PROMPT__ = {prompt_json};
+  }}
+  if ({task_id_json}) {{
+    window.__FLYMD_TASK_ID__ = {task_id_json};
+  }}
+
+  function autoFillPrompt(promptText) {{
+    if (!promptText) return false;
+    try {{
+      navigator.clipboard.writeText(promptText).catch(function(){{}});
+    }} catch (e) {{}}
+
+    var selectors = [
+      '#prompt-textarea',
+      'div[contenteditable="true"].ProseMirror',
+      'div[contenteditable="true"][role="textbox"]',
+      'rich-textarea div[contenteditable="true"]',
+      'div[contenteditable="true"]',
+      'textarea[placeholder]',
+      'textarea'
+    ];
+    for (var i = 0; i < selectors.length; i++) {{
+      var el = document.querySelector(selectors[i]);
+      if (el && el.offsetParent !== null) {{
+        el.focus();
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
+          var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+          if (nativeSetter && nativeSetter.set) {{
+            nativeSetter.set.call(el, promptText);
+          }} else {{
+            el.value = promptText;
+          }}
+          el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+          return true;
+        }} else {{
+          try {{
+            document.execCommand('selectAll', false, null);
+            document.execCommand('insertText', false, promptText);
+            return true;
+          }} catch (err) {{
+            el.textContent = promptText;
+            el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            return true;
+          }}
+        }}
+      }}
+    }}
+    return false;
+  }}
+
+  function extractLatestReply() {{
+    var sel = window.getSelection ? window.getSelection().toString().trim() : '';
+    if (sel && sel.length > 10) return sel;
+
+    var replySelectors = [
+      '[data-message-author-role="assistant"]',
+      '.font-claude-message',
+      'message-content',
+      'model-response',
+      '.markdown.prose',
+      '.prose'
+    ];
+    for (var i = 0; i < replySelectors.length; i++) {{
+      var nodes = document.querySelectorAll(replySelectors[i]);
+      if (nodes && nodes.length > 0) {{
+        var last = nodes[nodes.length - 1];
+        var txt = (last.innerText || last.textContent || '').trim();
+        if (txt.length > 5) return txt;
+      }}
+    }}
+    return '';
+  }}
+
+  function ensureFlymdBar() {{
+    if (!document.body) return;
+    var existing = document.getElementById('flymd-web-companion-bar');
+    if (existing) {{
+      var pasteBtn = document.getElementById('flymd-btn-paste');
+      if (pasteBtn) {{
+        pasteBtn.style.display = window.__FLYMD_TASK_PROMPT__ ? 'inline-flex' : 'none';
+      }}
+      return;
+    }}
+
+    var bar = document.createElement('div');
+    bar.id = 'flymd-web-companion-bar';
+    bar.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:9999px;background:rgba(15,23,42,0.94);border:1px solid ' + window.__FLYMD_ACCENT__ + ';box-shadow:0 10px 30px rgba(0,0,0,0.45);font-family:system-ui,-apple-system,sans-serif;font-size:12px;color:#f8fafc;backdrop-filter:blur(10px);';
+
+    var badge = document.createElement('span');
+    badge.style.cssText = 'font-weight:700;display:inline-flex;align-items:center;gap:6px;padding-right:6px;border-right:1px solid rgba(148,163,184,0.25);color:#fff;';
+    badge.textContent = '🪶 FlyMD • ' + window.__FLYMD_AGENT_NAME__ + ' (Free Web Tier)';
+    bar.appendChild(badge);
+
+    var btnAuth = document.createElement('button');
+    btnAuth.textContent = '✅ Confirm Signed In';
+    btnAuth.style.cssText = 'cursor:pointer;padding:4px 10px;border-radius:9999px;border:1px solid rgba(52,211,153,0.5);background:rgba(16,185,129,0.2);color:#6ee7b7;font-weight:600;font-size:11px;';
+    btnAuth.onclick = function() {{
+      btnAuth.textContent = '✓ Connected to FlyMD!';
+      window.location.href = 'https://flymd-bridge.local/confirm-login?agent=' + encodeURIComponent(window.__FLYMD_AGENT_ID__);
+    }};
+    bar.appendChild(btnAuth);
+
+    var btnPaste = document.createElement('button');
+    btnPaste.id = 'flymd-btn-paste';
+    btnPaste.textContent = '⚡ Auto-Fill Assigned Task';
+    btnPaste.style.cssText = 'cursor:pointer;padding:4px 10px;border-radius:9999px;border:1px solid rgba(56,189,248,0.5);background:rgba(14,165,233,0.25);color:#7dd3fc;font-weight:700;font-size:11px;display:' + (window.__FLYMD_TASK_PROMPT__ ? 'inline-flex' : 'none') + ';';
+    btnPaste.onclick = function() {{
+      var ok = autoFillPrompt(window.__FLYMD_TASK_PROMPT__);
+      btnPaste.textContent = ok ? '✓ Filled in Chat Input! (Press Enter)' : '✓ Copied! Press Ctrl+V in Chat';
+      setTimeout(function() {{ btnPaste.textContent = '⚡ Auto-Fill Assigned Task'; }}, 3500);
+    }};
+    bar.appendChild(btnPaste);
+
+    var btnCapture = document.createElement('button');
+    btnCapture.textContent = '📥 Send Reply Back to FlyMD (.md)';
+    btnCapture.style.cssText = 'cursor:pointer;padding:4px 10px;border-radius:9999px;border:1px solid rgba(167,139,250,0.5);background:rgba(139,92,246,0.25);color:#ddd6fe;font-weight:600;font-size:11px;';
+    btnCapture.onclick = function() {{
+      var reply = extractLatestReply();
+      if (!reply) {{
+        alert('Select any text or wait for the agent reply first, then click Send Reply Back to FlyMD!');
+        return;
+      }}
+      btnCapture.textContent = '✓ Sent to FlyMD Tab!';
+      var encoded = encodeURIComponent(reply.slice(0, 14000));
+      var tId = encodeURIComponent(window.__FLYMD_TASK_ID__ || '');
+      window.location.href = 'https://flymd-bridge.local/capture-reply?agent=' + encodeURIComponent(window.__FLYMD_AGENT_ID__) + '&task=' + tId + '&text=' + encoded;
+      setTimeout(function() {{ btnCapture.textContent = '📥 Send Reply Back to FlyMD (.md)'; }}, 3000);
+    }};
+    bar.appendChild(btnCapture);
+
+    document.body.appendChild(bar);
+
+    if (window.__FLYMD_TASK_PROMPT__ && !window.__FLYMD_AUTOFILLED_ONCE__) {{
+      window.__FLYMD_AUTOFILLED_ONCE__ = true;
+      setTimeout(function() {{
+        autoFillPrompt(window.__FLYMD_TASK_PROMPT__);
+      }}, 1800);
+    }}
+  }}
+
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', ensureFlymdBar);
+  }} else {{
+    ensureFlymdBar();
+  }}
+  setInterval(ensureFlymdBar, 2000);
+}})();"#
+    )
+}
+
 impl AgentOrchestrator {
     pub fn new(app_handle: AppHandle, store: SharedStore) -> SharedAgentOrchestrator {
         Arc::new(AgentOrchestrator {
@@ -355,6 +572,7 @@ impl AgentOrchestrator {
                 vec!["agy", "antigravity"],
                 "ide-workflow",
                 Some("agy auth login"),
+                Some("https://aistudio.google.com/prompts/new_chat"),
                 Some("GEMINI_API_KEY"),
                 vec![".gemini/antigravity/brain", ".agent/workflows"],
             ),
@@ -370,6 +588,7 @@ impl AgentOrchestrator {
                 vec!["claude"],
                 "cli-pty",
                 Some("claude login"),
+                Some("https://claude.ai/new"),
                 Some("ANTHROPIC_API_KEY"),
                 vec![".claude", ".claude/commands"],
             ),
@@ -385,6 +604,7 @@ impl AgentOrchestrator {
                 vec!["opencode"],
                 "cli-pty",
                 Some("opencode auth login"),
+                Some("https://openrouter.ai/chat"),
                 Some("OPENAI_API_KEY"),
                 vec![".opencode"],
             ),
@@ -400,6 +620,7 @@ impl AgentOrchestrator {
                 vec!["zcode", "zed"],
                 "ide-workflow",
                 Some("zed --login"),
+                Some("https://zed.dev/account"),
                 Some("ANTHROPIC_API_KEY"),
                 vec![".zed"],
             ),
@@ -415,6 +636,7 @@ impl AgentOrchestrator {
                 vec!["cursor"],
                 "ide-workflow",
                 Some("cursor"),
+                Some("https://www.cursor.com/agents"),
                 Some("OPENAI_API_KEY"),
                 vec![".cursor/rules"],
             ),
@@ -430,6 +652,7 @@ impl AgentOrchestrator {
                 vec!["codex"],
                 "cli-pty",
                 Some("codex login"),
+                Some("https://chatgpt.com/"),
                 Some("OPENAI_API_KEY"),
                 vec![".codex"],
             ),
@@ -449,6 +672,7 @@ impl AgentOrchestrator {
             bins,
             tier,
             login_cmd,
+            web_url,
             env_key,
             watch_paths,
         ) in definitions
@@ -473,9 +697,16 @@ impl AgentOrchestrator {
 
             let has_api_key = has_stored_key || has_env_key;
             let oauth_verified = user_cred.map(|c| c.oauth_verified).unwrap_or(false) || marker_authed;
-            let installed = detected_bin.is_some() || marker_installed || has_api_key || oauth_verified;
+            let web_session_verified = user_cred.map(|c| c.web_session_verified).unwrap_or(false);
+            let installed = detected_bin.is_some()
+                || marker_installed
+                || has_api_key
+                || oauth_verified
+                || web_session_verified;
 
-            let auth_status = if oauth_verified {
+            let auth_status = if web_session_verified {
+                "web-connected"
+            } else if oauth_verified {
                 "connected"
             } else if has_api_key {
                 "api-key-ready"
@@ -500,8 +731,10 @@ impl AgentOrchestrator {
                 auth_status: auth_status.to_string(),
                 tier: tier.to_string(),
                 login_command: login_cmd.map(|s| s.to_string()),
+                web_url: web_url.map(|s| s.to_string()),
                 env_key_name: env_key.map(|s| s.to_string()),
                 has_api_key,
+                web_auth_connected: web_session_verified,
                 connected_account_label: user_cred.and_then(|c| c.connected_account_label.clone()),
                 artifact_watch_paths: watch_paths.iter().map(|s| s.to_string()).collect(),
                 enabled: true,
@@ -573,6 +806,160 @@ impl AgentOrchestrator {
         self.app_handle.emit("agent:profiles-updated", &updated).ok();
 
         Ok(format!("Launched official login flow for {}", profile.name))
+    }
+
+    pub fn launch_agent_web_auth(
+        &self,
+        agent_id: &str,
+        task_prompt: Option<String>,
+        task_id: Option<String>,
+        report_path: Option<String>,
+    ) -> Result<String, String> {
+        let profiles = self.discover_agents();
+        let profile = profiles
+            .iter()
+            .find(|p| p.id == agent_id)
+            .ok_or_else(|| format!("Unknown agent: {}", agent_id))?
+            .clone();
+
+        let target_url = profile
+            .web_url
+            .clone()
+            .unwrap_or_else(|| "https://claude.ai/new".to_string());
+
+        let init_script = build_web_companion_script(
+            &profile.id,
+            &profile.name,
+            &profile.accent_color,
+            task_prompt.as_deref(),
+            task_id.as_deref(),
+        );
+
+        let win_label = format!("agent-web-{}", profile.id);
+
+        if let Some(existing) = self.app_handle.get_webview_window(&win_label) {
+            existing.eval(&init_script).ok();
+            existing.show().ok();
+            existing.set_focus().ok();
+            return Ok(format!("Opened {} Free-Tier Web Workspace", profile.name));
+        }
+
+        let parsed_url: tauri::Url = target_url
+            .parse()
+            .map_err(|e| format!("Invalid agent web URL: {}", e))?;
+
+        let app_clone = self.app_handle.clone();
+        let store_clone = Arc::clone(&self.store);
+        let agent_id_owned = profile.id.clone();
+        let short_name_owned = profile.short_name.clone();
+        let report_path_owned = report_path.clone();
+
+        let mut creds = self.store.get_agent_credentials();
+        let mut entry = creds.remove(agent_id).unwrap_or_default();
+        entry.web_session_verified = true;
+        if entry.connected_account_label.is_none() {
+            entry.connected_account_label =
+                Some(format!("{} Web Account (Free Tier)", profile.short_name));
+        }
+        self.store.set_agent_credential(agent_id, entry);
+        let updated_profiles = self.discover_agents();
+        self.app_handle
+            .emit("agent:profiles-updated", &updated_profiles)
+            .ok();
+
+        WebviewWindowBuilder::new(&self.app_handle, &win_label, WebviewUrl::External(parsed_url))
+            .title(format!(
+                "FlyMD Web Companion — {} (Free Tier Sign-In & Workspace)",
+                profile.name
+            ))
+            .inner_size(1100.0, 800.0)
+            .min_inner_size(700.0, 500.0)
+            .initialization_script(&init_script)
+            .on_navigation(move |url| {
+                if url.host_str() == Some("flymd-bridge.local") {
+                    let path = url.path();
+                    let query = url.query().unwrap_or("");
+
+                    if path == "/confirm-login" {
+                        let mut c_map = store_clone.get_agent_credentials();
+                        let mut cred_entry = c_map.remove(&agent_id_owned).unwrap_or_default();
+                        cred_entry.web_session_verified = true;
+                        cred_entry.connected_account_label =
+                            Some(format!("{} Web Account (Free Tier)", short_name_owned));
+                        store_clone.set_agent_credential(&agent_id_owned, cred_entry);
+                    } else if path == "/capture-reply" {
+                        let captured_text = parse_query_param(query, "text").unwrap_or_default();
+                        let q_task_id = parse_query_param(query, "task").unwrap_or_default();
+
+                        if !captured_text.trim().is_empty() {
+                            let md_report = format!(
+                                "# {} Web Response Report\n\n\
+                                > Captured from **{} Free-Tier Web Session** via FlyMD Supervisor\n\n\
+                                ---\n\n\
+                                {}\n",
+                                short_name_owned, short_name_owned, captured_text
+                            );
+
+                            let target_report_path = if !q_task_id.is_empty() {
+                                let tasks = store_clone.get_agent_tasks();
+                                tasks
+                                    .iter()
+                                    .find(|t| t.id == q_task_id)
+                                    .and_then(|t| t.output_report_path.clone())
+                                    .or_else(|| report_path_owned.clone())
+                            } else {
+                                report_path_owned.clone()
+                            };
+
+                            if let Some(ref r_path) = target_report_path {
+                                fs::write(r_path, &md_report).ok();
+                            }
+
+                            if !q_task_id.is_empty() {
+                                Self::finalize_task(
+                                    &store_clone,
+                                    &app_clone,
+                                    &q_task_id,
+                                    "completed",
+                                    None,
+                                );
+                            }
+
+                            let file_name = target_report_path
+                                .as_ref()
+                                .and_then(|p| Path::new(p).file_name())
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| format!("{}-Web-Reply.md", short_name_owned));
+
+                            app_clone
+                                .emit(
+                                    "file:loaded",
+                                    serde_json::json!({
+                                        "path": target_report_path.unwrap_or_default(),
+                                        "name": file_name,
+                                        "content": md_report,
+                                        "lastModified": now_ms()
+                                    }),
+                                )
+                                .ok();
+
+                            if let Some(prev_win) = app_clone.get_webview_window("preview") {
+                                prev_win.show().ok();
+                                prev_win.set_focus().ok();
+                            }
+                        }
+                    }
+                    return false;
+                }
+                true
+            })
+            .build()
+            .map_err(|e| format!("Failed to open WebAuth window: {}", e))?;
+
+        Ok(format!(
+            "Opened {} Free-Tier Web Session in FlyMD",
+            profile.name
+        ))
     }
 
     pub fn create_safety_checkpoint(
@@ -859,6 +1246,19 @@ impl AgentOrchestrator {
             initial_logs.push(format!("[Safe Parallel Mode] Isolated worktree active at {}", wt));
         }
 
+        let is_web_mode = req.execution_mode.as_deref() == Some("web");
+
+        if is_web_mode {
+            initial_logs.push(format!(
+                "[Free-Tier Web Companion] Opened {} Web Workspace with auto-filled task prompt.",
+                req.target_agent_id
+            ));
+            initial_logs.push(
+                "[Free-Tier Web Companion] Click '📥 Send Reply Back to FlyMD (.md)' in the top bar when the agent replies!"
+                    .to_string(),
+            );
+        }
+
         let record = AgentTaskRecord {
             id: task_id.clone(),
             target_agent_id: req.target_agent_id.clone(),
@@ -890,7 +1290,23 @@ impl AgentOrchestrator {
         self.store.save_agent_tasks(tasks.clone());
         self.app_handle.emit("agent:tasks-updated", &tasks).ok();
 
-        self.spawn_agent_execution(record.clone(), handoff_file, report_file, instructions);
+        if is_web_mode {
+            let web_prompt = format!(
+                "# FlyMD Assigned Mission ({})\n\n{}\n\n---\n\n## Source Markdown Document (`{}`)\n\n{}",
+                req.intent.to_uppercase(),
+                instructions,
+                req.file_name,
+                body_to_process
+            );
+            let _ = self.launch_agent_web_auth(
+                &req.target_agent_id,
+                Some(web_prompt),
+                Some(task_id.clone()),
+                Some(report_file.to_string_lossy().to_string()),
+            );
+        } else {
+            self.spawn_agent_execution(record.clone(), handoff_file, report_file, instructions);
+        }
 
         Ok(record)
     }
@@ -1211,6 +1627,16 @@ pub fn cmd_launch_agent_login(
     agent_id: String,
 ) -> Result<String, String> {
     orchestrator.launch_agent_login(&agent_id)
+}
+
+#[tauri::command]
+pub fn cmd_launch_agent_web_auth(
+    orchestrator: tauri::State<'_, SharedAgentOrchestrator>,
+    agent_id: String,
+    task_prompt: Option<String>,
+    task_id: Option<String>,
+) -> Result<String, String> {
+    orchestrator.launch_agent_web_auth(&agent_id, task_prompt, task_id, None)
 }
 
 #[tauri::command]

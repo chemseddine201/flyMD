@@ -10,11 +10,13 @@ export type AgentId = BuiltinAgentId | string;
 
 export type AgentAuthStatus =
   | 'connected'
+  | 'web-connected'
   | 'api-key-ready'
   | 'needs-login'
   | 'not-installed';
 
 export type AgentIntegrationTier =
+  | 'web-session'
   | 'cli-pty'
   | 'mcp-bridge'
   | 'ide-workflow'
@@ -53,8 +55,10 @@ export interface AgentProfile {
   authStatus: AgentAuthStatus;
   tier: AgentIntegrationTier;
   loginCommand?: string;
+  webUrl?: string;
   envKeyName?: string;
   hasApiKey: boolean;
+  webAuthConnected?: boolean;
   connectedAccountLabel?: string;
   artifactWatchPaths: string[];
   enabled: boolean;
@@ -66,6 +70,8 @@ export interface AgentCredentialConfig {
   customArgs?: string;
   connectedAccountLabel?: string;
   oauthVerified?: boolean;
+  webSessionVerified?: boolean;
+  preferredMode?: 'web' | 'cli' | 'ide';
 }
 
 export type AgentCredentialsMap = Record<string, AgentCredentialConfig>;
@@ -91,6 +97,7 @@ export interface AgentTaskRequest {
   createSafetyCheckpoint: boolean;
   safeParallelMode: boolean;
   attachSharedMemory: boolean;
+  executionMode?: 'web' | 'auto' | 'cli';
   pipelineId?: string;
   nextAgentInChain?: AgentId;
   nextIntentInChain?: AgentTaskIntent;
@@ -154,3 +161,4 @@ export interface AgentPipelinePreset {
   description: string;
   steps: AgentPipelineStep[];
 }
+

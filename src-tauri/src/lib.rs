@@ -243,6 +243,7 @@ pub fn run() {
             cmd_save_agent_credential,
             cmd_get_agent_credentials,
             cmd_launch_agent_login,
+            cmd_launch_agent_web_auth,
             cmd_dispatch_agent_task,
             cmd_get_agent_tasks,
             cmd_cancel_agent_task,

@@ -15,6 +15,7 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  Globe,
 } from 'lucide-react';
 
 interface AgentAccountsModalProps {
@@ -75,6 +76,18 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
     }
   };
 
+  const handleWebAuthLogin = async (agent: AgentProfile) => {
+    try {
+      const msg = await window.electronAPI.launchAgentWebAuth(agent.id);
+      const updated = await window.electronAPI.discoverAgents();
+      onProfilesUpdated(updated);
+      setStatusBanner(msg);
+      setTimeout(() => setStatusBanner(null), 4500);
+    } catch (err: any) {
+      setStatusBanner(`WebAuth notice: ${err?.message || String(err)}`);
+    }
+  };
+
   const handleOfficialLogin = async (agent: AgentProfile) => {
     try {
       const msg = await window.electronAPI.launchAgentLogin(agent.id);
@@ -99,10 +112,17 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
   };
 
   const renderStatusBadge = (agent: AgentProfile) => {
+    if (agent.authStatus === 'web-connected' || agent.webAuthConnected) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+          <Globe className="w-3 h-3" /> Web Connected (Free Tier)
+        </span>
+      );
+    }
     if (agent.authStatus === 'connected') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-          <CheckCircle2 className="w-3 h-3" /> Connected
+          <CheckCircle2 className="w-3 h-3" /> CLI Connected
         </span>
       );
     }
@@ -236,44 +256,78 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
               {renderStatusBadge(selectedProfile)}
             </div>
 
-            {/* Step 1: One-Click Official Account Login */}
+            {/* Step 1: One-Click Built-In WebAuth (Free Tier - Recommended for Non-Developers) */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/50 via-slate-950/90 to-sky-950/50 border border-emerald-500/40 space-y-3 shadow-lg">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                      <Globe className="w-4 h-4 text-emerald-400" />
+                      Option 1: Sign In via Web Browser Session (Free Tier • No CMD Needed)
+                    </h4>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      Recommended &amp; Free
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                    Opens {selectedProfile.name}&apos;s official web interface (<code className="text-emerald-300">{selectedProfile.webUrl || 'Web App'}</code>) inside a built-in FlyMD window. Sign in with your normal Google, Apple, or Email account to use the <strong>Free Tier</strong> without any paid API token or terminal commands!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleWebAuthLogin(selectedProfile)}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-lg shadow-emerald-500/20 transition flex items-center gap-1.5 shrink-0"
+                >
+                  <Globe className="w-4 h-4" />
+                  <span>Web Sign-In ({selectedProfile.shortName} Free Tier)</span>
+                </button>
+              </div>
+              <div className="text-[11px] text-emerald-300/90 flex items-center gap-2 pt-2 border-t border-emerald-500/20">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Includes the floating <strong>FlyMD Web Bridge Bar</strong> to auto-fill your Markdown tasks and send replies back to FlyMD with 1 click.
+                </span>
+              </div>
+            </div>
+
+            {/* Step 2: Optional CLI Login for Developers */}
             <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-bold text-slate-100 text-xs flex items-center gap-1.5">
-                    <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
-                    Option 1: Connect Official Subscription Account (Recommended)
+                  <h4 className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                    <Terminal className="w-3.5 h-3.5 text-sky-400" />
+                    Option 2 (For Developers): Connect Local CLI Terminal Session
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Sign in using {selectedProfile.name}&apos;s official login flow ({selectedProfile.loginCommand || 'native session'}). No password is ever stored by FlyMD.
+                    If you have {selectedProfile.name} CLI installed locally, launch <code className="text-slate-300">{selectedProfile.loginCommand || 'native CLI'}</code>.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleOfficialLogin(selectedProfile)}
-                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold shadow-md shadow-sky-600/20 transition flex items-center gap-1.5 shrink-0"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold transition flex items-center gap-1.5 shrink-0"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Login to {selectedProfile.shortName}</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
+                  <span>CLI Login</span>
                 </button>
               </div>
 
               <div className="flex items-center gap-4 pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
                 <div className="flex items-center gap-1.5">
                   <Terminal className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Detected Executable:</span>
+                  <span>Detected Local CLI:</span>
                   <code className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-200 font-mono">
-                    {selectedProfile.detectedBinaryPath || 'Using Workspace Workflow Bridge'}
+                    {selectedProfile.detectedBinaryPath || 'Not Installed (Using Web / IDE Bridge)'}
                   </code>
                 </div>
               </div>
             </div>
 
-            {/* Step 2: API Key & Custom Configuration */}
+            {/* Step 3: API Key & Custom Configuration */}
             <form onSubmit={handleSaveCredential} className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3.5">
               <h4 className="font-bold text-slate-100 text-xs flex items-center gap-1.5">
                 <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                Option 2: Direct API Key & Custom Path (Optional)
+                Option 3 (Optional): Paid Developer API Key &amp; Custom Path
               </h4>
 
               <div className="space-y-1">
@@ -352,3 +406,4 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
     </div>
   );
 };
+
