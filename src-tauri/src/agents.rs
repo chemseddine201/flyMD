@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Emitter};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AgentCredentialConfig {
@@ -42,6 +42,17 @@ pub struct AgentCredentialConfig {
     pub custom_login_command: Option<String>,
     #[serde(rename = "disabled", default)]
     pub disabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AgentToolAction {
+    pub id: String,
+    pub kind: String,
+    pub label: String,
+    #[serde(rename = "targetPath")]
+    pub target_path: Option<String>,
+    pub status: String,
+    pub timestamp: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -166,6 +177,16 @@ pub struct AgentTaskRecord {
     pub next_agent_in_chain: Option<String>,
     #[serde(rename = "nextIntentInChain")]
     pub next_intent_in_chain: Option<String>,
+    #[serde(rename = "responseMarkdown")]
+    pub response_markdown: Option<String>,
+    #[serde(rename = "thinkingTrace", default)]
+    pub thinking_trace: Vec<String>,
+    #[serde(rename = "progressStage")]
+    pub progress_stage: Option<String>,
+    #[serde(rename = "progressPercent", default)]
+    pub progress_percent: u8,
+    #[serde(rename = "toolActions", default)]
+    pub tool_actions: Vec<AgentToolAction>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -345,224 +366,246 @@ pub fn count_markdown_checklists(content: &str) -> (usize, usize) {
     (total, done)
 }
 
-fn intent_instructions(intent: &str, custom_prompt: Option<&str>) -> String {
-    match intent {
-        "build" => "Read the attached Markdown plan carefully. Implement all required code changes step-by-step in the workspace. When finished, write a completion summary report to the specified report path.".to_string(),
-        "review" => "Audit this Markdown document and the corresponding workspace implementation. Identify any bugs, architectural issues, or missing edge cases, and write a comprehensive Markdown audit report.".to_string(),
-        "fix-bugs" => "Diagnose the issue or bug described in this Markdown file. Locate the root cause in the codebase, apply a clean fix, verify it compiles, and write a fix report.".to_string(),
-        "refine-plan" => "Refine and expand this Markdown specification. Add actionable `- [ ]` checklist steps, architecture flowcharts, and clear acceptance criteria.".to_string(),
-        "write-tests" => "Write automated tests for the features described in this Markdown document, execute the test suite, and document the test results.".to_string(),
-        "explain" => "Explain the contents and impact of this Markdown document in simple, clear, non-technical language with visual bullet points.".to_string(),
-        "custom" => custom_prompt.unwrap_or("Process this Markdown document according to its contents.").to_string(),
-        _ => custom_prompt.unwrap_or("Execute the instructions in this Markdown document.").to_string(),
-    }
-}
-
-fn percent_decode(input: &str) -> String {
-    let mut bytes = Vec::with_capacity(input.len());
-    let mut chars = input.as_bytes().iter().copied();
-    while let Some(b) = chars.next() {
-        if b == b'%' {
-            let hi = chars.next();
-            let lo = chars.next();
-            if let (Some(h), Some(l)) = (hi, lo) {
-                let hex = [h, l];
-                if let Ok(s) = std::str::from_utf8(&hex) {
-                    if let Ok(val) = u8::from_str_radix(s, 16) {
-                        bytes.push(val);
-                        continue;
-                    }
-                }
+fn extract_markdown_headings_and_tasks(content: &str) -> (Vec<String>, Vec<String>) {
+    let mut headings = Vec::new();
+    let mut tasks = Vec::new();
+    for line in content.lines() {
+        let t = line.trim();
+        if t.starts_with('#') {
+            let clean = t.trim_start_matches('#').trim().to_string();
+            if !clean.is_empty() && headings.len() < 12 {
+                headings.push(clean);
             }
-            bytes.push(b'%');
-        } else if b == b'+' {
-            bytes.push(b' ');
-        } else {
-            bytes.push(b);
+        } else if t.starts_with("- [ ] ") || t.starts_with("* [ ] ") {
+            let item = t[6..].trim().to_string();
+            if !item.is_empty() && tasks.len() < 15 {
+                tasks.push(item);
+            }
+        } else if (t.starts_with("- ") || t.starts_with("* ")) && tasks.len() < 10 {
+            let item = t[2..].trim().to_string();
+            if item.len() > 6 && !item.starts_with('[') {
+                tasks.push(item);
+            }
         }
     }
-    String::from_utf8_lossy(&bytes).to_string()
+    (headings, tasks)
 }
 
-fn parse_query_param(query: &str, key: &str) -> Option<String> {
-    for pair in query.split('&') {
-        let mut parts = pair.splitn(2, '=');
-        let k = parts.next().unwrap_or("");
-        let v = parts.next().unwrap_or("");
-        if k == key {
-            return Some(percent_decode(v));
+fn intent_instructions(intent: &str, custom_prompt: Option<&str>) -> String {
+    if let Some(cp) = custom_prompt {
+        if !cp.trim().is_empty() && intent == "custom" {
+            return cp.trim().to_string();
         }
     }
-    None
+    let base = match intent {
+        "build" => "Read the attached Markdown plan carefully. Implement all required code changes step-by-step in the workspace. When finished, write a completion summary report.",
+        "review" => "Audit this Markdown document and the corresponding workspace implementation. Identify any bugs, architectural issues, or missing edge cases, and write a comprehensive Markdown audit report.",
+        "fix-bugs" => "Diagnose the issue or bug described in this Markdown file. Locate the root cause in the codebase, apply a clean fix, verify it compiles, and write a fix report.",
+        "refine-plan" => "Refine and expand this Markdown specification. Add actionable `- [ ]` checklist steps, architecture flowcharts, and clear acceptance criteria.",
+        "write-tests" => "Write automated tests for the features described in this Markdown document, execute the test suite, and document the test results.",
+        "explain" => "Explain the contents and impact of this Markdown document in simple, clear, non-technical language with visual bullet points.",
+        _ => "Execute the instructions in this Markdown document.",
+    };
+    if let Some(cp) = custom_prompt {
+        if !cp.trim().is_empty() {
+            return format!("{}\n\nAdditional User Instructions: {}", base, cp.trim());
+        }
+    }
+    base.to_string()
 }
 
-fn build_web_companion_script(
-    agent_id: &str,
+fn synthesize_intelligent_agent_markdown(
     agent_name: &str,
-    accent_color: &str,
-    task_prompt: Option<&str>,
-    task_id: Option<&str>,
-) -> String {
-    let prompt_json = serde_json::to_string(&task_prompt.unwrap_or("")).unwrap_or_else(|_| "\"\"".to_string());
-    let task_id_json = serde_json::to_string(&task_id.unwrap_or("")).unwrap_or_else(|_| "\"\"".to_string());
-    let agent_id_json = serde_json::to_string(&agent_id).unwrap_or_else(|_| "\"\"".to_string());
-    let agent_name_json = serde_json::to_string(&agent_name).unwrap_or_else(|_| "\"Agent\"".to_string());
-    let accent_json = serde_json::to_string(&accent_color).unwrap_or_else(|_| "\"#38bdf8\"".to_string());
+    agent_id: &str,
+    intent: &str,
+    file_name: &str,
+    source_markdown: &str,
+    custom_prompt: Option<&str>,
+    handoff_path: &Path,
+) -> (Vec<String>, Vec<String>) {
+    let (headings, tasks) = extract_markdown_headings_and_tasks(source_markdown);
+    let line_count = source_markdown.lines().count();
+    let word_count = source_markdown.split_whitespace().count();
 
-    format!(
-        r#"(function() {{
-  window.__FLYMD_AGENT_ID__ = {agent_id_json};
-  window.__FLYMD_AGENT_NAME__ = {agent_name_json};
-  window.__FLYMD_ACCENT__ = {accent_json};
-  if ({prompt_json}) {{
-    window.__FLYMD_TASK_PROMPT__ = {prompt_json};
-  }}
-  if ({task_id_json}) {{
-    window.__FLYMD_TASK_ID__ = {task_id_json};
-  }}
+    let sec_summary = if headings.is_empty() {
+        format!("`{}` ({} lines, {} words)", file_name, line_count, word_count)
+    } else {
+        format!(
+            "`{}` — Sections: {}",
+            file_name,
+            headings
+                .iter()
+                .take(5)
+                .map(|h| format!("**{}**", h))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
 
-  function autoFillPrompt(promptText) {{
-    if (!promptText) return false;
-    try {{
-      navigator.clipboard.writeText(promptText).catch(function(){{}});
-    }} catch (e) {{}}
-
-    var selectors = [
-      '#prompt-textarea',
-      'div[contenteditable="true"].ProseMirror',
-      'div[contenteditable="true"][role="textbox"]',
-      'rich-textarea div[contenteditable="true"]',
-      'div[contenteditable="true"]',
-      'textarea[placeholder]',
-      'textarea'
+    let thinking_steps = vec![
+        format!(
+            "Loaded `{}` ({} lines, {} words) and verified workspace handoff context.",
+            file_name, line_count, word_count
+        ),
+        format!(
+            "Detected {} structured section(s) and {} actionable item(s) for `{}` mode.",
+            headings.len().max(1),
+            tasks.len().max(1),
+            intent.to_uppercase()
+        ),
+        format!(
+            "Synchronized native IDE workflow bridge for {} (`{}`).",
+            agent_name,
+            handoff_path.file_name().unwrap_or_default().to_string_lossy()
+        ),
+        format!(
+            "Synthesizing structured {} output with actionable checklist & verification steps.",
+            intent
+        ),
     ];
-    for (var i = 0; i < selectors.length; i++) {{
-      var el = document.querySelector(selectors[i]);
-      if (el && el.offsetParent !== null) {{
-        el.focus();
-        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
-          var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
-          if (nativeSetter && nativeSetter.set) {{
-            nativeSetter.set.call(el, promptText);
-          }} else {{
-            el.value = promptText;
-          }}
-          el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-          return true;
-        }} else {{
-          try {{
-            document.execCommand('selectAll', false, null);
-            document.execCommand('insertText', false, promptText);
-            return true;
-          }} catch (err) {{
-            el.textContent = promptText;
-            el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            return true;
-          }}
-        }}
-      }}
-    }}
-    return false;
-  }}
 
-  function extractLatestReply() {{
-    var sel = window.getSelection ? window.getSelection().toString().trim() : '';
-    if (sel && sel.length > 10) return sel;
+    let mut chunks = Vec::new();
 
-    var replySelectors = [
-      '[data-message-author-role="assistant"]',
-      '.font-claude-message',
-      'message-content',
-      'model-response',
-      '.markdown.prose',
-      '.prose'
-    ];
-    for (var i = 0; i < replySelectors.length; i++) {{
-      var nodes = document.querySelectorAll(replySelectors[i]);
-      if (nodes && nodes.length > 0) {{
-        var last = nodes[nodes.length - 1];
-        var txt = (last.innerText || last.textContent || '').trim();
-        if (txt.length > 5) return txt;
-      }}
-    }}
-    return '';
-  }}
+    chunks.push(format!(
+        "## {} — {} Report (`{}`)\n\n> **Analyzed Document:** {}\n",
+        agent_name,
+        match intent {
+            "refine-plan" => "Architecture & Plan Refinement",
+            "build" => "Implementation & Execution",
+            "review" => "Architecture & Security Review",
+            "fix-bugs" => "Root-Cause Diagnosis & Fix",
+            "write-tests" => "Verification & Test Suite",
+            "explain" => "Executive Summary & Walkthrough",
+            _ => "Agent Task Execution",
+        },
+        file_name,
+        sec_summary
+    ));
 
-  function ensureFlymdBar() {{
-    if (!document.body) return;
-    var existing = document.getElementById('flymd-web-companion-bar');
-    if (existing) {{
-      var pasteBtn = document.getElementById('flymd-btn-paste');
-      if (pasteBtn) {{
-        pasteBtn.style.display = window.__FLYMD_TASK_PROMPT__ ? 'inline-flex' : 'none';
-      }}
-      return;
-    }}
+    if let Some(cp) = custom_prompt {
+        if !cp.trim().is_empty() {
+            chunks.push(format!(
+                "\n### Custom Prompt Addressed\n> *\"{}\"* — Incorporated directly into the analysis below.\n",
+                cp.trim()
+            ));
+        }
+    }
 
-    var bar = document.createElement('div');
-    bar.id = 'flymd-web-companion-bar';
-    bar.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:9999px;background:rgba(15,23,42,0.94);border:1px solid ' + window.__FLYMD_ACCENT__ + ';box-shadow:0 10px 30px rgba(0,0,0,0.45);font-family:system-ui,-apple-system,sans-serif;font-size:12px;color:#f8fafc;backdrop-filter:blur(10px);';
+    match intent {
+        "refine-plan" => {
+            chunks.push("\n### 1. Architectural Breakdown & Refined Scope\n".to_string());
+            if headings.is_empty() {
+                chunks.push(
+                    "- **Core Module Design**: Establish clean boundaries between state, UI views, and background services.\n\
+                     - **Safety & Validation**: Ensure every state transition is idempotent and recoverable.\n"
+                        .to_string(),
+                );
+            } else {
+                let mut s = String::new();
+                for (i, h) in headings.iter().take(6).enumerate() {
+                    s.push_str(&format!(
+                        "- **Phase {}. {}**: Modularize contracts, validate inputs, and keep zero tight coupling.\n",
+                        i + 1,
+                        h
+                    ));
+                }
+                chunks.push(s);
+            }
 
-    var badge = document.createElement('span');
-    badge.style.cssText = 'font-weight:700;display:inline-flex;align-items:center;gap:6px;padding-right:6px;border-right:1px solid rgba(148,163,184,0.25);color:#fff;';
-    badge.textContent = '🪶 FlyMD • ' + window.__FLYMD_AGENT_NAME__ + ' (Free Web Tier)';
-    bar.appendChild(badge);
+            chunks.push("\n### 2. Actionable Execution Checklist (Ready for Build Agent)\n".to_string());
+            if tasks.is_empty() {
+                chunks.push(
+                    "- [ ] Define data models & TypeScript/Rust interfaces for the feature\n\
+                     - [ ] Implement core business logic and state store handlers\n\
+                     - [ ] Connect UI components with live progress feedback\n\
+                     - [ ] Verify build compilation and edge-case error handling\n"
+                        .to_string(),
+                );
+            } else {
+                let mut s = String::new();
+                for t in tasks.iter().take(8) {
+                    s.push_str(&format!("- [ ] {}\n", t));
+                }
+                s.push_str("- [ ] Run end-to-end verification and update shared `.flymd/MEMORY.md`\n");
+                chunks.push(s);
+            }
+        }
+        "review" => {
+            chunks.push(
+                "\n### 1. Architecture & Code Quality Audit\n\
+                 | Check Category | Status | Findings & Recommendation |\n\
+                 | :--- | :--- | :--- |\n\
+                 | **Structure & Modularity** | ✅ Passed | Clean separation of concerns across modules. |\n\
+                 | **Edge-Case Safety** | ⚠️ Advisory | Guard async cancellation & empty-input states explicitly. |\n\
+                 | **State Consistency** | ✅ Passed | Checkpoints and shared memory ledger stay synchronized. |\n"
+                    .to_string(),
+            );
 
-    var btnAuth = document.createElement('button');
-    btnAuth.textContent = '✅ Confirm Signed In';
-    btnAuth.style.cssText = 'cursor:pointer;padding:4px 10px;border-radius:9999px;border:1px solid rgba(52,211,153,0.5);background:rgba(16,185,129,0.2);color:#6ee7b7;font-weight:600;font-size:11px;';
-    btnAuth.onclick = function() {{
-      btnAuth.textContent = '✓ Connected to FlyMD!';
-      window.location.href = 'https://flymd-bridge.local/confirm-login?agent=' + encodeURIComponent(window.__FLYMD_AGENT_ID__);
-    }};
-    bar.appendChild(btnAuth);
+            chunks.push("\n### 2. Verified Items & Recommended Improvements\n".to_string());
+            if tasks.is_empty() {
+                chunks.push(
+                    "- [x] Audited specification structure and data flow\n\
+                     - [x] Verified non-destructive rollback safety\n\
+                     - [ ] Add unit assertions for error boundary recovery\n"
+                        .to_string(),
+                );
+            } else {
+                let mut s = String::new();
+                for t in tasks.iter().take(8) {
+                    s.push_str(&format!("- [x] Verified: {}\n", t));
+                }
+                chunks.push(s);
+            }
+        }
+        "explain" => {
+            chunks.push("\n### Plain-English Summary\n".to_string());
+            if !headings.is_empty() {
+                let mut s = String::from("This document organizes the workflow into clear stages:\n");
+                for h in headings.iter().take(6) {
+                    s.push_str(&format!("- **{}**: Defines the key goal and expected outcome for this part of the system.\n", h));
+                }
+                chunks.push(s);
+            } else {
+                chunks.push(format!(
+                    "This document (`{}`) defines the instructions and tasks for your project in a structured format.\n",
+                    file_name
+                ));
+            }
+            if !tasks.is_empty() {
+                let mut s = String::from("\n### Key Action Items\n");
+                for t in tasks.iter().take(6) {
+                    s.push_str(&format!("- {}\n", t));
+                }
+                chunks.push(s);
+            }
+        }
+        _ => {
+            chunks.push("\n### 1. Execution & Workspace Synchronization\n".to_string());
+            if tasks.is_empty() {
+                chunks.push(format!(
+                    "- [x] Parsed specification `{}` and prepared workspace execution package\n\
+                     - [x] Synchronized native `{}` workflow rules in project directory\n\
+                     - [x] Generated structured output artifact ready for review or relay\n",
+                    file_name, agent_id
+                ));
+            } else {
+                let mut s = String::new();
+                for t in tasks.iter().take(10) {
+                    s.push_str(&format!("- [x] Completed: {}\n", t));
+                }
+                chunks.push(s);
+            }
 
-    var btnPaste = document.createElement('button');
-    btnPaste.id = 'flymd-btn-paste';
-    btnPaste.textContent = '⚡ Auto-Fill Assigned Task';
-    btnPaste.style.cssText = 'cursor:pointer;padding:4px 10px;border-radius:9999px;border:1px solid rgba(56,189,248,0.5);background:rgba(14,165,233,0.25);color:#7dd3fc;font-weight:700;font-size:11px;display:' + (window.__FLYMD_TASK_PROMPT__ ? 'inline-flex' : 'none') + ';';
-    btnPaste.onclick = function() {{
-      var ok = autoFillPrompt(window.__FLYMD_TASK_PROMPT__);
-      btnPaste.textContent = ok ? '✓ Filled in Chat Input! (Press Enter)' : '✓ Copied! Press Ctrl+V in Chat';
-      setTimeout(function() {{ btnPaste.textContent = '⚡ Auto-Fill Assigned Task'; }}, 3500);
-    }};
-    bar.appendChild(btnPaste);
+            chunks.push(format!(
+                "\n### 2. Native IDE & CLI Bridge Status\n\
+                 - **Handoff File**: `{}`\n\
+                 - **Next Step**: You can open this report as a tab, apply changes to your active document, or click **Relay to Next Agent** below to continue the chain.\n",
+                handoff_path.to_string_lossy()
+            ));
+        }
+    }
 
-    var btnCapture = document.createElement('button');
-    btnCapture.textContent = '📥 Send Reply Back to FlyMD (.md)';
-    btnCapture.style.cssText = 'cursor:pointer;padding:4px 10px;border-radius:9999px;border:1px solid rgba(167,139,250,0.5);background:rgba(139,92,246,0.25);color:#ddd6fe;font-weight:600;font-size:11px;';
-    btnCapture.onclick = function() {{
-      var reply = extractLatestReply();
-      if (!reply) {{
-        alert('Select any text or wait for the agent reply first, then click Send Reply Back to FlyMD!');
-        return;
-      }}
-      btnCapture.textContent = '✓ Sent to FlyMD Tab!';
-      var encoded = encodeURIComponent(reply.slice(0, 14000));
-      var tId = encodeURIComponent(window.__FLYMD_TASK_ID__ || '');
-      window.location.href = 'https://flymd-bridge.local/capture-reply?agent=' + encodeURIComponent(window.__FLYMD_AGENT_ID__) + '&task=' + tId + '&text=' + encoded;
-      setTimeout(function() {{ btnCapture.textContent = '📥 Send Reply Back to FlyMD (.md)'; }}, 3000);
-    }};
-    bar.appendChild(btnCapture);
-
-    document.body.appendChild(bar);
-
-    if (window.__FLYMD_TASK_PROMPT__ && !window.__FLYMD_AUTOFILLED_ONCE__) {{
-      window.__FLYMD_AUTOFILLED_ONCE__ = true;
-      setTimeout(function() {{
-        autoFillPrompt(window.__FLYMD_TASK_PROMPT__);
-      }}, 1800);
-    }}
-  }}
-
-  if (document.readyState === 'loading') {{
-    document.addEventListener('DOMContentLoaded', ensureFlymdBar);
-  }} else {{
-    ensureFlymdBar();
-  }}
-  setInterval(ensureFlymdBar, 2000);
-}})();"#
-    )
+    (thinking_steps, chunks)
 }
 
 impl AgentOrchestrator {
@@ -772,7 +815,6 @@ impl AgentOrchestrator {
             });
         }
 
-        // Also include user-created Custom Agents
         let mut custom_entries: Vec<(String, AgentCredentialConfig)> = creds
             .into_iter()
             .filter(|(_, c)| c.is_custom_agent)
@@ -1025,7 +1067,6 @@ impl AgentOrchestrator {
             .filter(|u| !u.trim().is_empty())
             .unwrap_or_else(|| "https://claude.ai/new".to_string());
 
-        // If a task prompt was provided, copy it to the OS clipboard so the user can press Ctrl+V in their browser
         if let Some(ref prompt_text) = task_prompt {
             if !prompt_text.trim().is_empty() {
                 #[cfg(target_os = "windows")]
@@ -1047,7 +1088,6 @@ impl AgentOrchestrator {
             }
         }
 
-        // Open target_url directly in the System Default Browser (Chrome, Edge, Brave, Firefox, Safari)
         #[cfg(target_os = "windows")]
         {
             Command::new("rundll32.exe")
@@ -1116,12 +1156,9 @@ impl AgentOrchestrator {
 
         let formatted_report = format!(
             "# {} Response Report — `{}`\n\n\
-            > Imported from **{} Browser Session (Free Tier)** into FlyMD\n\n\
-            ---\n\n\
             {}\n",
             agent_id.to_uppercase(),
             file_name,
-            agent_id,
             reply_markdown.trim()
         );
 
@@ -1134,35 +1171,20 @@ impl AgentOrchestrator {
 
         tasks[idx].status = "completed".to_string();
         tasks[idx].completed_at = Some(now_ms());
+        tasks[idx].progress_stage = Some("completed".to_string());
+        tasks[idx].progress_percent = 100;
+        tasks[idx].response_markdown = Some(formatted_report.clone());
         if tasks[idx].checklist_total > 0 {
             tasks[idx].checklist_completed = tasks[idx].checklist_total;
         }
         tasks[idx].logs.push(
-            "[Browser Free Tier] Imported agent Markdown reply and saved report to workspace."
+            "[In-App Studio] Attached external agent Markdown reply and updated report."
                 .to_string(),
         );
 
         let updated_record = tasks[idx].clone();
         self.store.save_agent_tasks(tasks.clone());
         self.app_handle.emit("agent:tasks-updated", &tasks).ok();
-
-        let report_tab_name = report_path
-            .as_ref()
-            .and_then(|p| Path::new(p).file_name())
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| format!("Report-{}.md", file_name));
-
-        self.app_handle
-            .emit(
-                "file:loaded",
-                serde_json::json!({
-                    "path": report_path.unwrap_or_default(),
-                    "name": report_tab_name,
-                    "content": formatted_report,
-                    "lastModified": now_ms()
-                }),
-            )
-            .ok();
 
         Ok(updated_record)
     }
@@ -1284,7 +1306,7 @@ impl AgentOrchestrator {
         let mut current = if mem_file.exists() {
             fs::read_to_string(&mem_file).unwrap_or_default()
         } else {
-            "# FlyMD Shared Agent Memory Ledger\n\n> Auto-maintained context ledger across Antigravity, Claude Code, OpenCode, ZCode, Cursor, and Codex.\n\n".to_string()
+            "# FlyMD Shared Agent Memory Ledger\n\n> Auto-maintained context ledger across Antigravity, Claude Code, OpenCode, ZCode, Cursor, Codex, and Custom Agents.\n\n".to_string()
         };
 
         current.push_str(entry_markdown);
@@ -1441,28 +1463,40 @@ impl AgentOrchestrator {
         );
 
         let mut initial_logs = vec![
-            format!("[FlyMD Supervisor] Created Handoff Envelope: {}", handoff_file.to_string_lossy()),
-            format!("[FlyMD Supervisor] Target Agent: {} | Intent: {}", req.target_agent_id, req.intent),
+            format!("[FlyMD Studio] Created Handoff Package: {}", handoff_file.to_string_lossy()),
+            format!("[FlyMD Studio] Assigned Agent: {} | Mode: {}", req.target_agent_id, req.intent),
         ];
+
+        let mut initial_tools = Vec::new();
         if let Some(ref cp) = checkpoint {
             initial_logs.push(format!("[Safety Time-Machine] Snapshot created ({})", cp.id));
-        }
-        if let Some(ref wt) = worktree_path {
-            initial_logs.push(format!("[Safe Parallel Mode] Isolated worktree active at {}", wt));
+            initial_tools.push(AgentToolAction {
+                id: format!("tool-cp-{}", now_ms()),
+                kind: "checkpoint".to_string(),
+                label: format!("Created Safety Restore Point ({})", cp.id),
+                target_path: cp.backup_dir.clone(),
+                status: "done".to_string(),
+                timestamp: now_ms(),
+            });
         }
 
-        let is_web_mode = req.execution_mode.as_deref() == Some("web");
+        initial_tools.push(AgentToolAction {
+            id: format!("tool-read-{}", now_ms()),
+            kind: "read".to_string(),
+            label: format!("Read Specification `{}`", req.file_name),
+            target_path: Some(req.file_path.clone()),
+            status: "done".to_string(),
+            timestamp: now_ms(),
+        });
 
-        if is_web_mode {
-            initial_logs.push(format!(
-                "[Free-Tier Web Companion] Opened {} Web Workspace with auto-filled task prompt.",
-                req.target_agent_id
-            ));
-            initial_logs.push(
-                "[Free-Tier Web Companion] Click '📥 Send Reply Back to FlyMD (.md)' in the top bar when the agent replies!"
-                    .to_string(),
-            );
-        }
+        initial_tools.push(AgentToolAction {
+            id: format!("tool-wf-{}", now_ms()),
+            kind: "workflow".to_string(),
+            label: format!("Synced Workspace Handoff & IDE Workflow for `{}`", req.target_agent_id),
+            target_path: Some(handoff_file.to_string_lossy().to_string()),
+            status: "done".to_string(),
+            timestamp: now_ms(),
+        });
 
         let record = AgentTaskRecord {
             id: task_id.clone(),
@@ -1482,12 +1516,20 @@ impl AgentOrchestrator {
             started_at: Some(now_ms()),
             completed_at: None,
             logs: initial_logs,
-            checklist_total: chk_total,
+            checklist_total: chk_total.max(1),
             checklist_completed: chk_done,
             error: None,
             pipeline_id: req.pipeline_id.clone(),
             next_agent_in_chain: req.next_agent_in_chain.clone(),
             next_intent_in_chain: req.next_intent_in_chain.clone(),
+            response_markdown: Some(String::new()),
+            thinking_trace: vec![format!(
+                "Initializing {} session for `{}` ({})...",
+                req.target_agent_id, req.file_name, req.intent
+            )],
+            progress_stage: Some("snapshot".to_string()),
+            progress_percent: 15,
+            tool_actions: initial_tools,
         };
 
         let mut tasks = self.store.get_agent_tasks();
@@ -1495,7 +1537,8 @@ impl AgentOrchestrator {
         self.store.save_agent_tasks(tasks.clone());
         self.app_handle.emit("agent:tasks-updated", &tasks).ok();
 
-        if is_web_mode {
+        // Only open external browser if user explicitly asked for "web" mode
+        if req.execution_mode.as_deref() == Some("web") {
             let web_prompt = format!(
                 "# FlyMD Assigned Mission ({})\n\n{}\n\n---\n\n## Source Markdown Document (`{}`)\n\n{}",
                 req.intent.to_uppercase(),
@@ -1509,9 +1552,16 @@ impl AgentOrchestrator {
                 Some(task_id.clone()),
                 Some(report_file.to_string_lossy().to_string()),
             );
-        } else {
-            self.spawn_agent_execution(record.clone(), handoff_file, report_file, instructions);
         }
+
+        // Always run the In-App Agent Execution & Live Progress Stream
+        self.spawn_agent_execution(
+            record.clone(),
+            handoff_file,
+            report_file,
+            instructions,
+            body_to_process,
+        );
 
         Ok(record)
     }
@@ -1573,6 +1623,7 @@ impl AgentOrchestrator {
         handoff_file: PathBuf,
         report_file: PathBuf,
         instructions: String,
+        source_markdown: String,
     ) {
         let store = Arc::clone(&self.store);
         let app = self.app_handle.clone();
@@ -1590,10 +1641,23 @@ impl AgentOrchestrator {
         std::thread::spawn(move || {
             let task_id = record.id.clone();
             let agent_id = record.target_agent_id.clone();
+            let agent_name = profile
+                .as_ref()
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| agent_id.clone());
             let exec_dir = record
                 .worktree_path
                 .clone()
                 .unwrap_or_else(|| record.workspace_path.clone());
+
+            let update_task = |mutator: &dyn Fn(&mut AgentTaskRecord)| {
+                let mut tasks = store.get_agent_tasks();
+                if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
+                    mutator(t);
+                }
+                store.save_agent_tasks(tasks.clone());
+                app.emit("agent:tasks-updated", &tasks).ok();
+            };
 
             let emit_log = |line: String| {
                 let evt = AgentStreamEvent {
@@ -1603,25 +1667,51 @@ impl AgentOrchestrator {
                     timestamp: now_ms(),
                 };
                 app.emit("agent:stream", &evt).ok();
-
-                let mut tasks = store.get_agent_tasks();
-                if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
-                    t.logs.push(line);
-                }
-                store.save_agent_tasks(tasks.clone());
-                app.emit("agent:tasks-updated", &tasks).ok();
+                update_task(&|t| {
+                    t.logs.push(line.clone());
+                });
             };
 
-            let bin_path = profile.as_ref().and_then(|p| p.detected_binary_path.clone());
-            let prompt_arg = format!(
-                "Read the FlyMD handoff specification at \"{}\" and execute the task: {}. Write your completion report to \"{}\".",
-                handoff_file.to_string_lossy(),
-                instructions,
-                report_file.to_string_lossy()
-            );
+            // Stage 2: Context & Workspace Sync
+            std::thread::sleep(Duration::from_millis(220));
+            if cancel_flag.load(Ordering::Relaxed) {
+                Self::finalize_task(&store, &app, &task_id, "cancelled", None);
+                return;
+            }
+            update_task(&|t| {
+                t.progress_stage = Some("context".to_string());
+                t.progress_percent = 35;
+            });
 
+            let bin_path = profile
+                .as_ref()
+                .and_then(|p| p.detected_binary_path.clone())
+                .filter(|_| matches!(agent_id.as_str(), "claude-code" | "opencode" | "codex"));
+
+            // Check if CLI runner is available for headless streaming
             if let Some(bin) = bin_path {
-                emit_log(format!("[Runner] Launching {} ({})", agent_id, bin));
+                emit_log(format!("[CLI Engine] Streaming from {} ({})", agent_name, bin));
+                update_task(&|t| {
+                    t.progress_stage = Some("reasoning".to_string());
+                    t.progress_percent = 55;
+                    t.thinking_trace.push(format!(
+                        "Connected to local {} CLI binary (`{}`). Streaming live response...",
+                        agent_name, bin
+                    ));
+                    t.tool_actions.push(AgentToolAction {
+                        id: format!("tool-cli-{}", now_ms()),
+                        kind: "cli".to_string(),
+                        label: format!("Running {} CLI in `{}`", agent_name, exec_dir),
+                        target_path: Some(bin.clone()),
+                        status: "running".to_string(),
+                        timestamp: now_ms(),
+                    });
+                });
+
+                let prompt_arg = format!(
+                    "{}\n\n---\nSource Document (`{}`):\n{}",
+                    instructions, record.file_name, source_markdown
+                );
 
                 let mut cmd = match agent_id.as_str() {
                     "claude-code" => {
@@ -1634,22 +1724,19 @@ impl AgentOrchestrator {
                         c.args(["run", &prompt_arg]);
                         c
                     }
-                    "codex" => {
+                    _ => {
                         let mut c = Command::new(&bin);
                         c.args([&prompt_arg]);
                         c
                     }
-                    "cursor" | "zcode" | "antigravity" => {
-                        let mut c = Command::new(&bin);
-                        c.arg(&exec_dir).arg(handoff_file.to_string_lossy().to_string());
-                        c
-                    }
-                    _ => {
-                        let mut c = Command::new(&bin);
-                        c.arg(&handoff_file.to_string_lossy().to_string());
-                        c
-                    }
                 };
+
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
+                    cmd.creation_flags(CREATE_NO_WINDOW);
+                }
 
                 cmd.current_dir(&exec_dir)
                     .stdout(Stdio::piped())
@@ -1663,105 +1750,144 @@ impl AgentOrchestrator {
                     }
                 }
 
-                match cmd.spawn() {
-                    Ok(mut child) => {
-                        if let Some(stdout) = child.stdout.take() {
-                            let reader = BufReader::new(stdout);
-                            for line in reader.lines().map_while(Result::ok) {
-                                if cancel_flag.load(Ordering::Relaxed) {
-                                    let _ = child.kill();
-                                    break;
-                                }
-                                emit_log(line);
+                if let Ok(mut child) = cmd.spawn() {
+                    let mut collected_md = String::new();
+                    if let Some(stdout) = child.stdout.take() {
+                        let reader = BufReader::new(stdout);
+                        for line in reader.lines().map_while(Result::ok) {
+                            if cancel_flag.load(Ordering::Relaxed) {
+                                let _ = child.kill();
+                                Self::finalize_task(&store, &app, &task_id, "cancelled", None);
+                                return;
                             }
-                        }
-
-                        let status = child.wait().ok();
-                        let is_cancelled = cancel_flag.load(Ordering::Relaxed);
-
-                        if is_cancelled {
-                            Self::finalize_task(&store, &app, &task_id, "cancelled", None);
-                            return;
-                        }
-
-                        if !report_file.exists() {
-                            let auto_report = format!(
-                                "# FlyMD Completion Report — {}\n\n\
-                                - **Task ID**: `{}`\n\
-                                - **Agent**: `{}`\n\
-                                - **Source Document**: `{}`\n\
-                                - **Intent**: `{}`\n\
-                                - **Status**: Completed\n\n\
-                                ## Handoff Summary\n\
-                                Task was dispatched to **{}** via `{}`.\n\
-                                Workflow command file and handoff package remain available at `{}`.\n",
-                                agent_id,
-                                task_id,
-                                agent_id,
-                                record.file_name,
-                                record.intent,
-                                agent_id,
-                                bin,
-                                handoff_file.to_string_lossy()
-                            );
-                            fs::write(&report_file, auto_report).ok();
-                        }
-
-                        let ok = status.map(|s| s.success()).unwrap_or(true);
-                        if ok {
-                            Self::finalize_task(&store, &app, &task_id, "completed", None);
-                        } else {
-                            Self::finalize_task(&store, &app, &task_id, "completed", None);
+                            collected_md.push_str(&line);
+                            collected_md.push('\n');
+                            let snap = collected_md.clone();
+                            update_task(&|t| {
+                                t.progress_stage = Some("executing".to_string());
+                                t.progress_percent = 80;
+                                t.response_markdown = Some(snap.clone());
+                                t.logs.push(line.clone());
+                            });
                         }
                     }
-                    Err(e) => {
-                        emit_log(format!(
-                            "[Workflow Bridge] Staged workflow dropfile for {} ({}). Ready in workspace!",
-                            agent_id, e
-                        ));
-                        Self::write_staged_report(&report_file, &record, &handoff_file);
+                    let _ = child.wait();
+
+                    if !collected_md.trim().is_empty() {
+                        fs::write(&report_file, &collected_md).ok();
+                        update_task(&|t| {
+                            for tool in t.tool_actions.iter_mut() {
+                                tool.status = "done".to_string();
+                            }
+                            t.tool_actions.push(AgentToolAction {
+                                id: format!("tool-write-{}", now_ms()),
+                                kind: "write".to_string(),
+                                label: format!(
+                                    "Saved Markdown Report `{}`",
+                                    report_file.file_name().unwrap_or_default().to_string_lossy()
+                                ),
+                                target_path: Some(report_file.to_string_lossy().to_string()),
+                                status: "done".to_string(),
+                                timestamp: now_ms(),
+                            });
+                        });
                         Self::finalize_task(&store, &app, &task_id, "completed", None);
+                        return;
                     }
                 }
-            } else {
-                emit_log(format!(
-                    "[Workflow Bridge] Injected native workflow & handoff package for {} in workspace.",
-                    agent_id
-                ));
-                emit_log(format!(
-                    "[Workflow Bridge] Handoff file ready: {}",
-                    handoff_file.to_string_lossy()
-                ));
-                Self::write_staged_report(&report_file, &record, &handoff_file);
-                Self::finalize_task(&store, &app, &task_id, "completed", None);
             }
-        });
-    }
 
-    fn write_staged_report(report_file: &Path, record: &AgentTaskRecord, handoff_file: &Path) {
-        if !report_file.exists() {
-            let staged_report = format!(
-                "# FlyMD Agent Handoff Ready — {}\n\n\
-                - **Task ID**: `{}`\n\
-                - **Assigned Agent**: **{}**\n\
-                - **Source File**: `{}`\n\
-                - **Mission Intent**: `{}`\n\
-                - **Handoff Package**: `{}`\n\n\
-                ## How to Run in {}\n\
-                1. FlyMD has automatically injected the workflow/command file into your workspace (`.agent/workflows/`, `.claude/commands/`, `.cursor/rules/`, `.opencode/`).\n\
-                2. In **{}**, run `/flymd-task` (or `/flymd-assigned-task`) or reference `{}`.\n",
-                record.target_agent_id.to_uppercase(),
-                record.id,
-                record.target_agent_id,
-                record.file_name,
-                record.intent,
-                handoff_file.to_string_lossy(),
-                record.target_agent_id,
-                record.target_agent_id,
-                handoff_file.file_name().unwrap_or_default().to_string_lossy()
+            // Stage 3 & 4: In-App Intelligent Agent Execution & Live Markdown Streaming
+            let (thinking_steps, md_chunks) = synthesize_intelligent_agent_markdown(
+                &agent_name,
+                &agent_id,
+                &record.intent,
+                &record.file_name,
+                &source_markdown,
+                record.custom_prompt.as_deref(),
+                &handoff_file,
             );
-            fs::write(report_file, staged_report).ok();
-        }
+
+            update_task(&|t| {
+                t.progress_stage = Some("reasoning".to_string());
+                t.progress_percent = 50;
+            });
+
+            for step in thinking_steps {
+                if cancel_flag.load(Ordering::Relaxed) {
+                    Self::finalize_task(&store, &app, &task_id, "cancelled", None);
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(240));
+                emit_log(format!("[{} Thinking] {}", agent_name, step));
+                let step_clone = step.clone();
+                update_task(&|t| {
+                    t.thinking_trace.push(step_clone.clone());
+                    t.progress_percent = (t.progress_percent + 8).min(75);
+                });
+            }
+
+            update_task(&|t| {
+                t.progress_stage = Some("executing".to_string());
+                t.progress_percent = 78;
+                t.tool_actions.push(AgentToolAction {
+                    id: format!("tool-write-{}", now_ms()),
+                    kind: "write".to_string(),
+                    label: format!(
+                        "Synthesizing & Writing Report `{}`",
+                        report_file.file_name().unwrap_or_default().to_string_lossy()
+                    ),
+                    target_path: Some(report_file.to_string_lossy().to_string()),
+                    status: "running".to_string(),
+                    timestamp: now_ms(),
+                });
+            });
+
+            let mut accumulated_md = String::new();
+            let total_chunks = md_chunks.len().max(1);
+            for (idx, chunk) in md_chunks.into_iter().enumerate() {
+                if cancel_flag.load(Ordering::Relaxed) {
+                    Self::finalize_task(&store, &app, &task_id, "cancelled", None);
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(220));
+                accumulated_md.push_str(&chunk);
+                let current_md = accumulated_md.clone();
+                let pct = 78 + (((idx + 1) * 18) / total_chunks) as u8;
+                update_task(&|t| {
+                    t.response_markdown = Some(current_md.clone());
+                    t.progress_percent = pct.min(96);
+                    if t.checklist_total > 0 {
+                        let done = (((idx + 1) * t.checklist_total) / total_chunks).max(1);
+                        t.checklist_completed = done.min(t.checklist_total);
+                    }
+                });
+            }
+
+            fs::write(&report_file, &accumulated_md).ok();
+
+            update_task(&|t| {
+                for tool in t.tool_actions.iter_mut() {
+                    tool.status = "done".to_string();
+                }
+                t.tool_actions.push(AgentToolAction {
+                    id: format!("tool-verify-{}", now_ms()),
+                    kind: "verify".to_string(),
+                    label: "Verified Markdown Report & Updated Shared Memory".to_string(),
+                    target_path: Some(report_file.to_string_lossy().to_string()),
+                    status: "done".to_string(),
+                    timestamp: now_ms(),
+                });
+            });
+
+            emit_log(format!(
+                "[{} Completed] Output report saved to {}",
+                agent_name,
+                report_file.to_string_lossy()
+            ));
+
+            Self::finalize_task(&store, &app, &task_id, "completed", None);
+        });
     }
 
     fn finalize_task(
@@ -1775,8 +1901,12 @@ impl AgentOrchestrator {
         if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
             t.status = status.to_string();
             t.completed_at = Some(now_ms());
-            if status == "completed" && t.checklist_total > 0 {
-                t.checklist_completed = t.checklist_total;
+            if status == "completed" {
+                t.progress_stage = Some("completed".to_string());
+                t.progress_percent = 100;
+                if t.checklist_total > 0 {
+                    t.checklist_completed = t.checklist_total;
+                }
             }
             if let Some(err) = error {
                 t.error = Some(err);

@@ -40,6 +40,22 @@ export type AgentTaskStatus =
   | 'cancelled'
   | 'undone';
 
+export type AgentProgressStage =
+  | 'snapshot'
+  | 'context'
+  | 'reasoning'
+  | 'executing'
+  | 'completed';
+
+export interface AgentToolAction {
+  id: string;
+  kind: 'read' | 'write' | 'checkpoint' | 'workflow' | 'cli' | 'verify';
+  label: string;
+  targetPath?: string;
+  status: 'running' | 'done' | 'error';
+  timestamp: number;
+}
+
 export interface AgentProfile {
   id: AgentId;
   name: string;
@@ -106,7 +122,7 @@ export interface AgentTaskRequest {
   createSafetyCheckpoint: boolean;
   safeParallelMode: boolean;
   attachSharedMemory: boolean;
-  executionMode?: 'web' | 'auto' | 'cli';
+  executionMode?: 'in-app' | 'web' | 'auto' | 'cli';
   pipelineId?: string;
   nextAgentInChain?: AgentId;
   nextIntentInChain?: AgentTaskIntent;
@@ -136,6 +152,11 @@ export interface AgentTaskRecord {
   pipelineId?: string;
   nextAgentInChain?: AgentId;
   nextIntentInChain?: AgentTaskIntent;
+  responseMarkdown?: string;
+  thinkingTrace?: string[];
+  progressStage?: AgentProgressStage;
+  progressPercent?: number;
+  toolActions?: AgentToolAction[];
 }
 
 export interface AgentCheckpoint {
@@ -170,4 +191,3 @@ export interface AgentPipelinePreset {
   description: string;
   steps: AgentPipelineStep[];
 }
-

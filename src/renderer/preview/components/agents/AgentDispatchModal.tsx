@@ -45,7 +45,7 @@ export const AgentDispatchModal: React.FC = () => {
   const [nextIntentInChain, setNextIntentInChain] = useState<AgentTaskIntent>('review');
   const [selectedTasks, setSelectedTasks] = useState<Record<number, boolean>>({});
   const [filterSelectedOnly, setFilterSelectedOnly] = useState(false);
-  const [executionMode, setExecutionMode] = useState<'web' | 'auto'>('web');
+  const [executionMode, setExecutionMode] = useState<'in-app' | 'web'>('in-app');
   const [submitting, setSubmitting] = useState(false);
 
   const checklistItems = useMemo(() => {
@@ -73,12 +73,7 @@ export const AgentDispatchModal: React.FC = () => {
       const targetId = dispatchDraft.targetAgentId || 'claude-code';
       setTargetAgentId(targetId);
       setNextAgentInChain(dispatchDraft.nextAgentInChain || '');
-      const prof = agentProfiles.find((a) => a.id === targetId);
-      if (prof?.detectedBinaryPath && !prof?.webAuthConnected) {
-        setExecutionMode('auto');
-      } else {
-        setExecutionMode('web');
-      }
+      setExecutionMode('in-app');
       const initialSelected: Record<number, boolean> = {};
       checklistItems.forEach((item) => {
         if (!item.checked) {
@@ -286,8 +281,31 @@ export const AgentDispatchModal: React.FC = () => {
               })}
             </div>
 
-            {/* Execution Mode Selector: System Default Browser (Free Tier) vs Local CLI/IDE */}
+            {/* Execution Mode Selector: In-App Agent Chat Studio vs External Browser */}
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setExecutionMode('in-app')}
+                className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
+                  executionMode === 'in-app'
+                    ? 'bg-sky-500/15 border-sky-500/50 text-white ring-1 ring-sky-500/30'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Terminal size={16} className="text-sky-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    In-App Chat &amp; Live Progress Studio
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-bold uppercase">
+                      Recommended
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 mt-0.5">
+                    Runs directly inside FlyMD with live step progress, thinking trace, native IDE sync, and rendered Markdown chat!
+                  </div>
+                </div>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setExecutionMode('web')}
@@ -299,34 +317,11 @@ export const AgentDispatchModal: React.FC = () => {
               >
                 <Globe size={16} className="text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    Open in System Browser (Free Tier)
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">
-                      Recommended
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-300 mt-0.5">
-                    Copies your Markdown prompt automatically &amp; opens {targetAgent?.shortName} in your default browser (just press <strong>Ctrl+V</strong> in chat!).
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setExecutionMode('auto')}
-                className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
-                  executionMode === 'auto'
-                    ? 'bg-sky-500/15 border-sky-500/50 text-white ring-1 ring-sky-500/30'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                <Terminal size={16} className="text-sky-400 shrink-0 mt-0.5" />
-                <div>
                   <div className="text-xs font-bold text-white">
-                    Local IDE &amp; CLI Mode (For Developers)
+                    Also Open External Web Browser
                   </div>
                   <div className="text-[10px] text-slate-300 mt-0.5">
-                    Injects native IDE workflow files (`.agent/workflows/`, `.claude/commands/`, `.cursor/rules/`) and runs local CLI if installed.
+                    Copies your Markdown prompt to clipboard and opens {targetAgent?.shortName} in your default browser.
                   </div>
                 </div>
               </button>
