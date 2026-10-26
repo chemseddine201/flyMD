@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradients -->
+    <radialGradient id="bgGlow" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="60%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </radialGradient>
+
+    <!-- Ring Gradient -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+
+    <!-- Electric Arc Gradient -->
+    <linearGradient id="arcGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="35%" stop-color="#7dd3fc"/>
+      <stop offset="70%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+
+    <!-- Electric Glow Filter -->
+    <filter id="electricGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur1"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="16" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Subtle Drop Shadow -->
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <!-- Base Circle Background with Shadow -->
+  <circle cx="256" cy="256" r="236" fill="url(#bgGlow)" stroke="url(#ringGrad)" stroke-width="8" filter="url(#dropShadow)"/>
+
+  <!-- Inner Subtle Accent Ring -->
+  <circle cx="256" cy="256" r="222" fill="none" stroke="#38bdf8" stroke-width="2" stroke-opacity="0.25" stroke-dasharray="12 8"/>
+
+  <!-- Letters: "M" and "D" in Bold Technical Geometry -->
+  <g fill="#f8fafc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="160" letter-spacing="-4">
+    <!-- Letter M -->
+    <text x="135" y="315" text-anchor="middle" fill="#f1f5f9" opacity="0.95">M</text>
+    <!-- Letter D -->
+    <text x="375" y="315" text-anchor="middle" fill="#38bdf8" opacity="0.95">D</text>
+  </g>
+
+  <!-- Electric Arc / Lightning Bolt in the Center -->
+  <g filter="url(#electricGlow)">
+    <!-- Electric Aura Core -->
+    <path d="M 275 60
+             L 215 220
+             L 265 225
+             L 205 380
+             L 245 375
+             L 195 460
+             L 305 280
+             L 255 275
+             L 320 150
+             Z"
+          fill="url(#arcGrad)"/>
+
+    <!-- High-energy Intense White Inner Arc Bolt -->
+    <path d="M 270 75
+             L 223 218
+             L 267 223
+             L 214 370
+             L 245 366
+             L 210 440
+             L 295 285
+             L 253 280
+             L 310 158
+             Z"
+          fill="#ffffff"
+          opacity="0.85"/>
+  </g>
+
+  <!-- Electric Plasma Sparks / Discharges -->
+  <!-- Top Spark -->
+  <circle cx="280" cy="70" r="6" fill="#ffffff" filter="url(#electricGlow)"/>
+  <!-- Middle Right Branch -->
+  <path d="M 285 220 L 330 200 L 315 235" fill="none" stroke="#00f0ff" stroke-width="4" stroke-linecap="round" filter="url(#electricGlow)"/>
+  <!-- Middle Left Branch -->
+  <path d="M 235 320 L 190 340 L 205 310" fill="none" stroke="#7dd3fc" stroke-width="4" stroke-linecap="round" filter="url(#electricGlow)"/>
+  <!-- Bottom Spark -->
+  <circle cx="200" cy="450" r="5" fill="#ffffff" filter="url(#electricGlow)"/>
+</svg>

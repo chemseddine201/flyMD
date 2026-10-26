@@ -1,0 +1,32 @@
+[package]
+name = "fly-md-tauri"
+version = "0.1.0"
+description = "FlyMD - Native lightweight Markdown viewer & folder supervisor"
+authors = ["FlyMD Team"]
+edition = "2021"
+
+[lib]
+name = "fly_md_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+notify = "6.1"
+walkdir = "2.5"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+futures-util = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

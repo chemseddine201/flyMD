@@ -1,0 +1,222 @@
+/* Open-Source Design System & Themes Engine */
+
+:root {
+  /* Default: GitHub Dark */
+  --bg-canvas: #0d1117;
+  --bg-surface: #161b22;
+  --bg-surface-hover: #21262d;
+  --border-default: #30363d;
+  --border-subtle: #21262d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --accent-primary: #58a6ff;
+  --accent-hover: #79c0ff;
+  --code-bg: #161b22;
+  --code-border: #30363d;
+  --quote-bg: rgba(56, 139, 253, 0.1);
+  --quote-border: #58a6ff;
+  --table-border: #30363d;
+  --table-header-bg: #161b22;
+  --table-stripe: rgba(110, 118, 129, 0.04);
+  --link-color: #58a6ff;
+}
+
+[data-theme="github-light"], [data-theme="light"] {
+  --bg-canvas: #ffffff;
+  --bg-surface: #f6f8fa;
+  --bg-surface-hover: #eaeef2;
+  --border-default: #d0d7de;
+  --border-subtle: #e1e4e8;
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+  --text-muted: #8c959f;
+  --accent-primary: #0969da;
+  --accent-hover: #218bff;
+  --code-bg: #f6f8fa;
+  --code-border: #d0d7de;
+  --quote-bg: rgba(9, 105, 218, 0.06);
+  --quote-border: #0969da;
+  --table-border: #d0d7de;
+  --table-header-bg: #f6f8fa;
+  --table-stripe: #f6f8fa;
+  --link-color: #0969da;
+}
+
+[data-theme="tokyo-night"] {
+  --bg-canvas: #1a1b26;
+  --bg-surface: #24283b;
+  --bg-surface-hover: #2f354f;
+  --border-default: #414868;
+  --border-subtle: #292e42;
+  --text-primary: #c0caf5;
+  --text-secondary: #9aa5ce;
+  --text-muted: #565f89;
+  --accent-primary: #7aa2f7;
+  --accent-hover: #89ddff;
+  --code-bg: #1f2335;
+  --code-border: #414868;
+  --quote-bg: rgba(122, 162, 247, 0.1);
+  --quote-border: #7aa2f7;
+  --table-border: #414868;
+  --table-header-bg: #24283b;
+  --table-stripe: rgba(65, 72, 104, 0.2);
+  --link-color: #7aa2f7;
+}
+
+[data-theme="catppuccin"] {
+  --bg-canvas: #24273a;
+  --bg-surface: #1e2030;
+  --bg-surface-hover: #363a4f;
+  --border-default: #494d64;
+  --border-subtle: #363a4f;
+  --text-primary: #cad3f5;
+  --text-secondary: #a5adcb;
+  --text-muted: #6e738d;
+  --accent-primary: #8aadf4;
+  --accent-hover: #b7bdf8;
+  --code-bg: #1e2030;
+  --code-border: #494d64;
+  --quote-bg: rgba(138, 173, 244, 0.1);
+  --quote-border: #8aadf4;
+  --table-border: #494d64;
+  --table-header-bg: #1e2030;
+  --table-stripe: rgba(73, 77, 100, 0.25);
+  --link-color: #8aadf4;
+}
+
+[data-theme="dracula"] {
+  --bg-canvas: #282a36;
+  --bg-surface: #343746;
+  --bg-surface-hover: #44475a;
+  --border-default: #6272a4;
+  --border-subtle: #44475a;
+  --text-primary: #f8f8f2;
+  --text-secondary: #bfbfbf;
+  --text-muted: #6272a4;
+  --accent-primary: #bd93f9;
+  --accent-hover: #ff79c6;
+  --code-bg: #21222c;
+  --code-border: #44475a;
+  --quote-bg: rgba(189, 147, 249, 0.1);
+  --quote-border: #bd93f9;
+  --table-border: #6272a4;
+  --table-header-bg: #343746;
+  --table-stripe: rgba(68, 71, 90, 0.4);
+  --link-color: #8be9fd;
+}
+
+[data-theme="sepia"] {
+  --bg-canvas: #fbf0d9;
+  --bg-surface: #f4ecd8;
+  --bg-surface-hover: #ede3cc;
+  --border-default: #e2d5bc;
+  --border-subtle: #ede3cc;
+  --text-primary: #433422;
+  --text-secondary: #7a6650;
+  --text-muted: #9c8872;
+  --accent-primary: #c45525;
+  --accent-hover: #d96634;
+  --code-bg: #f2e7cf;
+  --code-border: #e2d5bc;
+  --quote-bg: rgba(196, 85, 37, 0.08);
+  --quote-border: #c45525;
+  --table-border: #e2d5bc;
+  --table-header-bg: #ede3cc;
+  --table-stripe: rgba(226, 213, 188, 0.35);
+  --link-color: #b5471a;
+}
+
+[data-theme="cyber"] {
+  --bg-canvas: #090910;
+  --bg-surface: #121124;
+  --bg-surface-hover: #1b1933;
+  --border-default: #2a2b4c;
+  --border-subtle: #1c1d35;
+  --text-primary: #e0f8ff;
+  --text-secondary: #8298b8;
+  --text-muted: #50617a;
+  --accent-primary: #00f0ff;
+  --accent-hover: #ff0055;
+  --code-bg: #0d0c1c;
+  --code-border: #00f0ff44;
+  --quote-bg: rgba(0, 240, 255, 0.08);
+  --quote-border: #00f0ff;
+  --table-border: #2a2b4c;
+  --table-header-bg: #141329;
+  --table-stripe: rgba(0, 240, 255, 0.03);
+  --link-color: #00f0ff;
+}
+
+/* WCAG AAA High Contrast Accessibility Theme */
+[data-theme="high-contrast"], [data-a11y-high-contrast="true"] {
+  --bg-canvas: #000000 !important;
+  --bg-surface: #0a0a0a !important;
+  --bg-surface-hover: #1f1f1f !important;
+  --border-default: #ffffff !important;
+  --border-subtle: #ffffff !important;
+  --text-primary: #ffffff !important;
+  --text-secondary: #ffff00 !important;
+  --text-muted: #ffff00 !important;
+  --accent-primary: #ffff00 !important;
+  --accent-hover: #00ffff !important;
+  --code-bg: #000000 !important;
+  --code-border: #ffffff !important;
+  --quote-bg: #000000 !important;
+  --quote-border: #ffff00 !important;
+  --table-border: #ffffff !important;
+  --table-header-bg: #141414 !important;
+  --table-stripe: #000000 !important;
+  --link-color: #00ffff !important;
+}
+
+/* Accessibility Modifiers */
+
+/* Dyslexia-Friendly Typography */
+[data-a11y-dyslexic="true"] .markdown-body,
+[data-a11y-dyslexic="true"] {
+  font-family: "Comic Sans MS", "Arial Rounded MT Bold", -apple-system, sans-serif !important;
+  line-height: 1.85 !important;
+  letter-spacing: 0.05em !important;
+  word-spacing: 0.12em !important;
+}
+
+[data-a11y-dyslexic="true"] .markdown-body p,
+[data-a11y-dyslexic="true"] .markdown-body li {
+  margin-bottom: 1.25rem !important;
+}
+
+/* Large Print Mode */
+[data-a11y-large-print="true"] .markdown-body {
+  font-size: 19px !important;
+  line-height: 1.8 !important;
+}
+
+[data-a11y-large-print="true"] .markdown-body h1 {
+  font-size: 2.5rem !important;
+}
+
+[data-a11y-large-print="true"] .markdown-body h2 {
+  font-size: 2rem !important;
+}
+
+[data-a11y-large-print="true"] .markdown-body h3 {
+  font-size: 1.6rem !important;
+}
+
+/* Reduced Motion Mode */
+[data-a11y-reduced-motion="true"] *,
+[data-a11y-reduced-motion="true"] *::before,
+[data-a11y-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* High Contrast Focus Indicators */
+[data-a11y-high-contrast="true"] *:focus-visible,
+:focus-visible {
+  outline: 2px solid var(--accent-primary) !important;
+  outline-offset: 2px !important;
+}
+

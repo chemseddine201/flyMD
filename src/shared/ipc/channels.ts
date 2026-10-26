@@ -1,0 +1,58 @@
+export const IPC_CHANNELS = {
+  FILE: {
+    OPEN_DIALOG: 'file:open-dialog',
+    READ: 'file:read',
+    SAVE: 'file:save',
+    SAVE_DIALOG: 'file:save-dialog',
+    EXPORT_PDF: 'file:export-pdf',
+  },
+  HISTORY: {
+    GET: 'history:get',
+    ADD: 'history:add',
+    REMOVE: 'history:remove',
+    CLEAR: 'history:clear',
+    UPDATED: 'history:updated',
+  },
+  WINDOW: {
+    FLOAT_TOGGLE_PIN: 'window:float:toggle-pin',
+    FLOAT_GET_PIN: 'window:float:get-pin',
+    PREVIEW_TOGGLE_PIN: 'window:preview:toggle-pin',
+    PREVIEW_GET_PIN: 'window:preview:get-pin',
+    MINIMIZE: 'window:minimize',
+    MAXIMIZE: 'window:maximize',
+    CLOSE: 'window:close',
+    FLOAT_MOVE: 'window:float:move',
+    FLOAT_GET_POSITION: 'window:float:get-position',
+    FLOAT_SET_POSITION: 'window:float:set-position',
+    FLOAT_SET_EXPANDED: 'window:float:set-expanded',
+    FLOAT_HIDE: 'window:float:hide',
+    FLOAT_SAVE_POSITION: 'window:float:save-position',
+  },
+  PREVIEW: {
+    OPEN_FILE: 'window:preview:open-file',
+    FILE_LOADED: 'preview:file-loaded',
+    FOLDER_LOADED: 'preview:folder-loaded',
+  },
+  LLM: {
+    GET_MODELS: 'ollama:get-models',
+    TEST_CONNECTION: 'llm:test-connection',
+    TRANSLATE_START: 'ollama:translate:start',
+    TRANSLATE_ABORT: 'ollama:translate:abort',
+    TRANSLATE_CHUNK: 'ollama:translate:chunk',
+    TRANSLATE_DONE: 'ollama:translate:done',
+  },
+  SETTINGS: {
+    GET: 'settings:get',
+    SAVE: 'settings:save',
+    CHANGED: 'settings:changed',
+  },
+  FOLDER: {
+    OPEN_DIALOG: 'folder:open-dialog',
+    SCAN: 'folder:scan',
+    SET_SUPERVISION: 'folder:set-supervision',
+    GET_SUPERVISION: 'folder:get-supervision',
+    SUPERVISED_FILE_EVENT: 'supervised:file-event',
+    SUPERVISED_TREE_UPDATED: 'supervised:tree-updated',
+  },
+} as const;
+

@@ -1,0 +1,1 @@
+Successfully wrote icon.png (145086 bytes, size: 512x512)

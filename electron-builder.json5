@@ -1,0 +1,69 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.flymd.app",
+  "productName": "FlyMD",
+  "copyright": "Copyright © 2026 FlyMD Team",
+  "compression": "maximum",
+  "directories": {
+    "output": "release"
+  },
+  "icon": "build/icon.ico",
+  "electronLanguages": ["en-US"],
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "build/icon.png",
+    "build/icon.ico",
+    "package.json",
+    "!node_modules/**/*"
+  ],
+  "win": {
+    "icon": "build/icon.ico",
+    "sign": null,
+    "signAndEditExecutable": false,
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown Document",
+        "description": "Markdown text file",
+        "role": "Editor"
+      },
+      {
+        "ext": "markdown",
+        "name": "Markdown Document",
+        "description": "Markdown text file",
+        "role": "Editor"
+      }
+    ]
+  },
+  "nsis": {
+    "differentialPackage": false,
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "FlyMD"
+  },
+  "mac": {
+    "target": ["dmg", "zip"],
+    "category": "public.app-category.productivity"
+  },
+  "linux": {
+    "target": ["AppImage", "deb"],
+    "category": "Office",
+    "synopsis": "On-the-fly cross-platform Markdown viewer and editor with local AI translation",
+    "desktop": {
+      "StartupWMClass": "FlyMD"
+    }
+  }
+}
