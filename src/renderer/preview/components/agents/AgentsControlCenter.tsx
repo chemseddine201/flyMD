@@ -53,6 +53,36 @@ export const AgentsControlCenter: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [restoringCheckpointId, setRestoringCheckpointId] = useState<string | null>(null);
   const [pastingTaskId, setPastingTaskId] = useState<string | null>(null);
+  const [pipelines, setPipelines] = useState<AgentPipelinePreset[]>(() => {
+    try {
+      const saved = localStorage.getItem('flymd:custom-pipelines');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return BUILTIN_AGENT_PIPELINES;
+  });
+
+  const handleUpdatePipelineStepAgent = (
+    pipelineId: string,
+    stepIdx: number,
+    newAgentId: AgentId
+  ) => {
+    setPipelines((prev) => {
+      const next = prev.map((p) => {
+        if (p.id !== pipelineId) return p;
+        const steps = p.steps.map((s, idx) =>
+          idx === stepIdx ? { ...s, agentId: newAgentId } : s
+        );
+        return { ...p, steps };
+      });
+      try {
+        localStorage.setItem('flymd:custom-pipelines', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const enabledProfiles = agentProfiles.filter((a) => a.enabled);
   const visibleAgents = enabledProfiles.length > 0 ? enabledProfiles : agentProfiles;
@@ -485,12 +515,26 @@ export const AgentsControlCenter: React.FC = () => {
 
       {/* Section 2: 1-Click Multi-Agent Relay Pipelines */}
       <div>
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-3">
-          <Workflow size={14} className="text-indigo-400" />
-          2. 1-Click Multi-Agent Relay Pipelines (Automated Handoff Chains)
-        </h2>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <Workflow size={14} className="text-indigo-400" />
+            2. 1-Click Relay Pipelines — Click Any Dropdown Below to Change Who Does Plan, Build & Review
+          </h2>
+          <button
+            type="button"
+            onClick={() => {
+              setPipelines(BUILTIN_AGENT_PIPELINES);
+              try {
+                localStorage.removeItem('flymd:custom-pipelines');
+              } catch {}
+            }}
+            className="text-[11px] text-slate-400 hover:text-sky-300 transition-colors"
+          >
+            Reset Default Pipeline Agents
+          </button>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {BUILTIN_AGENT_PIPELINES.map((pipeline) => (
+          {pipelines.map((pipeline) => (
             <div
               key={pipeline.id}
               className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col justify-between gap-3"
@@ -510,7 +554,7 @@ export const AgentsControlCenter: React.FC = () => {
                   </button>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  {pipeline.description}
+                  Choose which agent handles each step below, then click <strong>Start Relay</strong>:
                 </p>
               </div>
 
@@ -519,19 +563,34 @@ export const AgentsControlCenter: React.FC = () => {
                   const agent = agentProfiles.find((a) => a.id === step.agentId);
                   return (
                     <React.Fragment key={`${pipeline.id}-${idx}`}>
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 hover:border-indigo-400/60 text-xs transition-colors">
                         <span
-                          className="w-2 h-2 rounded-full"
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{
                             backgroundColor: agent?.accentColor || '#38bdf8',
                           }}
                         />
-                        <span className="font-semibold text-white">
-                          {agent?.shortName || step.agentId}
+                        <span className="text-[10px] font-bold uppercase text-indigo-300">
+                          {step.label}:
                         </span>
-                        <span className="text-[10px] text-slate-400">
-                          ({step.label})
-                        </span>
+                        <select
+                          value={step.agentId}
+                          onChange={(e) =>
+                            handleUpdatePipelineStepAgent(
+                              pipeline.id,
+                              idx,
+                              e.target.value
+                            )
+                          }
+                          title={`Change agent for ${step.label}`}
+                          className="bg-slate-900 text-white font-bold text-xs rounded px-1.5 py-0.5 border border-slate-700 focus:outline-none focus:border-sky-400 cursor-pointer"
+                        >
+                          {agentProfiles.map((opt) => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       {idx < pipeline.steps.length - 1 && (
                         <ArrowRight size={13} className="text-slate-500" />
