@@ -127,9 +127,20 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
     return (
       <div
         key={node.id}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(
+            'application/flymd-file',
+            JSON.stringify({
+              filePath: file.path,
+              fileName: file.name,
+              sourceAgent: file.sourceAgent,
+            })
+          );
+        }}
         onClick={() => onSelectFile(file.path)}
         style={{ paddingLeft: `${node.depth * 12 + 22}px` }}
-        title={`${file.relativePath} • ${formatRelativeTime(Math.max(file.createdAt, file.modifiedAt))}`}
+        title={`${file.relativePath} • Drag onto an Agent in the bottom dock to hand off`}
         className={`group flex items-center gap-2 py-1 pr-2 rounded-md cursor-pointer transition ${
           isSelected
             ? 'bg-sky-500/20 text-sky-200 font-semibold border border-sky-500/30'
@@ -151,6 +162,18 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
         </div>
 
         <span className="truncate flex-1 text-[11px]">{node.name}</span>
+
+        {file.sourceAgent && (
+          <span className="text-[9px] font-semibold px-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+            {file.sourceAgent}
+          </span>
+        )}
+
+        {typeof file.checklistTotal === 'number' && file.checklistTotal > 0 && (
+          <span className="text-[9px] font-mono px-1 rounded bg-emerald-500/15 text-emerald-300 shrink-0">
+            {file.checklistDone || 0}/{file.checklistTotal}
+          </span>
+        )}
 
         {file.isNew && colorBlindSafe && (
           <span className="text-[9px] font-bold px-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Columns2, Eye, Code2, PenLine } from 'lucide-react';
+import { Columns2, Eye, Code2, PenLine, Bot } from 'lucide-react';
 import { ViewMode } from '../../../../shared/constants';
 
 interface ViewModeSwitchProps {
@@ -52,6 +52,18 @@ export const ViewModeSwitch: React.FC<ViewModeSwitchProps> = ({
       >
         <Code2 className="w-3.5 h-3.5" />
         <span className="hidden md:inline text-[11px]">Source</span>
+      </button>
+      <button
+        onClick={() => onChangeViewMode('agents')}
+        title="Multi-Agent Workspace Supervisor & Handoff Hub"
+        className={`px-2 py-1 rounded flex items-center gap-1 transition ${
+          viewMode === 'agents'
+            ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+            : 'text-indigo-300 hover:text-white hover:bg-indigo-500/20'
+        }`}
+      >
+        <Bot className="w-3.5 h-3.5" />
+        <span className="hidden md:inline text-[11px]">Agents Hub</span>
       </button>
     </div>
   );

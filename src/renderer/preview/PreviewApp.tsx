@@ -11,6 +11,9 @@ import {
   AppTheme,
   PreviewWidthMode,
   AccessibilityConfig,
+  AgentProfile,
+  AgentTaskRecord,
+  AgentCheckpoint,
 } from '../../shared/types';
 import { resolveDirection } from '../../shared/utils';
 import { exportService, ExportFormatId } from './services/export';
@@ -24,6 +27,12 @@ import { SupervisionModal } from './components/SupervisionModal';
 import { SaveExportModal } from './components/SaveExportModal';
 import { AccessibilityModal } from './components/accessibility/AccessibilityModal';
 import { AppContextMenu } from './components/AppContextMenu';
+import {
+  AgentAccountsModal,
+  AgentDispatchModal,
+  CouncilModal,
+  AgentDock,
+} from './components/agents';
 import { useHotkeys } from '../shared/hooks/useHotkeys';
 import { useFileDrop } from '../shared/hooks/useFileDrop';
 import { useIpcEvent } from '../shared/hooks/useIpcEvent';
@@ -73,6 +82,9 @@ export const PreviewApp: React.FC = () => {
         store.setSidebarCollapsed(false);
       }
     });
+    window.electronAPI.discoverAgents?.().then(store.setAgentProfiles).catch(() => {});
+    window.electronAPI.getAgentTasks?.().then(store.setAgentTasks).catch(() => {});
+    window.electronAPI.getAgentCheckpoints?.().then(store.setAgentCheckpoints).catch(() => {});
   }, []);
 
   useIpcEvent<FileOpenResult>(window.electronAPI.onFileLoaded, (file) => {
@@ -122,6 +134,24 @@ export const PreviewApp: React.FC = () => {
 
   useIpcEvent(window.electronAPI.onSettingsChanged, (s) => {
     store.setSettings(s);
+  });
+
+  useIpcEvent<AgentProfile[]>(window.electronAPI.onAgentProfilesUpdated, (profiles) => {
+    if (Array.isArray(profiles)) {
+      store.setAgentProfiles(profiles);
+    }
+  });
+
+  useIpcEvent<AgentTaskRecord[]>(window.electronAPI.onAgentTasksUpdated, (tasks) => {
+    if (Array.isArray(tasks)) {
+      store.setAgentTasks(tasks);
+    }
+  });
+
+  useIpcEvent<AgentCheckpoint[]>(window.electronAPI.onAgentCheckpointsUpdated, (checkpoints) => {
+    if (Array.isArray(checkpoints)) {
+      store.setAgentCheckpoints(checkpoints);
+    }
   });
 
   useFileDrop({
@@ -428,6 +458,14 @@ export const PreviewApp: React.FC = () => {
         onCloseAll={() => store.closeAllTabs()}
         onCloseTabsToRight={(id) => store.closeTabsToRight(id)}
         onNewTab={() => store.addTab()}
+        onAssignTabToAgent={(tab) => {
+          store.openDispatchModal({
+            targetAgentId: 'claude-code',
+            sourceFilePath: tab.filePath,
+            sourceFileName: tab.fileName,
+            markdownContent: tab.content,
+          });
+        }}
         colorBlindSafe={store.settings.a11yConfig?.colorBlindSafe}
       />
 
@@ -524,6 +562,17 @@ export const PreviewApp: React.FC = () => {
         onChangeWidthMode={handleChangeWidthMode}
         onUpdateA11yConfig={handleUpdateA11yConfig}
       />
+
+      <AgentDock />
+
+      <AgentAccountsModal
+        isOpen={store.showAgentAccountsModal}
+        onClose={() => store.setShowAgentAccountsModal(false)}
+        profiles={store.agentProfiles}
+        onProfilesUpdated={store.setAgentProfiles}
+      />
+      <AgentDispatchModal />
+      <CouncilModal />
 
       <SaveExportModal
         isOpen={saveExportModal.isOpen}

@@ -215,6 +215,42 @@
     },
     onTranslationChunk: makeEventListener('llm:translate:chunk'),
     onTranslationComplete: makeEventListener('llm:translate:done'),
+
+    // Multi-Agent Workspace Supervisor
+    discoverAgents: function () {
+      return invoke('cmd_discover_agents');
+    },
+    saveAgentCredential: function (agentId, credential) {
+      return invoke('cmd_save_agent_credential', { agentId: agentId, credential: credential });
+    },
+    getAgentCredentials: function () {
+      return invoke('cmd_get_agent_credentials');
+    },
+    launchAgentLogin: function (agentId) {
+      return invoke('cmd_launch_agent_login', { agentId: agentId });
+    },
+    dispatchAgentTask: function (request) {
+      return invoke('cmd_dispatch_agent_task', { request: request });
+    },
+    getAgentTasks: function () {
+      return invoke('cmd_get_agent_tasks');
+    },
+    cancelAgentTask: function (taskId) {
+      return invoke('cmd_cancel_agent_task', { taskId: taskId });
+    },
+    clearAgentTasks: function () {
+      return invoke('cmd_clear_agent_tasks');
+    },
+    getAgentCheckpoints: function () {
+      return invoke('cmd_get_agent_checkpoints');
+    },
+    restoreAgentCheckpoint: function (checkpointId) {
+      return invoke('cmd_restore_agent_checkpoint', { checkpointId: checkpointId });
+    },
+    onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
+    onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),
+    onAgentCheckpointsUpdated: makeEventListener('agent:checkpoints-updated'),
+    onAgentStream: makeEventListener('agent:stream'),
   };
 
   window.electronAPI = electronAPI;

@@ -1,3 +1,4 @@
+use crate::agents::count_markdown_checklists;
 use crate::store::{FolderSupervisionConfig, SharedStore};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,12 @@ pub struct ScannedMdFile {
     pub size: u64,
     #[serde(rename = "isNew")]
     pub is_new: bool,
+    #[serde(rename = "sourceAgent")]
+    pub source_agent: Option<String>,
+    #[serde(rename = "checklistTotal", default)]
+    pub checklist_total: usize,
+    #[serde(rename = "checklistDone", default)]
+    pub checklist_done: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -49,31 +56,86 @@ fn is_markdown(name: &str) -> bool {
     lower.ends_with(".md")
         || lower.ends_with(".markdown")
         || lower.ends_with(".mdown")
+        || lower.ends_with(".mdc")
         || lower.ends_with(".txt")
 }
 
+fn is_allowed_agent_dot_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".flymd" | ".agent" | ".claude" | ".opencode" | ".cursor" | ".codex" | ".zed" | ".gemini"
+    )
+}
+
 fn is_ignored_dir(name: &str) -> bool {
+    if is_allowed_agent_dot_dir(name) {
+        return false;
+    }
     if name.starts_with('.') {
         return true;
     }
     matches!(
         name,
         "node_modules"
-            | ".git"
-            | ".vscode"
-            | ".idea"
-            | ".cursor"
+            | "checkpoints"
+            | "worktrees"
             | "dist"
             | "dist-electron"
             | "build"
             | "release"
-            | ".vendor"
             | "vendor"
             | "coverage"
-            | ".next"
-            | ".nuxt"
             | "target"
+            | ".system_generated"
     )
+}
+
+fn inspect_markdown_metadata(path: &Path) -> (Option<String>, usize, usize) {
+    let path_lower = path.to_string_lossy().to_lowercase();
+    let fname_lower = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let mut detected_agent = if path_lower.contains("antigravity") || path_lower.contains(".agent") || path_lower.contains(".gemini") {
+        Some("antigravity".to_string())
+    } else if path_lower.contains("claude") || fname_lower == "claude.md" {
+        Some("claude-code".to_string())
+    } else if path_lower.contains("opencode") {
+        Some("opencode".to_string())
+    } else if path_lower.contains("cursor") {
+        Some("cursor".to_string())
+    } else if path_lower.contains("codex") {
+        Some("codex".to_string())
+    } else if path_lower.contains("zcode") || path_lower.contains(".zed") {
+        Some("zcode".to_string())
+    } else {
+        None
+    };
+
+    if let Ok(content) = fs::read_to_string(path) {
+        let (total, done) = count_markdown_checklists(&content);
+        if detected_agent.is_none() {
+            let head: String = content.lines().take(20).collect::<Vec<_>>().join("\n").to_lowercase();
+            if head.contains("antigravity") {
+                detected_agent = Some("antigravity".to_string());
+            } else if head.contains("claude-code") || head.contains("claude code") {
+                detected_agent = Some("claude-code".to_string());
+            } else if head.contains("opencode") {
+                detected_agent = Some("opencode".to_string());
+            } else if head.contains("codex") {
+                detected_agent = Some("codex".to_string());
+            } else if head.contains("cursor") {
+                detected_agent = Some("cursor".to_string());
+            } else if head.contains("zcode") {
+                detected_agent = Some("zcode".to_string());
+            }
+        }
+        (detected_agent, total, done)
+    } else {
+        (detected_agent, 0, 0)
+    }
 }
 
 impl WorkspaceManager {
@@ -123,6 +185,7 @@ impl WorkspaceManager {
                                         .map(|d| d.as_millis() as i64)
                                         .unwrap_or(mtime);
                                     let is_recent = ctime >= self.session_start_time || mtime >= self.session_start_time;
+                                    let (source_agent, checklist_total, checklist_done) = inspect_markdown_metadata(&path);
 
                                     results.push(ScannedMdFile {
                                         path: path.to_string_lossy().to_string(),
@@ -132,6 +195,9 @@ impl WorkspaceManager {
                                         modified_at: mtime,
                                         size: meta.len(),
                                         is_new: is_recent,
+                                        source_agent,
+                                        checklist_total,
+                                        checklist_done,
                                     });
                                 }
                             }
@@ -169,6 +235,7 @@ impl WorkspaceManager {
                                     .unwrap_or(mtime);
                                 let rel = path.strip_prefix(root).unwrap_or(path);
                                 let is_recent = ctime >= self.session_start_time || mtime >= self.session_start_time;
+                                let (source_agent, checklist_total, checklist_done) = inspect_markdown_metadata(path);
 
                                 results.push(ScannedMdFile {
                                     path: path.to_string_lossy().to_string(),
@@ -178,6 +245,9 @@ impl WorkspaceManager {
                                     modified_at: mtime,
                                     size: meta.len(),
                                     is_new: is_recent,
+                                    source_agent,
+                                    checklist_total,
+                                    checklist_done,
                                 });
                             }
                         }
@@ -284,6 +354,8 @@ impl WorkspaceManager {
                                 };
 
                                 let rel = path.strip_prefix(&root_path).unwrap_or(&path);
+                                let (source_agent, checklist_total, checklist_done) = inspect_markdown_metadata(&path);
+
                                 let scanned = ScannedMdFile {
                                     path: path_str.clone(),
                                     name: fname.to_string(),
@@ -292,6 +364,9 @@ impl WorkspaceManager {
                                     modified_at: mtime,
                                     size: meta.len(),
                                     is_new,
+                                    source_agent,
+                                    checklist_total,
+                                    checklist_done,
                                 };
 
                                 let evt = SupervisedFileEvent {
@@ -329,4 +404,3 @@ impl WorkspaceManager {
         false
     }
 }
-

@@ -6,6 +6,9 @@ export interface ScannedMdFile {
   modifiedAt: number;
   size: number;
   isNew?: boolean;
+  sourceAgent?: string;
+  checklistTotal?: number;
+  checklistDone?: number;
 }
 
 export type ScanDepthMode = 'full-tree' | 'shallow';
@@ -15,6 +18,7 @@ export interface FolderSupervisionConfig {
   name: string;
   enabled: boolean;
   autoOpenNew: boolean;
-  scanMode?: ScanDepthMode; // 'full-tree' = recursive subfolders; 'shallow' = specified folder only
+  scanMode?: ScanDepthMode;
+  collectExternalAgentArtifacts?: boolean;
 }
 

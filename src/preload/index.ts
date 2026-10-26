@@ -7,6 +7,13 @@ import {
   FileOpenResult,
   ScannedMdFile,
   FolderSupervisionConfig,
+  AgentProfile,
+  AgentCredentialConfig,
+  AgentCredentialsMap,
+  AgentTaskRequest,
+  AgentTaskRecord,
+  AgentCheckpoint,
+  AgentStreamEvent,
 } from '../shared/types';
 import {
   IPC_CHANNELS,
@@ -148,6 +155,48 @@ const electronAPI = {
     const handler = (_: any, data: ScannedMdFile[]) => callback(data);
     ipcRenderer.on(IPC_CHANNELS.FOLDER.SUPERVISED_TREE_UPDATED, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.FOLDER.SUPERVISED_TREE_UPDATED, handler);
+  },
+
+  // Multi-Agent Workspace Supervisor
+  discoverAgents: (): Promise<AgentProfile[]> =>
+    ipcRenderer.invoke('agent:discover'),
+  saveAgentCredential: (agentId: string, credential: AgentCredentialConfig): Promise<AgentProfile[]> =>
+    ipcRenderer.invoke('agent:save-credential', agentId, credential),
+  getAgentCredentials: (): Promise<AgentCredentialsMap> =>
+    ipcRenderer.invoke('agent:get-credentials'),
+  launchAgentLogin: (agentId: string): Promise<string> =>
+    ipcRenderer.invoke('agent:launch-login', agentId),
+  dispatchAgentTask: (request: AgentTaskRequest): Promise<AgentTaskRecord> =>
+    ipcRenderer.invoke('agent:dispatch-task', request),
+  getAgentTasks: (): Promise<AgentTaskRecord[]> =>
+    ipcRenderer.invoke('agent:get-tasks'),
+  cancelAgentTask: (taskId: string): Promise<AgentTaskRecord[]> =>
+    ipcRenderer.invoke('agent:cancel-task', taskId),
+  clearAgentTasks: (): Promise<AgentTaskRecord[]> =>
+    ipcRenderer.invoke('agent:clear-tasks'),
+  getAgentCheckpoints: (): Promise<AgentCheckpoint[]> =>
+    ipcRenderer.invoke('agent:get-checkpoints'),
+  restoreAgentCheckpoint: (checkpointId: string): Promise<string> =>
+    ipcRenderer.invoke('agent:restore-checkpoint', checkpointId),
+  onAgentProfilesUpdated: (callback: (profiles: AgentProfile[]) => void) => {
+    const handler = (_: any, data: AgentProfile[]) => callback(data);
+    ipcRenderer.on('agent:profiles-updated', handler);
+    return () => ipcRenderer.removeListener('agent:profiles-updated', handler);
+  },
+  onAgentTasksUpdated: (callback: (tasks: AgentTaskRecord[]) => void) => {
+    const handler = (_: any, data: AgentTaskRecord[]) => callback(data);
+    ipcRenderer.on('agent:tasks-updated', handler);
+    return () => ipcRenderer.removeListener('agent:tasks-updated', handler);
+  },
+  onAgentCheckpointsUpdated: (callback: (checkpoints: AgentCheckpoint[]) => void) => {
+    const handler = (_: any, data: AgentCheckpoint[]) => callback(data);
+    ipcRenderer.on('agent:checkpoints-updated', handler);
+    return () => ipcRenderer.removeListener('agent:checkpoints-updated', handler);
+  },
+  onAgentStream: (callback: (evt: AgentStreamEvent) => void) => {
+    const handler = (_: any, data: AgentStreamEvent) => callback(data);
+    ipcRenderer.on('agent:stream', handler);
+    return () => ipcRenderer.removeListener('agent:stream', handler);
   },
 };
 

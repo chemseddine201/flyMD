@@ -234,6 +234,7 @@ pub async fn cmd_open_in_preview(
             enabled: true,
             auto_open_new: true,
             scan_mode: "full-tree".to_string(),
+            collect_external_agent_artifacts: true,
         };
         workspace.set_supervision(config);
 

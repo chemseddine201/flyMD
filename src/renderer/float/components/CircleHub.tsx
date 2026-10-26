@@ -19,6 +19,7 @@ interface CircleHubProps {
   onFileDrop: (filePath: string) => void;
   onHideToTray: () => void;
   hasNewFilesDot?: boolean;
+  runningAgentsCount?: number;
 }
 
 export const CircleHub: React.FC<CircleHubProps> = ({
@@ -33,6 +34,7 @@ export const CircleHub: React.FC<CircleHubProps> = ({
   onFileDrop,
   onHideToTray,
   hasNewFilesDot = false,
+  runningAgentsCount = 0,
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const hubContainerRef = useRef<HTMLDivElement>(null);
@@ -115,7 +117,11 @@ export const CircleHub: React.FC<CircleHubProps> = ({
             )}
           </div>
           <span className="text-[9px] text-sky-400/80 font-mono">
-            {history.length > 0 ? `${history.length} recent` : 'Empty'}
+            {runningAgentsCount > 0
+              ? `${runningAgentsCount} agent active`
+              : history.length > 0
+              ? `${history.length} recent`
+              : 'Empty'}
           </span>
         </div>
 

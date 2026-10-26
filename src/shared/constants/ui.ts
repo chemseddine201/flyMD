@@ -1,4 +1,4 @@
-export const VIEW_MODES = ['split', 'preview', 'editor', 'wysiwyg'] as const;
+export const VIEW_MODES = ['split', 'preview', 'editor', 'wysiwyg', 'agents'] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
 
 export const THEMES = [

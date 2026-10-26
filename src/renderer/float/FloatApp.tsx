@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { HistoryItem, ScannedMdFile } from '../../shared/types';
+import { HistoryItem, ScannedMdFile, AgentTaskRecord } from '../../shared/types';
 import { CircleHub } from './components/CircleHub';
 import { useIpcEvent } from '../shared/hooks/useIpcEvent';
 
@@ -7,14 +7,26 @@ export const FloatApp: React.FC = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isPinned, setIsPinned] = useState(true);
   const [hasNewFilesDot, setHasNewFilesDot] = useState(false);
+  const [runningAgentsCount, setRunningAgentsCount] = useState(0);
 
   useEffect(() => {
     window.electronAPI.getHistory().then(setHistory);
     window.electronAPI.getFloatAlwaysOnTop().then(setIsPinned);
+    window.electronAPI.getAgentTasks?.().then((tasks) => {
+      if (Array.isArray(tasks)) {
+        setRunningAgentsCount(tasks.filter((t) => t.status === 'running').length);
+      }
+    }).catch(() => {});
   }, []);
 
   useIpcEvent<HistoryItem[]>(window.electronAPI.onHistoryUpdated, (items) => {
     setHistory(items);
+  });
+
+  useIpcEvent<AgentTaskRecord[]>(window.electronAPI.onAgentTasksUpdated, (tasks) => {
+    if (Array.isArray(tasks)) {
+      setRunningAgentsCount(tasks.filter((t) => t.status === 'running').length);
+    }
   });
 
   useIpcEvent<{ file: ScannedMdFile; isNew: boolean }>(window.electronAPI.onSupervisedFileEvent, (data) => {
@@ -83,6 +95,7 @@ export const FloatApp: React.FC = () => {
         onFileDrop={handleFileDrop}
         onHideToTray={handleHideToTray}
         hasNewFilesDot={hasNewFilesDot}
+        runningAgentsCount={runningAgentsCount}
       />
     </div>
   );

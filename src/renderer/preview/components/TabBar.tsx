@@ -12,6 +12,7 @@ import {
   Trash2,
   AlertTriangle,
   AlertCircle,
+  Send,
 } from 'lucide-react';
 
 interface TabBarProps {
@@ -23,6 +24,7 @@ interface TabBarProps {
   onCloseAll?: () => void;
   onCloseTabsToRight?: (fromId: string) => void;
   onNewTab: () => void;
+  onAssignTabToAgent?: (tab: TabItem) => void;
   colorBlindSafe?: boolean;
 }
 
@@ -35,6 +37,7 @@ export const TabBar: React.FC<TabBarProps> = ({
   onCloseAll,
   onCloseTabsToRight,
   onNewTab,
+  onAssignTabToAgent,
   colorBlindSafe = false,
 }) => {
   const tabsContainerRef = useRef<HTMLDivElement>(null);
@@ -200,6 +203,17 @@ export const TabBar: React.FC<TabBarProps> = ({
               <div
                 key={tab.id}
                 data-active={isActive ? 'true' : 'false'}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(
+                    'application/flymd-file',
+                    JSON.stringify({
+                      filePath: tab.filePath,
+                      fileName: tab.fileName,
+                      markdownContent: tab.content,
+                    })
+                  );
+                }}
                 onClick={() => onSelectTab(tab.id)}
                 onContextMenu={(e) => handleTabContextMenu(tab, e)}
                 onMouseDown={(e) => {
@@ -286,6 +300,23 @@ export const TabBar: React.FC<TabBarProps> = ({
           className="w-48 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl p-1 text-slate-200 text-xs flex flex-col gap-0.5 animate-in fade-in duration-100"
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {onAssignTabToAgent && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  if (contextMenu.tab) onAssignTabToAgent(contextMenu.tab);
+                  setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                }}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 text-sky-300 font-semibold transition text-left"
+              >
+                <Send className="w-3.5 h-3.5 text-sky-400" />
+                <span className="flex-1">Assign to Agent...</span>
+              </button>
+              <div className="h-px bg-slate-800 my-0.5" />
+            </>
+          )}
+
           <button
             type="button"
             onClick={() => {

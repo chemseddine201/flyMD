@@ -241,7 +241,19 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             return (
               <div
                 key={file.path}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(
+                    'application/flymd-file',
+                    JSON.stringify({
+                      filePath: file.path,
+                      fileName: file.name,
+                      sourceAgent: file.sourceAgent,
+                    })
+                  );
+                }}
                 onClick={() => onSelectFile(file.path)}
+                title="Click to open • Drag onto an Agent in the bottom dock to hand off"
                 className={`group flex items-start gap-2 p-2 rounded-lg cursor-pointer transition ${
                   isSelected
                     ? 'bg-sky-500/15 border border-sky-500/30 text-sky-200'
@@ -267,6 +279,16 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                     >
                       {file.name}
                     </p>
+                    {file.sourceAgent && (
+                      <span className="text-[9px] font-semibold px-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+                        {file.sourceAgent}
+                      </span>
+                    )}
+                    {typeof file.checklistTotal === 'number' && file.checklistTotal > 0 && (
+                      <span className="text-[9px] font-mono px-1 rounded bg-emerald-500/15 text-emerald-300 shrink-0">
+                        {file.checklistDone || 0}/{file.checklistTotal}
+                      </span>
+                    )}
                     {file.isNew && colorBlindSafe && (
                       <span className="text-[9px] font-bold px-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0 uppercase tracking-wider">
                         NEW

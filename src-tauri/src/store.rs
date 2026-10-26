@@ -136,6 +136,8 @@ pub struct FolderSupervisionConfig {
     pub auto_open_new: bool,
     #[serde(rename = "scanMode", default = "default_scan_mode")]
     pub scan_mode: String,
+    #[serde(rename = "collectExternalAgentArtifacts", default = "default_true")]
+    pub collect_external_agent_artifacts: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -152,19 +154,28 @@ pub struct StoreSchema {
     pub preview_bounds: PreviewBounds,
     #[serde(rename = "supervisionConfig")]
     pub supervision_config: Option<FolderSupervisionConfig>,
+    #[serde(rename = "agentCredentials", default)]
+    pub agent_credentials: std::collections::HashMap<String, crate::agents::AgentCredentialConfig>,
+    #[serde(rename = "agentTasks", default)]
+    pub agent_tasks: Vec<crate::agents::AgentTaskRecord>,
+    #[serde(rename = "agentCheckpoints", default)]
+    pub agent_checkpoints: Vec<crate::agents::AgentCheckpoint>,
 }
 
-fn current_version() -> u32 { 2 }
+fn current_version() -> u32 { 3 }
 
 impl Default for StoreSchema {
     fn default() -> Self {
         Self {
-            schema_version: 2,
+            schema_version: 3,
             settings: AppSettings::default(),
             history: Vec::new(),
             float_bounds: FloatBounds::default(),
             preview_bounds: PreviewBounds::default(),
             supervision_config: None,
+            agent_credentials: std::collections::HashMap::new(),
+            agent_tasks: Vec::new(),
+            agent_checkpoints: Vec::new(),
         }
     }
 }
@@ -293,6 +304,45 @@ impl AppStore {
     pub fn set_supervision_config(&self, config: Option<FolderSupervisionConfig>) {
         let mut guard = self.data.lock().unwrap();
         guard.supervision_config = config;
+        drop(guard);
+        self.save();
+    }
+
+    pub fn get_agent_credentials(&self) -> std::collections::HashMap<String, crate::agents::AgentCredentialConfig> {
+        self.data.lock().unwrap().agent_credentials.clone()
+    }
+
+    pub fn set_agent_credential(&self, agent_id: &str, cred: crate::agents::AgentCredentialConfig) {
+        let mut guard = self.data.lock().unwrap();
+        guard.agent_credentials.insert(agent_id.to_string(), cred);
+        drop(guard);
+        self.save();
+    }
+
+    pub fn get_agent_tasks(&self) -> Vec<crate::agents::AgentTaskRecord> {
+        self.data.lock().unwrap().agent_tasks.clone()
+    }
+
+    pub fn save_agent_tasks(&self, tasks: Vec<crate::agents::AgentTaskRecord>) {
+        let mut guard = self.data.lock().unwrap();
+        guard.agent_tasks = tasks;
+        if guard.agent_tasks.len() > 50 {
+            guard.agent_tasks.truncate(50);
+        }
+        drop(guard);
+        self.save();
+    }
+
+    pub fn get_agent_checkpoints(&self) -> Vec<crate::agents::AgentCheckpoint> {
+        self.data.lock().unwrap().agent_checkpoints.clone()
+    }
+
+    pub fn save_agent_checkpoints(&self, checkpoints: Vec<crate::agents::AgentCheckpoint>) {
+        let mut guard = self.data.lock().unwrap();
+        guard.agent_checkpoints = checkpoints;
+        if guard.agent_checkpoints.len() > 30 {
+            guard.agent_checkpoints.truncate(30);
+        }
         drop(guard);
         self.save();
     }

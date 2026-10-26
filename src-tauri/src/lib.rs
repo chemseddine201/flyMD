@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod files;
 pub mod llm;
 pub mod pdf;
@@ -5,6 +6,7 @@ pub mod store;
 pub mod windows;
 pub mod workspace;
 
+use agents::*;
 use files::*;
 use llm::*;
 use pdf::*;
@@ -128,6 +130,7 @@ pub fn run() {
             let store = AppStore::new(config_dir);
             let workspace = WorkspaceManager::new(app.handle().clone(), Arc::clone(&store));
             let llm = Arc::new(LlmManager::new());
+            let agents_orch = AgentOrchestrator::new(app.handle().clone(), Arc::clone(&store));
 
             if let Some(sup) = store.get_supervision_config() {
                 if sup.enabled {
@@ -138,6 +141,7 @@ pub fn run() {
             app.manage(Arc::clone(&store));
             app.manage(Arc::clone(&workspace));
             app.manage(Arc::clone(&llm));
+            app.manage(Arc::clone(&agents_orch));
 
             let show_float = MenuItem::with_id(app, "show_float", "Show Float Hub", true, None::<&str>)?;
             let new_editor = MenuItem::with_id(app, "new_editor", "New Markdown Editor", true, None::<&str>)?;
@@ -235,6 +239,16 @@ pub fn run() {
             cmd_llm_get_models,
             cmd_llm_start_translation,
             cmd_llm_abort_translation,
+            cmd_discover_agents,
+            cmd_save_agent_credential,
+            cmd_get_agent_credentials,
+            cmd_launch_agent_login,
+            cmd_dispatch_agent_task,
+            cmd_get_agent_tasks,
+            cmd_cancel_agent_task,
+            cmd_clear_agent_tasks,
+            cmd_get_agent_checkpoints,
+            cmd_restore_agent_checkpoint,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -16,6 +16,7 @@ import { MarkdownViewer } from './MarkdownViewer';
 import { WysiwygEditor } from './WysiwygEditor';
 import { EmptyWorkspaceView } from './EmptyWorkspaceView';
 import { DocumentOutlinePanel } from './outline/DocumentOutlinePanel';
+import { AgentsControlCenter } from './agents';
 
 interface WorkspaceLayoutProps {
   viewMode: ViewMode;
@@ -130,7 +131,9 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
       )}
 
       <div className="flex-1 h-full flex overflow-hidden relative min-w-0">
-        {!activeTab ? (
+        {viewMode === 'agents' ? (
+          <AgentsControlCenter />
+        ) : !activeTab ? (
           <EmptyWorkspaceView
             onOpenFile={onOpenFile}
             onOpenFolder={onOpenFolder}
