@@ -98,7 +98,10 @@ fn inspect_markdown_metadata(path: &Path) -> (Option<String>, usize, usize) {
         .unwrap_or("")
         .to_lowercase();
 
-    let mut detected_agent = if path_lower.contains("antigravity") || path_lower.contains(".agent") || path_lower.contains(".gemini") {
+    let mut detected_agent = if path_lower.contains("antigravity")
+        || path_lower.contains(".agent")
+        || path_lower.contains(".gemini")
+    {
         Some("antigravity".to_string())
     } else if path_lower.contains("claude") || fname_lower == "claude.md" {
         Some("claude-code".to_string())
@@ -117,7 +120,12 @@ fn inspect_markdown_metadata(path: &Path) -> (Option<String>, usize, usize) {
     if let Ok(content) = fs::read_to_string(path) {
         let (total, done) = count_markdown_checklists(&content);
         if detected_agent.is_none() {
-            let head: String = content.lines().take(20).collect::<Vec<_>>().join("\n").to_lowercase();
+            let head: String = content
+                .lines()
+                .take(20)
+                .collect::<Vec<_>>()
+                .join("\n")
+                .to_lowercase();
             if head.contains("antigravity") {
                 detected_agent = Some("antigravity".to_string());
             } else if head.contains("claude-code") || head.contains("claude code") {
@@ -184,8 +192,10 @@ impl WorkspaceManager {
                                         .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
                                         .map(|d| d.as_millis() as i64)
                                         .unwrap_or(mtime);
-                                    let is_recent = ctime >= self.session_start_time || mtime >= self.session_start_time;
-                                    let (source_agent, checklist_total, checklist_done) = inspect_markdown_metadata(&path);
+                                    let is_recent = ctime >= self.session_start_time
+                                        || mtime >= self.session_start_time;
+                                    let (source_agent, checklist_total, checklist_done) =
+                                        inspect_markdown_metadata(&path);
 
                                     results.push(ScannedMdFile {
                                         path: path.to_string_lossy().to_string(),
@@ -234,8 +244,10 @@ impl WorkspaceManager {
                                     .map(|d| d.as_millis() as i64)
                                     .unwrap_or(mtime);
                                 let rel = path.strip_prefix(root).unwrap_or(path);
-                                let is_recent = ctime >= self.session_start_time || mtime >= self.session_start_time;
-                                let (source_agent, checklist_total, checklist_done) = inspect_markdown_metadata(path);
+                                let is_recent = ctime >= self.session_start_time
+                                    || mtime >= self.session_start_time;
+                                let (source_agent, checklist_total, checklist_done) =
+                                    inspect_markdown_metadata(path);
 
                                 results.push(ScannedMdFile {
                                     path: path.to_string_lossy().to_string(),
@@ -354,7 +366,8 @@ impl WorkspaceManager {
                                 };
 
                                 let rel = path.strip_prefix(&root_path).unwrap_or(&path);
-                                let (source_agent, checklist_total, checklist_done) = inspect_markdown_metadata(&path);
+                                let (source_agent, checklist_total, checklist_done) =
+                                    inspect_markdown_metadata(&path);
 
                                 let scanned = ScannedMdFile {
                                     path: path_str.clone(),
@@ -390,7 +403,10 @@ impl WorkspaceManager {
             } else {
                 RecursiveMode::Recursive
             };
-            if watcher.watch(Path::new(&config.path), recursive_mode).is_ok() {
+            if watcher
+                .watch(Path::new(&config.path), recursive_mode)
+                .is_ok()
+            {
                 let mut w_guard = self.active_watcher.lock().unwrap();
                 *w_guard = Some(watcher);
                 println!(

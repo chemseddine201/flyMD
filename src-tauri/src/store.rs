@@ -3,16 +3,36 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-fn default_theme() -> String { "dark".to_string() }
-fn default_false() -> bool { false }
-fn default_true() -> bool { true }
-fn default_ollama_url() -> String { "http://127.0.0.1:11434".to_string() }
-fn default_ollama_model() -> String { "".to_string() }
-fn default_view() -> String { "split".to_string() }
-fn default_font_size() -> u32 { 14 }
-fn default_text_dir() -> String { "auto".to_string() }
-fn default_scan_mode() -> String { "full-tree".to_string() }
-fn default_width_mode() -> String { "wide".to_string() }
+fn default_theme() -> String {
+    "dark".to_string()
+}
+fn default_false() -> bool {
+    false
+}
+fn default_true() -> bool {
+    true
+}
+fn default_ollama_url() -> String {
+    "http://127.0.0.1:11434".to_string()
+}
+fn default_ollama_model() -> String {
+    "".to_string()
+}
+fn default_view() -> String {
+    "split".to_string()
+}
+fn default_font_size() -> u32 {
+    14
+}
+fn default_text_dir() -> String {
+    "auto".to_string()
+}
+fn default_scan_mode() -> String {
+    "full-tree".to_string()
+}
+fn default_width_mode() -> String {
+    "wide".to_string()
+}
 fn default_llm_config() -> crate::llm::LLMConfig {
     crate::llm::LLMConfig {
         provider: "ollama".to_string(),
@@ -162,7 +182,9 @@ pub struct StoreSchema {
     pub agent_checkpoints: Vec<crate::agents::AgentCheckpoint>,
 }
 
-fn current_version() -> u32 { 3 }
+fn current_version() -> u32 {
+    3
+}
 
 impl Default for StoreSchema {
     fn default() -> Self {
@@ -198,7 +220,9 @@ impl AppStore {
                 .unwrap_or_default()
         } else {
             if let Ok(appdata) = std::env::var("APPDATA") {
-                let electron_store = PathBuf::from(appdata).join("fly-md").join("fly-md-store.json");
+                let electron_store = PathBuf::from(appdata)
+                    .join("fly-md")
+                    .join("fly-md-store.json");
                 if electron_store.exists() {
                     fs::read_to_string(&electron_store)
                         .ok()
@@ -287,12 +311,18 @@ impl AppStore {
 
     pub fn update_float_bounds(&self, x: i32, y: i32) {
         let mut guard = self.data.lock().unwrap();
-        guard.float_bounds = FloatBounds { x: Some(x), y: Some(y) };
+        guard.float_bounds = FloatBounds {
+            x: Some(x),
+            y: Some(y),
+        };
     }
 
     pub fn set_float_bounds(&self, x: i32, y: i32) {
         let mut guard = self.data.lock().unwrap();
-        guard.float_bounds = FloatBounds { x: Some(x), y: Some(y) };
+        guard.float_bounds = FloatBounds {
+            x: Some(x),
+            y: Some(y),
+        };
         drop(guard);
         self.save();
     }
@@ -308,7 +338,9 @@ impl AppStore {
         self.save();
     }
 
-    pub fn get_agent_credentials(&self) -> std::collections::HashMap<String, crate::agents::AgentCredentialConfig> {
+    pub fn get_agent_credentials(
+        &self,
+    ) -> std::collections::HashMap<String, crate::agents::AgentCredentialConfig> {
         self.data.lock().unwrap().agent_credentials.clone()
     }
 
@@ -354,4 +386,3 @@ impl AppStore {
         self.save();
     }
 }
-

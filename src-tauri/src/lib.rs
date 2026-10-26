@@ -110,7 +110,9 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             for arg in &argv[1..] {
-                if !arg.starts_with('-') && (arg.ends_with(".md") || arg.ends_with(".markdown") || arg.ends_with(".txt")) {
+                if !arg.starts_with('-')
+                    && (arg.ends_with(".md") || arg.ends_with(".markdown") || arg.ends_with(".txt"))
+                {
                     if Path::new(arg).exists() {
                         open_file_in_preview_helper(app, arg);
                         return;
@@ -143,17 +145,14 @@ pub fn run() {
             app.manage(Arc::clone(&llm));
             app.manage(Arc::clone(&agents_orch));
 
-            let show_float = MenuItem::with_id(app, "show_float", "Show Float Hub", true, None::<&str>)?;
-            let new_editor = MenuItem::with_id(app, "new_editor", "New Markdown Editor", true, None::<&str>)?;
+            let show_float =
+                MenuItem::with_id(app, "show_float", "Show Float Hub", true, None::<&str>)?;
+            let new_editor =
+                MenuItem::with_id(app, "new_editor", "New Markdown Editor", true, None::<&str>)?;
             let sep1 = PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit FlyMD", true, None::<&str>)?;
 
-            let tray_menu = Menu::with_items(app, &[
-                &show_float,
-                &new_editor,
-                &sep1,
-                &quit_item,
-            ])?;
+            let tray_menu = Menu::with_items(app, &[&show_float, &new_editor, &sep1, &quit_item])?;
 
             let mut tray_builder = TrayIconBuilder::new()
                 .menu(&tray_menu)
@@ -195,7 +194,9 @@ pub fn run() {
 
             let args: Vec<String> = std::env::args().collect();
             for arg in &args[1..] {
-                if !arg.starts_with('-') && (arg.ends_with(".md") || arg.ends_with(".markdown") || arg.ends_with(".txt")) {
+                if !arg.starts_with('-')
+                    && (arg.ends_with(".md") || arg.ends_with(".markdown") || arg.ends_with(".txt"))
+                {
                     if Path::new(arg).exists() {
                         open_file_in_preview_helper(app.handle(), arg);
                         break;

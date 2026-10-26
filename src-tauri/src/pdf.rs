@@ -22,7 +22,11 @@ pub async fn cmd_export_pdf(
         .blocking_save_file();
 
     let path_str = match save_path {
-        Some(p) => p.as_path().and_then(|p| p.to_str()).unwrap_or("").to_string(),
+        Some(p) => p
+            .as_path()
+            .and_then(|p| p.to_str())
+            .unwrap_or("")
+            .to_string(),
         None => {
             return Ok(FileSaveResponse {
                 success: false,
@@ -63,4 +67,3 @@ pub async fn cmd_export_pdf(
         error: None,
     })
 }
-

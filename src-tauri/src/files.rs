@@ -33,7 +33,11 @@ pub fn read_file_entry(path_str: &str) -> Result<FileOpenResult, String> {
         return Err(format!("File does not exist: {}", path_str));
     }
     let content = fs::read_to_string(p).map_err(|e| e.to_string())?;
-    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("document.md").to_string();
+    let name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("document.md")
+        .to_string();
     let meta = fs::metadata(p).map_err(|e| e.to_string())?;
     let last_modified = meta
         .modified()
@@ -61,7 +65,11 @@ pub async fn cmd_open_file_dialog(app: AppHandle) -> Result<Option<FileOpenResul
 
     match file_path {
         Some(p) => {
-            let path_str = p.as_path().and_then(|p| p.to_str()).unwrap_or("").to_string();
+            let path_str = p
+                .as_path()
+                .and_then(|p| p.to_str())
+                .unwrap_or("")
+                .to_string();
             if path_str.is_empty() {
                 Ok(None)
             } else {
@@ -77,7 +85,11 @@ pub async fn cmd_open_folder_dialog(app: AppHandle) -> Result<Option<String>, St
     let folder_path = app.dialog().file().blocking_pick_folder();
     match folder_path {
         Some(p) => {
-            let path_str = p.as_path().and_then(|p| p.to_str()).unwrap_or("").to_string();
+            let path_str = p
+                .as_path()
+                .and_then(|p| p.to_str())
+                .unwrap_or("")
+                .to_string();
             if path_str.is_empty() {
                 Ok(None)
             } else {
@@ -128,7 +140,11 @@ pub async fn cmd_save_file_dialog(
     let save_path = builder.blocking_save_file();
     match save_path {
         Some(p) => {
-            let path_str = p.as_path().and_then(|p| p.to_str()).unwrap_or("").to_string();
+            let path_str = p
+                .as_path()
+                .and_then(|p| p.to_str())
+                .unwrap_or("")
+                .to_string();
             if path_str.is_empty() {
                 return Ok(FileSaveResponse {
                     success: false,
@@ -243,5 +259,3 @@ pub fn cmd_delete_file_path(target_path: String) -> Result<bool, String> {
     }
     Ok(true)
 }
-
-

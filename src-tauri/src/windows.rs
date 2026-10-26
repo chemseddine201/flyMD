@@ -3,11 +3,16 @@ use crate::store::SharedStore;
 use crate::workspace::SharedWorkspaceManager;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 
 pub const BRIDGE_SCRIPT: &str = include_str!("../../bridge/tauri-bridge.js");
 
-pub fn get_or_create_float_window(app: &AppHandle, store: &SharedStore) -> Result<WebviewWindow, String> {
+pub fn get_or_create_float_window(
+    app: &AppHandle,
+    store: &SharedStore,
+) -> Result<WebviewWindow, String> {
     if let Some(win) = app.get_webview_window("float") {
         win.show().ok();
         win.set_focus().ok();
@@ -38,7 +43,10 @@ pub fn get_or_create_float_window(app: &AppHandle, store: &SharedStore) -> Resul
     Ok(win)
 }
 
-pub fn get_or_create_preview_window(app: &AppHandle, store: &SharedStore) -> Result<WebviewWindow, String> {
+pub fn get_or_create_preview_window(
+    app: &AppHandle,
+    store: &SharedStore,
+) -> Result<WebviewWindow, String> {
     if let Some(win) = app.get_webview_window("preview") {
         return Ok(win);
     }
@@ -52,14 +60,15 @@ pub fn get_or_create_preview_window(app: &AppHandle, store: &SharedStore) -> Res
     let w = bounds.width.unwrap_or(1150) as f64;
     let h = bounds.height.unwrap_or(780) as f64;
 
-    let mut builder = WebviewWindowBuilder::new(app, "preview", WebviewUrl::App("index.html".into()))
-        .title("FlyMD - Preview & Editor")
-        .inner_size(w, h)
-        .min_inner_size(700.0, 500.0)
-        .decorations(false)
-        .visible(false)
-        .always_on_top(settings.preview_always_on_top)
-        .initialization_script(BRIDGE_SCRIPT);
+    let mut builder =
+        WebviewWindowBuilder::new(app, "preview", WebviewUrl::App("index.html".into()))
+            .title("FlyMD - Preview & Editor")
+            .inner_size(w, h)
+            .min_inner_size(700.0, 500.0)
+            .decorations(false)
+            .visible(false)
+            .always_on_top(settings.preview_always_on_top)
+            .initialization_script(BRIDGE_SCRIPT);
 
     if let (Some(x), Some(y)) = (bounds.x, bounds.y) {
         builder = builder.position(x as f64, y as f64);
@@ -81,7 +90,10 @@ pub fn set_webview_memory_level(_window: &WebviewWindow, _low: bool) {}
 pub fn set_webview_memory_level(_window: &WebviewWindow, _low: bool) {}
 
 #[tauri::command]
-pub async fn cmd_toggle_float_pin(app: AppHandle, store: tauri::State<'_, SharedStore>) -> Result<bool, String> {
+pub async fn cmd_toggle_float_pin(
+    app: AppHandle,
+    store: tauri::State<'_, SharedStore>,
+) -> Result<bool, String> {
     let current = store.get_settings().float_always_on_top;
     let next = !current;
     store.save_settings(serde_json::json!({ "floatAlwaysOnTop": next }));
@@ -97,7 +109,10 @@ pub async fn cmd_get_float_pin(store: tauri::State<'_, SharedStore>) -> Result<b
 }
 
 #[tauri::command]
-pub async fn cmd_toggle_preview_pin(app: AppHandle, store: tauri::State<'_, SharedStore>) -> Result<bool, String> {
+pub async fn cmd_toggle_preview_pin(
+    app: AppHandle,
+    store: tauri::State<'_, SharedStore>,
+) -> Result<bool, String> {
     let current = store.get_settings().preview_always_on_top;
     let next = !current;
     store.save_settings(serde_json::json!({ "previewAlwaysOnTop": next }));
@@ -149,7 +164,9 @@ pub async fn cmd_move_float_window(
     if let Ok(pos) = window.outer_position() {
         let new_x = pos.x + delta_x as i32;
         let new_y = pos.y + delta_y as i32;
-        window.set_position(PhysicalPosition::new(new_x, new_y)).ok();
+        window
+            .set_position(PhysicalPosition::new(new_x, new_y))
+            .ok();
         store.set_float_bounds(new_x, new_y);
     }
     Ok(())
@@ -163,7 +180,9 @@ pub struct PositionResult {
 
 #[tauri::command]
 pub async fn cmd_get_float_position(window: WebviewWindow) -> Result<PositionResult, String> {
-    let pos = window.outer_position().unwrap_or(PhysicalPosition::new(0, 0));
+    let pos = window
+        .outer_position()
+        .unwrap_or(PhysicalPosition::new(0, 0));
     Ok(PositionResult { x: pos.x, y: pos.y })
 }
 
@@ -226,7 +245,11 @@ pub async fn cmd_open_in_preview(
     let p = Path::new(&file_path);
     if p.is_dir() {
         let files = workspace.scan_directory(&file_path, "full-tree");
-        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("folder").to_string();
+        let name = p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("folder")
+            .to_string();
 
         let config = crate::store::FolderSupervisionConfig {
             path: file_path.clone(),
@@ -248,10 +271,19 @@ pub async fn cmd_open_in_preview(
     } else {
         if let Ok(file_entry) = read_file_entry(&file_path) {
             let item = crate::store::HistoryItem {
-                id: format!("hist_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()),
+                id: format!(
+                    "hist_{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis()
+                ),
                 path: file_path.clone(),
                 name: file_entry.name.clone(),
-                last_opened: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64,
+                last_opened: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as i64,
                 preview: file_entry.content.chars().take(150).collect(),
                 size: file_entry.content.len() as u64,
             };

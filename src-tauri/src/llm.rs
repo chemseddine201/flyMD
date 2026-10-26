@@ -132,7 +132,10 @@ pub async fn cmd_llm_test_connection(
                         let models = data.models.unwrap_or_default();
                         Ok(LlmTestConnectionResult {
                             success: true,
-                            message: format!("Connected to Ollama! Found {} model(s).", models.len()),
+                            message: format!(
+                                "Connected to Ollama! Found {} model(s).",
+                                models.len()
+                            ),
                             models: Some(models),
                         })
                     } else {
@@ -211,7 +214,10 @@ pub async fn cmd_llm_test_connection(
 
         // Fallback: ping chat completions with max_tokens: 1
         let chat_url = normalize_chat_url(&config.endpoint_url);
-        let mut chat_req = llm.client.post(&chat_url).header("Content-Type", "application/json");
+        let mut chat_req = llm
+            .client
+            .post(&chat_url)
+            .header("Content-Type", "application/json");
 
         if let Some(key) = &config.api_key {
             let trimmed = key.trim();
@@ -244,7 +250,10 @@ pub async fn cmd_llm_test_connection(
                 } else if status.as_u16() == 401 || status.as_u16() == 403 {
                     Ok(LlmTestConnectionResult {
                         success: false,
-                        message: format!("Authentication failed (HTTP {}): Invalid API Key.", status),
+                        message: format!(
+                            "Authentication failed (HTTP {}): Invalid API Key.",
+                            status
+                        ),
                         models: None,
                     })
                 } else {
@@ -415,11 +424,16 @@ pub async fn cmd_llm_start_translation(
                 Ok(response) => {
                     if !response.status().is_success() {
                         let err_text = response.text().await.unwrap_or_default();
-                        app_clone.emit("llm:translate:done", TranslationDoneEvent {
-                            success: false,
-                            text: None,
-                            error: Some(format!("Ollama error: {}", err_text)),
-                        }).ok();
+                        app_clone
+                            .emit(
+                                "llm:translate:done",
+                                TranslationDoneEvent {
+                                    success: false,
+                                    text: None,
+                                    error: Some(format!("Ollama error: {}", err_text)),
+                                },
+                            )
+                            .ok();
                         return;
                     }
 
@@ -428,11 +442,16 @@ pub async fn cmd_llm_start_translation(
 
                     while let Some(chunk_res) = stream.next().await {
                         if cancel_flag.load(Ordering::SeqCst) {
-                            app_clone.emit("llm:translate:done", TranslationDoneEvent {
-                                success: false,
-                                text: Some(full_text),
-                                error: Some("Translation aborted by user".to_string()),
-                            }).ok();
+                            app_clone
+                                .emit(
+                                    "llm:translate:done",
+                                    TranslationDoneEvent {
+                                        success: false,
+                                        text: Some(full_text),
+                                        error: Some("Translation aborted by user".to_string()),
+                                    },
+                                )
+                                .ok();
                             return;
                         }
 
@@ -468,29 +487,42 @@ pub async fn cmd_llm_start_translation(
                         }
                     }
 
-                    app_clone.emit("llm:translate:done", TranslationDoneEvent {
-                        success: true,
-                        text: Some(full_text),
-                        error: None,
-                    }).ok();
+                    app_clone
+                        .emit(
+                            "llm:translate:done",
+                            TranslationDoneEvent {
+                                success: true,
+                                text: Some(full_text),
+                                error: None,
+                            },
+                        )
+                        .ok();
                 }
                 Err(e) => {
-                    app_clone.emit("llm:translate:done", TranslationDoneEvent {
-                        success: false,
-                        text: None,
-                        error: Some(e.to_string()),
-                    }).ok();
+                    app_clone
+                        .emit(
+                            "llm:translate:done",
+                            TranslationDoneEvent {
+                                success: false,
+                                text: None,
+                                error: Some(e.to_string()),
+                            },
+                        )
+                        .ok();
                 }
             }
         } else {
             // OpenAI / OpenAI-compatible
             let chat_url = normalize_chat_url(&config.endpoint_url);
-            let mut req_builder = client.post(&chat_url).header("Content-Type", "application/json");
+            let mut req_builder = client
+                .post(&chat_url)
+                .header("Content-Type", "application/json");
 
             if let Some(key) = &config.api_key {
                 let trimmed = key.trim();
                 if !trimmed.is_empty() {
-                    req_builder = req_builder.header("Authorization", format!("Bearer {}", trimmed));
+                    req_builder =
+                        req_builder.header("Authorization", format!("Bearer {}", trimmed));
                 }
             }
 
@@ -509,11 +541,16 @@ pub async fn cmd_llm_start_translation(
                 Ok(response) => {
                     if !response.status().is_success() {
                         let err_text = response.text().await.unwrap_or_default();
-                        app_clone.emit("llm:translate:done", TranslationDoneEvent {
-                            success: false,
-                            text: None,
-                            error: Some(format!("Provider error: {}", err_text)),
-                        }).ok();
+                        app_clone
+                            .emit(
+                                "llm:translate:done",
+                                TranslationDoneEvent {
+                                    success: false,
+                                    text: None,
+                                    error: Some(format!("Provider error: {}", err_text)),
+                                },
+                            )
+                            .ok();
                         return;
                     }
 
@@ -522,11 +559,16 @@ pub async fn cmd_llm_start_translation(
 
                     while let Some(chunk_res) = stream.next().await {
                         if cancel_flag.load(Ordering::SeqCst) {
-                            app_clone.emit("llm:translate:done", TranslationDoneEvent {
-                                success: false,
-                                text: Some(full_text),
-                                error: Some("Translation aborted by user".to_string()),
-                            }).ok();
+                            app_clone
+                                .emit(
+                                    "llm:translate:done",
+                                    TranslationDoneEvent {
+                                        success: false,
+                                        text: Some(full_text),
+                                        error: Some("Translation aborted by user".to_string()),
+                                    },
+                                )
+                                .ok();
                             return;
                         }
 
@@ -560,14 +602,21 @@ pub async fn cmd_llm_start_translation(
                                         choices: Option<Vec<OpenAiChoice>>,
                                     }
 
-                                    if let Ok(data) = serde_json::from_str::<OpenAiStreamResponse>(data_str) {
+                                    if let Ok(data) =
+                                        serde_json::from_str::<OpenAiStreamResponse>(data_str)
+                                    {
                                         if let Some(choices) = data.choices {
                                             if let Some(first) = choices.first() {
                                                 if let Some(delta) = &first.delta {
                                                     if let Some(content) = &delta.content {
                                                         if !content.is_empty() {
                                                             full_text.push_str(content);
-                                                            app_clone.emit("llm:translate:chunk", content).ok();
+                                                            app_clone
+                                                                .emit(
+                                                                    "llm:translate:chunk",
+                                                                    content,
+                                                                )
+                                                                .ok();
                                                         }
                                                     }
                                                 }
@@ -579,18 +628,28 @@ pub async fn cmd_llm_start_translation(
                         }
                     }
 
-                    app_clone.emit("llm:translate:done", TranslationDoneEvent {
-                        success: true,
-                        text: Some(full_text),
-                        error: None,
-                    }).ok();
+                    app_clone
+                        .emit(
+                            "llm:translate:done",
+                            TranslationDoneEvent {
+                                success: true,
+                                text: Some(full_text),
+                                error: None,
+                            },
+                        )
+                        .ok();
                 }
                 Err(e) => {
-                    app_clone.emit("llm:translate:done", TranslationDoneEvent {
-                        success: false,
-                        text: None,
-                        error: Some(e.to_string()),
-                    }).ok();
+                    app_clone
+                        .emit(
+                            "llm:translate:done",
+                            TranslationDoneEvent {
+                                success: false,
+                                text: None,
+                                error: Some(e.to_string()),
+                            },
+                        )
+                        .ok();
                 }
             }
         }
