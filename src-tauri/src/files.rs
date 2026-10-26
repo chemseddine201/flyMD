@@ -157,3 +157,91 @@ pub async fn cmd_save_file_dialog(
     }
 }
 
+#[tauri::command]
+pub fn cmd_reveal_in_explorer(target_path: String) -> Result<bool, String> {
+    let trimmed = target_path.trim();
+    if trimmed.is_empty() {
+        return Err("Empty path provided".to_string());
+    }
+    let p = Path::new(trimmed);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        let win_path = trimmed.replace('/', "\\");
+        if p.is_file() {
+            Command::new("explorer.exe")
+                .arg(format!("/select,{}", win_path))
+                .spawn()
+                .map_err(|e| format!("Failed to reveal file in Explorer: {}", e))?;
+        } else if p.is_dir() {
+            Command::new("explorer.exe")
+                .arg(&win_path)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder in Explorer: {}", e))?;
+        } else if let Some(parent) = p.parent() {
+            if parent.exists() {
+                Command::new("explorer.exe")
+                    .arg(parent.to_string_lossy().replace('/', "\\"))
+                    .spawn()
+                    .map_err(|e| format!("Failed to open parent folder in Explorer: {}", e))?;
+            } else {
+                return Err(format!("Path does not exist: {}", trimmed));
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        if p.is_file() {
+            Command::new("open")
+                .args(["-R", trimmed])
+                .spawn()
+                .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+        } else {
+            Command::new("open")
+                .arg(trimmed)
+                .spawn()
+                .map_err(|e| format!("Failed to open in Finder: {}", e))?;
+        }
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        use std::process::Command;
+        let dir = if p.is_dir() {
+            trimmed.to_string()
+        } else {
+            p.parent()
+                .map(|parent| parent.to_string_lossy().to_string())
+                .unwrap_or_else(|| ".".to_string())
+        };
+        Command::new("xdg-open")
+            .arg(&dir)
+            .spawn()
+            .map_err(|e| format!("Failed to open directory: {}", e))?;
+    }
+
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn cmd_delete_file_path(target_path: String) -> Result<bool, String> {
+    let trimmed = target_path.trim();
+    if trimmed.is_empty() {
+        return Err("Empty path provided".to_string());
+    }
+    let p = Path::new(trimmed);
+    if !p.exists() {
+        return Ok(true);
+    }
+    if p.is_dir() {
+        fs::remove_dir_all(p).map_err(|e| format!("Failed to delete directory: {}", e))?;
+    } else {
+        fs::remove_file(p).map_err(|e| format!("Failed to delete file: {}", e))?;
+    }
+    Ok(true)
+}
+
+

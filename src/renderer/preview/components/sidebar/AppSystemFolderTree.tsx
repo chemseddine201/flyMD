@@ -16,6 +16,7 @@ interface AppSystemFolderTreeProps {
   files: ScannedMdFile[];
   currentActiveFilePath?: string;
   onSelectFile: (filePath: string) => void;
+  onContextMenuFile?: (e: React.MouseEvent, file: ScannedMdFile) => void;
   searchQuery?: string;
   colorBlindSafe?: boolean;
 }
@@ -24,6 +25,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
   files,
   currentActiveFilePath,
   onSelectFile,
+  onContextMenuFile,
   searchQuery = '',
   colorBlindSafe = false,
 }) => {
@@ -139,8 +141,15 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
           );
         }}
         onClick={() => onSelectFile(file.path)}
+        onContextMenu={(e) => {
+          if (onContextMenuFile) {
+            e.preventDefault();
+            e.stopPropagation();
+            onContextMenuFile(e, file);
+          }
+        }}
         style={{ paddingLeft: `${node.depth * 12 + 22}px` }}
-        title={`${file.relativePath} • Drag onto an Agent in the bottom dock to hand off`}
+        title={`${file.relativePath} • Right-click to Open in Directory or Delete`}
         className={`group flex items-center gap-2 py-1 pr-2 rounded-md cursor-pointer transition ${
           isSelected
             ? 'bg-sky-500/20 text-sky-200 font-semibold border border-sky-500/30'

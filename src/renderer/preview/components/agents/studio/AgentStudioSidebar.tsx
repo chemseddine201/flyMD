@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Bot,
   Plus,
@@ -11,6 +11,7 @@ import {
   XCircle,
   Trash2,
   Globe,
+  X,
 } from 'lucide-react';
 import {
   AgentId,
@@ -19,7 +20,14 @@ import {
   AgentTaskIntent,
   AgentTaskRecord,
 } from '../../../../../shared/types';
-import { BUILTIN_AGENT_PIPELINES } from '../../../../../shared/constants';
+import {
+  AGENT_INTENT_PRESETS,
+  BUILTIN_AGENT_PIPELINES,
+} from '../../../../../shared/constants';
+import {
+  SidebarContextMenuTarget,
+  SidebarItemContextMenu,
+} from '../../sidebar/SidebarItemContextMenu';
 
 interface AgentStudioSidebarProps {
   visibleAgents: AgentProfile[];
@@ -29,10 +37,17 @@ interface AgentStudioSidebarProps {
   agentTasks: AgentTaskRecord[];
   selectedTaskId: string | null;
   onSelectTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => Promise<void>;
   onClearFinished: () => void;
   onOpenAccountsModal: () => void;
   pipelines: AgentPipelinePreset[];
-  onUpdatePipelineStep: (pipelineId: string, stepIdx: number, agentId: AgentId) => void;
+  onUpdatePipelineStep: (
+    pipelineId: string,
+    stepIdx: number,
+    updates: { agentId?: AgentId; intent?: AgentTaskIntent; label?: string }
+  ) => void;
+  onAddPipelineStep: (pipelineId: string) => void;
+  onRemovePipelineStep: (pipelineId: string, stepIdx: number) => void;
   onResetPipelines: () => void;
   onRunPipelineInStudio: (pipeline: AgentPipelinePreset) => void;
   onDropFileOnAgent: (
@@ -42,6 +57,16 @@ interface AgentStudioSidebarProps {
   onOpenExternalBrowser: (agentId: AgentId) => void;
 }
 
+const INTENT_SHORT_LABELS: Record<AgentTaskIntent, string> = {
+  'refine-plan': 'Plan',
+  build: 'Build',
+  review: 'Review',
+  'fix-bugs': 'Fix Bugs',
+  'write-tests': 'Tests',
+  explain: 'Explain',
+  custom: 'Custom',
+};
+
 export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   visibleAgents,
   allAgents,
@@ -50,39 +75,45 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   agentTasks,
   selectedTaskId,
   onSelectTask,
+  onDeleteTask,
   onClearFinished,
   onOpenAccountsModal,
   pipelines,
   onUpdatePipelineStep,
+  onAddPipelineStep,
+  onRemovePipelineStep,
   onResetPipelines,
   onRunPipelineInStudio,
   onDropFileOnAgent,
   onOpenExternalBrowser,
 }) => {
-  const [dragOverId, setDragOverId] = React.useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [contextMenuTarget, setContextMenuTarget] =
+    useState<SidebarContextMenuTarget | null>(null);
+
   const primaryPipeline = pipelines[0] || BUILTIN_AGENT_PIPELINES[0];
 
   return (
     <aside className="w-72 shrink-0 h-full border-r border-slate-800/90 bg-slate-900/75 flex flex-col overflow-hidden select-none">
-      {/* Section 1: Active Agents Roster */}
+      {/* Section 1: Enabled Agents Roster */}
       <div className="p-3.5 border-b border-slate-800/90">
         <div className="flex items-center justify-between mb-2.5">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
             <Bot size={13} className="text-sky-400" />
-            Agents ({visibleAgents.length})
+            Enabled Agents ({visibleAgents.length})
           </span>
           <button
             type="button"
             onClick={onOpenAccountsModal}
             className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-300 text-[10px] font-bold transition-colors"
-            title="Add Custom Agent or Manage Logins"
+            title="Add Custom Agent or Toggle Enabled Agents"
           >
             <Plus size={11} />
-            Custom Agent
+            Manage / Custom
           </button>
         </div>
 
-        <div className="space-y-1 max-h-48 overflow-y-auto pr-0.5">
+        <div className="space-y-1 max-h-40 overflow-y-auto pr-0.5">
           {visibleAgents.map((agent) => {
             const isSelected = agent.id === selectedAgentId;
             const isRunning = agentTasks.some(
@@ -112,7 +143,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                   }
                   onDropFileOnAgent(agent.id);
                 }}
-                className={`group flex items-center justify-between px-2.5 py-2 rounded-xl border cursor-pointer transition-all ${
+                className={`group flex items-center justify-between px-2.5 py-1.5 rounded-xl border cursor-pointer transition-all ${
                   isDrag
                     ? 'bg-sky-500/20 border-sky-400 scale-[1.01]'
                     : isSelected
@@ -139,7 +170,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     <div className="text-[10px] text-slate-400 truncate">
                       {agent.detectedBinaryPath
                         ? 'CLI Stream Ready'
-                        : 'In-App Studio & IDE Ready'}
+                        : 'In-App Studio Ready'}
                     </div>
                   </div>
                 </div>
@@ -166,38 +197,76 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
         </div>
       </div>
 
-      {/* Section 2: Configurable Plan -> Build -> Review Relay Builder */}
+      {/* Section 2: Custom Workflow Repeater (Only Enabled Agents Shown) */}
       {primaryPipeline && (
         <div className="p-3.5 border-b border-slate-800/90 bg-indigo-950/15">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
               <Workflow size={13} className="text-indigo-400" />
-              Plan → Build → Review
+              Workflow Steps ({primaryPipeline.steps.length})
             </span>
-            <button
-              type="button"
-              onClick={onResetPipelines}
-              title="Reset to default pipeline agents"
-              className="text-[10px] text-slate-400 hover:text-sky-300 flex items-center gap-0.5"
-            >
-              <RotateCcw size={10} /> Reset
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onAddPipelineStep(primaryPipeline.id)}
+                title="Add another step to the workflow repeater"
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-200 text-[10px] font-bold transition-colors"
+              >
+                <Plus size={10} /> Add Step
+              </button>
+              <button
+                type="button"
+                onClick={onResetPipelines}
+                title="Reset workflow steps"
+                className="text-[10px] text-slate-400 hover:text-sky-300 flex items-center gap-0.5"
+              >
+                <RotateCcw size={10} />
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
             {primaryPipeline.steps.map((step, idx) => {
-              const stepAgent = allAgents.find((a) => a.id === step.agentId);
-              const roleBadge =
-                idx === 0 ? '1. PLAN' : idx === 1 ? '2. BUILD' : '3. REVIEW';
+              const effectiveAgentId = visibleAgents.some(
+                (a) => a.id === step.agentId
+              )
+                ? step.agentId
+                : visibleAgents[0]?.id || step.agentId;
+              const stepAgent =
+                visibleAgents.find((a) => a.id === effectiveAgentId) ||
+                allAgents.find((a) => a.id === effectiveAgentId);
+
               return (
                 <div
                   key={`${primaryPipeline.id}-${idx}`}
-                  className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-950/90 border border-slate-800 text-xs"
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-slate-950/90 border border-slate-800 text-xs"
                 >
-                  <span className="text-[10px] font-extrabold text-indigo-300 shrink-0 w-16">
-                    {roleBadge}
+                  <span className="text-[10px] font-extrabold text-indigo-400 shrink-0 w-4">
+                    {idx + 1}.
                   </span>
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+
+                  {/* Step Action/Intent Dropdown */}
+                  <select
+                    value={step.intent}
+                    onChange={(e) => {
+                      const newIntent = e.target.value as AgentTaskIntent;
+                      onUpdatePipelineStep(primaryPipeline.id, idx, {
+                        intent: newIntent,
+                        label: `${idx + 1}. ${INTENT_SHORT_LABELS[newIntent] || newIntent}`,
+                      });
+                    }}
+                    title="Select Step Action (Plan, Build, Review, Fix Bugs, Tests, Explain)"
+                    className="w-20 shrink-0 bg-slate-900 text-indigo-300 font-bold text-[10px] rounded px-1 py-0.5 border border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer"
+                  >
+                    {AGENT_INTENT_PRESETS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {INTENT_SHORT_LABELS[preset.id] || preset.title}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Enabled Agent Dropdown */}
+                  <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span
                       className="w-2 h-2 rounded-full shrink-0"
                       style={{
@@ -205,23 +274,36 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       }}
                     />
                     <select
-                      value={step.agentId}
+                      value={effectiveAgentId}
                       onChange={(e) =>
-                        onUpdatePipelineStep(
-                          primaryPipeline.id,
-                          idx,
-                          e.target.value
-                        )
+                        onUpdatePipelineStep(primaryPipeline.id, idx, {
+                          agentId: e.target.value,
+                        })
                       }
-                      className="w-full bg-slate-900 text-white font-semibold text-[11px] rounded px-1.5 py-0.5 border border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer truncate"
+                      title="Select Enabled Agent for this step"
+                      className="w-full bg-slate-900 text-white font-semibold text-[11px] rounded px-1 py-0.5 border border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer truncate"
                     >
-                      {allAgents.map((opt) => (
+                      {visibleAgents.map((opt) => (
                         <option key={opt.id} value={opt.id}>
                           {opt.name}
                         </option>
                       ))}
                     </select>
                   </div>
+
+                  {/* Remove Step Button */}
+                  {primaryPipeline.steps.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onRemovePipelineStep(primaryPipeline.id, idx)
+                      }
+                      title="Remove this step"
+                      className="p-0.5 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 shrink-0"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -233,12 +315,12 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold text-xs shadow-md shadow-indigo-500/15 transition-all"
           >
             <Play size={12} fill="currentColor" />
-            Start Plan → Build → Review
+            Run {primaryPipeline.steps.length}-Step Workflow
           </button>
         </div>
       )}
 
-      {/* Section 3: Conversation & Task Sessions History */}
+      {/* Section 3: Conversation & Task Sessions History (Right-Click to Open in Dir or Confirm Delete) */}
       <div className="flex-1 flex flex-col min-h-0 p-3.5">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -250,7 +332,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
               onClick={onClearFinished}
               className="text-[10px] text-slate-400 hover:text-rose-300 flex items-center gap-1"
             >
-              <Trash2 size={10} /> Clear
+              <Trash2 size={10} /> Clear Done
             </button>
           )}
         </div>
@@ -264,11 +346,34 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             agentTasks.map((task) => {
               const agent = allAgents.find((a) => a.id === task.targetAgentId);
               const isSelected = task.id === selectedTaskId;
+              const bestFilePath =
+                task.outputReportPath ||
+                task.filePath ||
+                task.handoffFilePath ||
+                task.workspacePath;
+
               return (
                 <button
                   key={task.id}
                   type="button"
                   onClick={() => onSelectTask(task.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextMenuTarget({
+                      x: e.clientX,
+                      y: e.clientY,
+                      title: `${agent?.shortName || task.targetAgentId} — ${task.fileName}`,
+                      subtitle: bestFilePath,
+                      filePath: bestFilePath,
+                      onOpen: () => onSelectTask(task.id),
+                      deleteLabel: 'Delete Session Thread...',
+                      onDeleteConfirm: async () => {
+                        await onDeleteTask(task.id);
+                      },
+                    });
+                  }}
+                  title="Left-click to view session • Right-click to Open in Directory or Delete"
                   className={`w-full text-left p-2.5 rounded-xl border transition-all ${
                     isSelected
                       ? 'bg-slate-800/95 border-sky-500/50 shadow-sm'
@@ -312,7 +417,9 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       {task.fileName}
                     </span>
                     <span className="text-[10px] text-slate-500 shrink-0">
-                      {task.progressPercent ?? (task.status === 'completed' ? 100 : 20)}%
+                      {task.progressPercent ??
+                        (task.status === 'completed' ? 100 : 20)}
+                      %
                     </span>
                   </div>
                 </button>
@@ -321,7 +428,11 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
           )}
         </div>
       </div>
+
+      <SidebarItemContextMenu
+        target={contextMenuTarget}
+        onClose={() => setContextMenuTarget(null)}
+      />
     </aside>
   );
 };
-

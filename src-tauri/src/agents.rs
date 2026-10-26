@@ -266,9 +266,11 @@ fn find_binary_on_system(candidates: &[&str]) -> Option<String> {
         search_dirs.push(home.join(".cargo").join("bin"));
         search_dirs.push(home.join(".opencode").join("bin"));
         search_dirs.push(home.join(".claude").join("local"));
+        search_dirs.push(home.join("AppData").join("Local").join("agy").join("bin"));
         search_dirs.push(home.join("AppData").join("Roaming").join("npm"));
         search_dirs.push(home.join("AppData").join("Local").join("Programs").join("cursor").join("resources").join("app").join("bin"));
         search_dirs.push(home.join("AppData").join("Local").join("Programs").join("Antigravity").join("bin"));
+        search_dirs.push(home.join("AppData").join("Local").join("Programs").join("Antigravity IDE").join("bin"));
         search_dirs.push(home.join("AppData").join("Local").join("Programs").join("Zed").join("bin"));
         search_dirs.push(home.join("AppData").join("Local").join("Zed").join("bin"));
     }
@@ -1686,7 +1688,15 @@ impl AgentOrchestrator {
             let bin_path = profile
                 .as_ref()
                 .and_then(|p| p.detected_binary_path.clone())
-                .filter(|_| matches!(agent_id.as_str(), "claude-code" | "opencode" | "codex"));
+                .filter(|b| {
+                    let lower = b.to_lowercase();
+                    matches!(
+                        agent_id.as_str(),
+                        "antigravity" | "claude-code" | "opencode" | "codex"
+                    ) && !lower.ends_with("antigravity.cmd")
+                        && !lower.ends_with("cursor.exe")
+                        && !lower.ends_with("zed.exe")
+                });
 
             // Check if CLI runner is available for headless streaming
             if let Some(bin) = bin_path {
@@ -1695,7 +1705,7 @@ impl AgentOrchestrator {
                     t.progress_stage = Some("reasoning".to_string());
                     t.progress_percent = 55;
                     t.thinking_trace.push(format!(
-                        "Connected to local {} CLI binary (`{}`). Streaming live response...",
+                        "Connected to local {} CLI binary (`{}`). Streaming live response & writing workspace files...",
                         agent_name, bin
                     ));
                     t.tool_actions.push(AgentToolAction {
@@ -1709,25 +1719,59 @@ impl AgentOrchestrator {
                 });
 
                 let prompt_arg = format!(
-                    "{}\n\n---\nSource Document (`{}`):\n{}",
-                    instructions, record.file_name, source_markdown
+                    "Working directory: \"{}\". Read the FlyMD Handoff Specification at \"{}\" and execute the mission ({}): {}. Write all requested code/HTML/Markdown files directly inside \"{}\" and output a clear Markdown summary of the files created/updated.",
+                    exec_dir,
+                    handoff_file.to_string_lossy(),
+                    record.intent.to_uppercase(),
+                    instructions,
+                    exec_dir
                 );
 
-                let mut cmd = match agent_id.as_str() {
-                    "claude-code" => {
-                        let mut c = Command::new(&bin);
-                        c.args(["-p", &prompt_arg]);
-                        c
+                let bin_lower = bin.to_lowercase();
+                let mut cmd = if bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat") {
+                    let mut c = Command::new("cmd.exe");
+                    if agent_id == "opencode" {
+                        c.args(["/C", &bin, "run", &prompt_arg]);
+                    } else {
+                        c.args(["/C", &bin, "-p", "--dangerously-skip-permissions", "--add-dir", &exec_dir, &prompt_arg]);
                     }
-                    "opencode" => {
-                        let mut c = Command::new(&bin);
-                        c.args(["run", &prompt_arg]);
-                        c
-                    }
-                    _ => {
-                        let mut c = Command::new(&bin);
-                        c.args([&prompt_arg]);
-                        c
+                    c
+                } else {
+                    match agent_id.as_str() {
+                        "claude-code" => {
+                            let mut c = Command::new(&bin);
+                            c.args([
+                                "-p",
+                                "--dangerously-skip-permissions",
+                                "--add-dir",
+                                &exec_dir,
+                                &prompt_arg,
+                            ]);
+                            c
+                        }
+                        "antigravity" => {
+                            let mut c = Command::new(&bin);
+                            c.args([
+                                "-p",
+                                "--dangerously-skip-permissions",
+                                "--add-dir",
+                                &exec_dir,
+                                "--mode",
+                                "accept-edits",
+                                &prompt_arg,
+                            ]);
+                            c
+                        }
+                        "opencode" => {
+                            let mut c = Command::new(&bin);
+                            c.args(["run", &prompt_arg]);
+                            c
+                        }
+                        _ => {
+                            let mut c = Command::new(&bin);
+                            c.args([&prompt_arg]);
+                            c
+                        }
                     }
                 };
 
@@ -1931,6 +1975,27 @@ impl AgentOrchestrator {
         self.app_handle.emit("agent:tasks-updated", &tasks).ok();
         tasks
     }
+
+    pub fn clear_task_logs(&self, task_id: &str) -> Vec<AgentTaskRecord> {
+        let mut tasks = self.store.get_agent_tasks();
+        if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
+            t.logs.clear();
+        }
+        self.store.save_agent_tasks(tasks.clone());
+        self.app_handle.emit("agent:tasks-updated", &tasks).ok();
+        tasks
+    }
+
+    pub fn delete_task(&self, task_id: &str) -> Vec<AgentTaskRecord> {
+        if let Some(flag) = self.cancel_flags.lock().unwrap().get(task_id) {
+            flag.store(true, Ordering::Relaxed);
+        }
+        let mut tasks = self.store.get_agent_tasks();
+        tasks.retain(|t| t.id != task_id);
+        self.store.save_agent_tasks(tasks.clone());
+        self.app_handle.emit("agent:tasks-updated", &tasks).ok();
+        tasks
+    }
 }
 
 #[tauri::command]
@@ -2035,3 +2100,20 @@ pub fn cmd_complete_web_task_with_reply(
 ) -> Result<AgentTaskRecord, String> {
     orchestrator.complete_web_task_with_reply(&task_id, &reply_markdown)
 }
+
+#[tauri::command]
+pub fn cmd_clear_agent_task_logs(
+    orchestrator: tauri::State<'_, SharedAgentOrchestrator>,
+    task_id: String,
+) -> Vec<AgentTaskRecord> {
+    orchestrator.clear_task_logs(&task_id)
+}
+
+#[tauri::command]
+pub fn cmd_delete_agent_task(
+    orchestrator: tauri::State<'_, SharedAgentOrchestrator>,
+    task_id: String,
+) -> Vec<AgentTaskRecord> {
+    orchestrator.delete_task(&task_id)
+}
+

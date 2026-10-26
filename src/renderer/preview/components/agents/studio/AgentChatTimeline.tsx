@@ -374,7 +374,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       onChange={(e) => setRelayAgentId(e.target.value)}
                       className="bg-slate-900 text-white text-[11px] font-bold rounded px-1.5 py-0.5 border border-slate-700"
                     >
-                      {allAgents.map((a) => (
+                      {visibleAgents.map((a) => (
                         <option key={a.id} value={a.id}>
                           @{a.shortName}
                         </option>
@@ -436,7 +436,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                 onChange={(e) => onSelectAgent(e.target.value)}
                 className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer"
               >
-                {allAgents.map((a) => (
+                {visibleAgents.map((a) => (
                   <option key={a.id} value={a.id} className="bg-slate-900">
                     @{a.name}
                   </option>

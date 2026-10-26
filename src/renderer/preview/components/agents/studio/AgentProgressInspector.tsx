@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   Loader2,
@@ -10,23 +10,30 @@ import {
   ListChecks,
   Play,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import {
   AgentCheckpoint,
   AgentTaskRecord,
   ScannedMdFile,
 } from '../../../../../shared/types';
+import {
+  SidebarContextMenuTarget,
+  SidebarItemContextMenu,
+} from '../../sidebar/SidebarItemContextMenu';
 
 interface AgentProgressInspectorProps {
   selectedTask: AgentTaskRecord | null;
   checkpoints: AgentCheckpoint[];
   restoringCheckpointId: string | null;
   onRestoreCheckpoint: (checkpointId: string) => void;
+  onClearTaskLogs: (taskId: string) => void;
   activeMarkdownContent: string;
   watchedFiles: ScannedMdFile[];
   onRunSingleChecklistItem: (itemText: string) => void;
   onOpenFileInEditor: (filePath?: string) => void;
   onSelectWatchedFileForDispatch: (file: ScannedMdFile) => void;
+  onDeleteWorkspaceFile: (filePath: string) => Promise<void> | void;
 }
 
 const PROGRESS_STAGES = [
@@ -42,12 +49,17 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   checkpoints,
   restoringCheckpointId,
   onRestoreCheckpoint,
+  onClearTaskLogs,
   activeMarkdownContent,
   watchedFiles,
   onRunSingleChecklistItem,
   onOpenFileInEditor,
   onSelectWatchedFileForDispatch,
+  onDeleteWorkspaceFile,
 }) => {
+  const [contextTarget, setContextTarget] =
+    useState<SidebarContextMenuTarget | null>(null);
+
   const pct = selectedTask
     ? selectedTask.progressPercent ??
       (selectedTask.status === 'completed' ? 100 : 25)
@@ -210,7 +222,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
         )}
       </div>
 
-      {/* 3. Supervised Workspace Files (Drag or Click to Send) */}
+      {/* 3. Supervised Workspace Files (Drag, Click or Right-Click) */}
       <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
@@ -239,6 +251,23 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                     })
                   );
                 }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setContextTarget({
+                    x: e.clientX,
+                    y: e.clientY,
+                    title: file.name,
+                    subtitle: 'Workspace Markdown File',
+                    filePath: file.path,
+                    deleteLabel: 'Delete File from Disk...',
+                    onOpen: () => onOpenFileInEditor(file.path),
+                    onDeleteConfirm: async () => {
+                      await onDeleteWorkspaceFile(file.path);
+                    },
+                  });
+                }}
+                title="Right-click to Open in Directory or Delete"
                 className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 text-[11px] cursor-grab"
               >
                 <span className="truncate text-slate-200 font-medium">
@@ -274,6 +303,17 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
             <Terminal size={11} className="text-emerald-400" />
             Execution Stream Log
           </span>
+          {selectedTask && selectedTask.logs.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onClearTaskLogs(selectedTask.id)}
+              title="Clear Execution Stream Log"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-rose-500/20 text-[9px] font-bold text-slate-400 hover:text-rose-300 transition-colors"
+            >
+              <Trash2 size={9} />
+              <span>Clear</span>
+            </button>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto font-mono text-[10px] text-slate-400 space-y-1 max-h-36">
           {selectedTask && selectedTask.logs.length > 0 ? (
@@ -289,6 +329,12 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
           )}
         </div>
       </div>
+
+      {/* Right-Click Context Menu & Confirmable Delete Modal */}
+      <SidebarItemContextMenu
+        target={contextTarget}
+        onClose={() => setContextTarget(null)}
+      />
     </aside>
   );
 };

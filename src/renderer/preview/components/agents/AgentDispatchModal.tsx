@@ -506,7 +506,7 @@ export const AgentDispatchModal: React.FC = () => {
                 className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200"
               >
                 <option value="">None (Stop after {targetAgent?.shortName})</option>
-                {agentProfiles
+                {visibleAgents
                   .filter((a) => a.id !== targetAgentId)
                   .map((a) => (
                     <option key={a.id} value={a.id}>

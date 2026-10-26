@@ -184,6 +184,14 @@ const electronAPI = {
     ipcRenderer.invoke('agent:remove-profile', agentId),
   completeWebTaskWithReply: (taskId: string, replyMarkdown: string): Promise<AgentTaskRecord> =>
     ipcRenderer.invoke('agent:complete-web-task', taskId, replyMarkdown),
+  clearAgentTaskLogs: (taskId: string): Promise<AgentTaskRecord[]> =>
+    ipcRenderer.invoke('agent:clear-task-logs', taskId),
+  deleteAgentTask: (taskId: string): Promise<AgentTaskRecord[]> =>
+    ipcRenderer.invoke('agent:delete-task', taskId),
+  revealInExplorer: (targetPath: string): Promise<boolean> =>
+    ipcRenderer.invoke('file:reveal-in-explorer', targetPath),
+  deleteFilePath: (targetPath: string): Promise<boolean> =>
+    ipcRenderer.invoke('file:delete-path', targetPath),
   onAgentProfilesUpdated: (callback: (profiles: AgentProfile[]) => void) => {
     const handler = (_: any, data: AgentProfile[]) => callback(data);
     ipcRenderer.on('agent:profiles-updated', handler);

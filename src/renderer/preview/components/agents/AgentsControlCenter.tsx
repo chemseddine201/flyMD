@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Bot,
   KeyRound,
@@ -8,10 +8,14 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
-import { BUILTIN_AGENT_PIPELINES } from '../../../../shared/constants';
+import {
+  AGENT_INTENT_PRESETS,
+  BUILTIN_AGENT_PIPELINES,
+} from '../../../../shared/constants';
 import {
   AgentId,
   AgentPipelinePreset,
+  AgentPipelineStep,
   AgentTaskIntent,
   AgentTaskRecord,
 } from '../../../../shared/types';
@@ -38,7 +42,9 @@ export const AgentsControlCenter: React.FC = () => {
   const folderPath = usePreviewStore((s) => s.folderPath);
   const supervisionConfig = usePreviewStore((s) => s.supervisionConfig);
   const folderFiles = usePreviewStore((s) => s.folderFiles);
+  const setFolderFiles = usePreviewStore((s) => s.setFolderFiles);
 
+  // Only show agents enabled by the user in all studio selectors
   const enabledProfiles = agentProfiles.filter((a) => a.enabled);
   const visibleAgents =
     enabledProfiles.length > 0 ? enabledProfiles : agentProfiles;
@@ -55,6 +61,25 @@ export const AgentsControlCenter: React.FC = () => {
   const [restoringCheckpointId, setRestoringCheckpointId] = useState<
     string | null
   >(null);
+
+  // Track automated multi-step repeater runs
+  const activePipelineRunRef = useRef<{
+    pipelineId: string;
+    pipelineName: string;
+    steps: AgentPipelineStep[];
+    currentStepIndex: number;
+    currentTaskId: string;
+  } | null>(null);
+
+  // Ensure selectedAgentId stays within enabled visibleAgents
+  useEffect(() => {
+    if (
+      visibleAgents.length > 0 &&
+      !visibleAgents.some((a) => a.id === selectedAgentId)
+    ) {
+      setSelectedAgentId(visibleAgents[0].id);
+    }
+  }, [visibleAgents, selectedAgentId]);
 
   const [pipelines, setPipelines] = useState<AgentPipelinePreset[]>(() => {
     try {
@@ -75,28 +100,90 @@ export const AgentsControlCenter: React.FC = () => {
   const selectedTask =
     agentTasks.find((t) => t.id === selectedTaskId) || agentTasks[0] || null;
 
-  const handleUpdatePipelineStepAgent = (
+  const persistPipelines = (next: AgentPipelinePreset[]) => {
+    try {
+      localStorage.setItem('flymd:custom-pipelines', JSON.stringify(next));
+    } catch {}
+  };
+
+  const handleUpdatePipelineStep = (
     pipelineId: string,
     stepIdx: number,
-    newAgentId: AgentId
+    updates: { agentId?: AgentId; intent?: AgentTaskIntent; label?: string }
   ) => {
     setPipelines((prev) => {
       const next = prev.map((p) => {
         if (p.id !== pipelineId) return p;
         const steps = p.steps.map((s, idx) =>
-          idx === stepIdx ? { ...s, agentId: newAgentId } : s
+          idx === stepIdx ? { ...s, ...updates } : s
         );
         return { ...p, steps };
       });
-      try {
-        localStorage.setItem('flymd:custom-pipelines', JSON.stringify(next));
-      } catch {}
+      persistPipelines(next);
+      return next;
+    });
+  };
+
+  const handleAddPipelineStep = (pipelineId: string) => {
+    const defaultAgent = visibleAgents[0]?.id || 'antigravity';
+    setPipelines((prev) => {
+      const next = prev.map((p) => {
+        if (p.id !== pipelineId) return p;
+        const nextIntent: AgentTaskIntent =
+          p.steps.length === 0
+            ? 'refine-plan'
+            : p.steps.length === 1
+            ? 'build'
+            : 'review';
+        const presetLabel =
+          AGENT_INTENT_PRESETS.find((ip) => ip.id === nextIntent)?.title ||
+          nextIntent;
+        return {
+          ...p,
+          steps: [
+            ...p.steps,
+            {
+              agentId: defaultAgent,
+              intent: nextIntent,
+              label: presetLabel,
+              requireConfirmation: false,
+            },
+          ],
+        };
+      });
+      persistPipelines(next);
+      return next;
+    });
+  };
+
+  const handleRemovePipelineStep = (pipelineId: string, stepIdx: number) => {
+    setPipelines((prev) => {
+      const next = prev.map((p) => {
+        if (p.id !== pipelineId) return p;
+        if (p.steps.length <= 1) return p;
+        const steps = p.steps.filter((_, idx) => idx !== stepIdx);
+        return { ...p, steps };
+      });
+      persistPipelines(next);
       return next;
     });
   };
 
   const handleResetPipelines = () => {
-    setPipelines(BUILTIN_AGENT_PIPELINES);
+    const fallbackAgent = visibleAgents[0]?.id || 'antigravity';
+    const secondAgent = visibleAgents[1]?.id || fallbackAgent;
+    const reset = BUILTIN_AGENT_PIPELINES.map((p) => ({
+      ...p,
+      steps: p.steps.map((s, idx) => ({
+        ...s,
+        agentId: visibleAgents.some((va) => va.id === s.agentId)
+          ? s.agentId
+          : idx % 2 === 0
+          ? fallbackAgent
+          : secondAgent,
+      })),
+    }));
+    setPipelines(reset);
     try {
       localStorage.removeItem('flymd:custom-pipelines');
     } catch {}
@@ -121,14 +208,30 @@ export const AgentsControlCenter: React.FC = () => {
   };
 
   const resolveCurrentSourceDocument = async (overridePath?: string) => {
-    const targetPath = overridePath || selectedSourceFile || activeTab?.filePath || '';
+    // If activeTab is an unsaved Welcome tab and the user has a real .md file in the workspace (e.g. Untitled-1.md), prefer that file
+    const userWorkspaceFiles = folderFiles.filter(
+      (f) => !f.path.includes('.flymd') && !f.name.startsWith('report-task-')
+    );
+    const fallbackWorkspaceFile =
+      !activeTab?.filePath && userWorkspaceFiles.length > 0
+        ? userWorkspaceFiles[0].path
+        : '';
+
+    const targetPath =
+      overridePath ||
+      selectedSourceFile ||
+      activeTab?.filePath ||
+      fallbackWorkspaceFile ||
+      '';
+
     if (targetPath && targetPath !== activeTab?.filePath) {
       try {
         const res = await window.electronAPI.readFile(targetPath);
         if (res && typeof res.content === 'string') {
           return {
             filePath: res.path || targetPath,
-            fileName: res.name || targetPath.split(/[\\/]/).pop() || 'Document.md',
+            fileName:
+              res.name || targetPath.split(/[\\/]/).pop() || 'Document.md',
             markdownContent: res.content,
           };
         }
@@ -156,7 +259,7 @@ export const AgentsControlCenter: React.FC = () => {
       nextAgentInChain?: AgentId;
       nextIntentInChain?: AgentTaskIntent;
     }
-  ) => {
+  ): Promise<AgentTaskRecord | null> => {
     setSubmitting(true);
     try {
       const doc = await resolveCurrentSourceDocument(overrides?.filePath);
@@ -187,8 +290,10 @@ export const AgentsControlCenter: React.FC = () => {
       if (record?.id) {
         setSelectedTaskId(record.id);
       }
+      return record || null;
     } catch (err) {
       console.error('Failed to run in-app agent task:', err);
+      return null;
     } finally {
       setSubmitting(false);
     }
@@ -200,8 +305,8 @@ export const AgentsControlCenter: React.FC = () => {
     const second = pipeline.steps[1];
     setSelectedAgentId(first.agentId);
     setSelectedIntent(first.intent);
-    await handleSendInAppChatTask(
-      `Pipeline [${pipeline.name}] — Step 1 (${first.label})`,
+    const created = await handleSendInAppChatTask(
+      `Pipeline [${pipeline.name}] — Step 1/${pipeline.steps.length} (${first.label})`,
       {
         agentId: first.agentId,
         intent: first.intent,
@@ -210,7 +315,69 @@ export const AgentsControlCenter: React.FC = () => {
         nextIntentInChain: second?.intent,
       }
     );
+    if (created?.id && pipeline.steps.length > 1) {
+      activePipelineRunRef.current = {
+        pipelineId: pipeline.id,
+        pipelineName: pipeline.name,
+        steps: [...pipeline.steps],
+        currentStepIndex: 0,
+        currentTaskId: created.id,
+      };
+    } else {
+      activePipelineRunRef.current = null;
+    }
   };
+
+  // Automatically advance multi-step repeater pipelines when each step finishes
+  useEffect(() => {
+    const runState = activePipelineRunRef.current;
+    if (!runState) return;
+    const finishedTask = agentTasks.find(
+      (t) => t.id === runState.currentTaskId && t.status === 'completed'
+    );
+    if (!finishedTask) return;
+
+    const nextIdx = runState.currentStepIndex + 1;
+    const nextStep = runState.steps[nextIdx];
+    const followingStep = runState.steps[nextIdx + 1];
+
+    if (!nextStep) {
+      activePipelineRunRef.current = null;
+      return;
+    }
+
+    // Prevent duplicate triggers while dispatching next step
+    activePipelineRunRef.current = null;
+
+    void (async () => {
+      setSelectedAgentId(nextStep.agentId);
+      setSelectedIntent(nextStep.intent);
+      const nextTask = await handleSendInAppChatTask(
+        `Pipeline [${runState.pipelineName}] — Step ${nextIdx + 1}/${
+          runState.steps.length
+        } (${nextStep.label}) relayed from @${finishedTask.targetAgentId}`,
+        {
+          agentId: nextStep.agentId,
+          intent: nextStep.intent,
+          filePath: finishedTask.outputReportPath || finishedTask.filePath,
+          fileName: finishedTask.fileName,
+          markdownContent:
+            finishedTask.responseMarkdown || activeTab?.content || '',
+          sourceAgentId: finishedTask.targetAgentId,
+          pipelineId: runState.pipelineId,
+          nextAgentInChain: followingStep?.agentId,
+          nextIntentInChain: followingStep?.intent,
+        }
+      );
+      if (nextTask?.id && nextIdx + 1 < runState.steps.length) {
+        activePipelineRunRef.current = {
+          ...runState,
+          currentStepIndex: nextIdx,
+          currentTaskId: nextTask.id,
+        };
+      }
+    })();
+  }, [agentTasks]);
 
   const handleRelayToNextAgent = async (
     task: AgentTaskRecord,
@@ -344,6 +511,48 @@ export const AgentsControlCenter: React.FC = () => {
     }
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      if (window.electronAPI.deleteAgentTask) {
+        const remaining = await window.electronAPI.deleteAgentTask(taskId);
+        setAgentTasks(remaining);
+      } else {
+        setAgentTasks(agentTasks.filter((t) => t.id !== taskId));
+      }
+      if (selectedTaskId === taskId) {
+        setSelectedTaskId(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+    }
+  };
+
+  const handleClearTaskLogs = async (taskId: string) => {
+    try {
+      if (window.electronAPI.clearAgentTaskLogs) {
+        await window.electronAPI.clearAgentTaskLogs(taskId);
+      }
+      const tasks = await window.electronAPI.getAgentTasks();
+      setAgentTasks(tasks);
+    } catch (err) {
+      console.error('Failed to clear task logs:', err);
+    }
+  };
+
+  const handleDeleteWorkspaceFile = async (filePath: string) => {
+    try {
+      if (window.electronAPI.deleteFilePath) {
+        await window.electronAPI.deleteFilePath(filePath);
+      }
+      setFolderFiles(folderFiles.filter((f) => f.path !== filePath));
+      if (selectedSourceFile === filePath) {
+        setSelectedSourceFile('');
+      }
+    } catch (err) {
+      console.error('Failed to delete workspace file:', err);
+    }
+  };
+
   const handleOpenSharedMemory = async () => {
     if (!resolvedWorkspace) return;
     const sep = resolvedWorkspace.includes('\\') ? '\\' : '/';
@@ -432,7 +641,7 @@ export const AgentsControlCenter: React.FC = () => {
 
       {/* Main 3-Pane Studio Workspace */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left Sidebar: Agents, Plan->Build->Review Builder & Sessions */}
+        {/* Left Sidebar: Agents, Custom Workflow Steps Repeater & Sessions */}
         <AgentStudioSidebar
           visibleAgents={visibleAgents}
           allAgents={agentProfiles}
@@ -441,10 +650,13 @@ export const AgentsControlCenter: React.FC = () => {
           agentTasks={agentTasks}
           selectedTaskId={selectedTask?.id || null}
           onSelectTask={(id) => setSelectedTaskId(id)}
+          onDeleteTask={handleDeleteTask}
           onClearFinished={handleClearFinished}
           onOpenAccountsModal={() => setShowAgentAccountsModal(true)}
           pipelines={pipelines}
-          onUpdatePipelineStep={handleUpdatePipelineStepAgent}
+          onUpdatePipelineStep={handleUpdatePipelineStep}
+          onAddPipelineStep={handleAddPipelineStep}
+          onRemovePipelineStep={handleRemovePipelineStep}
           onResetPipelines={handleResetPipelines}
           onRunPipelineInStudio={handleRunPipelineInStudio}
           onDropFileOnAgent={async (agentId, customFile) => {
@@ -470,12 +682,28 @@ export const AgentsControlCenter: React.FC = () => {
           selectedIntent={selectedIntent}
           onSelectIntent={(intent) => setSelectedIntent(intent)}
           selectedTask={selectedTask}
-          activeFileName={activeTab?.fileName || 'Workspace-Specification.md'}
-          activeFilePath={activeTab?.filePath || ''}
+          activeFileName={
+            activeTab?.filePath
+              ? activeTab.fileName
+              : folderFiles.find(
+                  (f) => !f.path.includes('.flymd') && !f.name.startsWith('report-task-')
+                )?.name ||
+                activeTab?.fileName ||
+                'Workspace-Specification.md'
+          }
+          activeFilePath={
+            activeTab?.filePath ||
+            folderFiles.find(
+              (f) => !f.path.includes('.flymd') && !f.name.startsWith('report-task-')
+            )?.path ||
+            ''
+          }
           watchedFiles={folderFiles}
           selectedSourceFile={selectedSourceFile}
           onSelectSourceFile={(path) => setSelectedSourceFile(path)}
-          onSendChatTask={(text) => handleSendInAppChatTask(text)}
+          onSendChatTask={async (text) => {
+            await handleSendInAppChatTask(text);
+          }}
           onOpenReportInTab={handleOpenReportInTab}
           onApplyToActiveTab={handleApplyToActiveTab}
           onRelayToNextAgent={handleRelayToNextAgent}
@@ -490,6 +718,7 @@ export const AgentsControlCenter: React.FC = () => {
           checkpoints={agentCheckpoints}
           restoringCheckpointId={restoringCheckpointId}
           onRestoreCheckpoint={handleRestoreCheckpoint}
+          onClearTaskLogs={handleClearTaskLogs}
           activeMarkdownContent={activeTab?.content || ''}
           watchedFiles={folderFiles}
           onRunSingleChecklistItem={(itemText) =>
@@ -506,6 +735,7 @@ export const AgentsControlCenter: React.FC = () => {
               sourceAgentId: file.sourceAgent,
             });
           }}
+          onDeleteWorkspaceFile={handleDeleteWorkspaceFile}
         />
       </div>
     </div>

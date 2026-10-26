@@ -257,6 +257,18 @@
         replyMarkdown: replyMarkdown,
       });
     },
+    clearAgentTaskLogs: function (taskId) {
+      return invoke('cmd_clear_agent_task_logs', { taskId: taskId });
+    },
+    deleteAgentTask: function (taskId) {
+      return invoke('cmd_delete_agent_task', { taskId: taskId });
+    },
+    revealInExplorer: function (targetPath) {
+      return invoke('cmd_reveal_in_explorer', { targetPath: targetPath });
+    },
+    deleteFilePath: function (targetPath) {
+      return invoke('cmd_delete_file_path', { targetPath: targetPath });
+    },
     onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
     onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),
     onAgentCheckpointsUpdated: makeEventListener('agent:checkpoints-updated'),

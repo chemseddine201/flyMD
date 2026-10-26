@@ -4,6 +4,10 @@ import { formatRelativeTime } from '../../../shared/utils';
 import { SidebarExplorerMode } from '../store/slices/workspaceSlice';
 import { AppSystemFolderTree } from './sidebar/AppSystemFolderTree';
 import {
+  SidebarContextMenuTarget,
+  SidebarItemContextMenu,
+} from './sidebar/SidebarItemContextMenu';
+import {
   FolderTree,
   FileText,
   Search,
@@ -49,6 +53,27 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [localExplorerMode, setLocalExplorerMode] = useState<SidebarExplorerMode>(explorerMode);
+  const [contextTarget, setContextTarget] = useState<SidebarContextMenuTarget | null>(null);
+
+  const handleOpenFileContextMenu = (e: React.MouseEvent, file: ScannedMdFile) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextTarget({
+      x: e.clientX,
+      y: e.clientY,
+      title: file.name,
+      subtitle: file.relativePath,
+      filePath: file.path,
+      deleteLabel: 'Delete File from Disk...',
+      onOpen: () => onSelectFile(file.path),
+      onDeleteConfirm: async () => {
+        if (window.electronAPI?.deleteFilePath) {
+          await window.electronAPI.deleteFilePath(file.path);
+          onRefreshFolder();
+        }
+      },
+    });
+  };
 
   const activeExplorerMode = onChangeExplorerMode ? explorerMode : localExplorerMode;
   const handleSetExplorerMode = (mode: SidebarExplorerMode) => {
@@ -228,6 +253,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           files={filteredFiles}
           currentActiveFilePath={currentActiveFilePath}
           onSelectFile={onSelectFile}
+          onContextMenuFile={handleOpenFileContextMenu}
           searchQuery={searchQuery}
           colorBlindSafe={colorBlindSafe}
         />
@@ -253,7 +279,8 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                   );
                 }}
                 onClick={() => onSelectFile(file.path)}
-                title="Click to open • Drag onto an Agent in the bottom dock to hand off"
+                onContextMenu={(e) => handleOpenFileContextMenu(e, file)}
+                title="Click to open • Right-click to Open in Directory or Delete"
                 className={`group flex items-start gap-2 p-2 rounded-lg cursor-pointer transition ${
                   isSelected
                     ? 'bg-sky-500/15 border border-sky-500/30 text-sky-200'
@@ -307,6 +334,11 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           })}
         </div>
       )}
+
+      <SidebarItemContextMenu
+        target={contextTarget}
+        onClose={() => setContextTarget(null)}
+      />
     </div>
   );
 };
