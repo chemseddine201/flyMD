@@ -349,6 +349,66 @@ fn check_agent_home_markers(agent_id: &str) -> (bool, bool) {
     }
 }
 
+fn extract_and_write_code_blocks(workspace_dir: &str, file_name: &str, markdown: &str) -> Vec<String> {
+    let mut created_files = Vec::new();
+    let ws_path = Path::new(workspace_dir);
+    if !ws_path.exists() {
+        return created_files;
+    }
+
+    let lines: Vec<&str> = markdown.lines().collect();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i].trim();
+        if line.starts_with("```") {
+            let tag = line.trim_start_matches('`').trim().to_lowercase();
+            let ext = match tag.as_str() {
+                "html" | "htm" => Some("html"),
+                "css" => Some("css"),
+                "javascript" | "js" => Some("js"),
+                "typescript" | "ts" => Some("ts"),
+                "json" => Some("json"),
+                "python" | "py" => Some("py"),
+                _ => None,
+            };
+
+            if let Some(target_ext) = ext {
+                let mut block_content = String::new();
+                i += 1;
+                while i < lines.len() && !lines[i].trim().starts_with("```") {
+                    block_content.push_str(lines[i]);
+                    block_content.push('\n');
+                    i += 1;
+                }
+
+                if !block_content.trim().is_empty() {
+                    let mut chosen_name = if target_ext == "html" {
+                        "index.html".to_string()
+                    } else if target_ext == "css" {
+                        "styles.css".to_string()
+                    } else if target_ext == "js" {
+                        "app.js".to_string()
+                    } else {
+                        format!("output.{}", target_ext)
+                    };
+
+                    if file_name.ends_with(&format!(".{}", target_ext)) && !file_name.starts_with("Untitled") {
+                        chosen_name = file_name.to_string();
+                    }
+
+                    let dest = ws_path.join(&chosen_name);
+                    if fs::write(&dest, block_content.as_bytes()).is_ok() {
+                        created_files.push(chosen_name);
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+
+    created_files
+}
+
 pub fn count_markdown_checklists(content: &str) -> (usize, usize) {
     let mut total = 0usize;
     let mut done = 0usize;
@@ -1718,12 +1778,18 @@ impl AgentOrchestrator {
                     });
                 });
 
+                let user_context = if !source_markdown.trim().is_empty() && source_markdown.len() < 4000 {
+                    format!("\n\nTask Specification Document ({}):\n{}", record.file_name, source_markdown.trim())
+                } else {
+                    format!("\n\nRead the task specification document at: \"{}\"", handoff_file.to_string_lossy())
+                };
+
                 let prompt_arg = format!(
-                    "Working directory: \"{}\". Read the FlyMD Handoff Specification at \"{}\" and execute the mission ({}): {}. Write all requested code/HTML/Markdown files directly inside \"{}\" and output a clear Markdown summary of the files created/updated.",
+                    "Execute this mission directly in \"{}\" ({}):\n{}{}\n\nIMPORTANT: Create, write, or modify all required code/HTML/CSS/JS/Markdown files directly inside \"{}\". Do not ask for confirmation, execute the changes now and output a clear Markdown summary.",
                     exec_dir,
-                    handoff_file.to_string_lossy(),
                     record.intent.to_uppercase(),
                     instructions,
+                    user_context,
                     exec_dir
                 );
 
@@ -1732,8 +1798,28 @@ impl AgentOrchestrator {
                     let mut c = Command::new("cmd.exe");
                     if agent_id == "opencode" {
                         c.args(["/C", &bin, "run", &prompt_arg]);
+                    } else if agent_id == "antigravity" {
+                        c.args([
+                            "/C",
+                            &bin,
+                            "-p",
+                            &prompt_arg,
+                            "--dangerously-skip-permissions",
+                            "--add-dir",
+                            &exec_dir,
+                            "--mode",
+                            "accept-edits",
+                        ]);
                     } else {
-                        c.args(["/C", &bin, "-p", "--dangerously-skip-permissions", "--add-dir", &exec_dir, &prompt_arg]);
+                        c.args([
+                            "/C",
+                            &bin,
+                            "-p",
+                            &prompt_arg,
+                            "--dangerously-skip-permissions",
+                            "--add-dir",
+                            &exec_dir,
+                        ]);
                     }
                     c
                 } else {
@@ -1742,10 +1828,10 @@ impl AgentOrchestrator {
                             let mut c = Command::new(&bin);
                             c.args([
                                 "-p",
+                                &prompt_arg,
                                 "--dangerously-skip-permissions",
                                 "--add-dir",
                                 &exec_dir,
-                                &prompt_arg,
                             ]);
                             c
                         }
@@ -1753,12 +1839,12 @@ impl AgentOrchestrator {
                             let mut c = Command::new(&bin);
                             c.args([
                                 "-p",
+                                &prompt_arg,
                                 "--dangerously-skip-permissions",
                                 "--add-dir",
                                 &exec_dir,
                                 "--mode",
                                 "accept-edits",
-                                &prompt_arg,
                             ]);
                             c
                         }
@@ -1769,7 +1855,7 @@ impl AgentOrchestrator {
                         }
                         _ => {
                             let mut c = Command::new(&bin);
-                            c.args([&prompt_arg]);
+                            c.args(["-p", &prompt_arg]);
                             c
                         }
                     }
@@ -1783,6 +1869,7 @@ impl AgentOrchestrator {
                 }
 
                 cmd.current_dir(&exec_dir)
+                    .stdin(Stdio::null())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
 
@@ -1815,7 +1902,32 @@ impl AgentOrchestrator {
                             });
                         }
                     }
+
+                    if let Some(stderr) = child.stderr.take() {
+                        let reader = BufReader::new(stderr);
+                        for line in reader.lines().map_while(Result::ok) {
+                            if !line.trim().is_empty() {
+                                emit_log(format!("[CLI Stderr] {}", line));
+                            }
+                        }
+                    }
+
                     let _ = child.wait();
+
+                    let created_files = extract_and_write_code_blocks(&exec_dir, &record.file_name, &collected_md);
+                    for cf in created_files {
+                        emit_log(format!("[FlyMD Workspace Sync] Created file: `{}`", cf));
+                        update_task(&|t| {
+                            t.tool_actions.push(AgentToolAction {
+                                id: format!("tool-code-{}", now_ms()),
+                                kind: "write".to_string(),
+                                label: format!("Created Workspace File `{}`", cf),
+                                target_path: Some(format!("{}\\{}", exec_dir, cf)),
+                                status: "done".to_string(),
+                                timestamp: now_ms(),
+                            });
+                        });
+                    }
 
                     if !collected_md.trim().is_empty() {
                         fs::write(&report_file, &collected_md).ok();
