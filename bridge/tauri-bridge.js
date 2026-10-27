@@ -284,6 +284,51 @@
         clearMemory: clearMemory,
       });
     },
+    // Multi-Agent Discussion System
+    startDiscussion: function (config) {
+      return invoke('cmd_start_discussion', { config: config });
+    },
+    pauseDiscussion: function (sessionId) {
+      return invoke('cmd_pause_discussion', { sessionId: sessionId });
+    },
+    resumeDiscussion: function (sessionId, workspacePath) {
+      return invoke('cmd_resume_discussion', {
+        sessionId: sessionId,
+        workspacePath: workspacePath,
+      });
+    },
+    cancelDiscussion: function (sessionId) {
+      return invoke('cmd_cancel_discussion', { sessionId: sessionId });
+    },
+    injectDiscussionGuidance: function (sessionId, guidance) {
+      return invoke('cmd_inject_discussion_guidance', {
+        sessionId: sessionId,
+        guidance: guidance,
+      });
+    },
+    getDiscussionTranscript: function (workspacePath, sessionId) {
+      return invoke('cmd_get_discussion_transcript', {
+        workspacePath: workspacePath,
+        sessionId: sessionId,
+      });
+    },
+    getDiscussionMetadata: function (workspacePath, sessionId) {
+      return invoke('cmd_get_discussion_metadata', {
+        workspacePath: workspacePath,
+        sessionId: sessionId,
+      });
+    },
+    getDiscussionReport: function (workspacePath, sessionId, version) {
+      return invoke('cmd_get_discussion_report', {
+        workspacePath: workspacePath,
+        sessionId: sessionId,
+        version: version || null,
+      });
+    },
+    listDiscussions: function (workspacePath) {
+      return invoke('cmd_list_discussions', { workspacePath: workspacePath });
+    },
+    onDiscussionEvent: makeEventListener('discussion:event'),
     onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
     onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),
     onAgentCheckpointsUpdated: makeEventListener('agent:checkpoints-updated'),

@@ -2,6 +2,7 @@
 //!
 //! Provides structured, bounded multi-agent debate and consensus synthesis.
 
+pub mod commands;
 pub mod memory;
 pub mod orchestrator;
 pub mod report;
@@ -10,6 +11,7 @@ pub mod skills;
 pub mod storage;
 pub mod types;
 
+pub use commands::*;
 pub use memory::*;
 pub use orchestrator::*;
 pub use report::*;

@@ -8,6 +8,7 @@ pub mod windows;
 pub mod workspace;
 
 use agents::*;
+use discussion::*;
 use files::*;
 use llm::*;
 use pdf::*;
@@ -134,6 +135,7 @@ pub fn run() {
             let workspace = WorkspaceManager::new(app.handle().clone(), Arc::clone(&store));
             let llm = Arc::new(LlmManager::new());
             let agents_orch = AgentOrchestrator::new(app.handle().clone(), Arc::clone(&store));
+            let discussion_mgr = Arc::new(DiscussionManager::new());
 
             if let Some(sup) = store.get_supervision_config() {
                 if sup.enabled {
@@ -145,6 +147,7 @@ pub fn run() {
             app.manage(Arc::clone(&workspace));
             app.manage(Arc::clone(&llm));
             app.manage(Arc::clone(&agents_orch));
+            app.manage(Arc::clone(&discussion_mgr) as SharedDiscussionManager);
 
             let show_float =
                 MenuItem::with_id(app, "show_float", "Show Float Hub", true, None::<&str>)?;
@@ -260,6 +263,15 @@ pub fn run() {
             cmd_reveal_in_explorer,
             cmd_delete_file_path,
             cmd_open_external_path,
+            cmd_start_discussion,
+            cmd_pause_discussion,
+            cmd_resume_discussion,
+            cmd_cancel_discussion,
+            cmd_inject_discussion_guidance,
+            cmd_get_discussion_transcript,
+            cmd_get_discussion_metadata,
+            cmd_get_discussion_report,
+            cmd_list_discussions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

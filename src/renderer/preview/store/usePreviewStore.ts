@@ -4,13 +4,15 @@ import { WorkspaceSlice, createWorkspaceSlice } from './slices/workspaceSlice';
 import { UiSlice, createUiSlice } from './slices/uiSlice';
 import { SettingsSlice, createSettingsSlice } from './slices/settingsSlice';
 import { AgentsSlice, createAgentsSlice } from './slices/agentsSlice';
+import { DiscussionSlice, createDiscussionSlice } from './slices/discussionSlice';
 import { TabItem } from '../../../shared/types';
 
 export type PreviewStoreState = TabsSlice &
   WorkspaceSlice &
   UiSlice &
   SettingsSlice &
-  AgentsSlice;
+  AgentsSlice &
+  DiscussionSlice;
 
 export const usePreviewStore = create<PreviewStoreState>()((...a) => ({
   ...createTabsSlice(...a),
@@ -18,6 +20,7 @@ export const usePreviewStore = create<PreviewStoreState>()((...a) => ({
   ...createUiSlice(...a),
   ...createSettingsSlice(...a),
   ...createAgentsSlice(...a),
+  ...createDiscussionSlice(...a),
 }));
 
 export const selectActiveTab = (state: PreviewStoreState): TabItem | undefined => {

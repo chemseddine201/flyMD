@@ -1,0 +1,228 @@
+import { StateCreator } from 'zustand';
+import {
+  DiscussionConfig,
+  DiscussionMetadata,
+  DiscussionMessage,
+  DiscussionStreamEvent,
+} from '../../../../shared/types';
+
+export interface DiscussionSlice {
+  discussions: DiscussionMetadata[];
+  activeSessionId: string | null;
+  activeDiscussionMeta: DiscussionMetadata | null;
+  activeTranscript: DiscussionMessage[];
+  streamingChunks: Record<string, string>;
+  activeReportMarkdown: string | null;
+  activeReportVersion: number | null;
+  isDiscussionRunning: boolean;
+  discussionError: string | null;
+
+  loadDiscussions: (workspacePath: string) => Promise<void>;
+  selectDiscussion: (workspacePath: string, sessionId: string) => Promise<void>;
+  startNewDiscussion: (config: DiscussionConfig) => Promise<void>;
+  pauseCurrentDiscussion: () => Promise<void>;
+  resumeCurrentDiscussion: (workspacePath: string) => Promise<void>;
+  cancelCurrentDiscussion: () => Promise<void>;
+  injectGuidance: (guidance: string) => Promise<void>;
+  handleDiscussionEvent: (event: any) => void;
+  loadReport: (workspacePath: string, sessionId: string, version?: number) => Promise<void>;
+}
+
+export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) => ({
+  discussions: [],
+  activeSessionId: null,
+  activeDiscussionMeta: null,
+  activeTranscript: [],
+  streamingChunks: {},
+  activeReportMarkdown: null,
+  activeReportVersion: null,
+  isDiscussionRunning: false,
+  discussionError: null,
+
+  loadDiscussions: async (workspacePath: string) => {
+    if (!window.electronAPI?.listDiscussions) return;
+    try {
+      const list = await window.electronAPI.listDiscussions(workspacePath);
+      set({ discussions: list || [] });
+    } catch (e: any) {
+      console.error('[DiscussionSlice] Failed to load discussions:', e);
+    }
+  },
+
+  selectDiscussion: async (workspacePath: string, sessionId: string) => {
+    if (!window.electronAPI) return;
+    try {
+      set({ activeSessionId: sessionId, discussionError: null, streamingChunks: {} });
+      const meta = await window.electronAPI.getDiscussionMetadata(workspacePath, sessionId);
+      const transcript = await window.electronAPI.getDiscussionTranscript(workspacePath, sessionId);
+      set({
+        activeDiscussionMeta: meta,
+        activeTranscript: transcript || [],
+        isDiscussionRunning: meta?.status === 'running',
+      });
+      // Load latest report if completed or awaiting review
+      if (meta?.latestReportVersion && meta.latestReportVersion > 0) {
+        get().loadReport(workspacePath, sessionId, meta.latestReportVersion);
+      } else {
+        set({ activeReportMarkdown: null, activeReportVersion: null });
+      }
+    } catch (e: any) {
+      set({ discussionError: String(e) });
+    }
+  },
+
+  startNewDiscussion: async (config: DiscussionConfig) => {
+    if (!window.electronAPI?.startDiscussion) return;
+    try {
+      set({
+        activeSessionId: config.sessionId,
+        isDiscussionRunning: true,
+        discussionError: null,
+        activeTranscript: [],
+        streamingChunks: {},
+        activeReportMarkdown: null,
+      });
+      const meta = await window.electronAPI.startDiscussion(config);
+      set({ activeDiscussionMeta: meta });
+      get().loadDiscussions(config.workspacePath);
+    } catch (e: any) {
+      set({ discussionError: String(e), isDiscussionRunning: false });
+    }
+  },
+
+  pauseCurrentDiscussion: async () => {
+    const { activeSessionId } = get();
+    if (!activeSessionId || !window.electronAPI?.pauseDiscussion) return;
+    try {
+      const meta = await window.electronAPI.pauseDiscussion(activeSessionId);
+      set({ activeDiscussionMeta: meta, isDiscussionRunning: false });
+    } catch (e: any) {
+      set({ discussionError: String(e) });
+    }
+  },
+
+  resumeCurrentDiscussion: async (workspacePath: string) => {
+    const { activeSessionId } = get();
+    if (!activeSessionId || !window.electronAPI?.resumeDiscussion) return;
+    try {
+      set({ isDiscussionRunning: true, discussionError: null });
+      const meta = await window.electronAPI.resumeDiscussion(activeSessionId, workspacePath);
+      set({ activeDiscussionMeta: meta });
+    } catch (e: any) {
+      set({ discussionError: String(e), isDiscussionRunning: false });
+    }
+  },
+
+  cancelCurrentDiscussion: async () => {
+    const { activeSessionId } = get();
+    if (!activeSessionId || !window.electronAPI?.cancelDiscussion) return;
+    try {
+      const meta = await window.electronAPI.cancelDiscussion(activeSessionId);
+      set({ activeDiscussionMeta: meta, isDiscussionRunning: false });
+    } catch (e: any) {
+      set({ discussionError: String(e) });
+    }
+  },
+
+  injectGuidance: async (guidance: string) => {
+    const { activeSessionId } = get();
+    if (!activeSessionId || !window.electronAPI?.injectDiscussionGuidance) return;
+    try {
+      set({ isDiscussionRunning: true, discussionError: null });
+      const meta = await window.electronAPI.injectDiscussionGuidance(activeSessionId, guidance);
+      set({ activeDiscussionMeta: meta });
+    } catch (e: any) {
+      set({ discussionError: String(e), isDiscussionRunning: false });
+    }
+  },
+
+  handleDiscussionEvent: (event: any) => {
+    if (!event || !event.type) return;
+    const { activeSessionId } = get();
+    const payload = event.payload || {};
+
+    if (payload.session_id && activeSessionId && payload.session_id !== activeSessionId) {
+      return;
+    }
+
+    switch (event.type) {
+      case 'StatusChanged': {
+        const newStatus = payload.new_status;
+        set((state) => ({
+          isDiscussionRunning: newStatus === 'running',
+          activeDiscussionMeta: state.activeDiscussionMeta
+            ? { ...state.activeDiscussionMeta, status: newStatus }
+            : null,
+        }));
+        break;
+      }
+      case 'TurnChunk': {
+        const key = `r${payload.round}-${payload.agent_id}`;
+        set((state) => ({
+          streamingChunks: {
+            ...state.streamingChunks,
+            [key]: (state.streamingChunks[key] || '') + payload.chunk,
+          },
+        }));
+        break;
+      }
+      case 'TurnCompleted': {
+        const key = `r${payload.round}-${payload.agent_id}`;
+        const chunkContent = get().streamingChunks[key] || '';
+        const newMsg: DiscussionMessage = {
+          id: payload.message_id || `msg-${Date.now()}`,
+          sessionId: payload.session_id,
+          roundNumber: payload.round,
+          turnIndex: 0,
+          authorAgentId: payload.agent_id,
+          authorRole: '',
+          authorProvider: '',
+          messageKind:
+            payload.round === 1
+              ? 'initial_analysis'
+              : payload.round === 2
+              ? 'peer_critique'
+              : 'rebuttal_revision',
+          targetPeerIds: [],
+          content: chunkContent,
+          timestamp: Date.now(),
+          tokenUsage: payload.usage,
+          durationMs: 0,
+          truncated: false,
+        };
+
+        set((state) => {
+          const exists = state.activeTranscript.some((m) => m.id === newMsg.id);
+          return {
+            activeTranscript: exists
+              ? state.activeTranscript
+              : [...state.activeTranscript, newMsg],
+          };
+        });
+        break;
+      }
+      case 'RoundCompleted': {
+        set((state) => ({
+          activeDiscussionMeta: state.activeDiscussionMeta
+            ? { ...state.activeDiscussionMeta, currentRound: payload.round }
+            : null,
+        }));
+        break;
+      }
+    }
+  },
+
+  loadReport: async (workspacePath: string, sessionId: string, version?: number) => {
+    if (!window.electronAPI?.getDiscussionReport) return;
+    try {
+      const reportMd = await window.electronAPI.getDiscussionReport(workspacePath, sessionId, version);
+      set({
+        activeReportMarkdown: reportMd,
+        activeReportVersion: version || null,
+      });
+    } catch (e: any) {
+      console.warn('[DiscussionSlice] Failed to load report:', e);
+    }
+  },
+});
+

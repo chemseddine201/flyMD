@@ -14,6 +14,9 @@ import {
   AgentTaskRecord,
   AgentCheckpoint,
   AgentStreamEvent,
+  DiscussionConfig,
+  DiscussionMetadata,
+  DiscussionMessage,
 } from '../shared/types';
 import {
   IPC_CHANNELS,
@@ -196,6 +199,30 @@ const electronAPI = {
     ipcRenderer.invoke('file:open-external-path', targetPath),
   clearWorkspaceCache: (workspacePath: string, clearMemory: boolean): Promise<string> =>
     ipcRenderer.invoke('agent:clear-workspace-cache', workspacePath, clearMemory),
+  // Multi-Agent Discussion System
+  startDiscussion: (config: DiscussionConfig): Promise<DiscussionMetadata> =>
+    ipcRenderer.invoke('discussion:start', config),
+  pauseDiscussion: (sessionId: string): Promise<DiscussionMetadata> =>
+    ipcRenderer.invoke('discussion:pause', sessionId),
+  resumeDiscussion: (sessionId: string, workspacePath: string): Promise<DiscussionMetadata> =>
+    ipcRenderer.invoke('discussion:resume', sessionId, workspacePath),
+  cancelDiscussion: (sessionId: string): Promise<DiscussionMetadata> =>
+    ipcRenderer.invoke('discussion:cancel', sessionId),
+  injectDiscussionGuidance: (sessionId: string, guidance: string): Promise<DiscussionMetadata> =>
+    ipcRenderer.invoke('discussion:inject-guidance', sessionId, guidance),
+  getDiscussionTranscript: (workspacePath: string, sessionId: string): Promise<DiscussionMessage[]> =>
+    ipcRenderer.invoke('discussion:get-transcript', workspacePath, sessionId),
+  getDiscussionMetadata: (workspacePath: string, sessionId: string): Promise<DiscussionMetadata> =>
+    ipcRenderer.invoke('discussion:get-metadata', workspacePath, sessionId),
+  getDiscussionReport: (workspacePath: string, sessionId: string, version?: number): Promise<string> =>
+    ipcRenderer.invoke('discussion:get-report', workspacePath, sessionId, version),
+  listDiscussions: (workspacePath: string): Promise<DiscussionMetadata[]> =>
+    ipcRenderer.invoke('discussion:list', workspacePath),
+  onDiscussionEvent: (callback: (event: any) => void) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on('discussion:event', handler);
+    return () => ipcRenderer.removeListener('discussion:event', handler);
+  },
   onAgentProfilesUpdated: (callback: (profiles: AgentProfile[]) => void) => {
     const handler = (_: any, data: AgentProfile[]) => callback(data);
     ipcRenderer.on('agent:profiles-updated', handler);
