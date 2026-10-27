@@ -5,4 +5,5 @@ export * from './settings';
 export * from './workspace';
 export * from './tabs';
 export * from './agents';
+export * from './discussion';
 

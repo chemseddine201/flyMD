@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod discussion;
 pub mod files;
 pub mod llm;
 pub mod pdf;
