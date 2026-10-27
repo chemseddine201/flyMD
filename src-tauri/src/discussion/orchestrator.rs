@@ -457,7 +457,9 @@ impl DiscussionOrchestrator {
             });
 
             if current_round >= self.config.max_rounds {
-                // Reached final round barrier -> transition to AwaitingReview
+                // Reached final round barrier -> synthesize 12-section evidence report
+                let generator = super::report::ReportGenerator::new(self.session_dir.clone());
+                let _ = generator.generate_report(&self.config, &mut self.metadata);
                 self.transition_status(DiscussionStatus::AwaitingReview)?;
                 self.release_lock();
                 return Ok(DiscussionStatus::AwaitingReview);
