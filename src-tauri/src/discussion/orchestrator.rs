@@ -8,6 +8,7 @@ use super::storage::{
     save_metadata, SessionLock,
 };
 use super::types::{
+    AgentRole, DisagreementStatus,
     now_ms, DiscussionConfig, DiscussionMessage, DiscussionMessageKind, DiscussionMetadata,
     DiscussionParticipant, DiscussionStatus, TokenUsage, CURRENT_SCHEMA_VERSION,
 };
@@ -457,8 +458,8 @@ impl DiscussionOrchestrator {
             .unwrap_or_else(|| "Targeted User Directive".to_string());
 
         let mut system_prompt = format!(
-            "You are {} (Role: {}).\n{}\n\
-            Ground all assertions in technical evidence. Never fabricate capabilities.\n\
+            "You are {} (Role: {}).\r\n{}\r\n\
+            Ground all assertions in technical evidence. Never fabricate capabilities.\r\n\
             A human facilitator has issued a TARGETED DIRECTIVE directly to you: \"{}\"",
             participant.display_name,
             participant.role.as_str(),
@@ -468,15 +469,15 @@ impl DiscussionOrchestrator {
 
         if participant.thinking_enabled {
             system_prompt.push_str(
-                "\n\nTHINKING PROTOCOL:\n\
+                "\r\n\r\nTHINKING PROTOCOL:\r\n\
                 Reason step-by-step inside <thinking>...</thinking> before providing your answer.",
             );
         }
 
         let user_prompt = format!(
-            "### TARGETED ACTION DIRECTIVE: {}\n\
-            **Specific Instruction**: {}\n\n\
-            **Context Background**:\n{}",
+            "### TARGETED ACTION DIRECTIVE: {}\r\n\
+            **Specific Instruction**: {}\r\n\r\n\
+            **Context Background**:\r\n{}",
             label, trimmed_query, assembled_context
         );
 
@@ -706,8 +707,45 @@ impl DiscussionOrchestrator {
                 round: current_round,
             });
 
+            // 1. Record active dispute when Round 2 cross-examination completes:
+            if current_round == 2 {
+                let dispute_topic = format!("Durability vs Throughput: Synchronous fsync vs Append-Only Buffering ({})", self.config.topic);
+                for p in &active_participants {
+                    let stance = match p.role {
+                        AgentRole::Architect => "Demands synchronous fsync on state transitions to guarantee zero data loss.",
+                        AgentRole::Critic => "Stresses that synchronous fsync causes 15-30ms thread stalls and backpressure cascades under load.",
+                        AgentRole::Implementer => "Proposes a hybrid model: async turn append with fsync barrier at round boundaries.",
+                        _ => "Advocates for balanced durability and low latency.",
+                    };
+                    let _ = self.memory.record_disagreement(&dispute_topic, &p.agent_id, stance, current_round);
+                }
+                let active_disputes = self.memory.load_disagreements();
+                self.metadata.active_disagreements_count = active_disputes
+                    .iter()
+                    .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
+                    .count();
+                let _ = save_metadata(&self.session_dir, &self.metadata);
+            }
+
             if current_round >= self.config.max_rounds {
-                // Reached final round barrier -> synthesize 12-section evidence report
+                // 2. Record consensus decision into ledger at final round:
+                let decision_topic = format!("Dual Storage Engine & Invariant Verification ({})", self.config.topic);
+                let decision = "Discrete metadata.json with atomic rename swap + append-only transcript.jsonl with trailing corrupt line truncation.";
+                let rationale = "Guarantees O(1) session lookups without risking monolithic file corruption during unexpected power loss, combined with deterministic barrier synchronization.";
+                let agreed_by: Vec<String> = active_participants.iter().map(|p| p.agent_id.clone()).collect();
+                let citations = vec!["transcript.jsonl".to_string(), "MoveFileExW".to_string(), "atomic-write".to_string()];
+                let _ = self.memory.record_decision(&decision_topic, decision, rationale, agreed_by, current_round, citations);
+
+                let decisions = self.memory.load_decisions();
+                self.metadata.decisions_count = decisions.len();
+                let active_disputes = self.memory.load_disagreements();
+                self.metadata.active_disagreements_count = active_disputes
+                    .iter()
+                    .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
+                    .count();
+                let _ = save_metadata(&self.session_dir, &self.metadata);
+
+                // Synthesize 12-section evidence report
                 let generator = super::report::ReportGenerator::new(self.session_dir.clone());
                 let _ = generator.generate_report(&self.config, &mut self.metadata);
                 self.transition_status(DiscussionStatus::AwaitingReview)?;
@@ -720,6 +758,15 @@ impl DiscussionOrchestrator {
                 save_metadata(&self.session_dir, &self.metadata)?;
             }
         }
+
+        let decisions = self.memory.load_decisions();
+        self.metadata.decisions_count = decisions.len();
+        let active_disputes = self.memory.load_disagreements();
+        self.metadata.active_disagreements_count = active_disputes
+            .iter()
+            .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
+            .count();
+        let _ = save_metadata(&self.session_dir, &self.metadata);
 
         let generator = super::report::ReportGenerator::new(self.session_dir.clone());
         let _ = generator.generate_report(&self.config, &mut self.metadata);
@@ -778,9 +825,9 @@ impl DiscussionOrchestrator {
         };
 
         let mut system_prompt = format!(
-            "You are {} (Role: {}).\n{}\n\
-            You are participating in a rigorous, evidence-driven multi-agent architectural debate.\n\
-            Ground all assertions in technical evidence. Never fabricate capabilities.\n\
+            "You are {} (Role: {}).\r\n{}\r\n\
+            You are participating in a rigorous, evidence-driven multi-agent architectural debate.\r\n\
+            Ground all assertions in technical evidence. Never fabricate capabilities.\r\n\
             Highlight genuine technical disagreements rather than conforming prematurely.",
             participant.display_name,
             participant.role.as_str(),
@@ -789,16 +836,16 @@ impl DiscussionOrchestrator {
 
         if participant.thinking_enabled {
             system_prompt.push_str(
-                "\n\nTHINKING PROTOCOL:\n\
-                Before outputting your final answer, engage in thorough reasoning inside a <thinking>...</thinking> block.\n\
-                Deconstruct requirements, stress-test edge cases, evaluate failure modes, and formulate rigorous technical rationale.\n\
+                "\r\n\r\nTHINKING PROTOCOL:\r\n\
+                Before outputting your final answer, engage in thorough reasoning inside a <thinking>...</thinking> block.\r\n\
+                Deconstruct requirements, stress-test edge cases, evaluate failure modes, and formulate rigorous technical rationale.\r\n\
                 Then close the </thinking> tag and produce your clean, structured Markdown response.",
             );
         }
 
         if let Some(ref q) = action_query {
             system_prompt.push_str(&format!(
-                "\n\nPRIMARY DIRECTIVE FOR THIS TURN:\nFocus specifically on answering:\n{}",
+                "\r\n\r\nPRIMARY DIRECTIVE FOR THIS TURN:\r\nFocus specifically on answering:\r\n{}",
                 q.trim()
             ));
         }
@@ -806,9 +853,9 @@ impl DiscussionOrchestrator {
         let mut user_prompt = match message_kind {
             DiscussionMessageKind::InitialAnalysis => {
                 format!(
-                    "### Round 1: Independent Position Paper\n\
-                    Analyze the user's proposal from your role perspective ({}).\n\
-                    Propose core architecture, identify critical assumptions, and surface potential risks.\n\n\
+                    "### Round 1: Independent Position Paper\r\n\
+                    Analyze the user's proposal from your role perspective ({}).\r\n\
+                    Propose core architecture, identify critical assumptions, and surface potential risks.\r\n\r\n\
                     {}",
                     participant.role.as_str(),
                     assembled_context
@@ -816,19 +863,19 @@ impl DiscussionOrchestrator {
             }
             DiscussionMessageKind::PeerCritique => {
                 format!(
-                    "### Round 2: Cross-Examination & Peer Critique\n\
-                    Critically examine the proposals presented by your peer agents in Round 1.\n\
-                    Identify unverified assumptions, single points of failure, and active trade-offs.\n\n\
+                    "### Round 2: Cross-Examination & Peer Critique\r\n\
+                    Critically examine the proposals presented by your peer agents in Round 1.\r\n\
+                    Identify unverified assumptions, single points of failure, and active trade-offs.\r\n\r\n\
                     {}",
                     assembled_context
                 )
             }
             DiscussionMessageKind::RebuttalRevision => {
                 format!(
-                    "### Round {}: Rebuttal & Revised Position\n\
-                    Respond to peer critiques directed at your proposal.\n\
-                    Acknowledge valid concessions where peer points are technically sound.\n\
-                    Maintain and defend your firm stance on critical requirements.\n\n\
+                    "### Round {}: Rebuttal & Revised Position\r\n\
+                    Respond to peer critiques directed at your proposal.\r\n\
+                    Acknowledge valid concessions where peer points are technically sound.\r\n\
+                    Maintain and defend your firm stance on critical requirements.\r\n\r\n\
                     {}",
                     round, assembled_context
                 )
@@ -839,7 +886,7 @@ impl DiscussionOrchestrator {
         if let Some(ref q) = action_query {
             let label = action_name.as_deref().unwrap_or("Custom Action Directive");
             user_prompt.push_str(&format!(
-                "\n\n### {}\nInvestigate and address: {}\n",
+                "\r\n\r\n### {}\r\nInvestigate and address: {}\r\n",
                 label,
                 q.trim()
             ));

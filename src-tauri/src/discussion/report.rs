@@ -155,12 +155,47 @@ impl ReportGenerator {
             }
             report.push_str(&format!("### Round {} Deliberation Summary\n\n", round));
             for m in round_msgs {
-                let excerpt: String = m.content.lines().take(4).collect::<Vec<_>>().join(" ");
+                let substantive_lines: Vec<&str> = m
+                    .content
+                    .lines()
+                    .map(|l| l.trim())
+                    .filter(|l| {
+                        !l.is_empty()
+                            && !l.starts_with('#')
+                            && !l.starts_with("**Domain Analysis")
+                            && !l.starts_with("**Critique Target")
+                            && !l.starts_with("**Adversarial Challenge")
+                            && !l.starts_with("**Systems Engineering")
+                            && !l.starts_with("**Zero-Trust Security")
+                            && !l.starts_with("**Topic Refinement")
+                            && !l.starts_with("**Topic Context")
+                    })
+                    .take(3)
+                    .collect();
+
+                let summary = if substantive_lines.is_empty() {
+                    m.content
+                        .lines()
+                        .find(|l| !l.trim().is_empty())
+                        .unwrap_or("Deliberation turn completed.")
+                        .trim()
+                        .to_string()
+                } else {
+                    substantive_lines.join(" ")
+                };
+
+                let clean_summary = if summary.len() > 240 {
+                    format!("{}...", &summary[..237])
+                } else {
+                    summary
+                };
+
+                let display_name = m.author_display_name.as_deref().unwrap_or(&m.author_agent_id);
                 report.push_str(&format!(
                     "- **{}** ({}): {}\n",
-                    m.author_agent_id,
+                    display_name,
                     m.author_role,
-                    excerpt.trim()
+                    clean_summary
                 ));
             }
             report.push('\n');

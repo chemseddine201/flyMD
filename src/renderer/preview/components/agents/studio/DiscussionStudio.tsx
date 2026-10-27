@@ -353,6 +353,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const [turnTimeoutSecs, setTurnTimeoutSecs] = useState(120);
   const [newDebateMode, setNewDebateMode] = useState<'preset' | 'custom'>('preset');
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>('architecture');
+  const [presetEngine, setPresetEngine] = useState<string>('auto');
   const [enableStepModeInNew, setEnableStepModeInNew] = useState(false);
   const [customParticipants, setCustomParticipants] = useState<DiscussionParticipant[]>(
     () => PRESET_TEMPLATES.architecture.participants
@@ -591,9 +592,35 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const handleLaunchNewDiscussion = async () => {
     if (!resolvedWorkspace || !newTopic.trim() || !newIdea.trim()) return;
     const sessionId = `disc-${Date.now()}`;
-    const participants = newDebateMode === 'preset'
+    let participants = newDebateMode === 'preset'
       ? PRESET_TEMPLATES[selectedPreset].participants
       : customParticipants;
+
+    if (newDebateMode === 'preset') {
+      let targetProvider = presetEngine;
+      if (presetEngine === 'auto') {
+        const best = availableProviders.find((ap) => ap.available && ap.id !== 'mock');
+        targetProvider = best ? best.id : 'mock';
+      }
+
+      const matched = availableProviders.find((ap) => ap.id === targetProvider);
+      participants = participants.map((p) => {
+        if (targetProvider === 'mock') {
+          return {
+            ...p,
+            providerId: 'mock',
+            modelId: p.modelId || 'adaptive-domain-simulator',
+            thinkingEnabled: true,
+          };
+        }
+        return {
+          ...p,
+          providerId: targetProvider,
+          modelId: matched?.model || p.modelId,
+          thinkingEnabled: true,
+        };
+      });
+    }
 
     const config: DiscussionConfig = {
       schemaVersion: 1,
@@ -1824,7 +1851,36 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                 )}
 
                 {newDebateMode === 'preset' ? (
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-3">
+                    {/* Preset Engine Switcher */}
+                    <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <Cpu size={14} className="text-sky-400 shrink-0" />
+                        <div>
+                          <span className="font-bold text-slate-200">Preset Engine:</span>
+                          <span className="text-[10px] text-slate-400 ml-1.5 hidden sm:inline">
+                            Model powering all agents
+                          </span>
+                        </div>
+                      </div>
+                      <select
+                        value={presetEngine}
+                        onChange={(e) => setPresetEngine(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium"
+                      >
+                        <option value="auto">⚡ Auto-detect Best Engine</option>
+                        <option value="mock">Local Adaptive Reasoner (Simulated)</option>
+                        {availableProviders
+                          .filter((ap) => ap.id !== 'mock')
+                          .map((ap) => (
+                            <option key={ap.id} value={ap.id}>
+                              {ap.name} ({ap.model}) {ap.available ? '✓ Ready' : '(Not configured)'}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
                     {(Object.keys(PRESET_TEMPLATES) as PresetKey[]).map((key) => {
                       const preset = PRESET_TEMPLATES[key];
                       const isSelected = selectedPreset === key;
@@ -1855,6 +1911,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                         </div>
                       );
                     })}
+                    </div>
                   </div>
                 ) : (
                   /* Custom Team Editor with Custom Actions & Query Builders */

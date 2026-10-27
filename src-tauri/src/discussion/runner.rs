@@ -825,19 +825,48 @@ impl DiscussionProvider for MockProvider {
             String::new()
         };
 
-        let thinking_body = format!(
-            "Deconstructing user problem: \"{}\".\n\
-            Analyzing domain constraints from role perspective: {} (Agent: {}).\n\
-            Key considerations:\n\
-            1. Core requirement: {}\n\
-            2. Evaluating potential failure modes, thread safety, and latency trade-offs.\n\
-            3. Invariant validation: ensure no silent data corruption or race conditions.\n\
-            4. Formulating actionable technical findings with precise rationale.",
-            topic_clean,
-            request.role.as_str(),
-            request.agent_id,
-            idea_clean
-        );
+        let thinking_body = match &request.role {
+            AgentRole::Architect => format!(
+                "Deconstructing architectural topology for \"{}\".\n\
+                Step 1: Modular boundary invariant analysis for: \"{}\".\n\
+                Step 2: State-machine lifecycle design: Created -> Running -> Paused -> AwaitingReview -> Completed.\n\
+                Step 3: Verification of contract invariants: schema versioning, discrete recovery checkpoints, and barrier synchronization.\n\
+                Step 4: Formulating structural modular architecture proposal.",
+                topic_clean, idea_clean
+            ),
+            AgentRole::Critic => format!(
+                "Adversarial stress-analysis of \"{}\".\n\
+                Step 1: Threat modeling and assumption questioning regarding: \"{}\".\n\
+                Step 2: Identifying single points of failure: unhandled thread panics, unbounded queue buffers, and lock starvation.\n\
+                Step 3: Simulating edge-case failures: unexpected process termination, Windows FILE_SHARE lock contention, and cascade drops.\n\
+                Step 4: Crafting targeted critiques against peer architectural assumptions.",
+                topic_clean, idea_clean
+            ),
+            AgentRole::Implementer => format!(
+                "Systems programming feasibility analysis for \"{}\".\n\
+                Step 1: Platform constraints (Windows NT / Rust tokio async runtime) regarding: \"{}\".\n\
+                Step 2: Storage I/O atomicity: evaluating MoveFileExW replace semantics vs write-ahead append logging.\n\
+                Step 3: Measuring syscall latency: fsync overhead (15ms-40ms) vs in-memory channel ring-buffers.\n\
+                Step 4: Formulating low-level crash-safe implementation specification.",
+                topic_clean, idea_clean
+            ),
+            AgentRole::Auditor => format!(
+                "Security & isolation audit for \"{}\".\n\
+                Step 1: Zero-trust inspection of filesystem access and process elevation for: \"{}\".\n\
+                Step 2: Verifying path traversal denylist checks (parent directory escape, sensitive paths).\n\
+                Step 3: Secret redaction review: ensuring API keys and bearer tokens are stripped before serialization.\n\
+                Step 4: Formulating sandbox policy and isolation invariant report.",
+                topic_clean, idea_clean
+            ),
+            _ => format!(
+                "Domain research and synthesis for \"{}\".\n\
+                Step 1: Empirical baseline analysis regarding: \"{}\".\n\
+                Step 2: Comparing industry patterns and failure case studies.\n\
+                Step 3: Invariant validation: ensuring deterministic reproducibility.\n\
+                Step 4: Formulating evidence-backed domain conclusions.",
+                topic_clean, idea_clean
+            ),
+        };
 
         if request.thinking_enabled {
             if let Some(ref sink) = stream_sink {
@@ -852,80 +881,172 @@ impl DiscussionProvider for MockProvider {
             }
         }
 
-        let response_body = match request.round_number {
-            1 => {
-                let custom_section = if let Some(ref q) = request.action_query {
-                    format!(
-                        "\n\n**Custom Action Analysis ({})**:\n- Investigation findings: Grounded verification confirms {}",
-                        request.action_name.as_deref().unwrap_or("Directive"),
-                        q.trim()
-                    )
-                } else {
-                    String::new()
-                };
+        let custom_section = if let Some(ref q) = request.action_query {
+            format!(
+                "\n\n**Special Action Directive ({})**:\n- Investigation findings: Grounded verification confirms {}",
+                request.action_name.as_deref().unwrap_or("Directive"),
+                q.trim()
+            )
+        } else {
+            String::new()
+        };
 
-                format!(
-                    "### Position Paper by {} ({})\n\n\
+        let response_body = match request.round_number {
+            1 => match &request.role {
+                AgentRole::Architect => format!(
+                    "### Position Paper by {} (Lead Architect)\n\n\
                     **Domain Analysis for Topic**: *{}*\n\
                     {}\n\
                     #### 1. Architectural Baseline & Decomposition\n\
                     - **Primary Objective**: {}\n\
-                    - **System Boundaries**: Isolated execution sandbox with strict unidirectional event flow.\n\
-                    - **Data Contract Invariants**: Explicit schema versioning and deterministic recovery checkpoints.\n\n\
+                    - **Modular Topology**: Strict three-tier separation:\n\
+                      1. *Subprocess Isolation Sandbox*: Read-only execution boundary with stripped environment variables.\n\
+                      2. *Deterministic Event Reactor*: Unidirectional barrier synchronization preventing arrival-order bias.\n\
+                      3. *Persistence Engine*: Dual storage with atomic state snapshots and append-only event logs.\n\
+                    - **State Invariants**: Schema versioning (v1) validated before deserialization.\n\n\
                     #### 2. Key Hypotheses & Technical Feasibility\n\
-                    - **Concurrency Model**: Async event reactor with thread-pool offloading for I/O operations.\n\
-                    - **Memory & Storage Safety**: Zero-copy deserialization where feasible; append-only durability.\n\
-                    - **Failure Modes**: Process termination guarded via atomic write swaps and lockfile leases.\n\n\
-                    #### 3. Critical Risks & Trade-Offs Identified\n\
-                    - Single point of failure: Unchecked memory allocations during bursts.\n\
-                    - Recommended validation: Automated fuzzing of serialization boundaries.{}",
-                    request.agent_id,
-                    request.role.as_str(),
-                    topic_clean,
-                    action_focus.trim(),
-                    idea_clean,
-                    custom_section
-                )
-            }
-            2 => {
-                let dispute_target = match request.role {
-                    AgentRole::Critic => "Architectural Assumptions",
-                    AgentRole::Auditor => "Access Control & Sandbox Isolation Boundaries",
-                    AgentRole::Implementer => "Runtime Resource Footprint & Error Propagation",
-                    _ => "System Invariants & Scalability Bottlenecks",
-                };
-
-                format!(
-                    "### Round 2 Cross-Examination by {} ({})\n\n\
-                    **Critique Target**: *{}*\n\
+                    - **Concurrency Model**: Asynchronous message passing via bounded `tokio::sync::mpsc` channels with backpressure.\n\
+                    - **Contract Boundary**: Explicit JSON-RPC command interfaces between UI and runtime.\n\n\
+                    #### 3. Recommended Validation Gates\n\
+                    - Formal state transition matrix test suite covering all 8 lifecycle states.\n\
+                    - Property-based testing for JSONL partial recovery.{}",
+                    request.agent_id, topic_clean, action_focus.trim(), idea_clean, custom_section
+                ),
+                AgentRole::Critic => format!(
+                    "### Position Paper by {} (Critical Adversary)\n\n\
+                    **Adversarial Challenge for Topic**: *{}*\n\
+                    {}\n\
+                    #### 1. Scrutiny of Architectural Assumptions\n\
+                    - **Underestimated Failure Modes**: High-level specifications routinely overlook process-level deadlocks during sudden power interruptions or SIGKILL signals.\n\
+                    - **Single Point of Failure (SPOF)**: Monolithic session locks cause permanent denial-of-service if a previous instance crashes without releasing its lockfile.\n\
+                    - **Buffer Bloat Hazard**: Unbounded streaming chunks risk overflowing memory budgets if downstream UI rendering throttles.\n\n\
+                    #### 2. Critical Edge Cases to Stress-Test\n\
+                    1. *Dirty Writes*: Interrupted disk writes during concurrent guidance injection.\n\
+                    2. *File Watcher Cascade*: Disk persistence triggering recursive file watcher loops if writing into monitored directories.\n\
+                    3. *Zombie Subprocesses*: Orphaned CLI adapter processes continuing to consume CPU after user cancellation.\n\n\
+                    #### 3. Adversarial Mandate\n\
+                    - Demand empirical proof of crash recovery and deterministic process-tree termination before approving design.{}",
+                    request.agent_id, topic_clean, action_focus.trim(), custom_section
+                ),
+                AgentRole::Implementer => format!(
+                    "### Position Paper by {} (Core Implementer)\n\n\
+                    **Systems Engineering Specification for Topic**: *{}*\n\
+                    {}\n\
+                    #### 1. Low-Level Platform & Storage Realities\n\
+                    - **Primary Objective**: Implement {}\n\
+                    - **Storage Atomicity on Windows**: Standard `std::fs::write` is NOT atomic on Windows NTFS. Replacement must use atomic write-to-temp and `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`.\n\
+                    - **Durability Model**: Single-file JSON serialization causes catastrophic truncation on crash. We must implement dual storage:\n\
+                      - `transcript.jsonl`: Append-only, line-buffered with trailing partial-line recovery.\n\
+                      - `metadata.json`: Atomically rewritten snapshot with schema version validation.\n\n\
+                    #### 2. Subprocess Lifecycle & Process-Tree Isolation\n\
+                    - Process cleanup on Windows cannot rely on standard `kill()` which only kills the parent wrapper; we must terminate the full process tree via `taskkill /F /T /PID` or Win32 Job Objects.\n\
+                    - Memory budgets: Hard cap per turn at 32,000 tokens with pre-deserialization byte-limit bounds.{}",
+                    request.agent_id, topic_clean, action_focus.trim(), idea_clean, custom_section
+                ),
+                AgentRole::Auditor => format!(
+                    "### Position Paper by {} (Security Auditor)\n\n\
+                    **Zero-Trust Security Audit for Topic**: *{}*\n\
+                    {}\n\
+                    #### 1. Security Boundaries & Process Isolation\n\
+                    - **Read-Only Sandbox**: CLI adapters must strictly execute with `--tools \"\"` and `--mode plan --sandbox` to prevent arbitrary file mutation or remote command execution.\n\
+                    - **Path Traversal Barrier**: Reject all input paths containing `..`, symlink escapes, or Windows alternate data streams (`::$DATA`).\n\
+                    - **Secret Redaction**: Scrub API keys, Bearer tokens, and sensitive env variables from all logged messages prior to disk commit.\n\n\
+                    #### 2. Auditing Requirements\n\
+                    - Maintain immutable cryptographic hashes or line-delimited audit log for every turn.{}",
+                    request.agent_id, topic_clean, action_focus.trim(), custom_section
+                ),
+                _ => format!(
+                    "### Position Paper by {} ({})\n\n\
+                    **Domain Analysis for Topic**: *{}*\n\
+                    {}\n\
+                    #### 1. Foundational Perspective\n\
+                    - **Core Focus**: Domain analysis for {}\n\
+                    - **Proposed Approach**: Coordinate role specialization with deterministic barrier synchronization.\n\
+                    - **Identified Trade-Off**: Throughput versus strict validation invariants.{}",
+                    request.agent_id, request.role.as_str(), topic_clean, action_focus.trim(), idea_clean, custom_section
+                ),
+            },
+            2 => match &request.role {
+                AgentRole::Architect => format!(
+                    "### Round 2 Cross-Examination by {} (Lead Architect)\n\n\
+                    **Critique Target**: *Critic's SPOF & Implementer's Storage Proposals*\n\
+                    **Topic Context**: {}\n\n\
+                    #### 1. Defense & Refinement of Architectural Invariants\n\
+                    - **Lockfile Self-Healing**: Accept Critic's concern regarding stale locks; session locks must incorporate PID-heartbeat validation so dead processes self-release locks on startup.\n\
+                    - **Durability Invariant**: Must maintain strict synchronous fsync for all state machine transitions (`Created` -> `Running` -> `Paused`). We cannot compromise on state recovery.\n\
+                    - **Active Trade-Off Under Dispute**: Latency penalty of synchronous fsync vs crash-vulnerability of delayed disk flushing.\n\n\
+                    #### 2. Peer Critique\n\
+                    - The Critic's proposal to eliminate locks entirely is rejected; concurrency without mutual exclusion invites silent transcript corruption.",
+                    request.agent_id, topic_clean
+                ),
+                AgentRole::Critic => format!(
+                    "### Round 2 Cross-Examination by {} (Critical Adversary)\n\n\
+                    **Critique Target**: *Architect's Synchronous Fsync Stance*\n\
                     **Topic Context**: {}\n\n\
                     #### 1. Scrutiny of Peer Claims\n\
-                    - **Sound Foundations**: Concur with the requirement for atomic persistence and crash resilience.\n\
-                    - **Vulnerabilities Challenged**: Peer proposals rely excessively on optimistic concurrency assumptions without defining upper bounds on retry budgets.\n\
-                    - **Active Trade-Off Under Dispute**: Latency penalty of synchronous fsync vs crash-vulnerability of delayed disk flushing.\n\n\
-                    #### 2. Stress-Testing Edge Cases\n\
-                    - Interrupted writes during power loss or kill signals.\n\
-                    - Watcher feedback loops when disk writes occur inside monitored directories.",
-                    request.agent_id,
-                    request.role.as_str(),
-                    dispute_target,
-                    topic_clean
-                )
-            }
-            _ => {
-                format!(
-                    "### Round {} Rebuttal & Consensus Position by {} ({})\n\n\
+                    - **The Latency Trap**: The Architect demands synchronous fsync on every turn. Benchmarks show fsync stalls the event loop for 15ms-30ms on Windows SSDs, creating massive backpressure.\n\
+                    - **Active Dispute**: *Synchronous fsync durability on every turn vs asynchronous append-only buffer throughput*.\n\
+                    - **Edge Case Expose**: If Windows crashes during an atomic rename, parent folder metadata is not committed unless the directory itself is flushed. The Architect's model is not crash-proof without directory sync.",
+                    request.agent_id, topic_clean
+                ),
+                AgentRole::Implementer => format!(
+                    "### Round 2 Cross-Examination by {} (Core Implementer)\n\n\
+                    **Critique Target**: *Bridging the Fsync Latency vs Crash-Safety Divide*\n\
+                    **Topic Context**: {}\n\n\
+                    #### 1. Concrete Engineering Compromise\n\
+                    - **Empirical Measurement**: Testing confirms direct fsync on each turn adds 22ms overhead, degrading deliberation speed.\n\
+                    - **Proposed Resolution**: A hybrid storage contract:\n\
+                      1. `transcript.jsonl`: Appended asynchronously with OS page-cache buffering. Truncate trailing incomplete line on recovery.\n\
+                      2. `metadata.json`: Atomically rewritten with `MoveFileExW` and fsync ONLY at round boundaries and human pause checkpoints.\n\
+                    - This provides zero data corruption risk while maintaining near zero-latency streaming throughput.",
+                    request.agent_id, topic_clean
+                ),
+                _ => format!(
+                    "### Round 2 Cross-Examination by {} ({})\n\n\
+                    **Critique Target**: *Evaluating Peer Proposals*\n\
+                    **Topic Context**: {}\n\n\
+                    #### 1. Cross-Examination Findings\n\
+                    - Concur with atomic persistence requirements.\n\
+                    - Active Trade-Off Under Dispute: Synchronous durability guarantees vs async throughput scaling.",
+                    request.agent_id, request.role.as_str(), topic_clean
+                ),
+            },
+            _ => match &request.role {
+                AgentRole::Architect => format!(
+                    "### Round {} Rebuttal & Consensus by {} (Lead Architect)\n\n\
                     **Topic Refinement**: *{}*\n\n\
-                    #### 1. Concessions & Revised Stances\n\
-                    - **Concession**: Acknowledge peer critique regarding disk write latency; batched append-only logging is technically superior to single-file overwrites.\n\
+                    #### 1. Concessions & Final Stance\n\
+                    - **Concession**: I concede to the Implementer's hybrid storage compromise: per-turn fsync is unneeded given append-only JSONL partial-line recovery.\n\
                     - **Firm Stance**: Metadata lookups must remain discrete and indexed; cannot compromise on O(1) session resolution.\n\
-                    - **Agreed Architecture**: Dual storage model with atomic metadata.json and append-only transcript.jsonl.",
-                    request.round_number,
-                    request.agent_id,
-                    request.role.as_str(),
-                    topic_clean
-                )
-            }
+                    - **Consensus Reached**: Dual storage model with atomic `metadata.json` and append-only `transcript.jsonl`.",
+                    request.round_number, request.agent_id, topic_clean
+                ),
+                AgentRole::Critic => format!(
+                    "### Round {} Rebuttal & Consensus by {} (Critical Adversary)\n\n\
+                    **Topic Refinement**: *{}*\n\n\
+                    #### 1. Concessions & Final Stance\n\
+                    - **Concession**: The hybrid persistence model with atomic metadata and append-only transcript resolves the data-loss risk without blocking the event loop.\n\
+                    - **Firm Stance**: Strict process-tree termination with job objects must remain a mandatory security requirement.\n\
+                    - **Consensus Reached**: System invariants verified for crash safety, zero-trust isolation, and low latency.",
+                    request.round_number, request.agent_id, topic_clean
+                ),
+                AgentRole::Implementer => format!(
+                    "### Round {} Rebuttal & Consensus by {} (Core Implementer)\n\n\
+                    **Topic Refinement**: *{}*\n\n\
+                    #### 1. Implementation Contract Approved\n\
+                    - **Agreed Storage Specification**: Dual storage architecture: `metadata.json` (atomic rename swap) + `transcript.jsonl` (line-buffered append).\n\
+                    - **Deterministic Barrier**: Snapshot frozen at round start, eliminating arrival-order bias.\n\
+                    - **Implementation Verdict**: Design is sound, crash-resilient, and fully validated for Windows Tauri runtime.",
+                    request.round_number, request.agent_id, topic_clean
+                ),
+                _ => format!(
+                    "### Round {} Rebuttal & Consensus by {} ({})\n\n\
+                    **Topic Refinement**: *{}*\n\n\
+                    #### 1. Final Position\n\
+                    - Concur with dual storage persistence and deterministic barrier synchronization.",
+                    request.round_number, request.agent_id, request.role.as_str(), topic_clean
+                ),
+            },
         };
 
         // Stream in chunks
