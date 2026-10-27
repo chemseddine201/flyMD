@@ -1,6 +1,6 @@
 //! Storage integrity, atomic file writes, session locking, and JSONL recovery.
 
-use super::types::{now_ms, DiscussionMessage};
+use super::types::{now_ms, DiscussionMessage, DiscussionMetadata};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -227,6 +227,19 @@ pub fn read_transcript_with_recovery(
     }
 
     Ok((messages, partial_detected))
+}
+
+/// Atomically saves discussion metadata to `metadata.json`.
+pub fn save_metadata(session_dir: &Path, metadata: &DiscussionMetadata) -> Result<(), String> {
+    let path = session_dir.join("metadata.json");
+    atomic_write_json(&path, metadata)
+}
+
+/// Loads discussion metadata from `metadata.json`.
+pub fn load_metadata(session_dir: &Path) -> Result<DiscussionMetadata, String> {
+    let path = session_dir.join("metadata.json");
+    let bytes = fs::read(&path).map_err(|e| format!("Failed reading {:?}: {}", path, e))?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("Failed parsing metadata {:?}: {}", path, e))
 }
 
 #[cfg(test)]
