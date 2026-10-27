@@ -39,8 +39,16 @@ pub enum DiscussionEvent {
         round: u32,
         agent_id: String,
         role: String,
+        #[serde(rename = "actionName", default, skip_serializing_if = "Option::is_none")]
+        action_name: Option<String>,
     },
     TurnChunk {
+        session_id: String,
+        round: u32,
+        agent_id: String,
+        chunk: String,
+    },
+    TurnThinkingChunk {
         session_id: String,
         round: u32,
         agent_id: String,
@@ -52,6 +60,12 @@ pub enum DiscussionEvent {
         agent_id: String,
         message_id: String,
         usage: TokenUsage,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        thinking: Option<String>,
+        #[serde(default)]
+        simulated: bool,
+        #[serde(rename = "actionName", default, skip_serializing_if = "Option::is_none")]
+        action_name: Option<String>,
     },
     TurnFailed {
         session_id: String,
@@ -87,6 +101,15 @@ struct EventStreamSink {
 impl StreamSink for EventStreamSink {
     async fn on_chunk(&self, chunk: &str) {
         self.listener.on_event(DiscussionEvent::TurnChunk {
+            session_id: self.session_id.clone(),
+            round: self.round,
+            agent_id: self.agent_id.clone(),
+            chunk: chunk.to_string(),
+        });
+    }
+
+    async fn on_thinking_chunk(&self, chunk: &str) {
+        self.listener.on_event(DiscussionEvent::TurnThinkingChunk {
             session_id: self.session_id.clone(),
             round: self.round,
             agent_id: self.agent_id.clone(),
@@ -130,6 +153,7 @@ impl DiscussionOrchestrator {
         let metadata = DiscussionMetadata {
             schema_version: CURRENT_SCHEMA_VERSION,
             session_id: config.session_id.clone(),
+            topic: Some(config.topic.clone()),
             status: DiscussionStatus::Created,
             current_round: 1,
             created_at: now,
@@ -348,6 +372,11 @@ impl DiscussionOrchestrator {
             token_usage: None,
             duration_ms: 0,
             truncated: false,
+            thinking_content: None,
+            action_name: None,
+            model_id: None,
+            simulated: false,
+            author_display_name: Some("Human Facilitator".to_string()),
         };
 
         append_transcript_message(&self.session_dir, &user_msg)?;
@@ -369,6 +398,159 @@ impl DiscussionOrchestrator {
 
         save_metadata(&self.session_dir, &self.metadata)?;
         Ok(())
+    }
+
+    /// Dispatches an on-demand targeted action/probe to a specific agent during discussion pause/review.
+    pub async fn dispatch_targeted_action(
+        &mut self,
+        agent_id: &str,
+        action_name: Option<String>,
+        action_query: String,
+    ) -> Result<DiscussionMessage, String> {
+        let trimmed_query = action_query.trim().to_string();
+        if trimmed_query.is_empty() {
+            return Err("Targeted action query cannot be empty".to_string());
+        }
+
+        let participant = self
+            .config
+            .participants
+            .iter()
+            .find(|p| p.agent_id == agent_id)
+            .cloned()
+            .ok_or_else(|| format!("Participant '{}' not found in discussion", agent_id))?;
+
+        let provider = self
+            .providers
+            .get(&participant.provider_id)
+            .cloned()
+            .ok_or_else(|| {
+                format!(
+                    "Configured provider '{}' not found in orchestrator registry",
+                    participant.provider_id
+                )
+            })?;
+
+        let round = self.metadata.current_round;
+        let turn_index = (self.metadata.total_messages + 1) as u32;
+
+        self.notify(DiscussionEvent::TurnStarted {
+            session_id: self.config.session_id.clone(),
+            round,
+            agent_id: participant.agent_id.clone(),
+            role: participant.role.as_str().to_string(),
+            action_name: action_name.clone(),
+        });
+
+        let (assembled_context, truncated) = self
+            .memory
+            .assemble_turn_context(
+                &participant.agent_id,
+                round,
+                &self.config.user_idea,
+                participant.context_budget_tokens,
+            )
+            .map_err(|e| format!("Failed to assemble context: {}", e))?;
+
+        let label = action_name
+            .clone()
+            .unwrap_or_else(|| "Targeted User Directive".to_string());
+
+        let mut system_prompt = format!(
+            "You are {} (Role: {}).\n{}\n\
+            Ground all assertions in technical evidence. Never fabricate capabilities.\n\
+            A human facilitator has issued a TARGETED DIRECTIVE directly to you: \"{}\"",
+            participant.display_name,
+            participant.role.as_str(),
+            participant.role_description,
+            label
+        );
+
+        if participant.thinking_enabled {
+            system_prompt.push_str(
+                "\n\nTHINKING PROTOCOL:\n\
+                Reason step-by-step inside <thinking>...</thinking> before providing your answer.",
+            );
+        }
+
+        let user_prompt = format!(
+            "### TARGETED ACTION DIRECTIVE: {}\n\
+            **Specific Instruction**: {}\n\n\
+            **Context Background**:\n{}",
+            label, trimmed_query, assembled_context
+        );
+
+        let turn_request = TurnRequest {
+            session_id: self.config.session_id.clone(),
+            round_number: round,
+            agent_id: participant.agent_id.clone(),
+            role: participant.role.clone(),
+            system_prompt,
+            user_prompt,
+            context_summary: String::new(),
+            timeout_secs: self.config.turn_timeout_secs,
+            topic: self.config.topic.clone(),
+            user_idea: self.config.user_idea.clone(),
+            action_name: action_name.clone(),
+            action_query: Some(trimmed_query.clone()),
+            thinking_enabled: participant.thinking_enabled,
+        };
+
+        let stream_sink: Option<Box<dyn StreamSink>> = self.event_listener.as_ref().map(|l| {
+            Box::new(EventStreamSink {
+                session_id: self.config.session_id.clone(),
+                round,
+                agent_id: participant.agent_id.clone(),
+                listener: l.clone(),
+            }) as Box<dyn StreamSink>
+        });
+
+        let response = provider
+            .execute_turn(turn_request, self.cancel_flag.clone(), stream_sink)
+            .await
+            .map_err(|e| format!("Targeted action failed: {}", e))?;
+
+        let msg_id = format!("targeted-r{}-{}-{}", round, participant.agent_id, now_ms());
+        let message = DiscussionMessage {
+            id: msg_id.clone(),
+            session_id: self.config.session_id.clone(),
+            round_number: round,
+            turn_index,
+            author_agent_id: participant.agent_id.clone(),
+            author_role: participant.role.as_str().to_string(),
+            author_provider: participant.provider_id.clone(),
+            message_kind: DiscussionMessageKind::TargetedAction,
+            target_peer_ids: Vec::new(),
+            content: response.raw_markdown,
+            timestamp: now_ms(),
+            token_usage: Some(response.usage.clone()),
+            duration_ms: response.duration_ms,
+            truncated,
+            thinking_content: response.thinking.clone(),
+            action_name: action_name.clone(),
+            model_id: Some(response.model_id.clone()),
+            simulated: response.simulated,
+            author_display_name: Some(participant.display_name.clone()),
+        };
+
+        append_transcript_message(&self.session_dir, &message)?;
+        self.metadata.total_messages += 1;
+        self.metadata.total_tokens += response.usage.total_tokens;
+        self.metadata.updated_at = now_ms();
+        save_metadata(&self.session_dir, &self.metadata)?;
+
+        self.notify(DiscussionEvent::TurnCompleted {
+            session_id: self.config.session_id.clone(),
+            round,
+            agent_id: participant.agent_id.clone(),
+            message_id: msg_id,
+            usage: response.usage,
+            thinking: response.thinking,
+            simulated: response.simulated,
+            action_name,
+        });
+
+        Ok(message)
     }
 
     /// Approves final report and finalizes session.
@@ -552,11 +734,17 @@ impl DiscussionOrchestrator {
         round: u32,
         turn_index: u32,
     ) -> Result<(), String> {
+        let action_name = participant.custom_action.as_ref().map(|a| a.name.clone());
+        let action_query = participant.custom_query.clone().or_else(|| {
+            participant.custom_action.as_ref().map(|a| a.prompt_directive.clone())
+        });
+
         self.notify(DiscussionEvent::TurnStarted {
             session_id: self.config.session_id.clone(),
             round,
             agent_id: participant.agent_id.clone(),
             role: participant.role.as_str().to_string(),
+            action_name: action_name.clone(),
         });
 
         // 1. Resolve Provider
@@ -589,7 +777,7 @@ impl DiscussionOrchestrator {
             _ => DiscussionMessageKind::RebuttalRevision,
         };
 
-        let system_prompt = format!(
+        let mut system_prompt = format!(
             "You are {} (Role: {}).\n{}\n\
             You are participating in a rigorous, evidence-driven multi-agent architectural debate.\n\
             Ground all assertions in technical evidence. Never fabricate capabilities.\n\
@@ -599,7 +787,23 @@ impl DiscussionOrchestrator {
             participant.role_description
         );
 
-        let user_prompt = match message_kind {
+        if participant.thinking_enabled {
+            system_prompt.push_str(
+                "\n\nTHINKING PROTOCOL:\n\
+                Before outputting your final answer, engage in thorough reasoning inside a <thinking>...</thinking> block.\n\
+                Deconstruct requirements, stress-test edge cases, evaluate failure modes, and formulate rigorous technical rationale.\n\
+                Then close the </thinking> tag and produce your clean, structured Markdown response.",
+            );
+        }
+
+        if let Some(ref q) = action_query {
+            system_prompt.push_str(&format!(
+                "\n\nPRIMARY DIRECTIVE FOR THIS TURN:\nFocus specifically on answering:\n{}",
+                q.trim()
+            ));
+        }
+
+        let mut user_prompt = match message_kind {
             DiscussionMessageKind::InitialAnalysis => {
                 format!(
                     "### Round 1: Independent Position Paper\n\
@@ -632,6 +836,15 @@ impl DiscussionOrchestrator {
             _ => assembled_context,
         };
 
+        if let Some(ref q) = action_query {
+            let label = action_name.as_deref().unwrap_or("Custom Action Directive");
+            user_prompt.push_str(&format!(
+                "\n\n### {}\nInvestigate and address: {}\n",
+                label,
+                q.trim()
+            ));
+        }
+
         let turn_request = TurnRequest {
             session_id: self.config.session_id.clone(),
             round_number: round,
@@ -641,6 +854,11 @@ impl DiscussionOrchestrator {
             user_prompt,
             context_summary: String::new(),
             timeout_secs: self.config.turn_timeout_secs,
+            topic: self.config.topic.clone(),
+            user_idea: self.config.user_idea.clone(),
+            action_name: action_name.clone(),
+            action_query: action_query.clone(),
+            thinking_enabled: participant.thinking_enabled,
         };
 
         // Prepare streaming sink if listener attached
@@ -676,6 +894,11 @@ impl DiscussionOrchestrator {
                     token_usage: Some(response.usage.clone()),
                     duration_ms: response.duration_ms,
                     truncated,
+                    thinking_content: response.thinking.clone(),
+                    action_name: action_name.clone(),
+                    model_id: Some(response.model_id.clone()),
+                    simulated: response.simulated,
+                    author_display_name: Some(participant.display_name.clone()),
                 };
 
                 append_transcript_message(&self.session_dir, &message)?;
@@ -691,6 +914,9 @@ impl DiscussionOrchestrator {
                     agent_id: participant.agent_id.clone(),
                     message_id: msg_id,
                     usage: response.usage,
+                    thinking: response.thinking,
+                    simulated: response.simulated,
+                    action_name,
                 });
 
                 Ok(())
@@ -760,6 +986,9 @@ mod tests {
                     avatar_color: "#38bdf8".to_string(),
                     assigned_skill_uris: Vec::new(),
                     context_budget_tokens: 16000,
+                    custom_action: None,
+                    custom_query: None,
+                    thinking_enabled: true,
                 },
                 DiscussionParticipant {
                     agent_id: "agent-critic".to_string(),
@@ -772,6 +1001,9 @@ mod tests {
                     avatar_color: "#ef4444".to_string(),
                     assigned_skill_uris: Vec::new(),
                     context_budget_tokens: 16000,
+                    custom_action: None,
+                    custom_query: None,
+                    thinking_enabled: true,
                 },
                 DiscussionParticipant {
                     agent_id: "agent-implementer".to_string(),
@@ -783,6 +1015,9 @@ mod tests {
                     avatar_color: "#10b981".to_string(),
                     assigned_skill_uris: Vec::new(),
                     context_budget_tokens: 16000,
+                    custom_action: None,
+                    custom_query: None,
+                    thinking_enabled: true,
                 },
             ],
             active_skill_uris: Vec::new(),
@@ -917,6 +1152,42 @@ mod tests {
             .join("reports")
             .join("final-report-latest.md")
             .exists());
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_targeted_action_dispatch() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_target_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let config = build_test_config(&temp_dir);
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(MockProvider::new("mock")));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config, providers).unwrap();
+
+        let msg = orchestrator
+            .dispatch_targeted_action(
+                "agent-critic",
+                Some("Security Stress Audit".to_string()),
+                "Verify CVE risk of IPC deserialization".to_string(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(msg.author_agent_id, "agent-critic");
+        assert_eq!(
+            msg.message_kind,
+            DiscussionMessageKind::TargetedAction
+        );
+        assert_eq!(msg.action_name.as_deref(), Some("Security Stress Audit"));
+        assert!(msg.thinking_content.is_some());
+        assert!(msg.simulated);
+
+        let (transcript, _) = read_transcript_with_recovery(&orchestrator.session_dir).unwrap();
+        assert_eq!(transcript.len(), 1);
+        assert_eq!(transcript[0].author_agent_id, "agent-critic");
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

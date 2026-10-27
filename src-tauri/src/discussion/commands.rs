@@ -85,9 +85,24 @@ fn resolve_executable(name: &str) -> Option<PathBuf> {
     None
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct AvailableProviderInfo {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "providerType")]
+    pub provider_type: String,
+    pub available: bool,
+    pub description: String,
+    #[serde(rename = "defaultModel")]
+    pub default_model: String,
+    #[serde(rename = "supportsThinking")]
+    pub supports_thinking: bool,
+}
+
 fn build_provider_map(
     config: &DiscussionConfig,
     client: reqwest::Client,
+    store: Option<&crate::store::AppStore>,
 ) -> HashMap<String, Arc<dyn DiscussionProvider>> {
     let mut map: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
     let session_sandbox = PathBuf::from(&config.workspace_path)
@@ -96,6 +111,9 @@ fn build_provider_map(
         .join(&config.session_id)
         .join(".sandbox");
 
+    let settings = store.map(|s| s.get_settings());
+    let creds = store.map(|s| s.get_agent_credentials()).unwrap_or_default();
+
     for p in &config.participants {
         if map.contains_key(&p.provider_id) {
             continue;
@@ -103,12 +121,17 @@ fn build_provider_map(
 
         match p.provider_id.as_str() {
             "claude-code" => {
-                if let Some(exe) = resolve_executable("claude") {
+                let custom_bin = creds
+                    .get("claude-code")
+                    .and_then(|c| c.custom_binary_path.as_ref())
+                    .map(PathBuf::from);
+                let exe = custom_bin.or_else(|| resolve_executable("claude"));
+                if let Some(exe_path) = exe {
                     map.insert(
                         p.provider_id.clone(),
                         Arc::new(CliProvider::new(
                             CliType::ClaudeCode,
-                            exe,
+                            exe_path,
                             session_sandbox.clone(),
                         )),
                     );
@@ -120,12 +143,17 @@ fn build_provider_map(
                 }
             }
             "gemini-antigravity" => {
-                if let Some(exe) = resolve_executable("agy") {
+                let custom_bin = creds
+                    .get("antigravity")
+                    .and_then(|c| c.custom_binary_path.as_ref())
+                    .map(PathBuf::from);
+                let exe = custom_bin.or_else(|| resolve_executable("agy"));
+                if let Some(exe_path) = exe {
                     map.insert(
                         p.provider_id.clone(),
                         Arc::new(CliProvider::new(
                             CliType::AntigravityGemini,
-                            exe,
+                            exe_path,
                             session_sandbox.clone(),
                         )),
                     );
@@ -136,15 +164,20 @@ fn build_provider_map(
                     );
                 }
             }
-            "mock" => {
-                map.insert(p.provider_id.clone(), Arc::new(MockProvider::new("mock")));
-            }
-            "http-llm" | "ollama" | "deepseek" | "kimi" => {
-                let is_ollama = p.provider_id == "ollama";
-                let endpoint = if is_ollama {
-                    "http://127.0.0.1:11434"
+            "ollama" => {
+                let endpoint = settings
+                    .as_ref()
+                    .map(|s| s.ollama_url.as_str())
+                    .filter(|u| !u.trim().is_empty())
+                    .unwrap_or("http://127.0.0.1:11434");
+                let model = if !p.model_id.is_empty() && p.model_id != "default" {
+                    p.model_id.clone()
                 } else {
-                    "https://api.openai.com/v1"
+                    settings
+                        .as_ref()
+                        .map(|s| s.ollama_model.clone())
+                        .filter(|m| !m.trim().is_empty())
+                        .unwrap_or_else(|| "qwen2.5:3b".to_string())
                 };
                 map.insert(
                     p.provider_id.clone(),
@@ -153,8 +186,55 @@ fn build_provider_map(
                         client.clone(),
                         endpoint,
                         None,
-                        &p.model_id,
-                        is_ollama,
+                        &model,
+                        true,
+                    )),
+                );
+            }
+            "deepseek" | "kimi" | "http-llm" => {
+                let (default_endpoint, default_model) = match p.provider_id.as_str() {
+                    "deepseek" => ("https://api.deepseek.com", "deepseek-reasoner"),
+                    "kimi" => ("https://api.moonshot.cn/v1", "moonshot-v1-8k"),
+                    _ => (
+                        settings
+                            .as_ref()
+                            .map(|s| s.llm_config.endpoint_url.as_str())
+                            .filter(|u| !u.trim().is_empty())
+                            .unwrap_or("https://api.openai.com/v1"),
+                        settings
+                            .as_ref()
+                            .map(|s| s.llm_config.model.as_str())
+                            .filter(|m| !m.trim().is_empty())
+                            .unwrap_or("gpt-4o"),
+                    ),
+                };
+
+                // Auto-resolve API key from agent credentials or app settings
+                let api_key = creds
+                    .get(&p.provider_id)
+                    .and_then(|c| c.api_key.clone())
+                    .or_else(|| {
+                        settings
+                            .as_ref()
+                            .and_then(|s| s.llm_config.api_key.clone())
+                    })
+                    .filter(|k| !k.trim().is_empty());
+
+                let model = if !p.model_id.is_empty() && p.model_id != "default" {
+                    p.model_id.clone()
+                } else {
+                    default_model.to_string()
+                };
+
+                map.insert(
+                    p.provider_id.clone(),
+                    Arc::new(HttpProvider::new(
+                        &p.provider_id,
+                        client.clone(),
+                        default_endpoint,
+                        api_key,
+                        &model,
+                        false,
                     )),
                 );
             }
@@ -171,13 +251,106 @@ fn build_provider_map(
 }
 
 #[tauri::command]
+pub fn cmd_get_available_providers(
+    store: tauri::State<'_, crate::store::SharedStore>,
+) -> Vec<AvailableProviderInfo> {
+    let settings = store.get_settings();
+    let creds = store.get_agent_credentials();
+
+    let claude_available = creds
+        .get("claude-code")
+        .and_then(|c| c.custom_binary_path.as_ref())
+        .map(PathBuf::from)
+        .map(|p| p.exists())
+        .unwrap_or_else(|| resolve_executable("claude").is_some());
+
+    let gemini_available = creds
+        .get("antigravity")
+        .and_then(|c| c.custom_binary_path.as_ref())
+        .map(PathBuf::from)
+        .map(|p| p.exists())
+        .unwrap_or_else(|| resolve_executable("agy").is_some());
+
+    let ollama_configured = !settings.ollama_url.trim().is_empty();
+    let http_configured = !settings.llm_config.endpoint_url.trim().is_empty();
+    let deepseek_has_key = creds.get("deepseek").and_then(|c| c.api_key.as_ref()).is_some()
+        || settings.llm_config.api_key.as_ref().map(|k| !k.trim().is_empty()).unwrap_or(false);
+
+    vec![
+        AvailableProviderInfo {
+            id: "mock".to_string(),
+            name: "Adaptive Domain Simulator (Local)".to_string(),
+            provider_type: "simulator".to_string(),
+            available: true,
+            description: "Zero API cost local analyzer that evaluates architecture and generates multi-step reasoning.".to_string(),
+            default_model: "domain-reasoner-v1".to_string(),
+            supports_thinking: true,
+        },
+        AvailableProviderInfo {
+            id: "ollama".to_string(),
+            name: "Ollama Local Engine".to_string(),
+            provider_type: "ollama".to_string(),
+            available: ollama_configured,
+            description: format!("Local Ollama daemon at {}", settings.ollama_url),
+            default_model: if !settings.ollama_model.is_empty() {
+                settings.ollama_model.clone()
+            } else {
+                "qwen2.5:3b".to_string()
+            },
+            supports_thinking: true,
+        },
+        AvailableProviderInfo {
+            id: "deepseek".to_string(),
+            name: "DeepSeek Reasoning (R1)".to_string(),
+            provider_type: "http".to_string(),
+            available: deepseek_has_key,
+            description: "Native reasoning engine with chain-of-thought tokens.".to_string(),
+            default_model: "deepseek-reasoner".to_string(),
+            supports_thinking: true,
+        },
+        AvailableProviderInfo {
+            id: "http-llm".to_string(),
+            name: "Custom LLM / OpenAI API".to_string(),
+            provider_type: "http".to_string(),
+            available: http_configured,
+            description: format!("Configured endpoint at {}", settings.llm_config.endpoint_url),
+            default_model: if !settings.llm_config.model.is_empty() {
+                settings.llm_config.model.clone()
+            } else {
+                "gpt-4o".to_string()
+            },
+            supports_thinking: true,
+        },
+        AvailableProviderInfo {
+            id: "claude-code".to_string(),
+            name: "Claude Code CLI".to_string(),
+            provider_type: "cli".to_string(),
+            available: claude_available,
+            description: "Anthropic Claude Code CLI in plan/read-only mode.".to_string(),
+            default_model: "claude-3-7-sonnet".to_string(),
+            supports_thinking: true,
+        },
+        AvailableProviderInfo {
+            id: "gemini-antigravity".to_string(),
+            name: "Antigravity Gemini CLI (agy)".to_string(),
+            provider_type: "cli".to_string(),
+            available: gemini_available,
+            description: "Google Antigravity CLI sandbox runner.".to_string(),
+            default_model: "gemini-2.5-pro".to_string(),
+            supports_thinking: true,
+        },
+    ]
+}
+
+#[tauri::command]
 pub async fn cmd_start_discussion(
     app: AppHandle,
     manager: tauri::State<'_, SharedDiscussionManager>,
+    store: tauri::State<'_, crate::store::SharedStore>,
     config: DiscussionConfig,
 ) -> Result<DiscussionMetadata, String> {
     let session_id = config.session_id.clone();
-    let providers = build_provider_map(&config, manager.client.clone());
+    let providers = build_provider_map(&config, manager.client.clone(), Some(&store));
 
     let mut orchestrator = DiscussionOrchestrator::new(config, providers)?;
     orchestrator.set_event_listener(Arc::new(TauriDiscussionListener { app: app.clone() }));
@@ -221,6 +394,7 @@ pub async fn cmd_pause_discussion(
 pub async fn cmd_resume_discussion(
     app: AppHandle,
     manager: tauri::State<'_, SharedDiscussionManager>,
+    store: tauri::State<'_, crate::store::SharedStore>,
     session_id: String,
     workspace_path: String,
 ) -> Result<DiscussionMetadata, String> {
@@ -242,7 +416,7 @@ pub async fn cmd_resume_discussion(
                 active_skill_uris: Vec::new(),
                 step_mode: false,
             };
-            let providers = build_provider_map(&base_config, manager.client.clone());
+            let providers = build_provider_map(&base_config, manager.client.clone(), Some(&store));
             let mut recovered = DiscussionOrchestrator::recover(
                 Path::new(&workspace_path),
                 &session_id,
@@ -495,4 +669,26 @@ pub async fn cmd_set_discussion_step_mode(
             Err(format!("Discussion session not found: {}", session_id))
         }
     }
+}
+
+#[tauri::command]
+pub async fn cmd_dispatch_targeted_action(
+    manager: tauri::State<'_, SharedDiscussionManager>,
+    session_id: String,
+    agent_id: String,
+    action_name: Option<String>,
+    action_query: String,
+) -> Result<DiscussionMessage, String> {
+    let orch_arc = {
+        let active = manager.active_orchestrators.lock().await;
+        active
+            .get(&session_id)
+            .cloned()
+            .ok_or_else(|| format!("Discussion session not loaded: {}", session_id))?
+    };
+
+    let mut guard = orch_arc.lock().await;
+    guard
+        .dispatch_targeted_action(&agent_id, action_name, action_query)
+        .await
 }

@@ -17,6 +17,7 @@ import {
   DiscussionConfig,
   DiscussionMetadata,
   DiscussionMessage,
+  AvailableProviderInfo,
 } from '../shared/types';
 import {
   IPC_CHANNELS,
@@ -224,6 +225,15 @@ const electronAPI = {
     ipcRenderer.invoke('discussion:clear-all', workspacePath),
   setDiscussionStepMode: (workspacePath: string, sessionId: string, enabled: boolean): Promise<void> =>
     ipcRenderer.invoke('discussion:set-step-mode', workspacePath, sessionId, enabled),
+  dispatchTargetedAction: (
+    sessionId: string,
+    agentId: string,
+    actionName?: string,
+    actionQuery?: string
+  ): Promise<DiscussionMessage> =>
+    ipcRenderer.invoke('discussion:dispatch-targeted-action', sessionId, agentId, actionName, actionQuery),
+  getAvailableProviders: (): Promise<AvailableProviderInfo[]> =>
+    ipcRenderer.invoke('discussion:get-available-providers'),
   onDiscussionEvent: (callback: (event: any) => void) => {
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on('discussion:event', handler);

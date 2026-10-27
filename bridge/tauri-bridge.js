@@ -346,6 +346,17 @@
         enabled: enabled,
       });
     },
+    dispatchTargetedAction: function (sessionId, agentId, actionName, actionQuery) {
+      return invoke('cmd_dispatch_targeted_action', {
+        sessionId: sessionId,
+        agentId: agentId,
+        actionName: actionName || null,
+        actionQuery: actionQuery,
+      });
+    },
+    getAvailableProviders: function () {
+      return invoke('cmd_get_available_providers');
+    },
     onDiscussionEvent: makeEventListener('discussion:event'),
     onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
     onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),

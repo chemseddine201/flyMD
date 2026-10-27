@@ -16,6 +16,22 @@ export type AgentRoleType =
   | 'researcher'
   | string;
 
+export interface AgentCustomAction {
+  id: string;
+  name: string;
+  description: string;
+  promptDirective: string;
+}
+
+export interface AvailableProviderInfo {
+  id: string;
+  name: string;
+  available: boolean;
+  model: string;
+  supportsThinking: boolean;
+  description: string;
+}
+
 export interface DiscussionTokenUsage {
   promptTokens: number;
   completionTokens: number;
@@ -32,6 +48,9 @@ export interface DiscussionParticipant {
   avatarColor?: string;
   assignedSkillUris?: string[];
   contextBudgetTokens?: number;
+  customAction?: AgentCustomAction;
+  customQuery?: string;
+  thinkingEnabled?: boolean;
 }
 
 export type DiscussionMessageKind =
@@ -39,7 +58,8 @@ export type DiscussionMessageKind =
   | 'peer_critique'
   | 'rebuttal_revision'
   | 'synthesis_report'
-  | 'user_intervention';
+  | 'user_intervention'
+  | 'targeted_action';
 
 export interface DiscussionMessage {
   id: string;
@@ -56,6 +76,11 @@ export interface DiscussionMessage {
   tokenUsage?: DiscussionTokenUsage;
   durationMs?: number;
   truncated?: boolean;
+  thinkingContent?: string;
+  actionName?: string;
+  modelId?: string;
+  simulated?: boolean;
+  authorDisplayName?: string;
 }
 
 export type DisagreementStatus =
@@ -99,6 +124,7 @@ export interface DiscussionConfig {
 export interface DiscussionMetadata {
   schemaVersion: number;
   sessionId: string;
+  topic?: string;
   status: DiscussionStatus;
   currentRound: number;
   createdAt: number;

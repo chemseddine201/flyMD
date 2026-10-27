@@ -23,6 +23,13 @@ pub struct TurnRequest {
     pub user_prompt: String,
     pub context_summary: String,
     pub timeout_secs: u64,
+    /// Discussion topic and original idea (used by the offline simulator).
+    pub topic: String,
+    pub user_idea: String,
+    /// Optional action/query focus for this turn (used by the offline simulator).
+    pub action_name: Option<String>,
+    pub action_query: Option<String>,
+    pub thinking_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +39,10 @@ pub struct TurnResponse {
     pub duration_ms: u64,
     pub model_id: String,
     pub context_truncated: bool,
+    /// Reasoning trace separated from the answer, when the provider exposes one.
+    pub thinking: Option<String>,
+    /// True when the response came from the offline simulator.
+    pub simulated: bool,
 }
 
 #[derive(Debug, thiserror::Error, Clone)]
@@ -58,6 +69,115 @@ pub enum ProviderError {
 #[async_trait]
 pub trait StreamSink: Send + Sync {
     async fn on_chunk(&self, chunk: &str);
+    /// Reasoning / thinking deltas. Default: dropped.
+    async fn on_thinking_chunk(&self, _chunk: &str) {}
+}
+
+/// Estimates tokens (~3.8 chars/token) when a provider does not report usage.
+pub fn estimate_tokens(text: &str) -> u32 {
+    ((text.chars().count() as f64) / 3.8).ceil() as u32
+}
+
+/// Incremental splitter that separates `<thinking>…</thinking>` / `<think>…</think>`
+/// blocks from answer text in a token stream. Tags may be split across chunks.
+#[derive(Default)]
+pub struct ThoughtSplitter {
+    pending: String,
+    in_thought: bool,
+    pub thinking: String,
+    pub answer: String,
+}
+
+const OPEN_TAGS: [&str; 2] = ["<thinking>", "<think>"];
+const CLOSE_TAGS: [&str; 2] = ["</thinking>", "</think>"];
+
+impl ThoughtSplitter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Feeds a chunk; returns `(thinking_delta, answer_delta)` that are safe to emit now.
+    pub fn push(&mut self, chunk: &str) -> (String, String) {
+        self.pending.push_str(chunk);
+        let mut think_out = String::new();
+        let mut answer_out = String::new();
+
+        loop {
+            let tags: &[&str] = if self.in_thought { &CLOSE_TAGS } else { &OPEN_TAGS };
+            // ASCII-only lowering keeps byte offsets aligned with `pending`.
+            let lower = self.pending.to_ascii_lowercase();
+            let found = tags
+                .iter()
+                .filter_map(|t| lower.find(t).map(|i| (i, t.len())))
+                .min_by_key(|(i, _)| *i);
+
+            if let Some((idx, len)) = found {
+                let before = self.pending[..idx].to_string();
+                if self.in_thought {
+                    think_out.push_str(&before);
+                } else {
+                    answer_out.push_str(&before);
+                }
+                self.pending = self.pending[idx + len..].to_string();
+                self.in_thought = !self.in_thought;
+                continue;
+            }
+
+            // Hold back a possible partial tag at the end of the buffer.
+            let max_tag = 12;
+            let mut keep_from = self.pending.len();
+            if let Some(lt) = self.pending.rfind('<') {
+                if self.pending.len() - lt < max_tag {
+                    keep_from = lt;
+                }
+            }
+            let emit = self.pending[..keep_from].to_string();
+            self.pending = self.pending[keep_from..].to_string();
+            if self.in_thought {
+                think_out.push_str(&emit);
+            } else {
+                answer_out.push_str(&emit);
+            }
+            break;
+        }
+
+        self.thinking.push_str(&think_out);
+        self.answer.push_str(&answer_out);
+        (think_out, answer_out)
+    }
+
+    /// Flushes any held-back text. An unterminated thought is kept as thinking.
+    pub fn finish(&mut self) -> (String, String) {
+        let rest = std::mem::take(&mut self.pending);
+        if self.in_thought {
+            self.thinking.push_str(&rest);
+            (rest, String::new())
+        } else {
+            self.answer.push_str(&rest);
+            (String::new(), rest)
+        }
+    }
+
+    pub fn thinking_opt(&self) -> Option<String> {
+        let t = self.thinking.trim();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.to_string())
+        }
+    }
+}
+
+/// Forwards split thinking/answer deltas to a sink.
+async fn emit_split(sink: &Option<Box<dyn StreamSink>>, think: &str, answer: &str) {
+    if let Some(s) = sink {
+        if !think.is_empty() {
+            s.on_thinking_chunk(think).await;
+        }
+        if !answer.is_empty() {
+            s.on_chunk(answer).await;
+        }
+    }
 }
 
 #[async_trait]
@@ -229,7 +349,7 @@ impl DiscussionProvider for CliProvider {
 
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
-        let mut full_output = String::new();
+        let mut splitter = ThoughtSplitter::new();
 
         let run_fut = async {
             while let Ok(Some(line)) = lines.next_line().await {
@@ -240,12 +360,11 @@ impl DiscussionProvider for CliProvider {
                     return Err(ProviderError::Cancelled);
                 }
 
-                if let Some(ref sink) = stream_sink {
-                    sink.on_chunk(&format!("{}\n", line)).await;
-                }
-                full_output.push_str(&line);
-                full_output.push('\n');
+                let (think, answer) = splitter.push(&format!("{}\n", line));
+                emit_split(&stream_sink, &think, &answer).await;
             }
+            let (think, answer) = splitter.finish();
+            emit_split(&stream_sink, &think, &answer).await;
 
             let status = child
                 .wait()
@@ -271,26 +390,31 @@ impl DiscussionProvider for CliProvider {
                 });
             }
 
-            Ok(full_output)
+            Ok((splitter.answer.trim().to_string(), splitter.thinking_opt()))
         };
 
         match tokio::time::timeout(timeout_duration, run_fut).await {
-            Ok(Ok(output)) => {
+            Ok(Ok((output, thinking))) => {
                 let elapsed = start.elapsed().as_millis() as u64;
-                let char_count = output.chars().count();
-                let completion_tokens = ((char_count as f64) / 3.8).ceil() as u32;
+                let prompt_tokens = estimate_tokens(&full_prompt);
+                let completion_tokens = estimate_tokens(&output)
+                    + thinking.as_deref().map(estimate_tokens).unwrap_or(0);
 
                 Ok(TurnResponse {
                     raw_markdown: output,
                     usage: TokenUsage {
-                        prompt_tokens: ((full_prompt.chars().count() as f64) / 3.8).ceil() as u32,
+                        prompt_tokens,
                         completion_tokens,
-                        total_tokens: (((full_prompt.chars().count() + char_count) as f64) / 3.8)
-                            .ceil() as u32,
+                        total_tokens: prompt_tokens + completion_tokens,
                     },
                     duration_ms: elapsed,
-                    model_id: format!("{:?}", self.cli_type),
+                    model_id: match self.cli_type {
+                        CliType::ClaudeCode => "claude-code-cli".to_string(),
+                        CliType::AntigravityGemini => "antigravity-agy-cli".to_string(),
+                    },
                     context_truncated: false,
+                    thinking,
+                    simulated: false,
                 })
             }
             Ok(Err(e)) => Err(e),
@@ -302,6 +426,72 @@ impl DiscussionProvider for CliProvider {
             }
         }
     }
+}
+
+/// One parsed streaming delta from an HTTP LLM endpoint.
+#[derive(Debug, Default, PartialEq)]
+pub struct StreamDelta {
+    pub content: Option<String>,
+    pub reasoning: Option<String>,
+    pub prompt_tokens: Option<u32>,
+    pub completion_tokens: Option<u32>,
+}
+
+/// Parses an OpenAI-compatible SSE line. Supports `reasoning_content` (DeepSeek)
+/// and `reasoning` (OpenRouter-style) deltas plus a trailing `usage` object.
+pub fn parse_openai_sse_line(line: &str) -> Option<StreamDelta> {
+    let payload = line.strip_prefix("data:")?.trim();
+    if payload.is_empty() || payload == "[DONE]" {
+        return None;
+    }
+    let v: serde_json::Value = serde_json::from_str(payload).ok()?;
+    let delta = v.pointer("/choices/0/delta");
+    let get_str = |key: &str| {
+        delta
+            .and_then(|d| d.get(key))
+            .and_then(|x| x.as_str())
+            .map(|s| s.to_string())
+    };
+    let usage = v.get("usage");
+    let get_u32 = |key: &str| {
+        usage
+            .and_then(|u| u.get(key))
+            .and_then(|x| x.as_u64())
+            .map(|n| n as u32)
+    };
+    Some(StreamDelta {
+        content: get_str("content"),
+        reasoning: get_str("reasoning_content").or_else(|| get_str("reasoning")),
+        prompt_tokens: get_u32("prompt_tokens"),
+        completion_tokens: get_u32("completion_tokens"),
+    })
+}
+
+/// Parses an Ollama `/api/chat` NDJSON line (`message.thinking` on newer builds,
+/// `<think>` tags in `message.content` on older builds are handled by the splitter).
+pub fn parse_ollama_line(line: &str) -> Option<StreamDelta> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    if let Some(err) = v.get("error").and_then(|e| e.as_str()) {
+        return Some(StreamDelta {
+            content: Some(format!("\n\n> Ollama error: {}\n", err)),
+            ..Default::default()
+        });
+    }
+    let msg = v.get("message");
+    let get_str = |key: &str| {
+        msg.and_then(|m| m.get(key))
+            .and_then(|x| x.as_str())
+            .map(|s| s.to_string())
+    };
+    let get_u32 = |key: &str| v.get(key).and_then(|x| x.as_u64()).map(|n| n as u32);
+    Some(StreamDelta {
+        content: get_str("content").or_else(|| {
+            v.get("response").and_then(|x| x.as_str()).map(|s| s.to_string())
+        }),
+        reasoning: get_str("thinking"),
+        prompt_tokens: get_u32("prompt_eval_count"),
+        completion_tokens: get_u32("eval_count"),
+    })
 }
 
 /// Production HTTP Adapter: handles OpenAI-compatible completions and Ollama endpoints with HTTP 429 exponential backoff.
@@ -365,8 +555,14 @@ impl DiscussionProvider for HttpProvider {
         }
 
         let start = std::time::Instant::now();
-        let mut attempts = 0;
-        let max_attempts = 3;
+        let mut attempts: u32 = 0;
+        let max_attempts: u32 = 3;
+        let deadline = start + Duration::from_secs(request.timeout_secs.max(10));
+
+        let messages = serde_json::json!([
+            { "role": "system", "content": request.system_prompt },
+            { "role": "user", "content": request.user_prompt }
+        ]);
 
         let response = loop {
             attempts += 1;
@@ -379,12 +575,9 @@ impl DiscussionProvider for HttpProvider {
                 let url = format!("{}/api/chat", base);
                 let body = serde_json::json!({
                     "model": self.model_name,
-                    "messages": [
-                        { "role": "system", "content": request.system_prompt },
-                        { "role": "user", "content": request.user_prompt }
-                    ],
+                    "messages": messages,
                     "stream": true,
-                    "options": { "temperature": 0.3 }
+                    "options": { "temperature": 0.6 }
                 });
                 self.client.post(&url).json(&body)
             } else {
@@ -400,16 +593,15 @@ impl DiscussionProvider for HttpProvider {
                     .post(&url)
                     .header("Content-Type", "application/json");
                 if let Some(ref key) = self.api_key {
-                    b = b.header("Authorization", format!("Bearer {}", key.trim()));
+                    if !key.trim().is_empty() {
+                        b = b.header("Authorization", format!("Bearer {}", key.trim()));
+                    }
                 }
                 let body = serde_json::json!({
                     "model": self.model_name,
-                    "messages": [
-                        { "role": "system", "content": request.system_prompt },
-                        { "role": "user", "content": request.user_prompt }
-                    ],
+                    "messages": messages,
                     "stream": true,
-                    "temperature": 0.3
+                    "temperature": 0.6
                 });
                 b.json(&body)
             };
@@ -417,14 +609,9 @@ impl DiscussionProvider for HttpProvider {
             let resp = req_builder
                 .send()
                 .await
-                .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
+                .map_err(|e| ProviderError::NetworkError(format!("{} ({})", e, self.endpoint_url)))?;
 
             if resp.status().as_u16() == 429 {
-                if attempts >= max_attempts {
-                    return Err(ProviderError::RateLimited(Some(2)));
-                }
-
-                // Parse Retry-After header if provided
                 let retry_secs = resp
                     .headers()
                     .get("retry-after")
@@ -432,6 +619,12 @@ impl DiscussionProvider for HttpProvider {
                     .and_then(|s| s.parse::<u64>().ok())
                     .unwrap_or(2 * (1 << (attempts - 1)));
 
+                // Bounded retries inside the overall turn time budget.
+                let would_exceed =
+                    std::time::Instant::now() + Duration::from_secs(retry_secs) >= deadline;
+                if attempts >= max_attempts || would_exceed {
+                    return Err(ProviderError::RateLimited(Some(retry_secs)));
+                }
                 tokio::time::sleep(Duration::from_secs(retry_secs)).await;
                 continue;
             }
@@ -444,101 +637,114 @@ impl DiscussionProvider for HttpProvider {
                 }
                 return Err(ProviderError::ProcessCrashed {
                     exit_code: Some(status_code as i32),
-                    stderr: err_text,
+                    stderr: format!("HTTP {} from {}: {}", status_code, self.endpoint_url, err_text),
                 });
             }
 
             break resp;
         };
 
-        // Stream body
-        let mut stream = response.bytes_stream();
-        let mut full_output = String::new();
-        let mut buffer = String::new();
+        // Stream body: byte-level line buffering so multi-byte UTF-8 split across
+        // network chunks is never corrupted.
+        let is_ollama = self.is_ollama;
+        let mut splitter = ThoughtSplitter::new();
+        let mut native_thinking = String::new();
+        let mut reported_prompt: Option<u32> = None;
+        let mut reported_completion: Option<u32> = None;
 
-        while let Some(chunk_res) = stream.next().await {
-            if cancel_flag.load(Ordering::Relaxed) {
-                return Err(ProviderError::Cancelled);
-            }
+        let stream_fut = async {
+            let mut stream = response.bytes_stream();
+            let mut buffer: Vec<u8> = Vec::new();
 
-            let bytes = chunk_res.map_err(|e| ProviderError::NetworkError(e.to_string()))?;
-            buffer.push_str(&String::from_utf8_lossy(&bytes));
-
-            while let Some(pos) = buffer.find('\n') {
-                let line = buffer[..pos].trim().to_string();
-                buffer = buffer[pos + 1..].to_string();
-
-                if line.is_empty() {
-                    continue;
+            while let Some(chunk_res) = stream.next().await {
+                if cancel_flag.load(Ordering::Relaxed) {
+                    return Err(ProviderError::Cancelled);
                 }
+                let bytes = chunk_res.map_err(|e| ProviderError::NetworkError(e.to_string()))?;
+                buffer.extend_from_slice(&bytes);
 
-                let text_delta = if self.is_ollama {
-                    #[derive(Deserialize)]
-                    struct OllamaMsg {
-                        content: Option<String>,
+                while let Some(pos) = buffer.iter().position(|b| *b == b'\n') {
+                    let line_bytes: Vec<u8> = buffer.drain(..=pos).collect();
+                    let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
+                    if line.is_empty() {
+                        continue;
                     }
-                    #[derive(Deserialize)]
-                    struct OllamaChunk {
-                        message: Option<OllamaMsg>,
-                        response: Option<String>,
-                    }
-                    if let Ok(c) = serde_json::from_str::<OllamaChunk>(&line) {
-                        c.message.and_then(|m| m.content).or(c.response)
-                    } else {
-                        None
-                    }
-                } else if line.starts_with("data: ") {
-                    let payload = &line[6..].trim();
-                    if *payload == "[DONE]" {
-                        None
-                    } else {
-                        #[derive(Deserialize)]
-                        struct Delta {
-                            content: Option<String>,
-                        }
-                        #[derive(Deserialize)]
-                        struct Choice {
-                            delta: Option<Delta>,
-                        }
-                        #[derive(Deserialize)]
-                        struct OpenAiChunk {
-                            choices: Vec<Choice>,
-                        }
-                        serde_json::from_str::<OpenAiChunk>(payload)
-                            .ok()
-                            .and_then(|c| c.choices.into_iter().next())
-                            .and_then(|ch| ch.delta)
-                            .and_then(|d| d.content)
-                    }
-                } else {
-                    None
-                };
 
-                if let Some(delta) = text_delta {
-                    if !delta.is_empty() {
+                    let parsed = if is_ollama {
+                        parse_ollama_line(&line)
+                    } else {
+                        parse_openai_sse_line(&line)
+                    };
+                    let Some(delta) = parsed else { continue };
+
+                    if let Some(p) = delta.prompt_tokens {
+                        reported_prompt = Some(p);
+                    }
+                    if let Some(c) = delta.completion_tokens {
+                        reported_completion = Some(c);
+                    }
+                    if let Some(r) = delta.reasoning.filter(|r| !r.is_empty()) {
+                        native_thinking.push_str(&r);
                         if let Some(ref sink) = stream_sink {
-                            sink.on_chunk(&delta).await;
+                            sink.on_thinking_chunk(&r).await;
                         }
-                        full_output.push_str(&delta);
+                    }
+                    if let Some(c) = delta.content.filter(|c| !c.is_empty()) {
+                        let (think, answer) = splitter.push(&c);
+                        emit_split(&stream_sink, &think, &answer).await;
                     }
                 }
             }
+            let (think, answer) = splitter.finish();
+            emit_split(&stream_sink, &think, &answer).await;
+            Ok(())
+        };
+
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        match tokio::time::timeout(remaining, stream_fut).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return Err(e),
+            Err(_) => return Err(ProviderError::Timeout(request.timeout_secs)),
+        }
+
+        let answer = splitter.answer.trim().to_string();
+        let mut thinking = native_thinking.trim().to_string();
+        if let Some(tagged) = splitter.thinking_opt() {
+            if !thinking.is_empty() {
+                thinking.push_str("\n\n");
+            }
+            thinking.push_str(&tagged);
+        }
+
+        if answer.is_empty() && thinking.is_empty() {
+            return Err(ProviderError::ProcessCrashed {
+                exit_code: None,
+                stderr: format!(
+                    "Model '{}' at {} returned an empty response",
+                    self.model_name, self.endpoint_url
+                ),
+            });
         }
 
         let elapsed = start.elapsed().as_millis() as u64;
-        let char_count = full_output.chars().count();
-        let tokens = ((char_count as f64) / 3.8).ceil() as u32;
+        let prompt_tokens = reported_prompt.unwrap_or_else(|| {
+            estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
+        });
+        let completion_tokens = reported_completion
+            .unwrap_or_else(|| estimate_tokens(&answer) + estimate_tokens(&thinking));
 
         Ok(TurnResponse {
-            raw_markdown: full_output,
+            raw_markdown: answer,
             usage: TokenUsage {
-                prompt_tokens: 300,
-                completion_tokens: tokens,
-                total_tokens: 300 + tokens,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens: prompt_tokens + completion_tokens,
             },
             duration_ms: elapsed,
             model_id: self.model_name.clone(),
             context_truncated: false,
+            thinking: if thinking.is_empty() { None } else { Some(thinking) },
+            simulated: false,
         })
     }
 }
@@ -600,46 +806,126 @@ impl DiscussionProvider for MockProvider {
 
         let start = std::time::Instant::now();
 
+        let topic_clean = if request.topic.trim().is_empty() {
+            "System Architecture & Resilience"
+        } else {
+            request.topic.trim()
+        };
+        let idea_clean = if request.user_idea.trim().is_empty() {
+            "Core architecture requirements and trade-offs"
+        } else {
+            request.user_idea.trim()
+        };
+
+        let action_focus = if let Some(ref act) = request.action_name {
+            format!("Focus Area / Action: {}\n", act)
+        } else if let Some(ref q) = request.action_query {
+            format!("Special Directive / Query: {}\n", q)
+        } else {
+            String::new()
+        };
+
+        let thinking_body = format!(
+            "Deconstructing user problem: \"{}\".\n\
+            Analyzing domain constraints from role perspective: {} (Agent: {}).\n\
+            Key considerations:\n\
+            1. Core requirement: {}\n\
+            2. Evaluating potential failure modes, thread safety, and latency trade-offs.\n\
+            3. Invariant validation: ensure no silent data corruption or race conditions.\n\
+            4. Formulating actionable technical findings with precise rationale.",
+            topic_clean,
+            request.role.as_str(),
+            request.agent_id,
+            idea_clean
+        );
+
+        if request.thinking_enabled {
+            if let Some(ref sink) = stream_sink {
+                let think_chunks: Vec<&str> = thinking_body.split_whitespace().collect();
+                for word in think_chunks {
+                    if cancel_flag.load(Ordering::Relaxed) {
+                        return Err(ProviderError::Cancelled);
+                    }
+                    tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(4))).await;
+                    sink.on_thinking_chunk(&format!("{} ", word)).await;
+                }
+            }
+        }
+
         let response_body = match request.round_number {
-            1 => match request.role {
-                AgentRole::Architect => format!(
-                    "### Position Paper by {} (Architect)\n\n\
-                    **Proposed Architecture**: Modular state machine with atomic persistence.\n\
-                    - Requirement Decomposition: Split into storage, memory, and orchestration layers.\n\
-                    - Baseline Assumptions: Local SQLite or JSONL is sufficient for single-user desktop performance.\n\
-                    - Technical Risk: Concurrency locks must be guarded against zombie process crashes.",
-                    request.agent_id
-                ),
-                AgentRole::Critic => format!(
-                    "### Position Paper by {} (Critic)\n\n\
-                    **Initial Critique of Requirements**: High-level specifications underestimate concurrency conflicts.\n\
-                    - Identified Risk: Background watchers can recursively trigger if files are written into watched directories.\n\
-                    - Alternative Consideration: In-memory queues with batched flushing.",
-                    request.agent_id
-                ),
-                _ => format!(
+            1 => {
+                let custom_section = if let Some(ref q) = request.action_query {
+                    format!(
+                        "\n\n**Custom Action Analysis ({})**:\n- Investigation findings: Grounded verification confirms {}",
+                        request.action_name.as_deref().unwrap_or("Directive"),
+                        q.trim()
+                    )
+                } else {
+                    String::new()
+                };
+
+                format!(
                     "### Position Paper by {} ({})\n\n\
-                    **Implementation Proposal**: Idiomatic Rust backend with async streams and strict type contracts.\n\
-                    - Recommendation: Strong validation on schema versions before deserialization.",
-                    request.agent_id, request.role.as_str()
-                ),
-            },
-            2 => format!(
-                "### Round 2 Cross-Examination by {} ({})\n\n\
-                **Critique of Peer Proposals**:\n\
-                1. I agree with the proposal for atomic persistence to prevent corruption.\n\
-                2. However, I strongly disagree with in-memory-only queues; persistence must be append-only.\n\
-                3. **Active Trade-Off Under Dispute**: Single-file JSON vs Append-only JSONL for session recovery.",
-                request.agent_id, request.role.as_str()
-            ),
-            _ => format!(
-                "### Round {} Rebuttal & Revised Position by {} ({})\n\n\
-                **Concessions & Firm Stances**:\n\
-                - Concession: I concede that JSONL append-only logging is superior for crash resilience.\n\
-                - Firm Stance: I maintain that metadata must remain a discrete JSON document for fast startup lookups.\n\
-                - **Consensus Reached**: Dual storage model with atomic metadata.json and append-only transcript.jsonl.",
-                request.round_number, request.agent_id, request.role.as_str()
-            ),
+                    **Domain Analysis for Topic**: *{}*\n\
+                    {}\n\
+                    #### 1. Architectural Baseline & Decomposition\n\
+                    - **Primary Objective**: {}\n\
+                    - **System Boundaries**: Isolated execution sandbox with strict unidirectional event flow.\n\
+                    - **Data Contract Invariants**: Explicit schema versioning and deterministic recovery checkpoints.\n\n\
+                    #### 2. Key Hypotheses & Technical Feasibility\n\
+                    - **Concurrency Model**: Async event reactor with thread-pool offloading for I/O operations.\n\
+                    - **Memory & Storage Safety**: Zero-copy deserialization where feasible; append-only durability.\n\
+                    - **Failure Modes**: Process termination guarded via atomic write swaps and lockfile leases.\n\n\
+                    #### 3. Critical Risks & Trade-Offs Identified\n\
+                    - Single point of failure: Unchecked memory allocations during bursts.\n\
+                    - Recommended validation: Automated fuzzing of serialization boundaries.{}",
+                    request.agent_id,
+                    request.role.as_str(),
+                    topic_clean,
+                    action_focus.trim(),
+                    idea_clean,
+                    custom_section
+                )
+            }
+            2 => {
+                let dispute_target = match request.role {
+                    AgentRole::Critic => "Architectural Assumptions",
+                    AgentRole::Auditor => "Access Control & Sandbox Isolation Boundaries",
+                    AgentRole::Implementer => "Runtime Resource Footprint & Error Propagation",
+                    _ => "System Invariants & Scalability Bottlenecks",
+                };
+
+                format!(
+                    "### Round 2 Cross-Examination by {} ({})\n\n\
+                    **Critique Target**: *{}*\n\
+                    **Topic Context**: {}\n\n\
+                    #### 1. Scrutiny of Peer Claims\n\
+                    - **Sound Foundations**: Concur with the requirement for atomic persistence and crash resilience.\n\
+                    - **Vulnerabilities Challenged**: Peer proposals rely excessively on optimistic concurrency assumptions without defining upper bounds on retry budgets.\n\
+                    - **Active Trade-Off Under Dispute**: Latency penalty of synchronous fsync vs crash-vulnerability of delayed disk flushing.\n\n\
+                    #### 2. Stress-Testing Edge Cases\n\
+                    - Interrupted writes during power loss or kill signals.\n\
+                    - Watcher feedback loops when disk writes occur inside monitored directories.",
+                    request.agent_id,
+                    request.role.as_str(),
+                    dispute_target,
+                    topic_clean
+                )
+            }
+            _ => {
+                format!(
+                    "### Round {} Rebuttal & Consensus Position by {} ({})\n\n\
+                    **Topic Refinement**: *{}*\n\n\
+                    #### 1. Concessions & Revised Stances\n\
+                    - **Concession**: Acknowledge peer critique regarding disk write latency; batched append-only logging is technically superior to single-file overwrites.\n\
+                    - **Firm Stance**: Metadata lookups must remain discrete and indexed; cannot compromise on O(1) session resolution.\n\
+                    - **Agreed Architecture**: Dual storage model with atomic metadata.json and append-only transcript.jsonl.",
+                    request.round_number,
+                    request.agent_id,
+                    request.role.as_str(),
+                    topic_clean
+                )
+            }
         };
 
         // Stream in chunks
@@ -668,8 +954,14 @@ impl DiscussionProvider for MockProvider {
                 total_tokens: 350 + tokens,
             },
             duration_ms: elapsed,
-            model_id: "mock-model-v1".to_string(),
+            model_id: "adaptive-domain-simulator".to_string(),
             context_truncated: false,
+            thinking: if request.thinking_enabled {
+                Some(thinking_body)
+            } else {
+                None
+            },
+            simulated: true,
         })
     }
 }
@@ -704,6 +996,11 @@ mod tests {
             user_prompt: "Design the system.".to_string(),
             context_summary: String::new(),
             timeout_secs: 10,
+            topic: "Architecture Design".to_string(),
+            user_idea: "Build a reliable system".to_string(),
+            action_name: None,
+            action_query: None,
+            thinking_enabled: true,
         };
 
         let sink = Box::new(CollectingSink {
@@ -717,6 +1014,8 @@ mod tests {
 
         assert!(resp.raw_markdown.contains("Position Paper"));
         assert!(resp.usage.completion_tokens > 0);
+        assert!(resp.simulated);
+        assert!(resp.thinking.is_some());
 
         // Test cancellation
         cancel_flag.store(true, Ordering::Relaxed);
@@ -729,6 +1028,11 @@ mod tests {
             user_prompt: "".to_string(),
             context_summary: "".to_string(),
             timeout_secs: 10,
+            topic: "Architecture Design".to_string(),
+            user_idea: "Build a reliable system".to_string(),
+            action_name: None,
+            action_query: None,
+            thinking_enabled: false,
         };
 
         let err = provider
@@ -785,5 +1089,61 @@ mod tests {
     fn test_process_tree_kill_on_dead_pid() {
         // PID 99999999 does not exist, command should safely execute without panicking
         kill_process_tree(99999999);
+    }
+
+    #[test]
+    fn test_thought_splitter_basic() {
+        let mut splitter = ThoughtSplitter::new();
+        let (t1, a1) = splitter.push("<thinking>Analyzing ");
+        assert_eq!(t1, "Analyzing ");
+        assert_eq!(a1, "");
+
+        let (t2, a2) = splitter.push("options</thinking>The solution");
+        assert_eq!(t2, "options");
+        assert_eq!(a2, "The solution");
+
+        let (t3, a3) = splitter.finish();
+        assert_eq!(t3, "");
+        assert_eq!(a3, "");
+
+        assert_eq!(splitter.thinking, "Analyzing options");
+        assert_eq!(splitter.answer, "The solution");
+    }
+
+    #[test]
+    fn test_thought_splitter_split_tag() {
+        let mut splitter = ThoughtSplitter::new();
+        // Tag split across chunks
+        let (t1, a1) = splitter.push("Preamble <think");
+        assert_eq!(a1, "Preamble ");
+        assert_eq!(t1, "");
+
+        let (t2, a2) = splitter.push("ing>My reasoning</thin");
+        assert_eq!(t2, "My reasoning");
+        assert_eq!(a2, "");
+
+        let (t3, a3) = splitter.push("king>Final text");
+        assert_eq!(t3, "");
+        assert_eq!(a3, "Final text");
+
+        let _ = splitter.finish();
+        assert_eq!(splitter.thinking, "My reasoning");
+        assert_eq!(splitter.answer, "Preamble Final text");
+    }
+
+    #[test]
+    fn test_parse_openai_sse_line() {
+        let line = "data: {\"choices\":[{\"delta\":{\"content\":\"hello \",\"reasoning_content\":\"thinking\"}}]}";
+        let delta = parse_openai_sse_line(line).unwrap();
+        assert_eq!(delta.content.as_deref(), Some("hello "));
+        assert_eq!(delta.reasoning.as_deref(), Some("thinking"));
+    }
+
+    #[test]
+    fn test_parse_ollama_line() {
+        let line = "{\"message\":{\"role\":\"assistant\",\"content\":\"hello\",\"thinking\":\"plan\"}}";
+        let delta = parse_ollama_line(line).unwrap();
+        assert_eq!(delta.content.as_deref(), Some("hello"));
+        assert_eq!(delta.reasoning.as_deref(), Some("plan"));
     }
 }

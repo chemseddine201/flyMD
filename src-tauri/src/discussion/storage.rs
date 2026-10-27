@@ -293,6 +293,11 @@ mod tests {
             token_usage: None,
             duration_ms: 100,
             truncated: false,
+            thinking_content: None,
+            action_name: None,
+            model_id: Some("claude-3-7-sonnet".to_string()),
+            simulated: false,
+            author_display_name: Some("Architect 1".to_string()),
         };
 
         append_transcript_message(&temp_dir, &valid_msg).unwrap();

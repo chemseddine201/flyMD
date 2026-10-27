@@ -37,6 +37,9 @@ import {
   Maximize2,
   Minimize2,
   SlidersHorizontal,
+  Brain,
+  Target,
+  Compass,
 } from 'lucide-react';
 import { usePreviewStore, PreviewStoreState } from '../../../store';
 import {
@@ -46,6 +49,8 @@ import {
   AgentRoleType,
   DiscussionMetadata,
   DiscussionMessage,
+  AgentCustomAction,
+  AvailableProviderInfo,
 } from '../../../../../shared/types';
 import { markdownService } from '../../../services/MarkdownService';
 
@@ -216,6 +221,58 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
 
 const COLOR_PALETTE = ['#38bdf8', '#818cf8', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#a855f7'];
 
+export interface ActionCatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  promptDirective: string;
+}
+
+export const ACTION_CATALOG: ActionCatalogItem[] = [
+  {
+    id: 'standard',
+    name: 'Standard Role Deliberation',
+    description: 'Autonomous discourse aligned with role assignment',
+    promptDirective: '',
+  },
+  {
+    id: 'arch-decomp',
+    name: 'Architectural Invariant Decomposition',
+    description: 'Strict modular boundary & crash-safety analysis',
+    promptDirective: 'Decompose the architecture into strict layers. Specify data-flow invariants, crash-recovery boundaries, and single points of failure.',
+  },
+  {
+    id: 'security-audit',
+    name: 'Zero-Trust Security & Sandbox Audit',
+    description: 'Privilege isolation, path traversal & token leaks',
+    promptDirective: 'Audit against zero-trust requirements. Scrutinize filesystem read boundaries, unauthorized process elevation, and prompt injection avenues.',
+  },
+  {
+    id: 'concurrency-stress',
+    name: 'Concurrency & Deadlock Stress Test',
+    description: 'Race conditions, file locks & zombie process hazards',
+    promptDirective: 'Stress test concurrent access scenarios. Identify race conditions, file lock contention, async cancellation hazards, and zombie process risks.',
+  },
+  {
+    id: 'chaos-adversary',
+    name: 'Chaos Engineering & Failure Injection',
+    description: 'Cascade drops, power loss, corrupted logs & timeouts',
+    promptDirective: 'Simulate critical system failure: unexpected process termination, sudden power loss during writes, corrupted JSONL lines, and network timeout cascading.',
+  },
+  {
+    id: 'custom',
+    name: 'Custom Prompt Directive...',
+    description: 'Define your own specialized inquiry or probe for this agent',
+    promptDirective: '',
+  },
+];
+
+export const calculateThinkingSteps = (thinking?: string): number => {
+  if (!thinking) return 0;
+  const stepMatches = thinking.match(/(?:step\s*\d+|invariant|\d+\.|\bfirst\b|\bsecond\b|\bfinally\b)/gi);
+  return Math.max(1, stepMatches ? stepMatches.length : Math.ceil(thinking.length / 250));
+};
+
 const ROUND_METADATA = [
   { round: 1, title: 'Phase 1: Independent Position Papers', desc: 'Each agent presents isolated analysis grounded in role evidence.' },
   { round: 2, title: 'Phase 2: Peer Cross-Examination & Critiques', desc: 'Models critique opposing claims, expose edge cases, and challenge assumptions.' },
@@ -230,6 +287,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const activeMeta = usePreviewStore((s: PreviewStoreState) => s.activeDiscussionMeta);
   const activeTranscript = usePreviewStore((s: PreviewStoreState) => s.activeTranscript);
   const streamingChunks = usePreviewStore((s: PreviewStoreState) => s.streamingChunks);
+  const streamingThinking = usePreviewStore((s: PreviewStoreState) => s.streamingThinking);
+  const availableProviders = usePreviewStore((s: PreviewStoreState) => s.availableProviders);
   const activeReportMarkdown = usePreviewStore((s: PreviewStoreState) => s.activeReportMarkdown);
   const activeReportVersion = usePreviewStore((s: PreviewStoreState) => s.activeReportVersion);
   const isRunning = usePreviewStore((s: PreviewStoreState) => s.isDiscussionRunning);
@@ -238,11 +297,13 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
   const loadDiscussions = usePreviewStore((s: PreviewStoreState) => s.loadDiscussions);
   const selectDiscussion = usePreviewStore((s: PreviewStoreState) => s.selectDiscussion);
+  const loadAvailableProviders = usePreviewStore((s: PreviewStoreState) => s.loadAvailableProviders);
   const startNewDiscussion = usePreviewStore((s: PreviewStoreState) => s.startNewDiscussion);
   const pauseCurrentDiscussion = usePreviewStore((s: PreviewStoreState) => s.pauseCurrentDiscussion);
   const resumeCurrentDiscussion = usePreviewStore((s: PreviewStoreState) => s.resumeCurrentDiscussion);
   const cancelCurrentDiscussion = usePreviewStore((s: PreviewStoreState) => s.cancelCurrentDiscussion);
   const injectGuidance = usePreviewStore((s: PreviewStoreState) => s.injectGuidance);
+  const dispatchTargetedAction = usePreviewStore((s: PreviewStoreState) => s.dispatchTargetedAction);
   const deleteDiscussion = usePreviewStore((s: PreviewStoreState) => s.deleteDiscussion);
   const clearAllDiscussions = usePreviewStore((s: PreviewStoreState) => s.clearAllDiscussions);
   const setStepMode = usePreviewStore((s: PreviewStoreState) => s.setStepMode);
@@ -265,6 +326,14 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     3: true,
   });
   const [expandedTurns, setExpandedTurns] = useState<Record<string, boolean>>({});
+  const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
+
+  // Targeted agent probe drawer & dispatcher state
+  const [showTargetedDispatch, setShowTargetedDispatch] = useState<boolean>(false);
+  const [targetedAgentId, setTargetedAgentId] = useState<string>('');
+  const [targetedActionName, setTargetedActionName] = useState<string>('Targeted Inquiry');
+  const [targetedActionQuery, setTargetedActionQuery] = useState<string>('');
+  const [isDispatchingTargeted, setIsDispatchingTargeted] = useState<boolean>(false);
 
   // Modals & confirmation dialogs
   const [showNewModal, setShowNewModal] = useState(false);
@@ -295,6 +364,11 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       loadDiscussions(resolvedWorkspace);
     }
   }, [resolvedWorkspace, loadDiscussions]);
+
+  // Load available LLM providers on mount
+  useEffect(() => {
+    loadAvailableProviders();
+  }, [loadAvailableProviders]);
 
   useEffect(() => {
     if (!window.electronAPI?.onDiscussionEvent) return;
@@ -416,6 +490,50 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     setExpandedTurns((prev) => ({ ...prev, [turnId]: !prev[turnId] }));
   };
 
+  const toggleThinking = (turnId: string) => {
+    setExpandedThinking((prev) => ({ ...prev, [turnId]: !prev[turnId] }));
+  };
+
+  // Extract distinct agents participating in current session for targeted dispatch
+  const participantAgents = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; role: string; color?: string }>();
+    for (const msg of activeTranscript) {
+      if (msg.authorAgentId && msg.authorAgentId !== 'human-user') {
+        if (!map.has(msg.authorAgentId)) {
+          map.set(msg.authorAgentId, {
+            id: msg.authorAgentId,
+            name: msg.authorDisplayName || msg.authorAgentId,
+            role: msg.authorRole,
+          });
+        }
+      }
+    }
+    if (map.size === 0) {
+      PRESET_TEMPLATES.architecture.participants.forEach((p) => {
+        map.set(p.agentId, { id: p.agentId, name: p.displayName, role: p.role, color: p.avatarColor });
+      });
+    }
+    return Array.from(map.values());
+  }, [activeTranscript]);
+
+  useEffect(() => {
+    if (!targetedAgentId && participantAgents.length > 0) {
+      setTargetedAgentId(participantAgents[0].id);
+    }
+  }, [targetedAgentId, participantAgents]);
+
+  const handleDispatchTargetedQuery = async () => {
+    if (!targetedActionQuery.trim() || !targetedAgentId) return;
+    setIsDispatchingTargeted(true);
+    try {
+      await dispatchTargetedAction(targetedAgentId, targetedActionName || 'Targeted Inquiry', targetedActionQuery.trim());
+      setTargetedActionQuery('');
+      setShowTargetedDispatch(false);
+    } finally {
+      setIsDispatchingTargeted(false);
+    }
+  };
+
   // Copy turn markdown
   const handleCopyTurn = (turnId: string, content: string) => {
     navigator.clipboard.writeText(content);
@@ -449,6 +567,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       avatarColor: color,
       assignedSkillUris: [],
       contextBudgetTokens: 16000,
+      thinkingEnabled: true,
     };
     setCustomParticipants([...customParticipants, newAgent]);
   };
@@ -1104,9 +1223,9 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                         </div>
 
                                         {/* Name & Role */}
-                                        <div className="flex items-center gap-2 min-w-0">
+                                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
                                           <span className="text-xs font-bold text-slate-100 truncate">
-                                            {isHuman ? 'Human Facilitator (You)' : msg.authorAgentId}
+                                            {isHuman ? 'Human Facilitator (You)' : (msg.authorDisplayName || msg.authorAgentId)}
                                           </span>
                                           <span
                                             className={`text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider ${getRoleBadgeStyle(
@@ -1115,11 +1234,37 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                           >
                                             {msg.authorRole || 'Agent'}
                                           </span>
-                                          {msg.authorProvider && (
+
+                                          {/* Custom Action Name Badge */}
+                                          {msg.actionName && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 font-medium flex items-center gap-1">
+                                              <Zap size={10} className="text-sky-400" />
+                                              <span>{msg.actionName}</span>
+                                            </span>
+                                          )}
+
+                                          {/* Targeted Action Badge */}
+                                          {msg.messageKind === 'targeted_action' && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-200 border border-purple-500/40 font-bold flex items-center gap-1">
+                                              <Target size={10} className="text-purple-300" />
+                                              <span>TARGETED PROBE</span>
+                                            </span>
+                                          )}
+
+                                          {/* Provider / Model Badge */}
+                                          {msg.simulated ? (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono hidden sm:inline-block" title="Adaptive Domain Reasoner with CoT Simulation">
+                                              simulated
+                                            </span>
+                                          ) : msg.modelId ? (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono hidden sm:inline-block">
+                                              {msg.modelId}
+                                            </span>
+                                          ) : msg.authorProvider ? (
                                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 font-mono hidden sm:inline-block">
                                               {msg.authorProvider}
                                             </span>
-                                          )}
+                                          ) : null}
                                         </div>
                                       </div>
 
@@ -1143,15 +1288,51 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                     {!isTurnExpanded && (
                                       <div
                                         onClick={() => toggleTurn(msg.id)}
-                                        className="px-3 pb-3 text-xs text-slate-400 line-clamp-1 pl-11 cursor-pointer hover:text-slate-300"
+                                        className="px-3 pb-3 text-xs text-slate-400 line-clamp-1 pl-11 cursor-pointer hover:text-slate-300 flex items-center gap-2"
                                       >
-                                        {snippet}
+                                        {msg.thinkingContent && (
+                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono flex items-center gap-1 shrink-0">
+                                            <Brain size={10} />
+                                            <span>CoT</span>
+                                          </span>
+                                        )}
+                                        <span className="truncate">{snippet}</span>
                                       </div>
                                     )}
 
                                     {/* Expanded Full Markdown Body */}
                                     {isTurnExpanded && (
                                       <div className="px-4 pb-4 pt-1 border-t border-slate-800/60 pl-11 space-y-3">
+                                        {/* Antigravity-Style Collapsible Thinking Block */}
+                                        {msg.thinkingContent && (
+                                          <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 overflow-hidden text-xs my-1 shadow-sm">
+                                            <div
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleThinking(msg.id);
+                                              }}
+                                              className="px-3 py-2 bg-indigo-950/40 hover:bg-indigo-950/60 flex items-center justify-between text-indigo-300 font-semibold cursor-pointer border-b border-indigo-500/20 select-none transition-colors"
+                                            >
+                                              <div className="flex items-center gap-2">
+                                                <Brain size={14} className="text-indigo-400 shrink-0" />
+                                                <span className="font-mono text-xs">Analytical Chain of Thought &amp; Invariants</span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">
+                                                  {calculateThinkingSteps(msg.thinkingContent)} steps
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center gap-1.5 text-indigo-400 text-[11px]">
+                                                <span>{expandedThinking[msg.id] ? 'Hide' : 'Show Thinking'}</span>
+                                                {expandedThinking[msg.id] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                              </div>
+                                            </div>
+                                            {expandedThinking[msg.id] && (
+                                              <div className="p-3.5 bg-slate-950/95 font-mono text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap border-l-2 border-indigo-500 max-h-80 overflow-y-auto">
+                                                {msg.thinkingContent}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+
                                         <div
                                           className="text-xs text-slate-200 leading-relaxed prose prose-invert max-w-none prose-pre:bg-slate-950 prose-pre:border prose-pre:border-slate-800 prose-headings:text-slate-100 prose-table:border prose-table:border-slate-800"
                                           dangerouslySetInnerHTML={{
@@ -1161,6 +1342,21 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
                                         {/* Action Bar inside Expanded Turn */}
                                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/40 text-[11px]">
+                                          {!isHuman && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setTargetedAgentId(msg.authorAgentId);
+                                                setShowTargetedDispatch(true);
+                                              }}
+                                              className="flex items-center gap-1 px-2 py-1 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-colors"
+                                              title="Direct a targeted inquiry specifically to this agent"
+                                            >
+                                              <Target size={11} className="text-purple-400" />
+                                              <span>Probe Agent</span>
+                                            </button>
+                                          )}
                                           <button
                                             type="button"
                                             onClick={(e) => {
@@ -1176,7 +1372,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              handleQuoteInGuidance(msg.authorAgentId, snippet);
+                                              handleQuoteInGuidance(msg.authorDisplayName || msg.authorAgentId, snippet);
                                             }}
                                             className="flex items-center gap-1 px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 transition-colors"
                                             title="Quote this agent's point into your guidance input"
@@ -1204,6 +1400,26 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                     LIVE IN PROGRESS
                                   </span>
                                 </div>
+
+                                {/* Live Reasoning Block if streaming thinking exists */}
+                                {streamingThinking[activeStreamingEntry[0]] && (
+                                  <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/30 p-3 space-y-1.5 animate-fadeIn">
+                                    <div className="flex items-center justify-between text-xs font-bold text-indigo-300">
+                                      <div className="flex items-center gap-2">
+                                        <Brain size={14} className="text-indigo-400 animate-pulse" />
+                                        <span>Streaming Analytical Reasoning...</span>
+                                      </div>
+                                      <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse font-mono">
+                                        REASONING
+                                      </span>
+                                    </div>
+                                    <div className="p-2.5 rounded-lg bg-slate-950/90 font-mono text-[11px] text-slate-300 max-h-48 overflow-y-auto border border-indigo-500/20 whitespace-pre-wrap leading-relaxed">
+                                      {streamingThinking[activeStreamingEntry[0]]}
+                                      <span className="inline-block w-2 h-3.5 bg-indigo-400 ml-1 animate-pulse" />
+                                    </div>
+                                  </div>
+                                )}
+
                                 <div className="text-xs text-slate-200 font-mono whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto p-2.5 rounded-lg bg-slate-950/80 border border-slate-800">
                                   {String(activeStreamingEntry[1])}
                                   <span className="inline-block w-2 h-3.5 bg-sky-400 ml-1 animate-pulse" />
@@ -1226,18 +1442,28 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                             Deliberation Paused for Human Review
                           </div>
                           <div className="text-[11px] text-slate-400 mt-0.5">
-                            You can review the proposals above, inject guidance below, or click Next Turn to hear from the next agent.
+                            You can review the proposals above, inject guidance below, or direct a targeted inquiry to any agent.
                           </div>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => resumeCurrentDiscussion(resolvedWorkspace)}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
-                      >
-                        <FastForward size={13} />
-                        <span>Continue Next Turn</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowTargetedDispatch((prev) => !prev)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 text-xs font-semibold transition-all shrink-0"
+                        >
+                          <Target size={13} className="text-purple-400" />
+                          <span>Target Agent</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => resumeCurrentDiscussion(resolvedWorkspace)}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
+                        >
+                          <FastForward size={13} />
+                          <span>Continue Next Turn</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1346,32 +1572,136 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                 </div>
               )}
 
-              {/* Persistent Human-in-the-Loop Guidance Input Bar (Pinned at bottom of timeline) */}
+              {/* Persistent Human-in-the-Loop Steering & Targeted Probe Bar (Pinned at bottom of timeline) */}
               {activeTab === 'timeline' && (
-                <div className="p-3 border-t border-slate-800 bg-slate-900/90 backdrop-blur-sm">
-                  <div className="max-w-4xl mx-auto flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={guidanceInput}
-                      onChange={(e) => setGuidanceInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
-                          e.preventDefault();
-                          handleSendGuidance();
-                        }
-                      }}
-                      placeholder="Intervene or steer discussion... (e.g. 'Prioritize SQLite over Postgres', press Enter)"
-                      className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSendGuidance}
-                      disabled={!guidanceInput.trim()}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:hover:bg-sky-500 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
-                    >
-                      <Send size={12} />
-                      <span>Steer</span>
-                    </button>
+                <div className="border-t border-slate-800 bg-slate-900/95 backdrop-blur-sm">
+                  {/* Expandable Targeted Probe Drawer */}
+                  {showTargetedDispatch && (
+                    <div className="p-3 bg-purple-950/20 border-b border-purple-500/30 animate-fadeIn">
+                      <div className="max-w-4xl mx-auto space-y-2">
+                        <div className="flex items-center justify-between text-xs font-bold text-purple-300">
+                          <div className="flex items-center gap-1.5">
+                            <Target size={14} className="text-purple-400" />
+                            <span>Targeted Agent Inquiry &amp; Custom Action Dispatch</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowTargetedDispatch(false)}
+                            className="text-slate-400 hover:text-slate-200 text-sm font-semibold"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-purple-500/30 text-xs">
+                            <span className="text-purple-400 font-semibold text-[11px]">Target Agent:</span>
+                            <select
+                              value={targetedAgentId}
+                              onChange={(e) => setTargetedAgentId(e.target.value)}
+                              className="bg-transparent border-0 text-slate-200 focus:outline-none cursor-pointer text-xs"
+                            >
+                              {participantAgents.map((ag) => (
+                                <option key={ag.id} value={ag.id} className="bg-slate-900 text-slate-200">
+                                  @{ag.name} ({ag.role})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-purple-500/30 text-xs">
+                            <span className="text-purple-400 font-semibold text-[11px]">Action Directive:</span>
+                            <select
+                              value={targetedActionName}
+                              onChange={(e) => setTargetedActionName(e.target.value)}
+                              className="bg-transparent border-0 text-slate-200 focus:outline-none cursor-pointer text-xs"
+                            >
+                              <option value="Targeted Inquiry" className="bg-slate-900 text-slate-200">Targeted Inquiry</option>
+                              <option value="Edge Case Stress Test" className="bg-slate-900 text-slate-200">Edge Case Stress Test</option>
+                              <option value="Invariant Verification" className="bg-slate-900 text-slate-200">Invariant Verification</option>
+                              <option value="Zero-Trust Security Probe" className="bg-slate-900 text-slate-200">Zero-Trust Security Probe</option>
+                              <option value="Concurrency Crash Probe" className="bg-slate-900 text-slate-200">Concurrency Crash Probe</option>
+                              <option value="Alternative Architecture Inquiry" className="bg-slate-900 text-slate-200">Alternative Architecture Inquiry</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={targetedActionQuery}
+                            onChange={(e) => setTargetedActionQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleDispatchTargetedQuery();
+                              }
+                            }}
+                            placeholder={`Specify inquiry or probe for ${targetedAgentId}... (e.g. 'How is crash atomicity guaranteed on Windows?')`}
+                            className="flex-1 bg-slate-950 border border-purple-500/40 rounded-lg px-3.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleDispatchTargetedQuery}
+                            disabled={!targetedActionQuery.trim() || isDispatchingTargeted}
+                            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm shrink-0"
+                          >
+                            {isDispatchingTargeted ? (
+                              <>
+                                <RotateCw size={12} className="animate-spin" />
+                                <span>Probing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Zap size={12} />
+                                <span>Dispatch Probe</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Standard Steer Bar + Quick Probe Toggle */}
+                  <div className="p-3">
+                    <div className="max-w-4xl mx-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowTargetedDispatch((prev) => !prev)}
+                        className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-bold transition-all shrink-0 ${
+                          showTargetedDispatch
+                            ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
+                            : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300'
+                        }`}
+                        title="Dispatch a targeted custom inquiry to an individual agent"
+                      >
+                        <Target size={13} className="text-purple-400" />
+                        <span className="hidden sm:inline">Target Agent</span>
+                      </button>
+
+                      <input
+                        type="text"
+                        value={guidanceInput}
+                        onChange={(e) => setGuidanceInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+                            e.preventDefault();
+                            handleSendGuidance();
+                          }
+                        }}
+                        placeholder="Intervene or steer council... (e.g. 'Prioritize SQLite over Postgres', press Enter)"
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSendGuidance}
+                        disabled={!guidanceInput.trim()}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:hover:bg-sky-500 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
+                      >
+                        <Send size={12} />
+                        <span>Steer</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1477,6 +1807,22 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   </div>
                 </div>
 
+                {/* Connected Engines Indicator */}
+                {availableProviders.some((ap) => ap.available) && (
+                  <div className="mb-3 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles size={12} className="text-emerald-400" />
+                      <span>
+                        <strong>Detected AI Engines:</strong>{' '}
+                        {availableProviders
+                          .filter((ap) => ap.available)
+                          .map((ap) => `${ap.name} (${ap.model})`)
+                          .join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {newDebateMode === 'preset' ? (
                   <div className="grid grid-cols-2 gap-2.5">
                     {(Object.keys(PRESET_TEMPLATES) as PresetKey[]).map((key) => {
@@ -1499,77 +1845,165 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                           <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
                             {preset.description}
                           </div>
-                          <div className="text-[10px] text-slate-500 mt-2">
-                            {preset.participants.length} participating agents
+                          <div className="text-[10px] text-slate-500 mt-2 flex items-center justify-between">
+                            <span>{preset.participants.length} participating agents</span>
+                            <span className="text-indigo-400 flex items-center gap-1">
+                              <Brain size={10} />
+                              <span>Thinking On</span>
+                            </span>
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  /* Custom Team Editor */
+                  /* Custom Team Editor with Custom Actions & Query Builders */
                   <div className="space-y-3">
-                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                      {customParticipants.map((p, idx) => (
-                        <div
-                          key={p.agentId || idx}
-                          className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 flex items-center gap-2 text-xs"
-                        >
-                          <input
-                            type="color"
-                            value={p.avatarColor || '#38bdf8'}
-                            onChange={(e) => handleUpdateParticipant(idx, { avatarColor: e.target.value })}
-                            className="w-6 h-6 rounded border-0 cursor-pointer bg-transparent"
-                            title="Avatar color"
-                          />
-                          <input
-                            type="text"
-                            value={p.displayName}
-                            onChange={(e) => handleUpdateParticipant(idx, { displayName: e.target.value })}
-                            placeholder="Agent Name"
-                            className="w-32 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200"
-                          />
-                          <select
-                            value={p.role}
-                            onChange={(e) => handleUpdateParticipant(idx, { role: e.target.value as any })}
-                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200"
+                    <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                      {customParticipants.map((p, idx) => {
+                        const selectedActionId = p.customAction?.id || 'standard';
+                        return (
+                          <div
+                            key={p.agentId || idx}
+                            className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 text-xs"
                           >
-                            <option value="architect">Architect</option>
-                            <option value="critic">Critic</option>
-                            <option value="auditor">Auditor</option>
-                            <option value="implementer">Implementer</option>
-                            <option value="researcher">Researcher</option>
-                          </select>
-                          <select
-                            value={p.providerId}
-                            onChange={(e) => handleUpdateParticipant(idx, { providerId: e.target.value })}
-                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200"
-                          >
-                            <option value="mock">Local Mock</option>
-                            <option value="claude-code">Claude Code CLI</option>
-                            <option value="gemini-antigravity">Gemini CLI</option>
-                            <option value="ollama">Ollama</option>
-                            <option value="http-llm">OpenAI / HTTP</option>
-                            <option value="deepseek">DeepSeek</option>
-                          </select>
-                          <input
-                            type="text"
-                            value={p.modelId}
-                            onChange={(e) => handleUpdateParticipant(idx, { modelId: e.target.value })}
-                            placeholder="Model ID"
-                            className="flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 font-mono text-[11px]"
-                          />
-                          <button
-                            type="button"
-                            disabled={customParticipants.length <= 2}
-                            onClick={() => handleRemoveParticipant(idx)}
-                            className="p-1 text-slate-500 hover:text-rose-400 disabled:opacity-20"
-                            title="Remove agent"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      ))}
+                            {/* Row 1: Identity, Role, Provider, Model */}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={p.avatarColor || '#38bdf8'}
+                                onChange={(e) => handleUpdateParticipant(idx, { avatarColor: e.target.value })}
+                                className="w-6 h-6 rounded border-0 cursor-pointer bg-transparent shrink-0"
+                                title="Avatar color"
+                              />
+                              <input
+                                type="text"
+                                value={p.displayName}
+                                onChange={(e) => handleUpdateParticipant(idx, { displayName: e.target.value })}
+                                placeholder="Agent Name"
+                                className="w-28 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200"
+                              />
+                              <select
+                                value={p.role}
+                                onChange={(e) => handleUpdateParticipant(idx, { role: e.target.value as any })}
+                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs"
+                              >
+                                <option value="architect">Architect</option>
+                                <option value="critic">Critic</option>
+                                <option value="auditor">Auditor</option>
+                                <option value="implementer">Implementer</option>
+                                <option value="researcher">Researcher</option>
+                                <option value="security-specialist">Security Specialist</option>
+                              </select>
+                              <select
+                                value={p.providerId}
+                                onChange={(e) => {
+                                  const provId = e.target.value;
+                                  const matched = availableProviders.find((ap) => ap.id === provId);
+                                  handleUpdateParticipant(idx, {
+                                    providerId: provId,
+                                    modelId: matched?.model || p.modelId,
+                                  });
+                                }}
+                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs"
+                              >
+                                <option value="mock">Local Reasoner (Simulated)</option>
+                                {availableProviders.map((ap) => (
+                                  <option key={ap.id} value={ap.id}>
+                                    {ap.name} {ap.available ? '✓ Ready' : '(Not configured)'}
+                                  </option>
+                                ))}
+                                {!availableProviders.some((ap) => ap.id === 'ollama') && (
+                                  <option value="ollama">Ollama</option>
+                                )}
+                                {!availableProviders.some((ap) => ap.id === 'claude-code') && (
+                                  <option value="claude-code">Claude Code CLI</option>
+                                )}
+                                {!availableProviders.some((ap) => ap.id === 'gemini-antigravity') && (
+                                  <option value="gemini-antigravity">Gemini CLI</option>
+                                )}
+                                {!availableProviders.some((ap) => ap.id === 'deepseek') && (
+                                  <option value="deepseek">DeepSeek</option>
+                                )}
+                                {!availableProviders.some((ap) => ap.id === 'http-llm') && (
+                                  <option value="http-llm">OpenAI / HTTP</option>
+                                )}
+                              </select>
+                              <input
+                                type="text"
+                                value={p.modelId}
+                                onChange={(e) => handleUpdateParticipant(idx, { modelId: e.target.value })}
+                                placeholder="Model ID"
+                                className="flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 font-mono text-[11px]"
+                              />
+                              <button
+                                type="button"
+                                disabled={customParticipants.length <= 2}
+                                onClick={() => handleRemoveParticipant(idx)}
+                                className="p-1 text-slate-500 hover:text-rose-400 disabled:opacity-20 shrink-0"
+                                title="Remove agent"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+
+                            {/* Row 2: Custom Action Directive & Thinking Mode */}
+                            <div className="flex items-center gap-2 pt-1.5 border-t border-slate-800/60">
+                              <span className="text-[11px] font-semibold text-sky-400 shrink-0">Custom Action:</span>
+                              <select
+                                value={selectedActionId}
+                                onChange={(e) => {
+                                  const actId = e.target.value;
+                                  const found = ACTION_CATALOG.find((ac) => ac.id === actId);
+                                  if (found && found.id !== 'standard') {
+                                    handleUpdateParticipant(idx, {
+                                      customAction: {
+                                        id: found.id,
+                                        name: found.name,
+                                        description: found.description,
+                                        promptDirective: found.promptDirective,
+                                      },
+                                    });
+                                  } else {
+                                    handleUpdateParticipant(idx, { customAction: undefined });
+                                  }
+                                }}
+                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs flex-1"
+                              >
+                                {ACTION_CATALOG.map((ac) => (
+                                  <option key={ac.id} value={ac.id}>
+                                    {ac.name} — {ac.description}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer shrink-0">
+                                <input
+                                  type="checkbox"
+                                  checked={p.thinkingEnabled ?? true}
+                                  onChange={(e) => handleUpdateParticipant(idx, { thinkingEnabled: e.target.checked })}
+                                  className="rounded bg-slate-950 border-slate-800 text-indigo-500 focus:ring-0"
+                                />
+                                <span className="flex items-center gap-1 text-indigo-300 font-medium">
+                                  <Brain size={12} className="text-indigo-400" />
+                                  <span>Thinking</span>
+                                </span>
+                              </label>
+                            </div>
+
+                            {/* Row 3: Optional Freeform Query Directive for this Agent */}
+                            <div className="pt-0.5">
+                              <input
+                                type="text"
+                                value={p.customQuery || ''}
+                                onChange={(e) => handleUpdateParticipant(idx, { customQuery: e.target.value })}
+                                placeholder="Specific inquiry or directive for this agent (e.g. 'Focus on SQLite journal crash recovery')..."
+                                className="w-full bg-slate-950 border border-slate-800/80 rounded px-2.5 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                     <button
                       type="button"

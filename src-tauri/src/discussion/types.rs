@@ -31,8 +31,9 @@ impl Default for DiscussionStatus {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+/// Agent role. Serialized as a plain lowercase string (e.g. `"critic"`); any
+/// unrecognised string becomes `Custom(..)` so user-defined roles round-trip.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AgentRole {
     Architect,
     Critic,
@@ -40,6 +41,63 @@ pub enum AgentRole {
     Implementer,
     Researcher,
     Custom(String),
+}
+
+impl AgentRole {
+    pub fn from_str_lossy(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "architect" => AgentRole::Architect,
+            "critic" => AgentRole::Critic,
+            "auditor" => AgentRole::Auditor,
+            "implementer" => AgentRole::Implementer,
+            "researcher" => AgentRole::Researcher,
+            "" => AgentRole::Architect,
+            _ => AgentRole::Custom(s.trim().to_string()),
+        }
+    }
+
+    fn wire_name(&self) -> String {
+        match self {
+            AgentRole::Custom(s) => s.clone(),
+            other => other.as_str().to_lowercase(),
+        }
+    }
+}
+
+impl Serialize for AgentRole {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.wire_name())
+    }
+}
+
+impl<'de> Deserialize<'de> for AgentRole {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Accept a plain string, or the legacy externally-tagged `{ "custom": "x" }` form.
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
+            serde_json::Value::String(s) => Ok(AgentRole::from_str_lossy(&s)),
+            serde_json::Value::Object(map) => {
+                if let Some(serde_json::Value::String(s)) = map.get("custom") {
+                    Ok(AgentRole::Custom(s.clone()))
+                } else {
+                    Err(serde::de::Error::custom("invalid agent role object"))
+                }
+            }
+            _ => Err(serde::de::Error::custom("agent role must be a string")),
+        }
+    }
+}
+
+/// A user-defined (or catalog) action that focuses an agent on a specific task.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct AgentCustomAction {
+    #[serde(default)]
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(rename = "promptDirective", default)]
+    pub prompt_directive: String,
 }
 
 impl Default for AgentRole {
@@ -90,6 +148,19 @@ pub struct DiscussionParticipant {
     pub assigned_skill_uris: Vec<String>,
     #[serde(rename = "contextBudgetTokens", default = "default_context_budget")]
     pub context_budget_tokens: u32,
+    /// Standing action assigned to this agent for every round (optional).
+    #[serde(rename = "customAction", default)]
+    pub custom_action: Option<AgentCustomAction>,
+    /// Free-form question / instruction the user wants this agent to answer (optional).
+    #[serde(rename = "customQuery", default)]
+    pub custom_query: Option<String>,
+    /// Ask the model to reason step-by-step before answering.
+    #[serde(rename = "thinkingEnabled", default = "default_true")]
+    pub thinking_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_avatar_color() -> String {
@@ -108,6 +179,8 @@ pub enum DiscussionMessageKind {
     RebuttalRevision,
     SynthesisReport,
     UserIntervention,
+    /// Out-of-band turn requested by the user for one specific agent.
+    TargetedAction,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -137,6 +210,21 @@ pub struct DiscussionMessage {
     pub duration_ms: u64,
     #[serde(default)]
     pub truncated: bool,
+    /// Model reasoning captured separately from the answer (never fed to peers).
+    #[serde(rename = "thinkingContent", default, skip_serializing_if = "Option::is_none")]
+    pub thinking_content: Option<String>,
+    /// Name of the custom action this turn executed, if any.
+    #[serde(rename = "actionName", default, skip_serializing_if = "Option::is_none")]
+    pub action_name: Option<String>,
+    /// Actual model / runtime that produced the turn.
+    #[serde(rename = "modelId", default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    /// True when produced by the offline simulator rather than a real model.
+    #[serde(default)]
+    pub simulated: bool,
+    /// Display name of the authoring agent.
+    #[serde(rename = "authorDisplayName", default, skip_serializing_if = "Option::is_none")]
+    pub author_display_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -216,6 +304,8 @@ pub struct DiscussionMetadata {
     pub schema_version: u32,
     #[serde(rename = "sessionId")]
     pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topic: Option<String>,
     pub status: DiscussionStatus,
     #[serde(rename = "currentRound")]
     pub current_round: u32,
@@ -259,6 +349,7 @@ mod tests {
         let meta = DiscussionMetadata {
             schema_version: CURRENT_SCHEMA_VERSION,
             session_id: "test-01".to_string(),
+            topic: None,
             status: DiscussionStatus::Created,
             current_round: 1,
             created_at: now_ms(),

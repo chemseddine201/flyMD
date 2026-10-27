@@ -330,6 +330,9 @@ mod tests {
                 avatar_color: "#38bdf8".to_string(),
                 assigned_skill_uris: Vec::new(),
                 context_budget_tokens: 16000,
+                custom_action: None,
+                custom_query: None,
+                thinking_enabled: true,
             }],
             active_skill_uris: Vec::new(),
             step_mode: false,
@@ -338,6 +341,7 @@ mod tests {
         let mut metadata = DiscussionMetadata {
             schema_version: 1,
             session_id: "test-report-s1".to_string(),
+            topic: Some("Test Report".to_string()),
             status: super::super::types::DiscussionStatus::Running,
             current_round: 1,
             created_at: now_ms(),

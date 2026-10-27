@@ -4,6 +4,7 @@ import {
   DiscussionMetadata,
   DiscussionMessage,
   DiscussionStreamEvent,
+  AvailableProviderInfo,
 } from '../../../../shared/types';
 
 export interface DiscussionSlice {
@@ -12,6 +13,8 @@ export interface DiscussionSlice {
   activeDiscussionMeta: DiscussionMetadata | null;
   activeTranscript: DiscussionMessage[];
   streamingChunks: Record<string, string>;
+  streamingThinking: Record<string, string>;
+  availableProviders: AvailableProviderInfo[];
   activeReportMarkdown: string | null;
   activeReportVersion: number | null;
   isDiscussionRunning: boolean;
@@ -20,11 +23,13 @@ export interface DiscussionSlice {
 
   loadDiscussions: (workspacePath: string) => Promise<void>;
   selectDiscussion: (workspacePath: string, sessionId: string) => Promise<void>;
+  loadAvailableProviders: () => Promise<void>;
   startNewDiscussion: (config: DiscussionConfig) => Promise<void>;
   pauseCurrentDiscussion: () => Promise<void>;
   resumeCurrentDiscussion: (workspacePath: string) => Promise<void>;
   cancelCurrentDiscussion: () => Promise<void>;
   injectGuidance: (guidance: string) => Promise<void>;
+  dispatchTargetedAction: (agentId: string, actionName?: string, actionQuery?: string) => Promise<DiscussionMessage | null>;
   deleteDiscussion: (workspacePath: string, sessionId: string) => Promise<void>;
   clearAllDiscussions: (workspacePath: string) => Promise<void>;
   setStepMode: (workspacePath: string, sessionId: string, enabled: boolean) => Promise<void>;
@@ -38,6 +43,8 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
   activeDiscussionMeta: null,
   activeTranscript: [],
   streamingChunks: {},
+  streamingThinking: {},
+  availableProviders: [],
   activeReportMarkdown: null,
   activeReportVersion: null,
   isDiscussionRunning: false,
@@ -59,7 +66,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     if (!window.electronAPI) return;
     try {
       (window as any)._flymd_last_workspace = workspacePath;
-      set({ activeSessionId: sessionId, discussionError: null, streamingChunks: {} });
+      set({ activeSessionId: sessionId, discussionError: null, streamingChunks: {}, streamingThinking: {} });
       const meta = await window.electronAPI.getDiscussionMetadata(workspacePath, sessionId);
       const transcript = await window.electronAPI.getDiscussionTranscript(workspacePath, sessionId);
       set({
@@ -79,6 +86,16 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     }
   },
 
+  loadAvailableProviders: async () => {
+    if (!window.electronAPI?.getAvailableProviders) return;
+    try {
+      const list = await window.electronAPI.getAvailableProviders();
+      set({ availableProviders: list || [] });
+    } catch (e: any) {
+      console.error('[DiscussionSlice] Failed to load available providers:', e);
+    }
+  },
+
   startNewDiscussion: async (config: DiscussionConfig) => {
     if (!window.electronAPI?.startDiscussion) return;
     try {
@@ -89,6 +106,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         discussionError: null,
         activeTranscript: [],
         streamingChunks: {},
+        streamingThinking: {},
         activeReportMarkdown: null,
         isStepMode: !!config.stepMode,
       });
@@ -144,6 +162,33 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
       set({ activeDiscussionMeta: meta });
     } catch (e: any) {
       set({ discussionError: String(e), isDiscussionRunning: false });
+    }
+  },
+
+  dispatchTargetedAction: async (agentId: string, actionName?: string, actionQuery?: string) => {
+    const { activeSessionId } = get();
+    if (!activeSessionId || !window.electronAPI?.dispatchTargetedAction) return null;
+    try {
+      set({ isDiscussionRunning: true, discussionError: null });
+      const msg = await window.electronAPI.dispatchTargetedAction(
+        activeSessionId,
+        agentId,
+        actionName || undefined,
+        actionQuery || ''
+      );
+      const workspace = (window as any)._flymd_last_workspace;
+      if (workspace && window.electronAPI) {
+        const transcript = await window.electronAPI.getDiscussionTranscript(workspace, activeSessionId);
+        if (transcript) set({ activeTranscript: transcript });
+        const meta = await window.electronAPI.getDiscussionMetadata(workspace, activeSessionId);
+        if (meta) set({ activeDiscussionMeta: meta });
+      }
+      set({ isDiscussionRunning: false });
+      return msg;
+    } catch (e: any) {
+      console.error('[DiscussionSlice] Failed to dispatch targeted action:', e);
+      set({ discussionError: String(e), isDiscussionRunning: false });
+      return null;
     }
   },
 
@@ -221,6 +266,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         set((state) => ({
           isDiscussionRunning: newStatus === 'running',
           streamingChunks: newStatus !== 'running' ? {} : state.streamingChunks,
+          streamingThinking: newStatus !== 'running' ? {} : state.streamingThinking,
           activeDiscussionMeta: state.activeDiscussionMeta
             ? { ...state.activeDiscussionMeta, status: newStatus }
             : null,
@@ -246,11 +292,13 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
       }
       case 'TurnStarted': {
         const key = `r${payload.round}-${payload.agent_id}`;
-        // Reset chunk for newly started turn
+        // Reset chunks and thinking for newly started turn
         set((state) => {
           const next = { ...state.streamingChunks };
           delete next[key];
-          return { streamingChunks: next };
+          const nextThinking = { ...state.streamingThinking };
+          delete nextThinking[key];
+          return { streamingChunks: next, streamingThinking: nextThinking };
         });
         break;
       }
@@ -258,6 +306,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         set((state) => ({
           isDiscussionRunning: false,
           streamingChunks: {},
+          streamingThinking: {},
           activeDiscussionMeta: state.activeDiscussionMeta
             ? { ...state.activeDiscussionMeta, status: 'paused' }
             : null,
@@ -280,23 +329,35 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         }
         break;
       }
+      case 'TurnThinkingChunk': {
+        const key = `r${payload.round}-${payload.agent_id}`;
+        set((state) => ({
+          streamingThinking: {
+            ...state.streamingThinking,
+            [key]: (state.streamingThinking[key] || '') + (payload.chunk || ''),
+          },
+        }));
+        break;
+      }
       case 'TurnChunk': {
         const key = `r${payload.round}-${payload.agent_id}`;
         set((state) => ({
           streamingChunks: {
             ...state.streamingChunks,
-            [key]: (state.streamingChunks[key] || '') + payload.chunk,
+            [key]: (state.streamingChunks[key] || '') + (payload.chunk || ''),
           },
         }));
         break;
       }
       case 'TurnCompleted': {
         const key = `r${payload.round}-${payload.agent_id}`;
-        // Clear completed turn from streaming chunks so it does not persist on screen as an active box!
+        // Clear completed turn from streaming chunks and thinking
         set((state) => {
           const nextChunks = { ...state.streamingChunks };
           delete nextChunks[key];
-          return { streamingChunks: nextChunks };
+          const nextThinking = { ...state.streamingThinking };
+          delete nextThinking[key];
+          return { streamingChunks: nextChunks, streamingThinking: nextThinking };
         });
 
         // Immediately refresh official transcript & metadata from durable backend
