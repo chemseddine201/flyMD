@@ -9,6 +9,7 @@ import {
   Send,
   FileText,
   ShieldAlert,
+  CheckCircle2,
   CheckCircle,
   HelpCircle,
   Copy,
@@ -20,6 +21,7 @@ import {
   Search,
   Filter,
   Check,
+  ChevronDown,
   ChevronRight,
   Info,
   Trash2,
@@ -30,6 +32,11 @@ import {
   Zap,
   Sliders,
   AlertTriangle,
+  Clock,
+  Quote,
+  Maximize2,
+  Minimize2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { usePreviewStore, PreviewStoreState } from '../../../store';
 import {
@@ -209,6 +216,12 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
 
 const COLOR_PALETTE = ['#38bdf8', '#818cf8', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#a855f7'];
 
+const ROUND_METADATA = [
+  { round: 1, title: 'Phase 1: Independent Position Papers', desc: 'Each agent presents isolated analysis grounded in role evidence.' },
+  { round: 2, title: 'Phase 2: Peer Cross-Examination & Critiques', desc: 'Models critique opposing claims, expose edge cases, and challenge assumptions.' },
+  { round: 3, title: 'Phase 3: Rebuttal & Consensus Synthesis', desc: 'Agents revise stances, document concessions, and record unresolved trade-offs.' },
+];
+
 export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   resolvedWorkspace,
 }) => {
@@ -243,6 +256,15 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
   // Search filter
   const [searchTerm, setSearchTerm] = useState('');
+  const [timelineFilter, setTimelineFilter] = useState<string>('all');
+
+  // Accordion state: which rounds and turns are expanded
+  const [expandedRounds, setExpandedRounds] = useState<Record<number, boolean>>({
+    1: true,
+    2: true,
+    3: true,
+  });
+  const [expandedTurns, setExpandedTurns] = useState<Record<string, boolean>>({});
 
   // Modals & confirmation dialogs
   const [showNewModal, setShowNewModal] = useState(false);
@@ -250,6 +272,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const [showClearAllModal, setShowClearAllModal] = useState(false);
   const [guidanceInput, setGuidanceInput] = useState('');
   const [copiedReport, setCopiedReport] = useState(false);
+  const [copiedTurnId, setCopiedTurnId] = useState<string | null>(null);
   const [tabFocusNotification, setTabFocusNotification] = useState<string | null>(null);
 
   // New discussion configuration state
@@ -290,6 +313,14 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     }
   }, [activeMeta?.latestReportVersion, activeReportMarkdown, resolvedWorkspace, activeSessionId, loadReport]);
 
+  // Expand latest messages by default
+  useEffect(() => {
+    if (activeTranscript.length > 0) {
+      const lastMsg = activeTranscript[activeTranscript.length - 1];
+      setExpandedTurns((prev) => ({ ...prev, [lastMsg.id]: true }));
+    }
+  }, [activeTranscript.length]);
+
   // Filtered session list
   const filteredDiscussions = useMemo(() => {
     if (!searchTerm.trim()) return discussions;
@@ -300,6 +331,103 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         (d as any).topic?.toLowerCase().includes(term)
     );
   }, [discussions, searchTerm]);
+
+  // Group active transcript into rounds like Antigravity for VS Code
+  const roundGroups = useMemo(() => {
+    const totalRounds = Math.max(3, activeMeta?.currentRound || 1);
+    const groups: {
+      round: number;
+      title: string;
+      desc: string;
+      messages: DiscussionMessage[];
+      totalTokens: number;
+      isCurrent: boolean;
+      isDone: boolean;
+    }[] = [];
+
+    for (let r = 1; r <= totalRounds; r++) {
+      const meta = ROUND_METADATA.find((m) => m.round === r) || {
+        round: r,
+        title: `Phase ${r}: Advanced Deliberation`,
+        desc: 'Continued multi-agent cross-examination and refinement.',
+      };
+
+      const msgs = activeTranscript.filter((m) => m.roundNumber === r);
+      const roundTokens = msgs.reduce((acc, m) => acc + (m.tokenUsage?.totalTokens || 0), 0);
+      const isCurrent = (activeMeta?.currentRound || 1) === r;
+      const isDone = (activeMeta?.currentRound || 1) > r || activeMeta?.status === 'awaiting_review' || activeMeta?.status === 'completed';
+
+      groups.push({
+        round: r,
+        title: meta.title,
+        desc: meta.desc,
+        messages: msgs,
+        totalTokens: roundTokens,
+        isCurrent,
+        isDone,
+      });
+    }
+
+    return groups;
+  }, [activeTranscript, activeMeta?.currentRound, activeMeta?.status]);
+
+  // Filter messages by role if selected
+  const applyTimelineFilter = (messages: DiscussionMessage[]) => {
+    if (timelineFilter === 'all') return messages;
+    return messages.filter((m) => {
+      const role = (m.authorRole || '').toLowerCase();
+      if (timelineFilter === 'human') return m.messageKind === 'user_intervention' || m.authorAgentId === 'human-user';
+      return role.includes(timelineFilter.toLowerCase());
+    });
+  };
+
+  // Generate 1-line clean snippet for folded turns
+  const getMessageSnippet = (content: string) => {
+    if (!content) return 'Deliberation completed.';
+    const clean = content
+      .replace(/^#+\s+/gm, '')
+      .replace(/\*\*/g, '')
+      .replace(/```[\s\S]*?```/g, '[Code]')
+      .replace(/\n+/g, ' ')
+      .trim();
+    return clean.length > 150 ? `${clean.slice(0, 147)}...` : clean;
+  };
+
+  // Expand / collapse all rounds and turns
+  const handleToggleExpandAll = (expand: boolean) => {
+    const roundMap: Record<number, boolean> = {};
+    for (let r = 1; r <= Math.max(3, activeMeta?.currentRound || 1); r++) {
+      roundMap[r] = expand;
+    }
+    setExpandedRounds(roundMap);
+
+    const turnMap: Record<string, boolean> = {};
+    activeTranscript.forEach((m) => {
+      turnMap[m.id] = expand;
+    });
+    setExpandedTurns(turnMap);
+  };
+
+  const toggleRound = (round: number) => {
+    setExpandedRounds((prev) => ({ ...prev, [round]: !prev[round] }));
+  };
+
+  const toggleTurn = (turnId: string) => {
+    setExpandedTurns((prev) => ({ ...prev, [turnId]: !prev[turnId] }));
+  };
+
+  // Copy turn markdown
+  const handleCopyTurn = (turnId: string, content: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedTurnId(turnId);
+    setTimeout(() => setCopiedTurnId(null), 2000);
+  };
+
+  // Quote agent into guidance box
+  const handleQuoteInGuidance = (agentName: string, snippet: string) => {
+    const quote = `> @${agentName}: "${snippet.slice(0, 100)}..."\nRegarding this point: `;
+    setGuidanceInput((prev) => (prev ? `${prev}\n\n${quote}` : quote));
+  };
 
   // Handle Preset selection change in New Modal
   const handleSelectPreset = (key: PresetKey) => {
@@ -492,6 +620,13 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
   };
 
+  // Find single currently active streaming chunk if any
+  const activeStreamingEntry = useMemo(() => {
+    const entries = Object.entries(streamingChunks);
+    if (entries.length === 0) return null;
+    return entries[entries.length - 1]; // Only the latest active turn!
+  }, [streamingChunks]);
+
   return (
     <div className="flex-1 flex min-h-0 bg-slate-950 text-slate-200 font-sans">
       {/* 1. Left Session Explorer Sidebar */}
@@ -640,9 +775,15 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
                     <span>Round {activeMeta.currentRound}</span>
                     <span>&bull;</span>
-                    <span>{activeMeta.totalMessages} messages</span>
+                    <span>{activeMeta.totalMessages} turns</span>
                     <span>&bull;</span>
                     <span className="font-mono">{activeMeta.totalTokens.toLocaleString()} tokens</span>
+                    {activeMeta.decisionsCount > 0 && (
+                      <>
+                        <span>&bull;</span>
+                        <span className="text-emerald-400 font-semibold">{activeMeta.decisionsCount} decisions agreed</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -745,50 +886,92 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
             </header>
 
             {/* Stage View Tabs */}
-            <div className="px-4 border-b border-slate-800 flex items-center gap-4 bg-slate-900/30">
-              <button
-                type="button"
-                onClick={() => setActiveTab('timeline')}
-                className={`py-2 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
-                  activeTab === 'timeline'
-                    ? 'border-sky-400 text-sky-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <MessageSquare size={13} />
-                <span>Live Deliberation Stream ({activeTranscript.length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('report');
-                  if ((activeMeta.latestReportVersion > 0 || activeMeta.status === 'awaiting_review') && !activeReportMarkdown) {
-                    loadReport(resolvedWorkspace, activeSessionId, activeMeta.latestReportVersion || 1);
-                  }
-                }}
-                className={`py-2 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
-                  activeTab === 'report'
-                    ? 'border-emerald-400 text-emerald-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <FileText size={13} />
-                <span>
-                  12-Section Evidence Report {activeMeta.latestReportVersion > 0 ? `(v${activeMeta.latestReportVersion})` : ''}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('disputes')}
-                className={`py-2 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
-                  activeTab === 'disputes'
-                    ? 'border-amber-400 text-amber-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <ShieldAlert size={13} />
-                <span>Disagreements &amp; Decisions ({activeMeta.activeDisagreementsCount})</span>
-              </button>
+            <div className="px-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/30">
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('timeline')}
+                  className={`py-2 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+                    activeTab === 'timeline'
+                      ? 'border-sky-400 text-sky-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <MessageSquare size={13} />
+                  <span>Deliberation Actions ({activeTranscript.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('report');
+                    if ((activeMeta.latestReportVersion > 0 || activeMeta.status === 'awaiting_review') && !activeReportMarkdown) {
+                      loadReport(resolvedWorkspace, activeSessionId, activeMeta.latestReportVersion || 1);
+                    }
+                  }}
+                  className={`py-2 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+                    activeTab === 'report'
+                      ? 'border-emerald-400 text-emerald-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <FileText size={13} />
+                  <span>
+                    12-Section Evidence Report {activeMeta.latestReportVersion > 0 ? `(v${activeMeta.latestReportVersion})` : ''}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('disputes')}
+                  className={`py-2 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+                    activeTab === 'disputes'
+                      ? 'border-amber-400 text-amber-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <ShieldAlert size={13} />
+                  <span>Disagreements &amp; Decisions ({activeMeta.activeDisagreementsCount})</span>
+                </button>
+              </div>
+
+              {/* Action Toolbar: Expand All / Collapse All & Role Filter */}
+              {activeTab === 'timeline' && (
+                <div className="flex items-center gap-2 py-1.5">
+                  <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 text-[11px]">
+                    <SlidersHorizontal size={11} className="text-slate-400" />
+                    <select
+                      value={timelineFilter}
+                      onChange={(e) => setTimelineFilter(e.target.value)}
+                      className="bg-transparent border-0 text-slate-300 focus:outline-none cursor-pointer py-0.5 text-[11px]"
+                    >
+                      <option value="all">All Participants</option>
+                      <option value="architect">Architects</option>
+                      <option value="critic">Critics</option>
+                      <option value="auditor">Auditors</option>
+                      <option value="implementer">Implementers</option>
+                      <option value="human">Human Guidance</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleExpandAll(true)}
+                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-[11px] flex items-center gap-1"
+                    title="Expand all turns"
+                  >
+                    <Maximize2 size={11} />
+                    <span>Expand</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleExpandAll(false)}
+                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-[11px] flex items-center gap-1"
+                    title="Collapse all turns"
+                  >
+                    <Minimize2 size={11} />
+                    <span>Collapse</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Error Banner */}
@@ -803,127 +986,239 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
             {/* View Tab Body */}
             <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
-              {/* TAB 1: Live Deliberation Timeline */}
+              {/* TAB 1: Antigravity-Style Grouped Actions Timeline */}
               {activeTab === 'timeline' && (
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
-                  {/* Round Progress Tracker */}
-                  <div className="grid grid-cols-3 gap-2 p-3 bg-slate-900/60 rounded-xl border border-slate-800 shadow-sm">
-                    <div className={`text-center p-2 rounded-lg border ${activeMeta.currentRound >= 1 ? 'bg-sky-500/10 border-sky-500/30 text-sky-300' : 'bg-slate-800/40 border-slate-800 text-slate-500'}`}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider">Round 1</div>
-                      <div className="text-xs font-semibold mt-0.5">Initial Analysis</div>
-                    </div>
-                    <div className={`text-center p-2 rounded-lg border ${activeMeta.currentRound >= 2 ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-slate-800/40 border-slate-800 text-slate-500'}`}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider">Round 2</div>
-                      <div className="text-xs font-semibold mt-0.5">Peer Critique</div>
-                    </div>
-                    <div className={`text-center p-2 rounded-lg border ${activeMeta.currentRound >= 3 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-slate-800/40 border-slate-800 text-slate-500'}`}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider">Round 3+</div>
-                      <div className="text-xs font-semibold mt-0.5">Rebuttal &amp; Synthesis</div>
-                    </div>
-                  </div>
-
                   {/* Empty state for fresh session */}
-                  {activeTranscript.length === 0 && Object.keys(streamingChunks).length === 0 && (
+                  {activeTranscript.length === 0 && !activeStreamingEntry && (
                     <div className="p-8 text-center text-slate-500 bg-slate-900/30 rounded-xl border border-slate-800/60">
                       <Bot size={32} className="mx-auto mb-2 text-sky-400 opacity-60 animate-bounce" />
-                      <h4 className="text-sm font-semibold text-slate-300">Agents are preparing deliberation</h4>
+                      <h4 className="text-sm font-semibold text-slate-300">Agents are ready to deliberate</h4>
                       <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                        Deterministic barrier synchronization ensures all agents analyze the problem before evaluating counter-proposals.
+                        Deterministic barrier synchronization ensures all agents analyze the problem before evaluating counter-proposals. Click Resume or Next Turn to begin.
                       </p>
                     </div>
                   )}
 
-                  {/* Transcript Items */}
-                  {activeTranscript.map((msg: DiscussionMessage, idx: number) => {
-                    const isHuman = msg.messageKind === 'user_intervention' || msg.authorAgentId === 'human-user';
+                  {/* Grouped Round Accordions (Antigravity VS Code Style) */}
+                  {roundGroups.map((group) => {
+                    const isExpanded = expandedRounds[group.round] ?? true;
+                    const roundMessages = applyTimelineFilter(group.messages);
+                    const isRoundStreaming = activeStreamingEntry && group.round === activeMeta?.currentRound && isRunning;
+
+                    if (roundMessages.length === 0 && !isRoundStreaming && group.round > (activeMeta?.currentRound || 1)) {
+                      return null; // Don't show empty future rounds
+                    }
 
                     return (
                       <div
-                        key={msg.id || idx}
-                        className={`p-4 rounded-xl border transition-all ${
-                          isHuman
-                            ? 'bg-teal-950/20 border-teal-500/40 shadow-sm'
-                            : 'bg-slate-900/70 border-slate-800 shadow-sm'
-                        }`}
+                        key={group.round}
+                        className="rounded-2xl border border-slate-800/90 bg-slate-900/40 overflow-hidden shadow-sm transition-all"
                       >
-                        {/* Message Card Header */}
-                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/60">
-                          <div className="flex items-center gap-2.5">
-                            {/* Avatar */}
-                            <div
-                              className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-inner"
-                              style={{
-                                backgroundColor: isHuman ? '#0d9488' : '#1e293b',
-                                color: isHuman ? '#fff' : '#38bdf8',
-                                border: `2px solid ${isHuman ? '#14b8a6' : '#38bdf8'}`,
-                              }}
+                        {/* Round Accordion Header */}
+                        <div
+                          onClick={() => toggleRound(group.round)}
+                          className="px-4 py-3 bg-slate-900/90 hover:bg-slate-900 cursor-pointer flex items-center justify-between border-b border-slate-800/80 select-none transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              className="text-slate-400 hover:text-slate-200 transition-transform"
                             >
-                              {isHuman ? <User size={13} /> : <Bot size={13} />}
-                            </div>
+                              {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                            </button>
 
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-slate-100">
-                                  {isHuman ? 'Human Facilitator (You)' : msg.authorAgentId}
-                                </span>
-                                <span
-                                  className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${getRoleBadgeStyle(
-                                    msg.authorRole
-                                  )}`}
-                                >
-                                  {msg.authorRole || 'Agent'}
-                                </span>
-                                {msg.authorProvider && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
-                                    {msg.authorProvider}
-                                  </span>
-                                )}
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  group.isDone
+                                    ? 'bg-emerald-400'
+                                    : group.isCurrent && isRunning
+                                    ? 'bg-amber-400 animate-ping'
+                                    : 'bg-slate-600'
+                                }`}
+                              />
+                              <h3 className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                                <span>{group.title}</span>
+                              </h3>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                            <span className="px-1.5 py-0.5 rounded bg-slate-800/80 font-mono">
-                              Round {msg.roundNumber} &bull; Turn {msg.turnIndex || 1}
+                          <div className="flex items-center gap-2.5 text-[11px] text-slate-400">
+                            <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
+                              {roundMessages.length} {roundMessages.length === 1 ? 'turn' : 'turns'}
                             </span>
-                            {msg.tokenUsage && (
+                            {group.totalTokens > 0 && (
                               <span className="font-mono text-slate-500">
-                                {msg.tokenUsage.totalTokens.toLocaleString()} tokens
+                                {group.totalTokens.toLocaleString()} tokens
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Markdown Content */}
-                        <div
-                          className="text-xs text-slate-300 leading-relaxed prose prose-invert max-w-none prose-pre:bg-slate-950 prose-pre:border prose-pre:border-slate-800 prose-headings:text-slate-100 prose-a:text-sky-400"
-                          dangerouslySetInnerHTML={{
-                            __html: markdownService.render(msg.content),
-                          }}
-                        />
+                        {/* Round Body (Collapsible Action Items) */}
+                        {isExpanded && (
+                          <div className="p-3.5 space-y-3 bg-slate-950/40">
+                            {roundMessages.length === 0 && !isRoundStreaming ? (
+                              <div className="p-4 text-center text-slate-600 text-xs italic">
+                                Waiting for phase deliberation to dispatch...
+                              </div>
+                            ) : (
+                              roundMessages.map((msg: DiscussionMessage) => {
+                                const isHuman = msg.messageKind === 'user_intervention' || msg.authorAgentId === 'human-user';
+                                const isTurnExpanded = expandedTurns[msg.id] ?? false;
+                                const snippet = getMessageSnippet(msg.content);
+
+                                return (
+                                  <div
+                                    key={msg.id}
+                                    className={`rounded-xl border transition-all ${
+                                      isHuman
+                                        ? 'bg-teal-950/20 border-teal-500/40 shadow-sm'
+                                        : isTurnExpanded
+                                        ? 'bg-slate-900/80 border-slate-700/80 shadow-md'
+                                        : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
+                                    }`}
+                                  >
+                                    {/* Action Turn Header */}
+                                    <div
+                                      onClick={() => toggleTurn(msg.id)}
+                                      className="p-3 cursor-pointer flex items-center justify-between gap-3 select-none"
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        {/* Status Icon */}
+                                        <div className="shrink-0 text-emerald-400">
+                                          <CheckCircle2 size={15} />
+                                        </div>
+
+                                        {/* Avatar */}
+                                        <div
+                                          className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-inner"
+                                          style={{
+                                            backgroundColor: isHuman ? '#0d9488' : '#1e293b',
+                                            color: isHuman ? '#fff' : '#38bdf8',
+                                            border: `2px solid ${isHuman ? '#14b8a6' : '#38bdf8'}`,
+                                          }}
+                                        >
+                                          {isHuman ? <User size={12} /> : <Bot size={12} />}
+                                        </div>
+
+                                        {/* Name & Role */}
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className="text-xs font-bold text-slate-100 truncate">
+                                            {isHuman ? 'Human Facilitator (You)' : msg.authorAgentId}
+                                          </span>
+                                          <span
+                                            className={`text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider ${getRoleBadgeStyle(
+                                              msg.authorRole
+                                            )}`}
+                                          >
+                                            {msg.authorRole || 'Agent'}
+                                          </span>
+                                          {msg.authorProvider && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 font-mono hidden sm:inline-block">
+                                              {msg.authorProvider}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Right Metrics & Expand Chevron */}
+                                      <div className="flex items-center gap-3 shrink-0 text-[11px] text-slate-400">
+                                        {msg.tokenUsage && (
+                                          <span className="font-mono text-slate-500 hidden sm:inline">
+                                            {msg.tokenUsage.totalTokens.toLocaleString()} tokens
+                                          </span>
+                                        )}
+                                        <button
+                                          type="button"
+                                          className="text-slate-400 hover:text-slate-200"
+                                        >
+                                          {isTurnExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Folded Snippet (Clean 1-line overview) */}
+                                    {!isTurnExpanded && (
+                                      <div
+                                        onClick={() => toggleTurn(msg.id)}
+                                        className="px-3 pb-3 text-xs text-slate-400 line-clamp-1 pl-11 cursor-pointer hover:text-slate-300"
+                                      >
+                                        {snippet}
+                                      </div>
+                                    )}
+
+                                    {/* Expanded Full Markdown Body */}
+                                    {isTurnExpanded && (
+                                      <div className="px-4 pb-4 pt-1 border-t border-slate-800/60 pl-11 space-y-3">
+                                        <div
+                                          className="text-xs text-slate-200 leading-relaxed prose prose-invert max-w-none prose-pre:bg-slate-950 prose-pre:border prose-pre:border-slate-800 prose-headings:text-slate-100 prose-table:border prose-table:border-slate-800"
+                                          dangerouslySetInnerHTML={{
+                                            __html: markdownService.render(msg.content),
+                                          }}
+                                        />
+
+                                        {/* Action Bar inside Expanded Turn */}
+                                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/40 text-[11px]">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleCopyTurn(msg.id, msg.content);
+                                            }}
+                                            className="flex items-center gap-1 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                                          >
+                                            {copiedTurnId === msg.id ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                                            <span>{copiedTurnId === msg.id ? 'Copied' : 'Copy Turn'}</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleQuoteInGuidance(msg.authorAgentId, snippet);
+                                            }}
+                                            className="flex items-center gap-1 px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 transition-colors"
+                                            title="Quote this agent's point into your guidance input"
+                                          >
+                                            <Quote size={11} />
+                                            <span>Quote Point</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+
+                            {/* Active Streaming Turn Card (Rendered neatly under the current round!) */}
+                            {isRoundStreaming && activeStreamingEntry && (
+                              <div className="rounded-xl border border-sky-500/50 bg-sky-950/20 p-4 space-y-3 shadow-lg animate-fadeIn">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2.5 text-xs font-bold text-sky-400">
+                                    <Sparkles size={14} className="animate-spin text-sky-400" />
+                                    <span>Deliberating: {activeStreamingEntry[0]}...</span>
+                                  </div>
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold animate-pulse">
+                                    LIVE IN PROGRESS
+                                  </span>
+                                </div>
+                                <div className="text-xs text-slate-200 font-mono whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto p-2.5 rounded-lg bg-slate-950/80 border border-slate-800">
+                                  {String(activeStreamingEntry[1])}
+                                  <span className="inline-block w-2 h-3.5 bg-sky-400 ml-1 animate-pulse" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
 
-                  {/* Streaming Chunk Indicator */}
-                  {Object.entries(streamingChunks).map(([key, chunk]) => (
-                    <div
-                      key={key}
-                      className="p-4 rounded-xl bg-sky-950/25 border border-sky-500/40 space-y-2 animate-pulse"
-                    >
-                      <div className="flex items-center gap-2 text-sky-400 text-xs font-bold">
-                        <Sparkles size={14} className="animate-spin" />
-                        <span>Deliberating: {key}...</span>
-                      </div>
-                      <div className="text-xs text-slate-300 font-mono whitespace-pre-wrap">
-                        {String(chunk)}
-                      </div>
-                    </div>
-                  ))}
-
                   {/* Paused for Human Turn / Review Banner */}
                   {activeMeta.status === 'paused' && (
-                    <div className="p-4 rounded-xl bg-amber-950/25 border border-amber-500/40 flex items-center justify-between gap-3">
+                    <div className="p-4 rounded-xl bg-amber-950/25 border border-amber-500/40 flex items-center justify-between gap-3 shadow-md">
                       <div className="flex items-center gap-2.5">
                         <Pause size={16} className="text-amber-400 shrink-0" />
                         <div>
@@ -931,14 +1226,14 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                             Deliberation Paused for Human Review
                           </div>
                           <div className="text-[11px] text-slate-400 mt-0.5">
-                            You can inject guidance below or continue to hear from the next agent.
+                            You can review the proposals above, inject guidance below, or click Next Turn to hear from the next agent.
                           </div>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => resumeCurrentDiscussion(resolvedWorkspace)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-colors shadow-sm shrink-0"
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
                       >
                         <FastForward size={13} />
                         <span>Continue Next Turn</span>
@@ -1053,7 +1348,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
               {/* Persistent Human-in-the-Loop Guidance Input Bar (Pinned at bottom of timeline) */}
               {activeTab === 'timeline' && (
-                <div className="p-3 border-t border-slate-800 bg-slate-900/80 backdrop-blur-sm">
+                <div className="p-3 border-t border-slate-800 bg-slate-900/90 backdrop-blur-sm">
                   <div className="max-w-4xl mx-auto flex items-center gap-2">
                     <input
                       type="text"

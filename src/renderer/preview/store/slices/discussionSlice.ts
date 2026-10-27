@@ -82,6 +82,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
   startNewDiscussion: async (config: DiscussionConfig) => {
     if (!window.electronAPI?.startDiscussion) return;
     try {
+      (window as any)._flymd_last_workspace = config.workspacePath;
       set({
         activeSessionId: config.sessionId,
         isDiscussionRunning: true,
@@ -114,6 +115,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     const { activeSessionId } = get();
     if (!activeSessionId || !window.electronAPI?.resumeDiscussion) return;
     try {
+      (window as any)._flymd_last_workspace = workspacePath;
       set({ isDiscussionRunning: true, discussionError: null });
       const meta = await window.electronAPI.resumeDiscussion(activeSessionId, workspacePath);
       set({ activeDiscussionMeta: meta });
@@ -210,55 +212,72 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
       return;
     }
 
+    const workspace = (window as any)._flymd_last_workspace;
+    const sessionId = payload.session_id || activeSessionId;
+
     switch (event.type) {
       case 'StatusChanged': {
         const newStatus = payload.new_status;
         set((state) => ({
           isDiscussionRunning: newStatus === 'running',
+          streamingChunks: newStatus !== 'running' ? {} : state.streamingChunks,
           activeDiscussionMeta: state.activeDiscussionMeta
             ? { ...state.activeDiscussionMeta, status: newStatus }
             : null,
         }));
-        // If state changed to awaiting_review or completed, try loading latest report
-        if (newStatus === 'awaiting_review' || newStatus === 'completed') {
-          const meta = get().activeDiscussionMeta;
-          const sessionId = get().activeSessionId;
-          const workspace = (window as any)._flymd_last_workspace;
-          if (sessionId && meta && workspace) {
-            get().loadReport(workspace, sessionId, meta.latestReportVersion || 1);
-          }
+
+        if (workspace && sessionId && window.electronAPI) {
+          window.electronAPI.getDiscussionMetadata(workspace, sessionId).then((meta) => {
+            if (meta) {
+              set({ activeDiscussionMeta: meta });
+              if ((newStatus === 'awaiting_review' || newStatus === 'completed') && meta.latestReportVersion > 0) {
+                get().loadReport(workspace, sessionId, meta.latestReportVersion);
+              }
+            }
+          }).catch(console.error);
+          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
+            if (transcript) set({ activeTranscript: transcript });
+          }).catch(console.error);
+          window.electronAPI.listDiscussions(workspace).then((list) => {
+            if (list) set({ discussions: list });
+          }).catch(console.error);
         }
+        break;
+      }
+      case 'TurnStarted': {
+        const key = `r${payload.round}-${payload.agent_id}`;
+        // Reset chunk for newly started turn
+        set((state) => {
+          const next = { ...state.streamingChunks };
+          delete next[key];
+          return { streamingChunks: next };
+        });
         break;
       }
       case 'TurnPausedForHuman': {
         set((state) => ({
           isDiscussionRunning: false,
+          streamingChunks: {},
           activeDiscussionMeta: state.activeDiscussionMeta
             ? { ...state.activeDiscussionMeta, status: 'paused' }
             : null,
         }));
+        if (workspace && sessionId && window.electronAPI) {
+          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
+            if (transcript) set({ activeTranscript: transcript });
+          }).catch(console.error);
+          window.electronAPI.getDiscussionMetadata(workspace, sessionId).then((meta) => {
+            if (meta) set({ activeDiscussionMeta: meta });
+          }).catch(console.error);
+        }
         break;
       }
       case 'GuidanceInjected': {
-        const guidanceMsg: DiscussionMessage = {
-          id: `guidance-${Date.now()}`,
-          sessionId: payload.session_id,
-          roundNumber: payload.round,
-          turnIndex: 0,
-          authorAgentId: 'human-user',
-          authorRole: 'Human Facilitator',
-          authorProvider: 'manual',
-          messageKind: 'user_intervention',
-          targetPeerIds: [],
-          content: payload.content,
-          timestamp: Date.now(),
-          tokenUsage: undefined,
-          durationMs: 0,
-          truncated: false,
-        };
-        set((state) => ({
-          activeTranscript: [...state.activeTranscript, guidanceMsg],
-        }));
+        if (workspace && sessionId && window.electronAPI) {
+          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
+            if (transcript) set({ activeTranscript: transcript });
+          }).catch(console.error);
+        }
         break;
       }
       case 'TurnChunk': {
@@ -273,45 +292,39 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
       }
       case 'TurnCompleted': {
         const key = `r${payload.round}-${payload.agent_id}`;
-        const chunkContent = get().streamingChunks[key] || '';
-        const newMsg: DiscussionMessage = {
-          id: payload.message_id || `msg-${Date.now()}`,
-          sessionId: payload.session_id,
-          roundNumber: payload.round,
-          turnIndex: 0,
-          authorAgentId: payload.agent_id,
-          authorRole: '',
-          authorProvider: '',
-          messageKind:
-            payload.round === 1
-              ? 'initial_analysis'
-              : payload.round === 2
-              ? 'peer_critique'
-              : 'rebuttal_revision',
-          targetPeerIds: [],
-          content: chunkContent,
-          timestamp: Date.now(),
-          tokenUsage: payload.usage,
-          durationMs: 0,
-          truncated: false,
-        };
-
+        // Clear completed turn from streaming chunks so it does not persist on screen as an active box!
         set((state) => {
-          const exists = state.activeTranscript.some((m) => m.id === newMsg.id);
-          return {
-            activeTranscript: exists
-              ? state.activeTranscript
-              : [...state.activeTranscript, newMsg],
-          };
+          const nextChunks = { ...state.streamingChunks };
+          delete nextChunks[key];
+          return { streamingChunks: nextChunks };
         });
+
+        // Immediately refresh official transcript & metadata from durable backend
+        if (workspace && sessionId && window.electronAPI) {
+          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
+            if (transcript) set({ activeTranscript: transcript });
+          }).catch(console.error);
+          window.electronAPI.getDiscussionMetadata(workspace, sessionId).then((meta) => {
+            if (meta) set({ activeDiscussionMeta: meta });
+          }).catch(console.error);
+          window.electronAPI.listDiscussions(workspace).then((list) => {
+            if (list) set({ discussions: list });
+          }).catch(console.error);
+        }
         break;
       }
       case 'RoundCompleted': {
-        set((state) => ({
-          activeDiscussionMeta: state.activeDiscussionMeta
-            ? { ...state.activeDiscussionMeta, currentRound: payload.round }
-            : null,
-        }));
+        if (workspace && sessionId && window.electronAPI) {
+          window.electronAPI.getDiscussionMetadata(workspace, sessionId).then((meta) => {
+            if (meta) set({ activeDiscussionMeta: meta });
+          }).catch(console.error);
+          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
+            if (transcript) set({ activeTranscript: transcript });
+          }).catch(console.error);
+          window.electronAPI.listDiscussions(workspace).then((list) => {
+            if (list) set({ discussions: list });
+          }).catch(console.error);
+        }
         break;
       }
     }
