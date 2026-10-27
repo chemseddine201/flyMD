@@ -40,6 +40,23 @@ impl DiscussionEventListener for TauriDiscussionListener {
     }
 }
 
+fn check_tcp_port_alive(url_str: &str, default_port: u16) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url_str) else {
+        return false;
+    };
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    let port = parsed.port().unwrap_or(default_port);
+    use std::net::{TcpStream, ToSocketAddrs};
+    format!("{}:{}", host, port)
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut addrs| addrs.next())
+        .map(|addr| TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(80)).is_ok())
+        .unwrap_or(false)
+}
+
 fn resolve_executable(name: &str) -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -93,7 +110,7 @@ pub struct AvailableProviderInfo {
     pub provider_type: String,
     pub available: bool,
     pub description: String,
-    #[serde(rename = "defaultModel")]
+    #[serde(rename = "model", alias = "defaultModel")]
     pub default_model: String,
     #[serde(rename = "supportsThinking")]
     pub supports_thinking: bool,
@@ -271,7 +288,8 @@ pub fn cmd_get_available_providers(
         .map(|p| p.exists())
         .unwrap_or_else(|| resolve_executable("agy").is_some());
 
-    let ollama_configured = !settings.ollama_url.trim().is_empty();
+    let ollama_configured = !settings.ollama_url.trim().is_empty()
+        && check_tcp_port_alive(&settings.ollama_url, 11434);
     let http_configured = !settings.llm_config.endpoint_url.trim().is_empty();
     let deepseek_has_key = creds.get("deepseek").and_then(|c| c.api_key.as_ref()).is_some()
         || settings.llm_config.api_key.as_ref().map(|k| !k.trim().is_empty()).unwrap_or(false);

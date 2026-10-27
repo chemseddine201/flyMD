@@ -680,8 +680,18 @@ impl DiscussionOrchestrator {
                 }
 
                 turn_index += 1;
-                self.execute_agent_turn(participant, current_round, turn_index)
-                    .await?;
+                if let Err(e) = self.execute_agent_turn(participant, current_round, turn_index).await {
+                    let err_str = e.to_string();
+                    self.metadata.error_message = Some(err_str.clone());
+                    let _ = self.transition_status(DiscussionStatus::Failed);
+                    self.release_lock();
+                    self.notify(DiscussionEvent::StatusChanged {
+                        session_id: self.config.session_id.clone(),
+                        new_status: DiscussionStatus::Failed,
+                    });
+                    let _ = save_metadata(&self.session_dir, &self.metadata);
+                    return Err(err_str);
+                }
 
                 // If in step-by-step mode, pause after executing this turn so human can review/intervene
                 if self.step_mode {
@@ -978,7 +988,12 @@ impl DiscussionOrchestrator {
                 Err("Turn cancelled".to_string())
             }
             Err(e) => {
-                let err_str = e.to_string();
+                let err_str = match &e {
+                    ProviderError::NetworkError(msg) if msg.contains("connection error") || msg.contains("11434") || msg.contains("refused") => {
+                        format!("Failed to connect to local engine ({}). Ensure service is running or switch Preset Engine to 'Local Adaptive Reasoner'.", msg)
+                    }
+                    other => other.to_string(),
+                };
                 self.notify(DiscussionEvent::TurnFailed {
                     session_id: self.config.session_id.clone(),
                     round,

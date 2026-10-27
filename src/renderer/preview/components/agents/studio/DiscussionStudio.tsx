@@ -353,7 +353,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const [turnTimeoutSecs, setTurnTimeoutSecs] = useState(120);
   const [newDebateMode, setNewDebateMode] = useState<'preset' | 'custom'>('preset');
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>('architecture');
-  const [presetEngine, setPresetEngine] = useState<string>('auto');
+  const [presetEngine, setPresetEngine] = useState<string>('mock');
   const [enableStepModeInNew, setEnableStepModeInNew] = useState(false);
   const [customParticipants, setCustomParticipants] = useState<DiscussionParticipant[]>(
     () => PRESET_TEMPLATES.architecture.participants
@@ -1121,11 +1121,13 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
             </div>
 
             {/* Error Banner */}
-            {discussionError && (
-              <div className="px-4 py-2 bg-rose-500/15 border-b border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert size={14} className="shrink-0" />
-                  <span className="font-mono">{discussionError}</span>
+            {(discussionError || (activeMeta?.status === 'failed' ? activeMeta?.errorMessage : null)) && (
+              <div className="px-4 py-3 bg-rose-500/15 border-b border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-3 shadow-inner">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ShieldAlert size={15} className="shrink-0 text-rose-400" />
+                  <span className="font-mono text-[11px] leading-relaxed break-words">
+                    {discussionError || activeMeta?.errorMessage}
+                  </span>
                 </div>
               </div>
             )}
@@ -1868,8 +1870,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                         onChange={(e) => setPresetEngine(e.target.value)}
                         className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium"
                       >
+                        <option value="mock">Local Adaptive Reasoner (Zero API Cost, Built-in) ✓</option>
                         <option value="auto">⚡ Auto-detect Best Engine</option>
-                        <option value="mock">Local Adaptive Reasoner (Simulated)</option>
                         {availableProviders
                           .filter((ap) => ap.id !== 'mock')
                           .map((ap) => (
