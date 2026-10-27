@@ -272,6 +272,9 @@ pub fn run() {
             cmd_get_discussion_metadata,
             cmd_get_discussion_report,
             cmd_list_discussions,
+            cmd_delete_discussion,
+            cmd_clear_all_discussions,
+            cmd_set_discussion_step_mode,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

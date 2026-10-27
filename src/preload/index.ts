@@ -218,6 +218,12 @@ const electronAPI = {
     ipcRenderer.invoke('discussion:get-report', workspacePath, sessionId, version),
   listDiscussions: (workspacePath: string): Promise<DiscussionMetadata[]> =>
     ipcRenderer.invoke('discussion:list', workspacePath),
+  deleteDiscussion: (workspacePath: string, sessionId: string): Promise<void> =>
+    ipcRenderer.invoke('discussion:delete', workspacePath, sessionId),
+  clearAllDiscussions: (workspacePath: string): Promise<number> =>
+    ipcRenderer.invoke('discussion:clear-all', workspacePath),
+  setDiscussionStepMode: (workspacePath: string, sessionId: string, enabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('discussion:set-step-mode', workspacePath, sessionId, enabled),
   onDiscussionEvent: (callback: (event: any) => void) => {
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on('discussion:event', handler);

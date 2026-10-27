@@ -240,6 +240,7 @@ pub async fn cmd_resume_discussion(
                 turn_timeout_secs: 120,
                 participants: Vec::new(),
                 active_skill_uris: Vec::new(),
+                step_mode: false,
             };
             let providers = build_provider_map(&base_config, manager.client.clone());
             let mut recovered = DiscussionOrchestrator::recover(
@@ -388,4 +389,110 @@ pub fn cmd_list_discussions(workspace_path: String) -> Result<Vec<DiscussionMeta
 
     list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     Ok(list)
+}
+
+#[tauri::command]
+pub async fn cmd_delete_discussion(
+    manager: tauri::State<'_, SharedDiscussionManager>,
+    workspace_path: String,
+    session_id: String,
+) -> Result<(), String> {
+    // 1. Cancel and remove active orchestrator if present
+    {
+        let mut active = manager.active_orchestrators.lock().await;
+        if let Some(orch_arc) = active.remove(&session_id) {
+            let mut guard = orch_arc.lock().await;
+            let _ = guard.cancel();
+        }
+    }
+
+    // 2. Remove session directory from disk
+    let session_dir = Path::new(&workspace_path)
+        .join(".flymd")
+        .join("discussions")
+        .join(&session_id);
+
+    if session_dir.exists() {
+        let lock_path = session_dir.join(".session.lock");
+        if lock_path.exists() {
+            let _ = fs::remove_file(&lock_path);
+        }
+
+        fs::remove_dir_all(&session_dir)
+            .map_err(|e| format!("Failed to delete discussion directory: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cmd_clear_all_discussions(
+    manager: tauri::State<'_, SharedDiscussionManager>,
+    workspace_path: String,
+) -> Result<usize, String> {
+    // 1. Cancel and clear all active orchestrators
+    {
+        let mut active = manager.active_orchestrators.lock().await;
+        for (_, orch_arc) in active.drain() {
+            let mut guard = orch_arc.lock().await;
+            let _ = guard.cancel();
+        }
+    }
+
+    // 2. Remove all session directories from disk
+    let base_dir = Path::new(&workspace_path)
+        .join(".flymd")
+        .join("discussions");
+
+    let mut count = 0;
+    if base_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&base_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let lock_path = path.join(".session.lock");
+                    if lock_path.exists() {
+                        let _ = fs::remove_file(&lock_path);
+                    }
+                    if fs::remove_dir_all(&path).is_ok() {
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(count)
+}
+
+#[tauri::command]
+pub async fn cmd_set_discussion_step_mode(
+    manager: tauri::State<'_, SharedDiscussionManager>,
+    workspace_path: String,
+    session_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let active = manager.active_orchestrators.lock().await;
+    if let Some(orch_arc) = active.get(&session_id) {
+        let mut guard = orch_arc.lock().await;
+        guard.set_step_mode(enabled);
+        Ok(())
+    } else {
+        let config_path = Path::new(&workspace_path)
+            .join(".flymd")
+            .join("discussions")
+            .join(&session_id)
+            .join("config.json");
+        if config_path.exists() {
+            let bytes =
+                fs::read(&config_path).map_err(|e| format!("Failed to read config.json: {}", e))?;
+            let mut config: DiscussionConfig = serde_json::from_slice(&bytes)
+                .map_err(|e| format!("Failed to parse config.json: {}", e))?;
+            config.step_mode = enabled;
+            super::storage::atomic_write_json(&config_path, &config)?;
+            Ok(())
+        } else {
+            Err(format!("Discussion session not found: {}", session_id))
+        }
+    }
 }

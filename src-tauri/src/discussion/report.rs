@@ -332,6 +332,7 @@ mod tests {
                 context_budget_tokens: 16000,
             }],
             active_skill_uris: Vec::new(),
+            step_mode: false,
         };
 
         let mut metadata = DiscussionMetadata {

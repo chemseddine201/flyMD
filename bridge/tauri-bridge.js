@@ -328,6 +328,24 @@
     listDiscussions: function (workspacePath) {
       return invoke('cmd_list_discussions', { workspacePath: workspacePath });
     },
+    deleteDiscussion: function (workspacePath, sessionId) {
+      return invoke('cmd_delete_discussion', {
+        workspacePath: workspacePath,
+        sessionId: sessionId,
+      });
+    },
+    clearAllDiscussions: function (workspacePath) {
+      return invoke('cmd_clear_all_discussions', {
+        workspacePath: workspacePath,
+      });
+    },
+    setDiscussionStepMode: function (workspacePath, sessionId, enabled) {
+      return invoke('cmd_set_discussion_step_mode', {
+        workspacePath: workspacePath,
+        sessionId: sessionId,
+        enabled: enabled,
+      });
+    },
     onDiscussionEvent: makeEventListener('discussion:event'),
     onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
     onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),

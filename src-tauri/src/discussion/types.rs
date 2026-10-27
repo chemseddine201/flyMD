@@ -194,6 +194,8 @@ pub struct DiscussionConfig {
     pub participants: Vec<DiscussionParticipant>,
     #[serde(rename = "activeSkillUris", default)]
     pub active_skill_uris: Vec<String>,
+    #[serde(rename = "stepMode", default)]
+    pub step_mode: bool,
 }
 
 fn default_schema_version() -> u32 {

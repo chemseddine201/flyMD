@@ -93,6 +93,7 @@ export interface DiscussionConfig {
   turnTimeoutSecs: number;
   participants: DiscussionParticipant[];
   activeSkillUris?: string[];
+  stepMode?: boolean;
 }
 
 export interface DiscussionMetadata {

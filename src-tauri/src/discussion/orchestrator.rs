@@ -59,6 +59,11 @@ pub enum DiscussionEvent {
         agent_id: String,
         error: String,
     },
+    TurnPausedForHuman {
+        session_id: String,
+        round: u32,
+        agent_id: String,
+    },
     GuidanceInjected {
         session_id: String,
         round: u32,
@@ -100,6 +105,7 @@ pub struct DiscussionOrchestrator {
     pause_flag: Arc<AtomicBool>,
     lock: Option<SessionLock>,
     event_listener: Option<Arc<dyn DiscussionEventListener>>,
+    pub step_mode: bool,
 }
 
 impl DiscussionOrchestrator {
@@ -142,6 +148,8 @@ impl DiscussionOrchestrator {
 
         let memory = MemoryManager::new(session_dir.clone());
 
+        let step_mode = config.step_mode;
+
         Ok(Self {
             config,
             metadata,
@@ -152,6 +160,7 @@ impl DiscussionOrchestrator {
             pause_flag: Arc::new(AtomicBool::new(false)),
             lock: None,
             event_listener: None,
+            step_mode,
         })
     }
 
@@ -209,6 +218,8 @@ impl DiscussionOrchestrator {
 
         save_metadata(&session_dir, &metadata)?;
 
+        let step_mode = config.step_mode;
+
         Ok(Self {
             config,
             metadata,
@@ -219,12 +230,21 @@ impl DiscussionOrchestrator {
             pause_flag: Arc::new(AtomicBool::new(false)),
             lock: None,
             event_listener: None,
+            step_mode,
         })
     }
 
     /// Attaches an event listener for live UI or test monitoring.
     pub fn set_event_listener(&mut self, listener: Arc<dyn DiscussionEventListener>) {
         self.event_listener = Some(listener);
+    }
+
+    /// Sets human-in-the-loop step mode.
+    pub fn set_step_mode(&mut self, enabled: bool) {
+        self.step_mode = enabled;
+        self.config.step_mode = enabled;
+        let config_path = self.session_dir.join("config.json");
+        let _ = atomic_write_json(&config_path, &self.config);
     }
 
     fn notify(&self, event: DiscussionEvent) {
@@ -421,16 +441,47 @@ impl DiscussionOrchestrator {
                 return Ok(DiscussionStatus::Paused);
             }
 
-            self.notify(DiscussionEvent::RoundStarted {
-                session_id: self.config.session_id.clone(),
-                round: current_round,
-            });
+            // Check which agents have already completed turns in this round
+            let (transcript, _) = read_transcript_with_recovery(&self.session_dir)?;
+            let spoken_agent_ids: Vec<String> = transcript
+                .iter()
+                .filter(|m| m.round_number == current_round)
+                .map(|m| m.author_agent_id.clone())
+                .collect();
+
+            // If all agents have completed turns in current_round:
+            if spoken_agent_ids.len() >= active_participants.len() {
+                if current_round >= self.config.max_rounds {
+                    let generator = super::report::ReportGenerator::new(self.session_dir.clone());
+                    let _ = generator.generate_report(&self.config, &mut self.metadata);
+                    self.transition_status(DiscussionStatus::AwaitingReview)?;
+                    self.release_lock();
+                    return Ok(DiscussionStatus::AwaitingReview);
+                } else {
+                    self.metadata.current_round += 1;
+                    self.metadata.updated_at = now_ms();
+                    save_metadata(&self.session_dir, &self.metadata)?;
+                    continue;
+                }
+            }
+
+            if spoken_agent_ids.is_empty() {
+                self.notify(DiscussionEvent::RoundStarted {
+                    session_id: self.config.session_id.clone(),
+                    round: current_round,
+                });
+            }
 
             // BARRIER SYNCHRONIZATION:
             // All agents in this round are evaluated against the immutable transcript snapshot
             // up to the preceding round, guaranteeing non-bias from response arrival order.
-            let mut turn_index = 0;
+            let mut turn_index = spoken_agent_ids.len() as u32;
             for participant in &active_participants {
+                // If this agent already completed their turn in this round, skip
+                if spoken_agent_ids.contains(&participant.agent_id) {
+                    continue;
+                }
+
                 // Check cancellation
                 if self.cancel_flag.load(Ordering::Relaxed) {
                     self.transition_status(DiscussionStatus::Cancelled)?;
@@ -448,6 +499,23 @@ impl DiscussionOrchestrator {
                 turn_index += 1;
                 self.execute_agent_turn(participant, current_round, turn_index)
                     .await?;
+
+                // If in step-by-step mode, pause after executing this turn so human can review/intervene
+                if self.step_mode {
+                    let is_last_turn_of_final_round = current_round >= self.config.max_rounds
+                        && (turn_index as usize) >= active_participants.len();
+
+                    if !is_last_turn_of_final_round {
+                        self.notify(DiscussionEvent::TurnPausedForHuman {
+                            session_id: self.config.session_id.clone(),
+                            round: current_round,
+                            agent_id: participant.agent_id.clone(),
+                        });
+                        self.transition_status(DiscussionStatus::Paused)?;
+                        self.release_lock();
+                        return Ok(DiscussionStatus::Paused);
+                    }
+                }
             }
 
             // Round completed successfully!
@@ -471,6 +539,8 @@ impl DiscussionOrchestrator {
             }
         }
 
+        let generator = super::report::ReportGenerator::new(self.session_dir.clone());
+        let _ = generator.generate_report(&self.config, &mut self.metadata);
         self.transition_status(DiscussionStatus::AwaitingReview)?;
         self.release_lock();
         Ok(DiscussionStatus::AwaitingReview)
@@ -716,6 +786,7 @@ mod tests {
                 },
             ],
             active_skill_uris: Vec::new(),
+            step_mode: false,
         }
     }
 
@@ -801,6 +872,51 @@ mod tests {
         // Approve and finalize
         orchestrator.approve_and_close().unwrap();
         assert_eq!(orchestrator.metadata.status, DiscussionStatus::Completed);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_step_by_step_mode_and_turn_progression() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_step_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let mut config = build_test_config(&temp_dir);
+        config.max_rounds = 1;
+        config.step_mode = true; // Enable step mode
+
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(MockProvider::new("mock")));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config, providers).unwrap();
+
+        // 1st step: runs first agent, then pauses
+        let status1 = orchestrator.run_discussion().await.unwrap();
+        assert_eq!(status1, DiscussionStatus::Paused);
+        let (transcript1, _) = read_transcript_with_recovery(&orchestrator.session_dir).unwrap();
+        assert_eq!(transcript1.len(), 1);
+        assert_eq!(transcript1[0].author_agent_id, "agent-architect");
+
+        // 2nd step: resume to run second agent, then pauses
+        let status2 = orchestrator.run_discussion().await.unwrap();
+        assert_eq!(status2, DiscussionStatus::Paused);
+        let (transcript2, _) = read_transcript_with_recovery(&orchestrator.session_dir).unwrap();
+        assert_eq!(transcript2.len(), 2);
+        assert_eq!(transcript2[1].author_agent_id, "agent-critic");
+
+        // 3rd step: resume to run third agent. Round 1 completes, reaches final barrier!
+        let status3 = orchestrator.run_discussion().await.unwrap();
+        assert_eq!(status3, DiscussionStatus::AwaitingReview);
+        let (transcript3, _) = read_transcript_with_recovery(&orchestrator.session_dir).unwrap();
+        assert_eq!(transcript3.len(), 3);
+        assert_eq!(transcript3[2].author_agent_id, "agent-implementer");
+
+        // Check report was generated
+        assert!(orchestrator
+            .session_dir
+            .join("reports")
+            .join("final-report-latest.md")
+            .exists());
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

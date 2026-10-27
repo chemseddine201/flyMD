@@ -16,6 +16,7 @@ export interface DiscussionSlice {
   activeReportVersion: number | null;
   isDiscussionRunning: boolean;
   discussionError: string | null;
+  isStepMode: boolean;
 
   loadDiscussions: (workspacePath: string) => Promise<void>;
   selectDiscussion: (workspacePath: string, sessionId: string) => Promise<void>;
@@ -24,6 +25,9 @@ export interface DiscussionSlice {
   resumeCurrentDiscussion: (workspacePath: string) => Promise<void>;
   cancelCurrentDiscussion: () => Promise<void>;
   injectGuidance: (guidance: string) => Promise<void>;
+  deleteDiscussion: (workspacePath: string, sessionId: string) => Promise<void>;
+  clearAllDiscussions: (workspacePath: string) => Promise<void>;
+  setStepMode: (workspacePath: string, sessionId: string, enabled: boolean) => Promise<void>;
   handleDiscussionEvent: (event: any) => void;
   loadReport: (workspacePath: string, sessionId: string, version?: number) => Promise<void>;
 }
@@ -38,10 +42,12 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
   activeReportVersion: null,
   isDiscussionRunning: false,
   discussionError: null,
+  isStepMode: false,
 
   loadDiscussions: async (workspacePath: string) => {
     if (!window.electronAPI?.listDiscussions) return;
     try {
+      (window as any)._flymd_last_workspace = workspacePath;
       const list = await window.electronAPI.listDiscussions(workspacePath);
       set({ discussions: list || [] });
     } catch (e: any) {
@@ -52,6 +58,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
   selectDiscussion: async (workspacePath: string, sessionId: string) => {
     if (!window.electronAPI) return;
     try {
+      (window as any)._flymd_last_workspace = workspacePath;
       set({ activeSessionId: sessionId, discussionError: null, streamingChunks: {} });
       const meta = await window.electronAPI.getDiscussionMetadata(workspacePath, sessionId);
       const transcript = await window.electronAPI.getDiscussionTranscript(workspacePath, sessionId);
@@ -59,6 +66,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         activeDiscussionMeta: meta,
         activeTranscript: transcript || [],
         isDiscussionRunning: meta?.status === 'running',
+        isStepMode: (meta as any)?.stepMode ?? false,
       });
       // Load latest report if completed or awaiting review
       if (meta?.latestReportVersion && meta.latestReportVersion > 0) {
@@ -81,6 +89,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         activeTranscript: [],
         streamingChunks: {},
         activeReportMarkdown: null,
+        isStepMode: !!config.stepMode,
       });
       const meta = await window.electronAPI.startDiscussion(config);
       set({ activeDiscussionMeta: meta });
@@ -136,6 +145,62 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     }
   },
 
+  deleteDiscussion: async (workspacePath: string, sessionId: string) => {
+    if (!window.electronAPI?.deleteDiscussion) return;
+    try {
+      await window.electronAPI.deleteDiscussion(workspacePath, sessionId);
+      set((state) => {
+        const nextDiscussions = state.discussions.filter((d) => d.sessionId !== sessionId);
+        const isCurrent = state.activeSessionId === sessionId;
+        return {
+          discussions: nextDiscussions,
+          activeSessionId: isCurrent ? null : state.activeSessionId,
+          activeDiscussionMeta: isCurrent ? null : state.activeDiscussionMeta,
+          activeTranscript: isCurrent ? [] : state.activeTranscript,
+          streamingChunks: isCurrent ? {} : state.streamingChunks,
+          activeReportMarkdown: isCurrent ? null : state.activeReportMarkdown,
+          activeReportVersion: isCurrent ? null : state.activeReportVersion,
+          isDiscussionRunning: isCurrent ? false : state.isDiscussionRunning,
+        };
+      });
+    } catch (e: any) {
+      console.error('[DiscussionSlice] Failed to delete discussion:', e);
+      set({ discussionError: String(e) });
+    }
+  },
+
+  clearAllDiscussions: async (workspacePath: string) => {
+    if (!window.electronAPI?.clearAllDiscussions) return;
+    try {
+      await window.electronAPI.clearAllDiscussions(workspacePath);
+      set({
+        discussions: [],
+        activeSessionId: null,
+        activeDiscussionMeta: null,
+        activeTranscript: [],
+        streamingChunks: {},
+        activeReportMarkdown: null,
+        activeReportVersion: null,
+        isDiscussionRunning: false,
+        discussionError: null,
+      });
+    } catch (e: any) {
+      console.error('[DiscussionSlice] Failed to clear all discussions:', e);
+      set({ discussionError: String(e) });
+    }
+  },
+
+  setStepMode: async (workspacePath: string, sessionId: string, enabled: boolean) => {
+    set({ isStepMode: enabled });
+    if (window.electronAPI?.setDiscussionStepMode) {
+      try {
+        await window.electronAPI.setDiscussionStepMode(workspacePath, sessionId, enabled);
+      } catch (e: any) {
+        console.warn('[DiscussionSlice] Failed to persist step mode:', e);
+      }
+    }
+  },
+
   handleDiscussionEvent: (event: any) => {
     if (!event || !event.type) return;
     const { activeSessionId } = get();
@@ -153,6 +218,46 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
           activeDiscussionMeta: state.activeDiscussionMeta
             ? { ...state.activeDiscussionMeta, status: newStatus }
             : null,
+        }));
+        // If state changed to awaiting_review or completed, try loading latest report
+        if (newStatus === 'awaiting_review' || newStatus === 'completed') {
+          const meta = get().activeDiscussionMeta;
+          const sessionId = get().activeSessionId;
+          const workspace = (window as any)._flymd_last_workspace;
+          if (sessionId && meta && workspace) {
+            get().loadReport(workspace, sessionId, meta.latestReportVersion || 1);
+          }
+        }
+        break;
+      }
+      case 'TurnPausedForHuman': {
+        set((state) => ({
+          isDiscussionRunning: false,
+          activeDiscussionMeta: state.activeDiscussionMeta
+            ? { ...state.activeDiscussionMeta, status: 'paused' }
+            : null,
+        }));
+        break;
+      }
+      case 'GuidanceInjected': {
+        const guidanceMsg: DiscussionMessage = {
+          id: `guidance-${Date.now()}`,
+          sessionId: payload.session_id,
+          roundNumber: payload.round,
+          turnIndex: 0,
+          authorAgentId: 'human-user',
+          authorRole: 'Human Facilitator',
+          authorProvider: 'manual',
+          messageKind: 'user_intervention',
+          targetPeerIds: [],
+          content: payload.content,
+          timestamp: Date.now(),
+          tokenUsage: undefined,
+          durationMs: 0,
+          truncated: false,
+        };
+        set((state) => ({
+          activeTranscript: [...state.activeTranscript, guidanceMsg],
         }));
         break;
       }
