@@ -54,6 +54,9 @@ export interface AgentToolAction {
   targetPath?: string;
   status: 'running' | 'done' | 'error';
   timestamp: number;
+  command?: string;
+  output?: string;
+  durationMs?: number;
 }
 
 export interface AgentProfile {

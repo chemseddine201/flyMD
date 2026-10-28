@@ -74,6 +74,59 @@ pub struct AgentToolAction {
     pub target_path: Option<String>,
     pub status: String,
     pub timestamp: i64,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub output: Option<String>,
+    #[serde(default, rename = "durationMs")]
+    pub duration_ms: Option<u64>,
+}
+
+impl AgentToolAction {
+    pub fn new(
+        id: String,
+        kind: String,
+        label: String,
+        target_path: Option<String>,
+        status: String,
+        timestamp: i64,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            label,
+            target_path,
+            status,
+            timestamp,
+            command: None,
+            output: None,
+            duration_ms: None,
+        }
+    }
+
+    pub fn with_details(
+        id: String,
+        kind: String,
+        label: String,
+        target_path: Option<String>,
+        status: String,
+        timestamp: i64,
+        command: Option<String>,
+        output: Option<String>,
+        duration_ms: Option<u64>,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            label,
+            target_path,
+            status,
+            timestamp,
+            command,
+            output,
+            duration_ms,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

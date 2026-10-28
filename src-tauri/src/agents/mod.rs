@@ -528,14 +528,14 @@ impl AgentOrchestrator {
             )],
             progress_stage: Some("snapshot".to_string()),
             progress_percent: 20,
-            tool_actions: vec![AgentToolAction {
-                id: format!("tool-init-{}", now_ms()),
-                kind: "handoff".to_string(),
-                label: format!("Prepared Handoff Package `{}`", req.file_name),
-                target_path: Some(handoff_file.to_string_lossy().to_string()),
-                status: "done".to_string(),
-                timestamp: now_ms(),
-            }],
+            tool_actions: vec![AgentToolAction::new(
+                format!("tool-init-{}", now_ms()),
+                "handoff".to_string(),
+                format!("Prepared Handoff Package `{}`", req.file_name),
+                Some(handoff_file.to_string_lossy().to_string()),
+                "done".to_string(),
+                now_ms(),
+            )],
         };
 
         let memory_entry = format!(

@@ -510,14 +510,18 @@ pub fn spawn_agent_execution(
                     "Connected to local {} CLI binary (`{}`). Streaming live response & writing workspace files...",
                     agent_name, bin
                 ));
-                t.tool_actions.push(AgentToolAction {
-                    id: format!("tool-cli-{}", now_ms()),
-                    kind: "cli".to_string(),
-                    label: format!("Running {} CLI in `{}`", agent_name, exec_dir),
-                    target_path: Some(bin.clone()),
-                    status: "running".to_string(),
-                    timestamp: now_ms(),
-                });
+                let prompt_summary = instructions.lines().next().unwrap_or("Execute mission").to_string();
+                t.tool_actions.push(AgentToolAction::with_details(
+                    format!("tool-cli-{}", now_ms()),
+                    "cli".to_string(),
+                    format!("Running {} CLI in `{}`", agent_name, exec_dir),
+                    Some(bin.clone()),
+                    "running".to_string(),
+                    now_ms(),
+                    Some(format!("{} -p \"{}\"", bin, prompt_summary)),
+                    None,
+                    None,
+                ));
             });
 
             let user_context = if !source_markdown.trim().is_empty() && source_markdown.len() < 4000
@@ -733,24 +737,46 @@ pub fn spawn_agent_execution(
                             if last_heartbeat.elapsed() >= Duration::from_secs(2) {
                                 last_heartbeat = std::time::Instant::now();
                                 elapsed_sec += 2;
-                                if current_pct < 74 {
+                                if current_pct < 92 {
                                     current_pct += 1;
                                 }
 
                                 let status_text = match elapsed_sec {
                                     0..=5 => format!("Scanning workspace context & specifications ({}s elapsed)...", elapsed_sec),
-                                    6..=12 => format!("CLI reasoning engine evaluating requirements & invariants ({}s elapsed)...", elapsed_sec),
-                                    13..=22 => format!("Processing AST structures, dependencies & potential failure modes ({}s elapsed)...", elapsed_sec),
-                                    23..=35 => format!("Formulating comprehensive findings & structured synthesis ({}s elapsed)...", elapsed_sec),
-                                    _ => format!("Assembling output report & preparing workspace updates ({}s elapsed)...", elapsed_sec),
+                                    6..=15 => format!("Reasoning engine evaluating requirements ({}s elapsed)...", elapsed_sec),
+                                    16..=30 => format!("Processing AST structures, dependencies & invariants ({}s elapsed)...", elapsed_sec),
+                                    31..=60 => format!("Synthesizing implementation & writing workspace files ({}s elapsed)...", elapsed_sec),
+                                    _ => {
+                                        let mins = elapsed_sec / 60;
+                                        let secs = elapsed_sec % 60;
+                                        format!("Deep synthesis & continuous file generation ({}m {}s elapsed)...", mins, secs)
+                                    }
                                 };
 
+                                let task_started_at = record.started_at.unwrap_or(record.created_at);
                                 emit_log(format!("[CLI Heartbeat {}s] {}", elapsed_sec, status_text));
                                 update_task(&|t| {
                                     t.progress_percent = current_pct;
                                     t.logs.push(format!("[Heartbeat {}s] {}", elapsed_sec, status_text));
-                                    if t.thinking_trace.len() < 10 {
+                                    if t.thinking_trace.len() < 12 {
                                         t.thinking_trace.push(format!("Active: {}", status_text));
+                                    }
+                                    // Periodic live detection of files written to workspace
+                                    if elapsed_sec % 6 == 0 {
+                                        let live_files = scan_workspace_modified_files(&exec_dir, task_started_at);
+                                        for lf in live_files {
+                                            if !t.tool_actions.iter().any(|a| a.label.contains(&lf)) {
+                                                t.tool_actions.push(AgentToolAction::new(
+                                                    format!("tool-code-{}", now_ms()),
+                                                    "write".to_string(),
+                                                    format!("Workspace File `{}`", lf),
+                                                    Some(format!("{}\\{}", exec_dir, lf)),
+                                                    "done".to_string(),
+                                                    now_ms(),
+                                                ));
+                                                t.thinking_trace.push(format!("Live Sync: Generated workspace file `{}`", lf));
+                                            }
+                                        }
                                     }
                                 });
                             }
@@ -775,14 +801,14 @@ pub fn spawn_agent_execution(
                     emit_log(format!("[FlyMD Workspace Sync] Workspace File: `{}`", cf));
                     let cf_clone = cf.clone();
                     update_task(&|t| {
-                        t.tool_actions.push(AgentToolAction {
-                            id: format!("tool-code-{}", now_ms()),
-                            kind: "write".to_string(),
-                            label: format!("Workspace File `{}`", cf_clone),
-                            target_path: Some(format!("{}\\{}", exec_dir, cf_clone)),
-                            status: "done".to_string(),
-                            timestamp: now_ms(),
-                        });
+                        t.tool_actions.push(AgentToolAction::new(
+                            format!("tool-code-{}", now_ms()),
+                            "write".to_string(),
+                            format!("Workspace File `{}`", cf_clone),
+                            Some(format!("{}\\{}", exec_dir, cf_clone)),
+                            "done".to_string(),
+                            now_ms(),
+                        ));
                     });
                 }
 
@@ -799,24 +825,31 @@ pub fn spawn_agent_execution(
                         )
                     };
                     fs::write(&report_file, &report_body).ok();
+                    let duration_ms = (now_ms() - task_started_at).max(0) as u64;
                     update_task(&|t| {
                         for tool in t.tool_actions.iter_mut() {
                             tool.status = "done".to_string();
+                            if tool.kind == "cli" && tool.duration_ms.is_none() {
+                                tool.duration_ms = Some(duration_ms);
+                                if !collected_md.trim().is_empty() {
+                                    tool.output = Some(collected_md.lines().take(20).collect::<Vec<_>>().join("\n"));
+                                }
+                            }
                         }
-                        t.tool_actions.push(AgentToolAction {
-                            id: format!("tool-write-{}", now_ms()),
-                            kind: "write".to_string(),
-                            label: format!(
+                        t.tool_actions.push(AgentToolAction::new(
+                            format!("tool-write-{}", now_ms()),
+                            "write".to_string(),
+                            format!(
                                 "Saved Markdown Report `{}`",
                                 report_file
                                     .file_name()
                                     .unwrap_or_default()
                                     .to_string_lossy()
                             ),
-                            target_path: Some(report_file.to_string_lossy().to_string()),
-                            status: "done".to_string(),
-                            timestamp: now_ms(),
-                        });
+                            Some(report_file.to_string_lossy().to_string()),
+                            "done".to_string(),
+                            now_ms(),
+                        ));
                     });
                     finalize_task(&store, &app, &task_id, "completed", None);
                     return;
@@ -858,20 +891,20 @@ pub fn spawn_agent_execution(
         update_task(&|t| {
             t.progress_stage = Some("executing".to_string());
             t.progress_percent = 78;
-            t.tool_actions.push(AgentToolAction {
-                id: format!("tool-write-{}", now_ms()),
-                kind: "write".to_string(),
-                label: format!(
+            t.tool_actions.push(AgentToolAction::new(
+                format!("tool-write-{}", now_ms()),
+                "write".to_string(),
+                format!(
                     "Synthesizing & Writing Report `{}`",
                     report_file
                         .file_name()
                         .unwrap_or_default()
                         .to_string_lossy()
                 ),
-                target_path: Some(report_file.to_string_lossy().to_string()),
-                status: "running".to_string(),
-                timestamp: now_ms(),
-            });
+                Some(report_file.to_string_lossy().to_string()),
+                "running".to_string(),
+                now_ms(),
+            ));
         });
 
         let mut accumulated_md = String::new();
@@ -899,14 +932,14 @@ pub fn spawn_agent_execution(
         for cf in created_files {
             emit_log(format!("[FlyMD Workspace Sync] Created file: `{}`", cf));
             update_task(&|t| {
-                t.tool_actions.push(AgentToolAction {
-                    id: format!("tool-code-{}", now_ms()),
-                    kind: "write".to_string(),
-                    label: format!("Created Workspace File `{}`", cf),
-                    target_path: Some(format!("{}\\{}", exec_dir, cf)),
-                    status: "done".to_string(),
-                    timestamp: now_ms(),
-                });
+                t.tool_actions.push(AgentToolAction::new(
+                    format!("tool-code-{}", now_ms()),
+                    "write".to_string(),
+                    format!("Created Workspace File `{}`", cf),
+                    Some(format!("{}\\{}", exec_dir, cf)),
+                    "done".to_string(),
+                    now_ms(),
+                ));
             });
         }
 
@@ -916,14 +949,14 @@ pub fn spawn_agent_execution(
             for tool in t.tool_actions.iter_mut() {
                 tool.status = "done".to_string();
             }
-            t.tool_actions.push(AgentToolAction {
-                id: format!("tool-verify-{}", now_ms()),
-                kind: "verify".to_string(),
-                label: "Verified Markdown Report & Updated Shared Memory".to_string(),
-                target_path: Some(report_file.to_string_lossy().to_string()),
-                status: "done".to_string(),
-                timestamp: now_ms(),
-            });
+            t.tool_actions.push(AgentToolAction::new(
+                format!("tool-verify-{}", now_ms()),
+                "verify".to_string(),
+                "Verified Markdown Report & Updated Shared Memory".to_string(),
+                Some(report_file.to_string_lossy().to_string()),
+                "done".to_string(),
+                now_ms(),
+            ));
         });
 
         emit_log(format!(

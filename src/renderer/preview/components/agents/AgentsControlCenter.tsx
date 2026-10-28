@@ -11,6 +11,7 @@ import {
   Check,
   Loader2,
   X,
+  FolderGit2,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import {
@@ -73,6 +74,8 @@ export const AgentsControlCenter: React.FC = () => {
   const [clearingCache, setClearingCache] = useState(false);
   const [cacheNotification, setCacheNotification] = useState<string | null>(null);
   const [studioMode, setStudioMode] = useState<'tasks' | 'discussion'>('tasks');
+  const [workspaceFocusMode, setWorkspaceFocusMode] = useState<'workspace' | 'file'>('workspace');
+  const [focusFilePath, setFocusFilePath] = useState<string>('');
 
   // Track automated multi-step repeater runs
   const [runningPipelineId, setRunningPipelineId] = useState<string | null>(null);
@@ -216,6 +219,18 @@ export const AgentsControlCenter: React.FC = () => {
   };
 
   const resolveCurrentSourceDocument = async (overridePath?: string) => {
+    // Workspace-First Root Architecture: default to entire project workspace unless user pinned a specific file
+    if (workspaceFocusMode === 'workspace' && !overridePath && resolvedWorkspace) {
+      const wsName = resolvedWorkspace.split(/[\\/]/).pop() || 'Project-Workspace';
+      return {
+        filePath: resolvedWorkspace,
+        fileName: `Entire Project (${wsName})`,
+        markdownContent:
+          activeTab?.content ||
+          `# Project Workspace: ${wsName}\n\nManaging full multi-file codebase and system architecture.\n`,
+      };
+    }
+
     // If activeTab is an unsaved Welcome tab and the user has a real .md file in the workspace (e.g. Untitled-1.md), prefer that file
     const userWorkspaceFiles = folderFiles.filter(
       (f) => !f.path.includes('.flymd') && !f.name.startsWith('report-task-')
@@ -227,6 +242,7 @@ export const AgentsControlCenter: React.FC = () => {
 
     const targetPath =
       overridePath ||
+      (workspaceFocusMode === 'file' && focusFilePath ? focusFilePath : '') ||
       selectedSourceFile ||
       activeTab?.filePath ||
       fallbackWorkspaceFile ||
@@ -307,7 +323,7 @@ export const AgentsControlCenter: React.FC = () => {
     }
   };
 
-  // Helper to reliably await a task reaching a terminal state (completed, cancelled, error, failed)
+  // Helper to reliably await a task reaching a terminal state (completed, cancelled, failed) without premature timeout
   const waitForTaskFinished = (taskId: string): Promise<AgentTaskRecord | null> => {
     return new Promise((resolve) => {
       const checkTerminal = () => {
@@ -352,14 +368,7 @@ export const AgentsControlCenter: React.FC = () => {
         } catch {
           // ignore transient poll error
         }
-      }, 500);
-
-      // Max safety timeout (15 mins)
-      setTimeout(() => {
-        clearInterval(timer);
-        const tasks = usePreviewStore.getState().agentTasks;
-        resolve(tasks.find((t) => t.id === taskId) || null);
-      }, 900000);
+      }, 750);
     });
   };
 
@@ -406,7 +415,20 @@ export const AgentsControlCenter: React.FC = () => {
           break;
         }
 
-        // Reliably await task completion before executing the next step
+        try {
+          localStorage.setItem(
+            'flymd:active-pipeline-run',
+            JSON.stringify({
+              pipelineId: pipeline.id,
+              pipelineName: pipeline.name,
+              stepIdx: idx,
+              totalSteps: pipeline.steps.length,
+              currentTaskId: dispatchedTask.id,
+            })
+          );
+        } catch {}
+
+        // Reliably await task completion before executing the next step (no premature timeout)
         const completed = await waitForTaskFinished(dispatchedTask.id);
         if (
           !completed ||
@@ -421,6 +443,9 @@ export const AgentsControlCenter: React.FC = () => {
     } finally {
       setRunningPipelineId(null);
       setRunningPipelineStepIdx(-1);
+      try {
+        localStorage.removeItem('flymd:active-pipeline-run');
+      } catch {}
     }
   };
 
@@ -686,6 +711,35 @@ export const AgentsControlCenter: React.FC = () => {
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
             </button>
           </div>
+
+          {/* Workspace-First Target Scope Selector */}
+          <div className="hidden lg:flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-xs ml-2">
+            <FolderGit2 size={12} className="text-sky-400 shrink-0" />
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Scope:</span>
+            <select
+              value={workspaceFocusMode === 'workspace' ? '__root__' : focusFilePath || activeTab?.filePath || ''}
+              onChange={(e) => {
+                if (e.target.value === '__root__') {
+                  setWorkspaceFocusMode('workspace');
+                  setFocusFilePath('');
+                } else {
+                  setWorkspaceFocusMode('file');
+                  setFocusFilePath(e.target.value);
+                }
+              }}
+              className="bg-transparent text-slate-200 font-semibold text-[11px] focus:outline-none cursor-pointer border-0 py-0 max-w-[220px] truncate"
+              title="Target Scope: Entire Project Workspace vs Specific Focused Document"
+            >
+              <option value="__root__">
+                🌐 Entire Workspace ({resolvedWorkspace ? resolvedWorkspace.split(/[\\/]/).pop() : 'Root'})
+              </option>
+              {cleanWorkspaceFiles.map((wf) => (
+                <option key={wf.path} value={wf.path}>
+                  📄 {wf.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -817,16 +871,18 @@ export const AgentsControlCenter: React.FC = () => {
           onSelectIntent={(intent) => setSelectedIntent(intent)}
           selectedTask={selectedTask}
           activeFileName={
-            activeTab?.filePath
-              ? activeTab.fileName
-              : cleanWorkspaceFiles[0]?.name ||
-                activeTab?.fileName ||
-                'Workspace-Specification.md'
+            workspaceFocusMode === 'workspace'
+              ? `Entire Project (${resolvedWorkspace ? resolvedWorkspace.split(/[\\/]/).pop() : 'Root'})`
+              : focusFilePath
+                ? cleanWorkspaceFiles.find((f) => f.path === focusFilePath)?.name ||
+                  focusFilePath.split(/[\\/]/).pop() ||
+                  'Focused File'
+                : activeTab?.fileName || 'Workspace Specification'
           }
           activeFilePath={
-            activeTab?.filePath ||
-            cleanWorkspaceFiles[0]?.path ||
-            ''
+            workspaceFocusMode === 'workspace'
+              ? resolvedWorkspace
+              : focusFilePath || activeTab?.filePath || cleanWorkspaceFiles[0]?.path || ''
           }
           watchedFiles={cleanWorkspaceFiles}
           selectedSourceFile={selectedSourceFile}

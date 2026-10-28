@@ -27,6 +27,7 @@ import {
 } from '../../../../../shared/types';
 import { AGENT_INTENT_PRESETS } from '../../../../../shared/constants';
 import { markdownService } from '../../../services/MarkdownService';
+import { ActionLogTimeline } from './ActionLogTimeline';
 
 interface AgentChatTimelineProps {
   visibleAgents: AgentProfile[];
@@ -253,59 +254,11 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
               </div>
 
               <div className="p-4 space-y-4">
-                {/* Collapsible Thinking & Reasoning Accordion */}
-                {selectedTask.thinkingTrace &&
-                  selectedTask.thinkingTrace.length > 0 && (
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/80 overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => setThinkingOpen(!thinkingOpen)}
-                        className="w-full flex items-center justify-between px-3 py-2 text-left text-[11px] font-semibold text-slate-300 hover:bg-slate-900/60 transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <Brain size={13} className="text-violet-400" />
-                          <span>
-                            Agent Reasoning &amp; Context Analysis (
-                            {selectedTask.thinkingTrace.length} steps)
-                          </span>
-                        </span>
-                        {thinkingOpen ? (
-                          <ChevronDown size={13} className="text-slate-400" />
-                        ) : (
-                          <ChevronRight size={13} className="text-slate-400" />
-                        )}
-                      </button>
-                      {thinkingOpen && (
-                        <div className="px-3.5 pb-2.5 pt-1 border-t border-slate-800/70 space-y-1 text-[11px] text-slate-400 font-mono">
-                          {selectedTask.thinkingTrace.map((trace, idx) => (
-                            <div key={idx} className="flex items-start gap-2">
-                              <span className="text-violet-400 select-none">•</span>
-                              <span>{trace}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                {/* Workspace Tool Action Pills */}
-                {selectedTask.toolActions && selectedTask.toolActions.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {selectedTask.toolActions.map((tool) => (
-                      <span
-                        key={tool.id}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300"
-                      >
-                        {tool.status === 'running' ? (
-                          <Loader2 size={11} className="text-sky-400 animate-spin" />
-                        ) : (
-                          <CheckCircle2 size={11} className="text-emerald-400" />
-                        )}
-                        <span className="font-medium">{tool.label}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {/* Antigravity-Style Action & Activity Logs Timeline */}
+                <ActionLogTimeline
+                  task={selectedTask}
+                  onOpenFile={(fp) => onOpenReportInTab(fp)}
+                />
 
                 {/* Rendered Markdown Response */}
                 {renderedReplyHtml ? (
