@@ -68,13 +68,13 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
       )}
 
       <button
+        type="button"
         onClick={onOpenTranslate}
-        title={`Translate with local Ollama / custom LLM (${ollamaModel || 'AI Model'}) (Ctrl+T)`}
-        className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500
+        title={`AI Translate with local Ollama / custom LLM (${ollamaModel || 'AI Model'}) (Ctrl+T)`}
+        className="p-1.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500
                    text-white font-medium rounded-lg shadow-sm shadow-sky-600/30 transition duration-150 group"
       >
         <Languages className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-        <span className="text-[11px] font-semibold">AI Translate</span>
       </button>
 
       <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] text-slate-400 bg-slate-950/60 rounded border border-slate-800/60">

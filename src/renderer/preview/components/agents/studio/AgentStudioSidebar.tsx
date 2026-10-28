@@ -326,13 +326,14 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Session Threads ({agentTasks.length})
           </span>
-          {agentTasks.length > 0 && (
+          {agentTasks.some((t) => t.status !== 'running') && (
             <button
               type="button"
               onClick={onClearFinished}
-              className="text-[10px] text-slate-400 hover:text-rose-300 flex items-center gap-1"
+              className="text-[10px] text-slate-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
+              title="Clear all completed/finished tasks"
             >
-              <Trash2 size={10} /> Clear Done
+              <Trash2 size={10} /> Clear All Done
             </button>
           )}
         </div>
@@ -396,19 +397,36 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       </span>
                     </div>
 
-                    {task.status === 'running' ? (
-                      <Loader2
-                        size={12}
-                        className="text-sky-400 animate-spin shrink-0"
-                      />
-                    ) : task.status === 'completed' ? (
-                      <CheckCircle2
-                        size={12}
-                        className="text-emerald-400 shrink-0"
-                      />
-                    ) : (
-                      <XCircle size={12} className="text-rose-400 shrink-0" />
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {task.status === 'running' ? (
+                        <Loader2
+                          size={12}
+                          className="text-sky-400 animate-spin shrink-0"
+                        />
+                      ) : task.status === 'completed' ? (
+                        <CheckCircle2
+                          size={12}
+                          className="text-emerald-400 shrink-0"
+                        />
+                      ) : (
+                        <XCircle size={12} className="text-rose-400 shrink-0" />
+                      )}
+
+                      {task.status !== 'running' && (
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            await onDeleteTask(task.id);
+                          }}
+                          title="Delete this finished task session"
+                          className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 opacity-60 hover:opacity-100 transition-all shrink-0"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">

@@ -657,70 +657,79 @@ export const AgentsControlCenter: React.FC = () => {
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
-            onClick={() =>
+            onClick={() => {
+              setShowCouncilModal(false);
+              setShowAgentAccountsModal(false);
               openDispatchModal({
                 targetAgentId: selectedAgentId,
                 sourceFilePath: activeTab?.filePath || '',
                 sourceFileName: activeTab?.fileName || 'Specification.md',
                 markdownContent: activeTab?.content || '',
-              })
-            }
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold transition-colors"
-            title="Open Advanced Task Options (Checklist filter, Parallel Worktree, etc.)"
+              });
+            }}
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
+            title="Advanced Task Options (Checklist filter, Parallel Worktree, etc.)"
           >
-            <SlidersHorizontal size={12} className="text-sky-400" />
-            <span className="hidden sm:inline">Advanced Options</span>
+            <SlidersHorizontal size={14} className="text-sky-400" />
           </button>
 
           <button
             type="button"
-            onClick={() => setShowCouncilModal(true)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-bold transition-colors"
+            onClick={() => {
+              setShowAgentAccountsModal(false);
+              setShowCouncilModal(true);
+            }}
+            className="p-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 transition-colors"
+            title="Council Broadcast (Multi-Agent Sync)"
           >
-            <Users size={12} />
-            <span className="hidden sm:inline">Council Broadcast</span>
+            <Users size={14} />
           </button>
 
           {resolvedWorkspace && (
             <button
               type="button"
               onClick={handleOpenSharedMemory}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold transition-colors"
-              title="Open .flymd/MEMORY.md"
+              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
+              title="Open Shared Memory (.flymd/MEMORY.md)"
             >
-              <BrainCircuit size={12} className="text-amber-400" />
-              <span className="hidden lg:inline">Shared Memory</span>
+              <BrainCircuit size={14} className="text-amber-400" />
             </button>
           )}
 
           {resolvedWorkspace && (
             <button
               type="button"
-              onClick={() => setShowClearCacheModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[11px] font-semibold transition-colors"
-              title="Clean temporary handoffs, agent reports, checkpoints, and optionally reset memory ledger"
+              onClick={() => {
+                setShowCouncilModal(false);
+                setShowAgentAccountsModal(false);
+                setShowClearCacheModal(true);
+              }}
+              className="p-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 transition-colors"
+              title="Clear Memory & Cache (Handoffs, checkpoints, memory ledger)"
             >
-              <Trash2 size={12} className="text-rose-400" />
-              <span className="hidden lg:inline">Clear Memory &amp; Cache</span>
+              <Trash2 size={14} className="text-rose-400" />
             </button>
           )}
 
           <button
             type="button"
-            onClick={() => setShowAgentAccountsModal(true)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-[11px] font-bold transition-colors"
+            onClick={() => {
+              setShowCouncilModal(false);
+              setShowAgentAccountsModal(true);
+            }}
+            className="p-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 transition-colors shadow-sm"
+            title="Custom Agents & Logins (API Keys & Profiles)"
           >
-            <KeyRound size={12} />
-            <span>Custom Agents &amp; Logins</span>
+            <KeyRound size={14} />
           </button>
 
           <button
             type="button"
             onClick={handleRefreshAll}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors"
             title="Refresh Agents & Sessions"
           >
-            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           </button>
         </div>
       </header>
@@ -804,6 +813,7 @@ export const AgentsControlCenter: React.FC = () => {
           restoringCheckpointId={restoringCheckpointId}
           onRestoreCheckpoint={handleRestoreCheckpoint}
           onClearTaskLogs={handleClearTaskLogs}
+          onDeleteTask={handleDeleteTask}
           activeMarkdownContent={activeTab?.content || ''}
           watchedFiles={cleanWorkspaceFiles}
           onRunSingleChecklistItem={(itemText) =>

@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   MessageSquare,
+  Settings,
+  Edit3,
+  CopyPlus,
+  RotateCcw,
+  Footprints,
+  ToggleLeft,
+  ToggleRight,
   Plus,
   Play,
   Pause,
@@ -58,12 +65,24 @@ interface DiscussionStudioProps {
   resolvedWorkspace: string;
 }
 
-type PresetKey = 'architecture' | 'security' | 'multi_cli' | 'performance';
+export interface DeliberationPreset {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  isBuiltIn?: boolean;
+  participants: DiscussionParticipant[];
+}
 
-const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; participants: DiscussionParticipant[] }> = {
-  architecture: {
+export type PresetKey = string;
+
+export const DEFAULT_PRESET_TEMPLATES: DeliberationPreset[] = [
+  {
+    id: 'architecture',
     name: 'System Architecture & Reliability',
     description: 'System decomposition, invariant verification, and failure recovery.',
+    enabled: true,
+    isBuiltIn: true,
     participants: [
       {
         agentId: 'agent-architect',
@@ -75,6 +94,12 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
         avatarColor: '#38bdf8',
         assignedSkillUris: [],
         contextBudgetTokens: 32000,
+        customAction: {
+          id: 'arch-decomp',
+          name: 'Architectural Invariant Decomposition',
+          description: 'Strict modular boundary & crash-safety analysis',
+          promptDirective: 'Decompose the architecture into strict layers. Specify data-flow invariants, crash-recovery boundaries, and single points of failure.',
+        },
       },
       {
         agentId: 'agent-critic',
@@ -86,6 +111,12 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
         avatarColor: '#ef4444',
         assignedSkillUris: [],
         contextBudgetTokens: 32000,
+        customAction: {
+          id: 'chaos-adversary',
+          name: 'Chaos Engineering & Failure Injection',
+          description: 'Cascade drops, power loss, corrupted logs & timeouts',
+          promptDirective: 'Simulate critical system failure: unexpected process termination, sudden power loss during writes, corrupted JSONL lines, and timeout cascades.',
+        },
       },
       {
         agentId: 'agent-implementer',
@@ -97,12 +128,21 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
         avatarColor: '#10b981',
         assignedSkillUris: [],
         contextBudgetTokens: 16000,
+        customAction: {
+          id: 'concurrency-stress',
+          name: 'Concurrency & Deadlock Stress Test',
+          description: 'Race conditions, file locks & zombie process hazards',
+          promptDirective: 'Stress test concurrent access scenarios. Verify atomic swap files, backpressure channels, and cleanup on process kill.',
+        },
       },
     ],
   },
-  security: {
+  {
+    id: 'security',
     name: 'Security & Sandbox Audit',
     description: 'Enforce process isolation, permission boundaries, and token leak prevention.',
+    enabled: true,
+    isBuiltIn: true,
     participants: [
       {
         agentId: 'agent-architect',
@@ -125,6 +165,12 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
         avatarColor: '#f59e0b',
         assignedSkillUris: [],
         contextBudgetTokens: 32000,
+        customAction: {
+          id: 'security-audit',
+          name: 'Zero-Trust Security & Sandbox Audit',
+          description: 'Privilege isolation, path traversal & token leaks',
+          promptDirective: 'Audit against zero-trust requirements. Scrutinize filesystem read boundaries, unauthorized process elevation, and prompt injection avenues.',
+        },
       },
       {
         agentId: 'agent-critic',
@@ -139,9 +185,12 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
       },
     ],
   },
-  multi_cli: {
+  {
+    id: 'multi_cli',
     name: 'Multi-CLI Cross Deliberation',
     description: 'Multi-provider debate across Claude Code CLI, Gemini Antigravity, and Local Core.',
+    enabled: true,
+    isBuiltIn: true,
     participants: [
       {
         agentId: 'claude-architect',
@@ -178,9 +227,12 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
       },
     ],
   },
-  performance: {
+  {
+    id: 'performance',
     name: 'Performance & Refactoring',
     description: 'Low-latency architecture, memory budgets, and algorithmic efficiency.',
+    enabled: true,
+    isBuiltIn: true,
     participants: [
       {
         agentId: 'perf-architect',
@@ -217,7 +269,32 @@ const PRESET_TEMPLATES: Record<PresetKey, { name: string; description: string; p
       },
     ],
   },
+];
+
+export const STORAGE_KEY_PRESETS = 'flymd_deliberation_presets_v2';
+
+export const loadSavedPresets = (): DeliberationPreset[] => {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_PRESETS) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load presets from localStorage', e);
+  }
+  return DEFAULT_PRESET_TEMPLATES;
 };
+
+const PRESET_TEMPLATES: Record<string, { name: string; description: string; participants: DiscussionParticipant[] }> = DEFAULT_PRESET_TEMPLATES.reduce(
+  (acc, p) => {
+    acc[p.id] = { name: p.name, description: p.description, participants: p.participants };
+    return acc;
+  },
+  {} as Record<string, { name: string; description: string; participants: DiscussionParticipant[] }>
+);
 
 const COLOR_PALETTE = ['#38bdf8', '#818cf8', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#a855f7'];
 
@@ -345,20 +422,27 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const [tabFocusNotification, setTabFocusNotification] = useState<string | null>(null);
 
   // New discussion configuration state
-  const [newTopic, setNewTopic] = useState('Modular Multi-Agent Architecture for FlyMD');
-  const [newIdea, setNewIdea] = useState(
-    'Design an isolated, multi-turn multi-agent discussion system with strict read-only process isolation, deterministic barrier synchronization, decision logging, and epistemic evidence-grading.'
-  );
+  // Presets & Custom Actions Management State
+  const [presets, setPresets] = useState<DeliberationPreset[]>(loadSavedPresets);
+  const [selectedPreset, setSelectedPreset] = useState<string>(() => {
+    const first = loadSavedPresets().find((p) => p.enabled);
+    return first ? first.id : 'architecture';
+  });
+  const [editingPreset, setEditingPreset] = useState<DeliberationPreset | null>(null);
+  const [isCreatingNewPreset, setIsCreatingNewPreset] = useState(false);
+
+  // New discussion configuration state (Empty initial values with placeholders)
+  const [newTopic, setNewTopic] = useState('');
+  const [newIdea, setNewIdea] = useState('');
   const [maxRounds, setMaxRounds] = useState(3);
   const [maxRoundsInput, setMaxRoundsInput] = useState<string>('3');
   const [turnTimeoutSecs, setTurnTimeoutSecs] = useState(120);
   const [turnTimeoutInput, setTurnTimeoutInput] = useState<string>('120');
-  const [newDebateMode, setNewDebateMode] = useState<'preset' | 'custom'>('preset');
-  const [selectedPreset, setSelectedPreset] = useState<PresetKey>('architecture');
+  const [newDebateMode, setNewDebateMode] = useState<'preset' | 'actions' | 'custom'>('preset');
   const [presetEngine, setPresetEngine] = useState<string>('mock');
   const [enableStepModeInNew, setEnableStepModeInNew] = useState(false);
   const [customParticipants, setCustomParticipants] = useState<DiscussionParticipant[]>(
-    () => PRESET_TEMPLATES.architecture.participants
+    () => (loadSavedPresets().find((p) => p.id === 'architecture') || loadSavedPresets()[0]).participants
   );
 
   // Load discussions on mount & subscribe to real-time events
@@ -550,10 +634,155 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     setGuidanceInput((prev) => (prev ? `${prev}\n\n${quote}` : quote));
   };
 
+  // Save presets helper
+  const savePresetsToStorage = (updated: DeliberationPreset[]) => {
+    setPresets(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_PRESETS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed to save presets to localStorage', e);
+    }
+  };
+
   // Handle Preset selection change in New Modal
-  const handleSelectPreset = (key: PresetKey) => {
+  const handleSelectPreset = (key: string) => {
     setSelectedPreset(key);
-    setCustomParticipants(PRESET_TEMPLATES[key].participants);
+    const found = presets.find((p) => p.id === key);
+    if (found) {
+      setCustomParticipants(found.participants);
+    }
+  };
+
+  // Toggle preset enabled/disabled
+  const handleTogglePresetEnabled = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updated = presets.map((p) => {
+      if (p.id === id) {
+        return { ...p, enabled: !p.enabled };
+      }
+      return p;
+    });
+    savePresetsToStorage(updated);
+    if (selectedPreset === id) {
+      const fallback = updated.find((p) => p.enabled) || updated[0];
+      if (fallback) {
+        setSelectedPreset(fallback.id);
+        setCustomParticipants(fallback.participants);
+      }
+    }
+  };
+
+  // Start editing a preset
+  const handleStartEditPreset = (preset: DeliberationPreset, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setIsCreatingNewPreset(false);
+    setEditingPreset(JSON.parse(JSON.stringify(preset)));
+    setNewDebateMode('actions');
+  };
+
+  // Start creating a custom preset
+  const handleStartCreatePreset = () => {
+    const newId = `preset-${Date.now()}`;
+    const newPreset: DeliberationPreset = {
+      id: newId,
+      name: 'Custom Domain Action Deliberation',
+      description: 'Domain-specific deliberation team with custom roles and inquiry directives.',
+      enabled: true,
+      isBuiltIn: false,
+      participants: [
+        {
+          agentId: `agent-lead-${Date.now()}`,
+          providerId: 'mock',
+          modelId: 'custom-expert-v1',
+          displayName: 'Domain Architect',
+          role: 'architect',
+          roleDescription: 'Primary domain specialist proposing architecture and requirements.',
+          avatarColor: '#38bdf8',
+          assignedSkillUris: [],
+          contextBudgetTokens: 32000,
+          customAction: {
+            id: `action-${Date.now()}-1`,
+            name: 'Domain Invariant Decomposition',
+            description: 'Decompose core domain logic',
+            promptDirective: 'Decompose the domain model, invariants, and edge cases for this topic.',
+          },
+        },
+        {
+          agentId: `agent-critic-${Date.now()}`,
+          providerId: 'mock',
+          modelId: 'custom-critic-v1',
+          displayName: 'Adversarial Critic',
+          role: 'critic',
+          roleDescription: 'Challenge assumptions, find single points of failure, and expose bottlenecks.',
+          avatarColor: '#ef4444',
+          assignedSkillUris: [],
+          contextBudgetTokens: 32000,
+          customAction: {
+            id: `action-${Date.now()}-2`,
+            name: 'Adversarial Challenge',
+            description: 'Stress test failure modes',
+            promptDirective: 'Challenge all unstated assumptions, bottlenecks, and error recovery strategies.',
+          },
+        },
+      ],
+    };
+    setIsCreatingNewPreset(true);
+    setEditingPreset(newPreset);
+    setNewDebateMode('actions');
+  };
+
+  // Save the preset being edited
+  const handleSaveEditingPreset = () => {
+    if (!editingPreset) return;
+    const exists = presets.some((p) => p.id === editingPreset.id);
+    let updated: DeliberationPreset[];
+    if (exists) {
+      updated = presets.map((p) => (p.id === editingPreset.id ? editingPreset : p));
+    } else {
+      updated = [...presets, editingPreset];
+    }
+    savePresetsToStorage(updated);
+    setSelectedPreset(editingPreset.id);
+    setCustomParticipants(editingPreset.participants);
+    setEditingPreset(null);
+    setIsCreatingNewPreset(false);
+  };
+
+  // Delete preset
+  const handleDeletePreset = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (presets.length <= 1) return;
+    const updated = presets.filter((p) => p.id !== id);
+    savePresetsToStorage(updated);
+    if (selectedPreset === id) {
+      const fallback = updated.find((p) => p.enabled) || updated[0];
+      if (fallback) {
+        setSelectedPreset(fallback.id);
+        setCustomParticipants(fallback.participants);
+      }
+    }
+  };
+
+  // Duplicate preset
+  const handleDuplicatePreset = (preset: DeliberationPreset, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const cloned: DeliberationPreset = {
+      ...JSON.parse(JSON.stringify(preset)),
+      id: `preset-${Date.now()}`,
+      name: `${preset.name} (Custom Copy)`,
+      isBuiltIn: false,
+      enabled: true,
+    };
+    const updated = [...presets, cloned];
+    savePresetsToStorage(updated);
+  };
+
+  // Reset presets to defaults
+  const handleResetPresetsToDefaults = () => {
+    savePresetsToStorage(DEFAULT_PRESET_TEMPLATES);
+    setSelectedPreset('architecture');
+    setCustomParticipants(DEFAULT_PRESET_TEMPLATES[0].participants);
+    setEditingPreset(null);
   };
 
   // Add custom participant
@@ -592,10 +821,14 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
   // Launch new discussion
   const handleLaunchNewDiscussion = async () => {
-    if (!resolvedWorkspace || !newTopic.trim() || !newIdea.trim()) return;
+    if (!resolvedWorkspace) return;
     const sessionId = `disc-${Date.now()}`;
+    const topicToUse = newTopic.trim() || 'Multi-Agent Deliberation';
+    const ideaToUse = newIdea.trim() || `In-depth multi-perspective evaluation and decision analysis for: ${topicToUse}`;
+
+    const currentPreset = presets.find((p) => p.id === selectedPreset) || presets[0] || DEFAULT_PRESET_TEMPLATES[0];
     let participants = newDebateMode === 'preset'
-      ? PRESET_TEMPLATES[selectedPreset].participants
+      ? currentPreset.participants
       : customParticipants;
 
     if (newDebateMode === 'preset') {
@@ -627,8 +860,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     const config: DiscussionConfig = {
       schemaVersion: 1,
       sessionId,
-      topic: newTopic.trim(),
-      userIdea: newIdea.trim(),
+      topic: topicToUse,
+      userIdea: ideaToUse,
       workspacePath: resolvedWorkspace,
       maxRounds: Math.min(10, Math.max(1, parseInt(maxRoundsInput, 10) || maxRounds || 3)),
       turnTimeoutSecs: Math.min(600, Math.max(15, parseInt(turnTimeoutInput, 10) || turnTimeoutSecs || 120)),
@@ -801,11 +1034,10 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
             <button
               type="button"
               onClick={() => setShowNewModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold transition-all shadow-sm"
-              title="Configure and launch new debate"
+              className="p-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 transition-all shadow-sm"
+              title="Configure and launch new deliberation"
             >
-              <Plus size={13} />
-              <span>New</span>
+              <Plus size={14} />
             </button>
           </div>
         </div>
@@ -945,30 +1177,28 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                     onClick={() => {
                       if (isStepMode) handleToggleStepMode();
                     }}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                    className={`p-1.5 rounded transition-all ${
                       !isStepMode
                         ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
-                    title="Auto-deliberation: Continuous rounds without pausing between agent turns"
+                    title="Auto Deliberation Mode (Continuous rounds without pausing)"
                   >
-                    <Zap size={11} className={!isStepMode ? 'text-sky-400' : ''} />
-                    <span>Auto</span>
+                    <Zap size={14} className={!isStepMode ? 'text-sky-400' : ''} />
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       if (!isStepMode) handleToggleStepMode();
                     }}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                    className={`p-1.5 rounded transition-all ${
                       isStepMode
                         ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
-                    title="Human-in-the-loop: Pause after each agent turn so you can review and intervene"
+                    title="Step-by-Step Mode (Pauses at each turn barrier for human steering)"
                   >
-                    <User size={11} className={isStepMode ? 'text-amber-400' : ''} />
-                    <span>Step-by-Step</span>
+                    <Footprints size={14} className={isStepMode ? 'text-amber-400' : ''} />
                   </button>
                 </div>
 
@@ -1024,11 +1254,10 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                 <button
                   type="button"
                   onClick={handleOpenReportInTab}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors"
-                  title="Open report in preview tab and focus preview"
+                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                  title="Open Deliberation Report in Editor Tab"
                 >
-                  <ExternalLink size={12} className="text-emerald-400" />
-                  <span>Open in Tab</span>
+                  <ExternalLink size={14} className="text-emerald-400" />
                 </button>
               </div>
             </header>
@@ -1791,7 +2020,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   type="text"
                   value={newTopic}
                   onChange={(e) => setNewTopic(e.target.value)}
-                  placeholder="e.g. SQLite Persistence vs Embedded RocksDB"
+                  placeholder="e.g. SQLite Persistence vs Embedded RocksDB, Gym Workout Tracker..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500 transition-colors"
                 />
               </div>
@@ -1802,40 +2031,55 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   rows={3}
                   value={newIdea}
                   onChange={(e) => setNewIdea(e.target.value)}
-                  placeholder="Describe the architectural design, trade-offs, and critical constraints..."
+                  placeholder="Describe the architectural design, trade-offs, constraints, or critical invariants to evaluate..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500 leading-relaxed transition-colors"
                 />
               </div>
 
-              {/* Mode Selection Tab: Preset vs Custom Team */}
-              <div className="border border-slate-800 rounded-xl p-3 bg-slate-950/60">
-                <div className="flex items-center justify-between mb-3">
+              {/* Mode Selection Tab: Preset vs Custom Actions vs Custom Team */}
+              <div className="border border-slate-800 rounded-xl p-3.5 bg-slate-950/60">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
                   <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                     <Sliders size={13} className="text-sky-400" />
-                    <span>Agent Team Configuration</span>
+                    <span>Agent Team &amp; Action Presets</span>
                   </div>
-                  <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                  <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-xs">
                     <button
                       type="button"
                       onClick={() => setNewDebateMode('preset')}
                       className={`px-3 py-1 rounded text-[11px] font-semibold transition-all ${
                         newDebateMode === 'preset'
-                          ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                          ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      Presets
+                      Presets (${presets.filter((p) => p.enabled).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewDebateMode('actions');
+                        setEditingPreset(null);
+                      }}
+                      className={`px-3 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
+                        newDebateMode === 'actions'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Settings size={11} />
+                      <span>Custom Actions &amp; Roles</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setNewDebateMode('custom')}
                       className={`px-3 py-1 rounded text-[11px] font-semibold transition-all ${
                         newDebateMode === 'custom'
-                          ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                          ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      Custom Team ({customParticipants.length})
+                      Custom Team (${customParticipants.length})
                     </button>
                   </div>
                 </div>
@@ -1876,59 +2120,369 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                           </div>
                         </div>
                       </div>
-                      <div className="w-full sm:w-auto min-w-0 sm:max-w-[420px] shrink-0">
-                        <select
-                          value={presetEngine}
-                          onChange={(e) => setPresetEngine(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium truncate shadow-inner cursor-pointer"
-                        >
-                          <option value="claude-code">🌟 Claude Code CLI (claude-3-7-sonnet) — Frontier Agent</option>
-                          <option value="gemini-antigravity">🌟 Antigravity Gemini CLI (gemini-2.5-pro) — Real AI</option>
-                          <option value="mock">⚡ Local Domain Reasoner (Zero API Cost, Built-in)</option>
-                          <option value="auto">⚡ Auto-detect Best Available</option>
-                          {availableProviders
-                            .filter((ap) => !['mock', 'claude-code', 'gemini-antigravity'].includes(ap.id))
-                            .map((ap) => (
-                              <option key={ap.id} value={ap.id}>
-                                {ap.name} ({ap.model || ap.id}) {ap.available ? '✓ Ready' : '(Offline / Not configured)'}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
+                      <select
+                        value={presetEngine}
+                        onChange={(e) => setPresetEngine(e.target.value)}
+                        className="w-full sm:w-auto min-w-0 sm:max-w-[420px] shrink-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium truncate shadow-inner cursor-pointer"
+                      >
+                        <option value="mock">⚡ Built-in Adaptive Domain Simulator (Fast)</option>
+                        {availableProviders
+                          .filter((ap) => ap.id !== 'mock')
+                          .map((p) => (
+                            <option key={p.id} value={p.id} disabled={!p.available}>
+                              {p.name} {p.available ? `(${p.model})` : '(Not Detected)'}
+                            </option>
+                          ))}
+                      </select>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {(Object.keys(PRESET_TEMPLATES) as PresetKey[]).map((key) => {
-                      const preset = PRESET_TEMPLATES[key];
-                      const isSelected = selectedPreset === key;
-                      return (
-                        <div
-                          key={key}
-                          onClick={() => handleSelectPreset(key)}
-                          className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                            isSelected
-                              ? 'bg-sky-500/15 border-sky-500/50 text-slate-100 shadow-sm'
-                              : 'bg-slate-900/60 border-slate-800 hover:bg-slate-900 text-slate-300'
-                          }`}
-                        >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span>{preset.name}</span>
-                            {isSelected && <Check size={13} className="text-sky-400" />}
+                      {presets
+                        .filter((p) => p.enabled)
+                        .map((preset) => {
+                          const isSelected = selectedPreset === preset.id;
+                          return (
+                            <div
+                              key={preset.id}
+                              onClick={() => handleSelectPreset(preset.id)}
+                              className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'bg-sky-500/15 border-sky-500/50 text-slate-100 shadow-sm'
+                                  : 'bg-slate-900/60 border-slate-800 hover:bg-slate-900 text-slate-300'
+                              }`}
+                            >
+                              <div className="font-bold text-xs flex items-center justify-between">
+                                <span className="truncate">{preset.name}</span>
+                                {isSelected && <Check size={13} className="text-sky-400 shrink-0" />}
+                              </div>
+                              <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                                {preset.description}
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-2 flex items-center justify-between">
+                                <span>{preset.participants.length} participating agents</span>
+                                <span className="text-indigo-400 flex items-center gap-1">
+                                  <Brain size={10} />
+                                  <span>Thinking On</span>
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewDebateMode('actions');
+                          setEditingPreset(null);
+                        }}
+                        className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-medium"
+                      >
+                        <Settings size={12} />
+                        <span>Manage, customize roles &amp; queries, or add new action presets &rarr;</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : newDebateMode === 'actions' ? (
+                  <div className="space-y-3">
+                    {editingPreset ? (
+                      <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                          <div className="flex items-center gap-2">
+                            <Edit3 size={15} className="text-amber-400" />
+                            <h4 className="text-xs font-bold text-slate-100">
+                              {isCreatingNewPreset ? 'Create New Action Preset' : `Edit Preset: ${editingPreset.name}`}
+                            </h4>
                           </div>
-                          <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                            {preset.description}
-                          </div>
-                          <div className="text-[10px] text-slate-500 mt-2 flex items-center justify-between">
-                            <span>{preset.participants.length} participating agents</span>
-                            <span className="text-indigo-400 flex items-center gap-1">
-                              <Brain size={10} />
-                              <span>Thinking On</span>
-                            </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingPreset(null)}
+                              className="px-3 py-1 rounded text-slate-400 hover:text-slate-200 text-xs font-semibold"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSaveEditingPreset}
+                              className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-sm"
+                            >
+                              Save Preset
+                            </button>
                           </div>
                         </div>
-                      );
-                    })}
-                    </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-slate-300 font-semibold mb-1 text-[11px]">Preset Name</label>
+                            <input
+                              type="text"
+                              value={editingPreset.name}
+                              onChange={(e) => setEditingPreset({ ...editingPreset, name: e.target.value })}
+                              placeholder="e.g. Database Migration & Concurrency Stress"
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-300 font-semibold mb-1 text-[11px]">Description</label>
+                            <input
+                              type="text"
+                              value={editingPreset.description}
+                              onChange={(e) => setEditingPreset({ ...editingPreset, description: e.target.value })}
+                              placeholder="Short description of this deliberation focus"
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Participating Agent Roles in this Preset */}
+                        <div className="space-y-3 pt-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                              <Bot size={13} className="text-sky-400" />
+                              Agent Roles &amp; Custom Queries ({editingPreset.participants.length})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextIdx = editingPreset.participants.length + 1;
+                                const color = COLOR_PALETTE[(nextIdx - 1) % COLOR_PALETTE.length];
+                                const newAgent: DiscussionParticipant = {
+                                  agentId: `agent-custom-${Date.now()}`,
+                                  providerId: 'mock',
+                                  modelId: 'custom-expert-v1',
+                                  displayName: `Specialist ${nextIdx}`,
+                                  role: 'custom',
+                                  roleDescription: 'Custom inquiry focus and domain analysis.',
+                                  avatarColor: color,
+                                  assignedSkillUris: [],
+                                  contextBudgetTokens: 16000,
+                                  thinkingEnabled: true,
+                                  customAction: {
+                                    id: `action-${Date.now()}`,
+                                    name: 'Specialized Inquiry',
+                                    description: 'Custom domain inquiry',
+                                    promptDirective: 'Evaluate specific failure modes and validation criteria.',
+                                  },
+                                };
+                                setEditingPreset({
+                                  ...editingPreset,
+                                  participants: [...editingPreset.participants, newAgent],
+                                });
+                              }}
+                              className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-semibold"
+                            >
+                              <Plus size={12} /> Add Agent Role
+                            </button>
+                          </div>
+
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                            {editingPreset.participants.map((p, pIdx) => (
+                              <div
+                                key={p.agentId || pIdx}
+                                className="p-3 rounded-lg bg-slate-950/80 border border-slate-800 space-y-2 text-xs"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                                      style={{ backgroundColor: p.avatarColor || '#38bdf8' }}
+                                    />
+                                    <input
+                                      type="text"
+                                      value={p.displayName}
+                                      onChange={(e) => {
+                                        const copy = [...editingPreset.participants];
+                                        copy[pIdx] = { ...copy[pIdx], displayName: e.target.value };
+                                        setEditingPreset({ ...editingPreset, participants: copy });
+                                      }}
+                                      placeholder="Agent Display Name"
+                                      className="w-44 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-100 font-bold focus:outline-none focus:border-sky-500"
+                                    />
+                                    <select
+                                      value={p.role}
+                                      onChange={(e) => {
+                                        const copy = [...editingPreset.participants];
+                                        copy[pIdx] = { ...copy[pIdx], role: e.target.value as any };
+                                        setEditingPreset({ ...editingPreset, participants: copy });
+                                      }}
+                                      className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-300 font-medium focus:outline-none focus:border-sky-500 cursor-pointer"
+                                    >
+                                      <option value="architect">Architect</option>
+                                      <option value="critic">Critic / Adversary</option>
+                                      <option value="implementer">Implementer</option>
+                                      <option value="auditor">Auditor</option>
+                                      <option value="user">User Proxy</option>
+                                      <option value="custom">Custom Specialist</option>
+                                    </select>
+                                  </div>
+                                  {editingPreset.participants.length > 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const copy = editingPreset.participants.filter((_, idx) => idx !== pIdx);
+                                        setEditingPreset({ ...editingPreset, participants: copy });
+                                      }}
+                                      className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                                      title="Remove agent role"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <input
+                                    type="text"
+                                    value={p.roleDescription || ''}
+                                    onChange={(e) => {
+                                      const copy = [...editingPreset.participants];
+                                      copy[pIdx] = { ...copy[pIdx], roleDescription: e.target.value };
+                                      setEditingPreset({ ...editingPreset, participants: copy });
+                                    }}
+                                    placeholder="Role description (e.g. Focus on memory safety and concurrency locks)"
+                                    className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-300 focus:outline-none focus:border-sky-500 text-[11px]"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] text-amber-400 font-semibold mb-1">
+                                    Custom Prompt Directive / Invariant Query for this Agent:
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    value={p.customAction?.promptDirective || ''}
+                                    onChange={(e) => {
+                                      const copy = [...editingPreset.participants];
+                                      copy[pIdx] = {
+                                        ...copy[pIdx],
+                                        customAction: {
+                                          id: copy[pIdx].customAction?.id || `action-${Date.now()}`,
+                                          name: copy[pIdx].displayName,
+                                          description: copy[pIdx].roleDescription || '',
+                                          promptDirective: e.target.value,
+                                        },
+                                      };
+                                      setEditingPreset({ ...editingPreset, participants: copy });
+                                    }}
+                                    placeholder="e.g. Stress test race conditions, audit single points of failure, and scrutinize SQLite write locks."
+                                    className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-slate-200 text-xs focus:outline-none focus:border-amber-500/70 leading-relaxed font-mono"
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-slate-800">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                              <Settings size={14} className="text-amber-400" />
+                              Deliberation Action Presets &amp; Role Library
+                            </h4>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              Enable, disable, customize, or define specialized multi-agent inquiry roles.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleResetPresetsToDefaults}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 transition-colors"
+                              title="Restore original 4 default presets"
+                            >
+                              <RotateCcw size={11} />
+                              <span>Restore Defaults</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleStartCreatePreset}
+                              className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1 transition-all shadow-sm"
+                            >
+                              <Plus size={13} />
+                              <span>+ Add Custom Action Preset</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                          {presets.map((preset) => (
+                            <div
+                              key={preset.id}
+                              className={`p-3 rounded-xl border transition-all ${
+                                preset.enabled
+                                  ? 'bg-slate-900/90 border-slate-800'
+                                  : 'bg-slate-950/60 border-slate-800/60 opacity-60'
+                              }`}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="min-w-0 flex items-start gap-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleTogglePresetEnabled(preset.id, e)}
+                                    className={`p-1 rounded transition-colors mt-0.5 ${
+                                      preset.enabled
+                                        ? 'text-emerald-400 hover:text-emerald-300'
+                                        : 'text-slate-600 hover:text-slate-400'
+                                    }`}
+                                    title={preset.enabled ? 'Click to disable preset' : 'Click to enable preset'}
+                                  >
+                                    {preset.enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                                  </button>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-xs text-slate-100">{preset.name}</span>
+                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
+                                        {preset.participants.length} agents
+                                      </span>
+                                      {preset.isBuiltIn && (
+                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                          Built-in
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">{preset.description}</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleStartEditPreset(preset, e)}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 transition-colors"
+                                    title="Edit roles and custom queries"
+                                  >
+                                    <Edit3 size={11} className="text-amber-400" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleDuplicatePreset(preset, e)}
+                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+                                    title="Duplicate preset"
+                                  >
+                                    <CopyPlus size={12} />
+                                  </button>
+                                  {presets.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleDeletePreset(preset.id, e)}
+                                      className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors"
+                                      title="Delete preset"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* Custom Team Editor with Custom Actions & Query Builders */
@@ -2208,7 +2762,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
       {/* 4. Single Session Deletion Confirmation Modal */}
       {sessionToDelete && (
-        <div className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
           <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6">
             <div className="flex items-center gap-2.5 text-rose-400 mb-2">
               <Trash2 size={18} />
@@ -2239,7 +2793,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
       {/* 5. Clear All Sessions Confirmation Modal */}
       {showClearAllModal && (
-        <div className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
           <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6">
             <div className="flex items-center gap-2.5 text-rose-400 mb-2">
               <AlertTriangle size={18} />

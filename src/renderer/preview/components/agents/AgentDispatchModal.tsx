@@ -237,7 +237,10 @@ export const AgentDispatchModal: React.FC = () => {
               </label>
               <button
                 type="button"
-                onClick={() => setShowAgentAccountsModal(true)}
+                onClick={() => {
+                  closeDispatchModal();
+                  setShowAgentAccountsModal(true);
+                }}
                 className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold"
               >
                 <Plus size={12} /> Add Custom Agent / Manage Logins

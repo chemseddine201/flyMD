@@ -34,6 +34,7 @@ interface AgentProgressInspectorProps {
   restoringCheckpointId: string | null;
   onRestoreCheckpoint: (checkpointId: string) => void;
   onClearTaskLogs: (taskId: string) => void;
+  onDeleteTask?: (taskId: string) => Promise<void> | void;
   activeMarkdownContent: string;
   watchedFiles?: ScannedMdFile[];
   onRunSingleChecklistItem: (itemText: string) => void;
@@ -64,6 +65,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   restoringCheckpointId,
   onRestoreCheckpoint,
   onClearTaskLogs,
+  onDeleteTask,
   activeMarkdownContent,
   onRunSingleChecklistItem,
   onOpenFileInEditor,
@@ -224,7 +226,19 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
             <ShieldCheck size={13} className="text-sky-400" />
             Live Progress View
           </span>
-          <span className="text-xs font-extrabold text-sky-300">{pct}%</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-extrabold text-sky-300">{pct}%</span>
+            {selectedTask && selectedTask.status !== 'running' && onDeleteTask && (
+              <button
+                type="button"
+                onClick={() => onDeleteTask(selectedTask.id)}
+                className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors"
+                title="Delete this finished task session"
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Progress Bar */}
