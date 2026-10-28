@@ -108,8 +108,8 @@ export class WindowManager {
     const isAlwaysOnTop = store.getSettings().previewAlwaysOnTop;
 
     this.previewWindow = new BrowserWindow({
-      width: savedBounds.width || 1150,
-      height: savedBounds.height || 780,
+      width: (savedBounds.width && savedBounds.width >= 1350) ? savedBounds.width : 1440,
+      height: (savedBounds.height && savedBounds.height >= 850) ? savedBounds.height : 920,
       x: savedBounds.x,
       y: savedBounds.y,
       minWidth: 700,

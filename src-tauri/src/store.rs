@@ -138,8 +138,8 @@ pub struct PreviewBounds {
 impl Default for PreviewBounds {
     fn default() -> Self {
         Self {
-            width: Some(1150),
-            height: Some(780),
+            width: Some(1440),
+            height: Some(920),
             x: None,
             y: None,
             is_maximized: false,

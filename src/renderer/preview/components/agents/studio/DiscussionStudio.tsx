@@ -350,7 +350,9 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     'Design an isolated, multi-turn multi-agent discussion system with strict read-only process isolation, deterministic barrier synchronization, decision logging, and epistemic evidence-grading.'
   );
   const [maxRounds, setMaxRounds] = useState(3);
+  const [maxRoundsInput, setMaxRoundsInput] = useState<string>('3');
   const [turnTimeoutSecs, setTurnTimeoutSecs] = useState(120);
+  const [turnTimeoutInput, setTurnTimeoutInput] = useState<string>('120');
   const [newDebateMode, setNewDebateMode] = useState<'preset' | 'custom'>('preset');
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>('architecture');
   const [presetEngine, setPresetEngine] = useState<string>('mock');
@@ -628,8 +630,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       topic: newTopic.trim(),
       userIdea: newIdea.trim(),
       workspacePath: resolvedWorkspace,
-      maxRounds: Number(maxRounds) || 3,
-      turnTimeoutSecs: Number(turnTimeoutSecs) || 120,
+      maxRounds: Math.min(10, Math.max(1, parseInt(maxRoundsInput, 10) || maxRounds || 3)),
+      turnTimeoutSecs: Math.min(600, Math.max(15, parseInt(turnTimeoutInput, 10) || turnTimeoutSecs || 120)),
       participants,
       activeSkillUris: [],
       stepMode: enableStepModeInNew,
@@ -1762,8 +1764,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
       {/* 3. New Deliberation Modal (Custom Team & Presets) */}
       {showNewModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+          <div className="w-full max-w-4xl lg:max-w-5xl bg-slate-900 border border-slate-800/90 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden transition-all duration-200">
             {/* Modal Header */}
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1857,36 +1859,45 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                 {newDebateMode === 'preset' ? (
                   <div className="space-y-3">
                     {/* Preset Engine Switcher */}
-                    <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-2">
-                        <Cpu size={14} className="text-sky-400 shrink-0" />
-                        <div>
-                          <span className="font-bold text-slate-200">Preset Engine:</span>
-                          <span className="text-[10px] text-slate-400 ml-1.5 hidden sm:inline">
-                            Model powering all agents
-                          </span>
+                    <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0">
+                          <Cpu size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-100 flex items-center gap-2 truncate">
+                            <span>Preset AI Engine</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/20 font-medium hidden sm:inline">
+                              Shared across all agents
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                            Frontier agent or fast built-in reasoning engine
+                          </div>
                         </div>
                       </div>
-                      <select
-                        value={presetEngine}
-                        onChange={(e) => setPresetEngine(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium"
-                      >
-                        <option value="claude-code">🌟 Claude Code CLI (claude-3-7-sonnet) — Real AI Frontier Agent</option>
-                        <option value="gemini-antigravity">🌟 Antigravity Gemini CLI (gemini-2.5-pro) — Real AI Agent</option>
-                        <option value="mock">⚡ Local Domain Reasoner (Zero API Cost, Built-in)</option>
-                        <option value="auto">⚡ Auto-detect Best Available</option>
-                        {availableProviders
-                          .filter((ap) => !['mock', 'claude-code', 'gemini-antigravity'].includes(ap.id))
-                          .map((ap) => (
-                            <option key={ap.id} value={ap.id}>
-                              {ap.name} ({ap.model || ap.id}) {ap.available ? '✓ Ready' : '(Offline / Not configured)'}
-                            </option>
-                          ))}
-                      </select>
+                      <div className="w-full sm:w-auto min-w-0 sm:max-w-[420px] shrink-0">
+                        <select
+                          value={presetEngine}
+                          onChange={(e) => setPresetEngine(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium truncate shadow-inner cursor-pointer"
+                        >
+                          <option value="claude-code">🌟 Claude Code CLI (claude-3-7-sonnet) — Frontier Agent</option>
+                          <option value="gemini-antigravity">🌟 Antigravity Gemini CLI (gemini-2.5-pro) — Real AI</option>
+                          <option value="mock">⚡ Local Domain Reasoner (Zero API Cost, Built-in)</option>
+                          <option value="auto">⚡ Auto-detect Best Available</option>
+                          {availableProviders
+                            .filter((ap) => !['mock', 'claude-code', 'gemini-antigravity'].includes(ap.id))
+                            .map((ap) => (
+                              <option key={ap.id} value={ap.id}>
+                                {ap.name} ({ap.model || ap.id}) {ap.available ? '✓ Ready' : '(Offline / Not configured)'}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {(Object.keys(PRESET_TEMPLATES) as PresetKey[]).map((key) => {
                       const preset = PRESET_TEMPLATES[key];
                       const isSelected = selectedPreset === key;
@@ -2081,41 +2092,93 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
               </div>
 
               {/* Rounds, Timeout, and Execution Mode */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Deliberation Rounds</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-300 font-semibold text-xs">Deliberation Rounds</label>
+                    <span className="text-[10px] text-slate-500">1 - 10</span>
+                  </div>
                   <input
                     type="number"
-                    min={1}
-                    max={10}
-                    value={maxRounds}
-                    onChange={(e) => setMaxRounds(Math.max(1, Number(e.target.value)))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-sky-500"
+                    value={maxRoundsInput}
+                    onChange={(e) => {
+                      setMaxRoundsInput(e.target.value);
+                      const parsed = parseInt(e.target.value, 10);
+                      if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
+                        setMaxRounds(parsed);
+                      }
+                    }}
+                    onBlur={() => {
+                      const parsed = parseInt(maxRoundsInput, 10);
+                      if (isNaN(parsed) || parsed < 1) {
+                        setMaxRoundsInput('1');
+                        setMaxRounds(1);
+                      } else if (parsed > 10) {
+                        setMaxRoundsInput('10');
+                        setMaxRounds(10);
+                      } else {
+                        setMaxRoundsInput(String(parsed));
+                        setMaxRounds(parsed);
+                      }
+                    }}
+                    placeholder="3"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Turn Timeout (s)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-300 font-semibold text-xs">Turn Timeout (s)</label>
+                    <span className="text-[10px] text-slate-500">15s - 600s</span>
+                  </div>
                   <input
                     type="number"
-                    min={15}
-                    max={600}
-                    value={turnTimeoutSecs}
-                    onChange={(e) => setTurnTimeoutSecs(Math.max(15, Number(e.target.value)))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-sky-500"
+                    value={turnTimeoutInput}
+                    onChange={(e) => {
+                      setTurnTimeoutInput(e.target.value);
+                      const parsed = parseInt(e.target.value, 10);
+                      if (!isNaN(parsed) && parsed >= 15 && parsed <= 600) {
+                        setTurnTimeoutSecs(parsed);
+                      }
+                    }}
+                    onBlur={() => {
+                      const parsed = parseInt(turnTimeoutInput, 10);
+                      if (isNaN(parsed) || parsed < 15) {
+                        setTurnTimeoutInput('15');
+                        setTurnTimeoutSecs(15);
+                      } else if (parsed > 600) {
+                        setTurnTimeoutInput('600');
+                        setTurnTimeoutSecs(600);
+                      } else {
+                        setTurnTimeoutInput(String(parsed));
+                        setTurnTimeoutSecs(parsed);
+                      }
+                    }}
+                    placeholder="120"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
                   />
+                  {Number(turnTimeoutInput) < 15 && turnTimeoutInput !== '' && (
+                    <div className="text-[10px] text-amber-400 mt-1">
+                      * Min 15s (will adjust on blur)
+                    </div>
+                  )}
+                  {Number(turnTimeoutInput) > 600 && (
+                    <div className="text-[10px] text-amber-400 mt-1">
+                      * Max 600s (will adjust on blur)
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Initial Mode</label>
-                  <div className="flex items-center gap-2 pt-1.5">
+                  <label className="block text-slate-300 font-semibold mb-1 text-xs">Initial Execution</label>
+                  <div className="flex items-center gap-2 pt-2">
                     <input
                       type="checkbox"
                       id="stepModeCheck"
                       checked={enableStepModeInNew}
                       onChange={(e) => setEnableStepModeInNew(e.target.checked)}
-                      className="rounded bg-slate-950 border-slate-800 text-sky-500 focus:ring-0"
+                      className="rounded bg-slate-950 border-slate-800 text-sky-500 focus:ring-0 cursor-pointer w-4 h-4"
                     />
-                    <label htmlFor="stepModeCheck" className="text-slate-300 text-xs cursor-pointer">
-                      Step-by-Step Mode
+                    <label htmlFor="stepModeCheck" className="text-slate-300 text-xs cursor-pointer select-none">
+                      Step-by-Step Mode (Pause after each turn)
                     </label>
                   </div>
                 </div>
@@ -2145,8 +2208,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
       {/* 4. Single Session Deletion Confirmation Modal */}
       {sessionToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-5">
+        <div className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6">
             <div className="flex items-center gap-2.5 text-rose-400 mb-2">
               <Trash2 size={18} />
               <h3 className="text-sm font-bold text-slate-100">Delete Deliberation</h3>
@@ -2176,8 +2239,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
       {/* 5. Clear All Sessions Confirmation Modal */}
       {showClearAllModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-5">
+        <div className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6">
             <div className="flex items-center gap-2.5 text-rose-400 mb-2">
               <AlertTriangle size={18} />
               <h3 className="text-sm font-bold text-slate-100">Clear All Deliberations</h3>

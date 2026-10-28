@@ -835,7 +835,7 @@ export const AgentsControlCenter: React.FC = () => {
 
       {/* Clear Memory & Cache Confirmation Modal */}
       {showClearCacheModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in select-none">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in select-none">
           <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/60">
               <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">

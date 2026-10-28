@@ -57,14 +57,14 @@ pub fn get_or_create_preview_window(
         guard.preview_bounds.clone()
     };
 
-    let w = bounds.width.unwrap_or(1150) as f64;
-    let h = bounds.height.unwrap_or(780) as f64;
+    let w = bounds.width.filter(|&v| v >= 1350).unwrap_or(1440) as f64;
+    let h = bounds.height.filter(|&v| v >= 850).unwrap_or(920) as f64;
 
     let mut builder =
         WebviewWindowBuilder::new(app, "preview", WebviewUrl::App("index.html".into()))
             .title("FlyMD - Preview & Editor")
             .inner_size(w, h)
-            .min_inner_size(700.0, 500.0)
+            .min_inner_size(900.0, 600.0)
             .decorations(false)
             .visible(false)
             .always_on_top(settings.preview_always_on_top)
