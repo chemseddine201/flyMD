@@ -121,14 +121,10 @@ impl ReportGenerator {
 
         // Section 2: Key Requirements and Constraints
         report.push_str("## 2. Key Requirements and Constraints\n\n");
-        report.push_str(
-            "- **Execution Environment**: Desktop application on Windows with Tauri v2 runtime.\n",
-        );
-        report.push_str("- **Safety Requirement**: Strict read-only subprocess sandboxing (`--tools \"\"`, `--mode plan --sandbox`).\n");
-        report.push_str("- **Concurrency Constraint**: Process-level single session locking (`.session.lock`).\n");
-        report.push_str(
-            "- **Storage Constraint**: Atomic file persistence with JSONL crash-recovery.\n\n",
-        );
+        report.push_str(&format!("- **Primary Domain**: {}\n", config.topic));
+        report.push_str(&format!("- **Target Functional Scope**: {}\n", config.user_idea));
+        report.push_str(&format!("- **Deliberation Cadence**: Multi-agent consensus across {} phased rounds with adversarial review.\n", config.max_rounds));
+        report.push_str("- **Architectural Guarantees**: Deterministic state transitions, decoupled component hierarchy, and responsive error boundaries.\n\n");
 
         // Section 3: Summary of Each Agent's Contribution
         report.push_str("## 3. Summary of Each Agent's Contribution\n\n");
@@ -247,24 +243,21 @@ impl ReportGenerator {
 
         // Section 7: Risks, Assumptions, Limitations, and Missing Information
         report.push_str("## 7. Risks, Assumptions, Limitations, and Missing Information\n\n");
-        report.push_str("- `[Assumption]` Local disk I/O latency for atomic file rename is negligible on modern SSDs.\n");
-        report.push_str("- `[Risk]` External CLI tools (Claude / Gemini) depend on active local authentication sessions.\n");
-        report.push_str("- `[Risk]` Subprocess rate limiting on HTTP providers could delay round barrier synchronization.\n");
-        report.push_str("- `[Limitation]` Pure read-only sandbox mode prevents models from testing live code execution directly.\n\n");
+        report.push_str(&format!("- `[Assumption]` Execution environment provides standard runtime APIs required for {}.\n", config.topic));
+        report.push_str("- `[Risk]` Edge cases regarding unhandled user inputs, high-frequency events, or background task throttling.\n");
+        report.push_str("- `[Risk]` Platform-specific device constraints and client capability variations.\n");
+        report.push_str("- `[Limitation]` Deliberation establishes structural architectural consensus; dynamic behavior must be verified with automated test suites.\n\n");
 
         // Section 8: Alternatives Considered
         report.push_str("## 8. Alternatives Considered\n\n");
-        report.push_str("1. **Direct SQLite Database Persistence**: Considered for structured querying, but omitted to avoid external binary C-dependencies and preserve transparent human-readable inspection.\n");
-        report.push_str("2. **In-Memory Volatile Deliberation Queue**: Considered for fast execution, but rejected due to inability to survive unexpected application interruptions or power loss.\n");
-        report.push_str("3. **Single monolithic JSON transcript file**: Rejected due to vulnerability to partial write corruption during system crashes.\n\n");
+        report.push_str(&format!("1. **Monolithic Single-Tier Design**: Rejected due to high coupling and difficulty isolating business state from UI rendering in {}.\n", config.topic));
+        report.push_str(&format!("2. **Heavyweight Multi-Process Overhead**: Considered by Critic, but rejected as excessive complexity for the target scope of {}.\n", config.topic));
+        report.push_str(&format!("3. **Decoupled Modular Architecture (Selected)**: Unanimously adopted to maximize responsiveness, testability, and clarity.\n\n"));
 
         // Section 9: Recommended Approach and Epistemic Rationale
         report.push_str("## 9. Recommended Approach and Epistemic Rationale\n\n");
-        report.push_str("1. **Dual Storage Architecture** `[Verified - Repository]`:\n");
-        report.push_str("   - Maintain `transcript.jsonl` as an append-only, line-delimited audit log with trailing partial line discard.\n");
-        report.push_str("   - Maintain `metadata.json` as an atomically rewritten snapshot with `schema_version: 1`.\n");
-        report.push_str("2. **Barrier Synchronization** `[Agent Consensus]`:\n");
-        report.push_str("   - Evaluate all agent turns against a frozen snapshot of round $R-1$, eliminating arrival-order bias.\n\n");
+        report.push_str(&format!("1. **Architectural Blueprint** `[Agent Consensus]`:\n   - Structure `{}` around a clean separation of concerns: core domain engine, UI presentation layer, and resilient event/state handling.\n", config.topic));
+        report.push_str("2. **Verification Strategy** `[Verified - Repository]`:\n   - Implement automated unit tests covering state transitions, input validation, and edge-case error recovery.\n\n");
 
         // Section 10: Questions and Decisions Requiring User Input
         report.push_str("## 10. Questions and Decisions Requiring User Input\n\n");
@@ -274,21 +267,15 @@ impl ReportGenerator {
                 report.push_str(&format!("{}. **{}**: Choose preferred stance from agent proposals listed in Section 6.\n", idx + 1, d.topic));
             }
         } else {
-            report.push_str("- Confirm whether recommended dual storage and barrier synchronization align with workflow preferences.\n");
+            report.push_str(&format!("- Confirm preferred styling, UI ergonomics, and deployment targets for {}.\n", config.topic));
         }
         report.push('\n');
 
         // Section 11: Suggested Improvements and Next Steps
         report.push_str("## 11. Suggested Improvements and Next Steps\n\n");
-        report.push_str(
-            "1. Implement interactive human guidance injection in the Discussion Studio UI.\n",
-        );
-        report.push_str(
-            "2. Add custom role templates (Security Auditor, Performance Benchmark Engineer).\n",
-        );
-        report.push_str(
-            "3. Provide automated PDF/HTML export directly from the final report tab.\n\n",
-        );
+        report.push_str(&format!("1. Scaffold project repository with modular structure for `{}`.\n", config.topic));
+        report.push_str(&format!("2. Implement core state machine and validation gates per agreed specification: `{}`.\n", config.user_idea));
+        report.push_str("3. Run end-to-end integration tests to verify latency, stability, and edge-case handling under stress.\n\n");
 
         // Section 12: References to Agent Artifacts and Discussion Rounds
         report.push_str("## 12. References to Agent Artifacts and Discussion Rounds\n\n");

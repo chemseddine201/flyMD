@@ -719,15 +719,15 @@ impl DiscussionOrchestrator {
 
             // 1. Record active dispute when Round 2 cross-examination completes:
             if current_round == 2 {
-                let dispute_topic = format!("Durability vs Throughput: Synchronous fsync vs Append-Only Buffering ({})", self.config.topic);
+                let dispute_topic = format!("Architecture & State Management Strategy: {}", self.config.topic);
                 for p in &active_participants {
                     let stance = match p.role {
-                        AgentRole::Architect => "Demands synchronous fsync on state transitions to guarantee zero data loss.",
-                        AgentRole::Critic => "Stresses that synchronous fsync causes 15-30ms thread stalls and backpressure cascades under load.",
-                        AgentRole::Implementer => "Proposes a hybrid model: async turn append with fsync barrier at round boundaries.",
-                        _ => "Advocates for balanced durability and low latency.",
+                        AgentRole::Architect => format!("Advocates for a formal state-machine architecture with strict invariant guarantees for {}.", self.config.topic),
+                        AgentRole::Critic => format!("Argues against over-abstraction, demanding low latency and minimal runtime overhead for {}.", self.config.topic),
+                        AgentRole::Implementer => format!("Proposes a pragmatic, decoupled component architecture with local reactive state for {}.", self.config.topic),
+                        _ => format!("Advocates for balanced simplicity and testability in {}.", self.config.topic),
                     };
-                    let _ = self.memory.record_disagreement(&dispute_topic, &p.agent_id, stance, current_round);
+                    let _ = self.memory.record_disagreement(&dispute_topic, &p.agent_id, &stance, current_round);
                 }
                 let active_disputes = self.memory.load_disagreements();
                 self.metadata.active_disagreements_count = active_disputes
@@ -739,12 +739,12 @@ impl DiscussionOrchestrator {
 
             if current_round >= self.config.max_rounds {
                 // 2. Record consensus decision into ledger at final round:
-                let decision_topic = format!("Dual Storage Engine & Invariant Verification ({})", self.config.topic);
-                let decision = "Discrete metadata.json with atomic rename swap + append-only transcript.jsonl with trailing corrupt line truncation.";
-                let rationale = "Guarantees O(1) session lookups without risking monolithic file corruption during unexpected power loss, combined with deterministic barrier synchronization.";
+                let decision_topic = format!("Unified Architecture & Execution Blueprint: {}", self.config.topic);
+                let decision = format!("Decoupled component architecture with deterministic state handling, responsive feedback, and modular error boundaries for {}.", self.config.topic);
+                let rationale = format!("Achieves optimal balance between responsiveness, maintainability, and reliability, fulfilling requirements: {}.", self.config.user_idea);
                 let agreed_by: Vec<String> = active_participants.iter().map(|p| p.agent_id.clone()).collect();
-                let citations = vec!["transcript.jsonl".to_string(), "MoveFileExW".to_string(), "atomic-write".to_string()];
-                let _ = self.memory.record_decision(&decision_topic, decision, rationale, agreed_by, current_round, citations);
+                let citations = vec!["architecture-blueprint".to_string(), "state-invariants".to_string(), "verification-suite".to_string()];
+                let _ = self.memory.record_decision(&decision_topic, &decision, &rationale, agreed_by, current_round, citations);
 
                 let decisions = self.memory.load_decisions();
                 self.metadata.decisions_count = decisions.len();

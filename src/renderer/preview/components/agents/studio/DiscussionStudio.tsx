@@ -1363,7 +1363,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                         )}
 
                                         <div
-                                          className="text-xs text-slate-200 leading-relaxed prose prose-invert max-w-none prose-pre:bg-slate-950 prose-pre:border prose-pre:border-slate-800 prose-headings:text-slate-100 prose-table:border prose-table:border-slate-800"
+                                          className="markdown-body text-xs text-slate-200 leading-relaxed max-w-none"
                                           dangerouslySetInnerHTML={{
                                             __html: markdownService.render(msg.content),
                                           }}
@@ -1537,12 +1537,14 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
                   {/* Rendered 12-Section Markdown Report */}
                   {activeReportMarkdown ? (
-                    <div
-                      className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs text-slate-200 leading-relaxed prose prose-invert max-w-none prose-headings:text-slate-100 prose-table:border prose-table:border-slate-800 prose-th:bg-slate-800/40 prose-td:border prose-td:border-slate-800"
-                      dangerouslySetInnerHTML={{
-                        __html: markdownService.render(activeReportMarkdown),
-                      }}
-                    />
+                    <div className="p-8 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-2xl">
+                      <div
+                        className="markdown-body text-slate-200 text-sm leading-relaxed"
+                        dangerouslySetInnerHTML={{
+                          __html: markdownService.render(activeReportMarkdown),
+                        }}
+                      />
+                    </div>
                   ) : (
                     <div className="p-16 text-center text-slate-500 text-xs bg-slate-900/30 rounded-2xl border border-slate-800/60">
                       <Info size={28} className="mx-auto mb-2 text-slate-600" />
@@ -1870,13 +1872,15 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                         onChange={(e) => setPresetEngine(e.target.value)}
                         className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium"
                       >
-                        <option value="mock">Local Adaptive Reasoner (Zero API Cost, Built-in) ✓</option>
-                        <option value="auto">⚡ Auto-detect Best Engine</option>
+                        <option value="claude-code">🌟 Claude Code CLI (claude-3-7-sonnet) — Real AI Frontier Agent</option>
+                        <option value="gemini-antigravity">🌟 Antigravity Gemini CLI (gemini-2.5-pro) — Real AI Agent</option>
+                        <option value="mock">⚡ Local Domain Reasoner (Zero API Cost, Built-in)</option>
+                        <option value="auto">⚡ Auto-detect Best Available</option>
                         {availableProviders
-                          .filter((ap) => ap.id !== 'mock')
+                          .filter((ap) => !['mock', 'claude-code', 'gemini-antigravity'].includes(ap.id))
                           .map((ap) => (
                             <option key={ap.id} value={ap.id}>
-                              {ap.name} ({ap.model}) {ap.available ? '✓ Ready' : '(Not configured)'}
+                              {ap.name} ({ap.model || ap.id}) {ap.available ? '✓ Ready' : '(Offline / Not configured)'}
                             </option>
                           ))}
                       </select>

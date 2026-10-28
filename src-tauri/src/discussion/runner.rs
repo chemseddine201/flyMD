@@ -894,156 +894,59 @@ impl DiscussionProvider for MockProvider {
         let response_body = match request.round_number {
             1 => match &request.role {
                 AgentRole::Architect => format!(
-                    "### Position Paper by {} (Lead Architect)\n\n\
-                    **Domain Analysis for Topic**: *{}*\n\
-                    {}\n\
-                    #### 1. Architectural Baseline & Decomposition\n\
-                    - **Primary Objective**: {}\n\
-                    - **Modular Topology**: Strict three-tier separation:\n\
-                      1. *Subprocess Isolation Sandbox*: Read-only execution boundary with stripped environment variables.\n\
-                      2. *Deterministic Event Reactor*: Unidirectional barrier synchronization preventing arrival-order bias.\n\
-                      3. *Persistence Engine*: Dual storage with atomic state snapshots and append-only event logs.\n\
-                    - **State Invariants**: Schema versioning (v1) validated before deserialization.\n\n\
-                    #### 2. Key Hypotheses & Technical Feasibility\n\
-                    - **Concurrency Model**: Asynchronous message passing via bounded `tokio::sync::mpsc` channels with backpressure.\n\
-                    - **Contract Boundary**: Explicit JSON-RPC command interfaces between UI and runtime.\n\n\
-                    #### 3. Recommended Validation Gates\n\
-                    - Formal state transition matrix test suite covering all 8 lifecycle states.\n\
-                    - Property-based testing for JSONL partial recovery.{}",
+                    "### Position Paper by {} (Lead Architect)\n\n                    **Domain Analysis for Topic**: *{}*\n                    {}\n                    #### 1. Architectural Baseline & Decomposition\n                    - **Primary Objective**: Satisfy requirements: {}\n                    - **Modular Component Hierarchy**:\n                      1. *View & Presentation Layer*: Clean responsive interface with immediate feedback, intuitive controls, and accessible status displays.\n                      2. *Core Domain Engine*: State machine governing transitions, precision event loops, validation, and invariant enforcement.\n                      3. *Persistence & State Synchronization*: Resilient local caching for user configurations, session continuity, and error boundaries.\n                    - **State Invariants**: Strict transition guards preventing invalid or out-of-order state mutations.\n\n                    #### 2. Technical Feasibility & Contracts\n                    - Decoupled interfaces ensuring UI remains 100% responsive during background tasks or event bursts.\n                    - Explicit schema validation for all persisted configurations and session records.\n\n                    #### 3. Recommended Validation Gates\n                    - Automated test suite covering state transitions, input boundaries, and error recovery gates.{}",
                     request.agent_id, topic_clean, action_focus.trim(), idea_clean, custom_section
                 ),
                 AgentRole::Critic => format!(
-                    "### Position Paper by {} (Critical Adversary)\n\n\
-                    **Adversarial Challenge for Topic**: *{}*\n\
-                    {}\n\
-                    #### 1. Scrutiny of Architectural Assumptions\n\
-                    - **Underestimated Failure Modes**: High-level specifications routinely overlook process-level deadlocks during sudden power interruptions or SIGKILL signals.\n\
-                    - **Single Point of Failure (SPOF)**: Monolithic session locks cause permanent denial-of-service if a previous instance crashes without releasing its lockfile.\n\
-                    - **Buffer Bloat Hazard**: Unbounded streaming chunks risk overflowing memory budgets if downstream UI rendering throttles.\n\n\
-                    #### 2. Critical Edge Cases to Stress-Test\n\
-                    1. *Dirty Writes*: Interrupted disk writes during concurrent guidance injection.\n\
-                    2. *File Watcher Cascade*: Disk persistence triggering recursive file watcher loops if writing into monitored directories.\n\
-                    3. *Zombie Subprocesses*: Orphaned CLI adapter processes continuing to consume CPU after user cancellation.\n\n\
-                    #### 3. Adversarial Mandate\n\
-                    - Demand empirical proof of crash recovery and deterministic process-tree termination before approving design.{}",
-                    request.agent_id, topic_clean, action_focus.trim(), custom_section
+                    "### Position Paper by {} (Critical Adversary)\n\n                    **Adversarial Challenge for Topic**: *{}*\n                    {}\n                    #### 1. Scrutiny of Architectural Assumptions\n                    - **Failure Modes**: Specifications often overlook real-world edge cases in {}: sudden interruptions, rapid user toggles, or background throttling.\n                    - **Single Point of Failure (SPOF)**: Tightly coupled state logic where a single runtime exception halts the entire user experience.\n                    - **Resource Hazards**: Unbounded event listeners or uncollected intervals causing memory leaks or UI frame drops.\n\n                    #### 2. Critical Edge Cases to Stress-Test\n                    1. *State Corruption*: Interrupted writes during concurrent state updates.\n                    2. *Background Throttling*: Device or browser sleep modes causing timer/event desynchronization.\n                    3. *Invalid Input Boundaries*: Malformed, missing, or extreme parameter configurations.\n\n                    #### 3. Adversarial Mandate\n                    - Demand automated regression tests and defensive fallbacks before approving the proposed architecture.{}",
+                    request.agent_id, topic_clean, action_focus.trim(), idea_clean, custom_section
                 ),
                 AgentRole::Implementer => format!(
-                    "### Position Paper by {} (Core Implementer)\n\n\
-                    **Systems Engineering Specification for Topic**: *{}*\n\
-                    {}\n\
-                    #### 1. Low-Level Platform & Storage Realities\n\
-                    - **Primary Objective**: Implement {}\n\
-                    - **Storage Atomicity on Windows**: Standard `std::fs::write` is NOT atomic on Windows NTFS. Replacement must use atomic write-to-temp and `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`.\n\
-                    - **Durability Model**: Single-file JSON serialization causes catastrophic truncation on crash. We must implement dual storage:\n\
-                      - `transcript.jsonl`: Append-only, line-buffered with trailing partial-line recovery.\n\
-                      - `metadata.json`: Atomically rewritten snapshot with schema version validation.\n\n\
-                    #### 2. Subprocess Lifecycle & Process-Tree Isolation\n\
-                    - Process cleanup on Windows cannot rely on standard `kill()` which only kills the parent wrapper; we must terminate the full process tree via `taskkill /F /T /PID` or Win32 Job Objects.\n\
-                    - Memory budgets: Hard cap per turn at 32,000 tokens with pre-deserialization byte-limit bounds.{}",
+                    "### Position Paper by {} (Core Implementer)\n\n                    **Systems Engineering Specification for Topic**: *{}*\n                    {}\n                    #### 1. Concrete Engineering Specification\n                    - **Target Implementation**: Fulfill {}\n                    - **Technology Stack & Architecture**:\n                      - Idiomatic, cleanly structured codebase with strict separation between business logic and view rendering.\n                      - Precision event loops and reactive state management with error boundaries.\n                      - Fast local persistence with safe schema migrations and fallbacks.\n\n                    #### 2. Execution Pipeline & Robustness\n                    - Graceful degradation: If optional platform features (audio, notifications, persistent storage) fail, core functionality remains intact.\n                    - High performance: Sub-16ms response times for all user interactions, eliminating UI stutter or lag.{}",
                     request.agent_id, topic_clean, action_focus.trim(), idea_clean, custom_section
                 ),
                 AgentRole::Auditor => format!(
-                    "### Position Paper by {} (Security Auditor)\n\n\
-                    **Zero-Trust Security Audit for Topic**: *{}*\n\
-                    {}\n\
-                    #### 1. Security Boundaries & Process Isolation\n\
-                    - **Read-Only Sandbox**: CLI adapters must strictly execute with `--tools \"\"` and `--mode plan --sandbox` to prevent arbitrary file mutation or remote command execution.\n\
-                    - **Path Traversal Barrier**: Reject all input paths containing `..`, symlink escapes, or Windows alternate data streams (`::$DATA`).\n\
-                    - **Secret Redaction**: Scrub API keys, Bearer tokens, and sensitive env variables from all logged messages prior to disk commit.\n\n\
-                    #### 2. Auditing Requirements\n\
-                    - Maintain immutable cryptographic hashes or line-delimited audit log for every turn.{}",
+                    "### Position Paper by {} (Security Auditor)\n\n                    **Zero-Trust Security & Validation Audit for Topic**: *{}*\n                    {}\n                    #### 1. Security Boundaries & Input Sanitization\n                    - **Input Validation**: Sanitize and validate all user inputs against injection or malformed payloads.\n                    - **Client-Side Privacy**: Enforce strict local boundaries, ensuring user data is never leaked or unencrypted.\n                    - **Error Handling**: Scrub internal stack traces from user-facing error dialogs.\n\n                    #### 2. Auditing Requirements\n                    - Maintain auditable event logging for critical state transitions and configuration changes.{}",
                     request.agent_id, topic_clean, action_focus.trim(), custom_section
                 ),
                 _ => format!(
-                    "### Position Paper by {} ({})\n\n\
-                    **Domain Analysis for Topic**: *{}*\n\
-                    {}\n\
-                    #### 1. Foundational Perspective\n\
-                    - **Core Focus**: Domain analysis for {}\n\
-                    - **Proposed Approach**: Coordinate role specialization with deterministic barrier synchronization.\n\
-                    - **Identified Trade-Off**: Throughput versus strict validation invariants.{}",
+                    "### Position Paper by {} ({})\n\n                    **Domain Analysis for Topic**: *{}*\n                    {}\n                    #### 1. Foundational Perspective\n                    - **Core Focus**: Domain analysis for {}\n                    - **Proposed Approach**: Coordinate role specialization with deterministic barrier synchronization.\n                    - **Identified Trade-Off**: Throughput versus strict validation invariants.{}",
                     request.agent_id, request.role.as_str(), topic_clean, action_focus.trim(), idea_clean, custom_section
                 ),
             },
             2 => match &request.role {
                 AgentRole::Architect => format!(
-                    "### Round 2 Cross-Examination by {} (Lead Architect)\n\n\
-                    **Critique Target**: *Critic's SPOF & Implementer's Storage Proposals*\n\
-                    **Topic Context**: {}\n\n\
-                    #### 1. Defense & Refinement of Architectural Invariants\n\
-                    - **Lockfile Self-Healing**: Accept Critic's concern regarding stale locks; session locks must incorporate PID-heartbeat validation so dead processes self-release locks on startup.\n\
-                    - **Durability Invariant**: Must maintain strict synchronous fsync for all state machine transitions (`Created` -> `Running` -> `Paused`). We cannot compromise on state recovery.\n\
-                    - **Active Trade-Off Under Dispute**: Latency penalty of synchronous fsync vs crash-vulnerability of delayed disk flushing.\n\n\
-                    #### 2. Peer Critique\n\
-                    - The Critic's proposal to eliminate locks entirely is rejected; concurrency without mutual exclusion invites silent transcript corruption.",
+                    "### Round 2 Cross-Examination by {} (Lead Architect)\n\n                    **Critique Target**: *Critic's Failure Analysis & Implementer's Specifications*\n                    **Topic Context**: {}\n\n                    #### 1. Defense & Refinement of Architectural Invariants\n                    - **Defensive State Bounds**: Accept Critic's concern regarding unexpected state interrupts; state machines must enforce strict entry/exit guards so unexpected events self-recover to safe defaults.\n                    - **Core Invariant**: Domain logic must remain cleanly decoupled from UI presentation to allow independent testing and future extensibility.\n                    - **Active Trade-Off Under Dispute**: Formal decoupled state-machine architecture vs rapid, lightweight component-local state.\n\n                    #### 2. Peer Critique\n                    - Conflating view rendering with business state introduces brittle regressions; we must maintain modular separation.",
                     request.agent_id, topic_clean
                 ),
                 AgentRole::Critic => format!(
-                    "### Round 2 Cross-Examination by {} (Critical Adversary)\n\n\
-                    **Critique Target**: *Architect's Synchronous Fsync Stance*\n\
-                    **Topic Context**: {}\n\n\
-                    #### 1. Scrutiny of Peer Claims\n\
-                    - **The Latency Trap**: The Architect demands synchronous fsync on every turn. Benchmarks show fsync stalls the event loop for 15ms-30ms on Windows SSDs, creating massive backpressure.\n\
-                    - **Active Dispute**: *Synchronous fsync durability on every turn vs asynchronous append-only buffer throughput*.\n\
-                    - **Edge Case Expose**: If Windows crashes during an atomic rename, parent folder metadata is not committed unless the directory itself is flushed. The Architect's model is not crash-proof without directory sync.",
-                    request.agent_id, topic_clean
+                    "### Round 2 Cross-Examination by {} (Critical Adversary)\n\n                    **Critique Target**: *Architect's State Model & Complexity Overhead*\n                    **Topic Context**: {}\n\n                    #### 1. Scrutiny of Peer Claims\n                    - **The Abstraction Trap**: The Architect's multi-layered state machine risks over-engineering a solution for {}. Excessive abstraction slows development and increases runtime debugging difficulty.\n                    - **Active Dispute**: *Formal modular state-machine complexity vs streamlined, reactive component-local simplicity*.\n                    - **Edge Case Exposure**: If an unhandled event occurs during user interaction, complex state machines risk halting entirely without graceful fallback.",
+                    request.agent_id, topic_clean, idea_clean
                 ),
                 AgentRole::Implementer => format!(
-                    "### Round 2 Cross-Examination by {} (Core Implementer)\n\n\
-                    **Critique Target**: *Bridging the Fsync Latency vs Crash-Safety Divide*\n\
-                    **Topic Context**: {}\n\n\
-                    #### 1. Concrete Engineering Compromise\n\
-                    - **Empirical Measurement**: Testing confirms direct fsync on each turn adds 22ms overhead, degrading deliberation speed.\n\
-                    - **Proposed Resolution**: A hybrid storage contract:\n\
-                      1. `transcript.jsonl`: Appended asynchronously with OS page-cache buffering. Truncate trailing incomplete line on recovery.\n\
-                      2. `metadata.json`: Atomically rewritten with `MoveFileExW` and fsync ONLY at round boundaries and human pause checkpoints.\n\
-                    - This provides zero data corruption risk while maintaining near zero-latency streaming throughput.",
+                    "### Round 2 Cross-Examination by {} (Core Implementer)\n\n                    **Critique Target**: *Synthesizing Architectural Rigor with Runtime Simplicity*\n                    **Topic Context**: {}\n\n                    #### 1. Concrete Engineering Compromise\n                    - **Resolution**: A pragmatic decoupled component architecture:\n                      1. *Core Engine*: A lightweight, pure TypeScript/JavaScript state-machine module containing zero DOM/view dependencies, fully unit-testable.\n                      2. *View Layer*: Reactive bindings that subscribe to state updates with automatic throttling and responsive visual/audio feedback.\n                      3. *Defensive Fallbacks*: Local storage persistence with default recovery states on reload.\n                    - Eliminates over-engineering while guaranteeing robust state isolation and crash resilience.",
                     request.agent_id, topic_clean
                 ),
                 _ => format!(
-                    "### Round 2 Cross-Examination by {} ({})\n\n\
-                    **Critique Target**: *Evaluating Peer Proposals*\n\
-                    **Topic Context**: {}\n\n\
-                    #### 1. Cross-Examination Findings\n\
-                    - Concur with atomic persistence requirements.\n\
-                    - Active Trade-Off Under Dispute: Synchronous durability guarantees vs async throughput scaling.",
+                    "### Round 2 Cross-Examination by {} ({})\n\n                    **Critique Target**: *Evaluating Peer Proposals*\n                    **Topic Context**: {}\n\n                    #### 1. Cross-Examination Findings\n                    - Concur with decoupled component architecture.\n                    - Active Trade-Off Under Dispute: Formal state abstraction vs pragmatic reactive execution.",
                     request.agent_id, request.role.as_str(), topic_clean
                 ),
             },
             _ => match &request.role {
                 AgentRole::Architect => format!(
-                    "### Round {} Rebuttal & Consensus by {} (Lead Architect)\n\n\
-                    **Topic Refinement**: *{}*\n\n\
-                    #### 1. Concessions & Final Stance\n\
-                    - **Concession**: I concede to the Implementer's hybrid storage compromise: per-turn fsync is unneeded given append-only JSONL partial-line recovery.\n\
-                    - **Firm Stance**: Metadata lookups must remain discrete and indexed; cannot compromise on O(1) session resolution.\n\
-                    - **Consensus Reached**: Dual storage model with atomic `metadata.json` and append-only `transcript.jsonl`.",
+                    "### Round {} Rebuttal & Consensus by {} (Lead Architect)\n\n                    **Topic Refinement**: *{}*\n\n                    #### 1. Concessions & Final Stance\n                    - **Concession**: I concede to the Implementer's pragmatic compromise: lightweight pure functions for state management provide sufficient invariant safety without bloated framework abstractions.\n                    - **Firm Stance**: State updates must remain unidirectional and predictable.\n                    - **Consensus Reached**: Decoupled component architecture with validated state transitions and responsive feedback loops.",
                     request.round_number, request.agent_id, topic_clean
                 ),
                 AgentRole::Critic => format!(
-                    "### Round {} Rebuttal & Consensus by {} (Critical Adversary)\n\n\
-                    **Topic Refinement**: *{}*\n\n\
-                    #### 1. Concessions & Final Stance\n\
-                    - **Concession**: The hybrid persistence model with atomic metadata and append-only transcript resolves the data-loss risk without blocking the event loop.\n\
-                    - **Firm Stance**: Strict process-tree termination with job objects must remain a mandatory security requirement.\n\
-                    - **Consensus Reached**: System invariants verified for crash safety, zero-trust isolation, and low latency.",
+                    "### Round {} Rebuttal & Consensus by {} (Critical Adversary)\n\n                    **Topic Refinement**: *{}*\n\n                    #### 1. Concessions & Final Stance\n                    - **Concession**: The Implementer's pure-function state machine resolves the complexity hazard while preserving defensive error boundaries.\n                    - **Firm Stance**: Defensive fallbacks for background sleep, audio autoplay permissions, and storage exceptions must remain mandatory.\n                    - **Consensus Reached**: Complete mitigation of single points of failure with robust runtime error recovery.",
                     request.round_number, request.agent_id, topic_clean
                 ),
                 AgentRole::Implementer => format!(
-                    "### Round {} Rebuttal & Consensus by {} (Core Implementer)\n\n\
-                    **Topic Refinement**: *{}*\n\n\
-                    #### 1. Implementation Contract Approved\n\
-                    - **Agreed Storage Specification**: Dual storage architecture: `metadata.json` (atomic rename swap) + `transcript.jsonl` (line-buffered append).\n\
-                    - **Deterministic Barrier**: Snapshot frozen at round start, eliminating arrival-order bias.\n\
-                    - **Implementation Verdict**: Design is sound, crash-resilient, and fully validated for Windows Tauri runtime.",
-                    request.round_number, request.agent_id, topic_clean
+                    "### Round {} Rebuttal & Consensus by {} (Core Implementer)\n\n                    **Topic Refinement**: *{}*\n\n                    #### 1. Implementation Contract Approved\n                    - **Agreed Technical Specification**: Unified decoupled architecture directly fulfilling: {}\n                    - **Execution Milestones**: 1. Pure core domain logic -> 2. View/Audio/Interaction layer -> 3. Automated unit test suite -> 4. Local state persistence.\n                    - **Implementation Verdict**: Specification is rock-solid, production-ready, and verified for immediate delivery.",
+                    request.round_number, request.agent_id, topic_clean, idea_clean
                 ),
                 _ => format!(
-                    "### Round {} Rebuttal & Consensus by {} ({})\n\n\
-                    **Topic Refinement**: *{}*\n\n\
-                    #### 1. Final Position\n\
-                    - Concur with dual storage persistence and deterministic barrier synchronization.",
+                    "### Round {} Rebuttal & Consensus by {} ({})\n\n                    **Topic Refinement**: *{}*\n\n                    #### 1. Final Position\n                    - Concur with decoupled modular architecture and verified error boundaries.",
                     request.round_number, request.agent_id, request.role.as_str(), topic_clean
                 ),
             },
