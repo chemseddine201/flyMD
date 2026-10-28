@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CheckCircle2,
   Loader2,
@@ -17,6 +17,7 @@ import {
   Activity,
   Layers,
   Sparkles,
+  Clock,
 } from 'lucide-react';
 import {
   AgentCheckpoint,
@@ -35,6 +36,7 @@ interface AgentProgressInspectorProps {
   onRestoreCheckpoint: (checkpointId: string) => void;
   onClearTaskLogs: (taskId: string) => void;
   onDeleteTask?: (taskId: string) => Promise<void> | void;
+  onCancelTask?: (taskId: string) => void;
   activeMarkdownContent: string;
   watchedFiles?: ScannedMdFile[];
   onRunSingleChecklistItem: (itemText: string) => void;
@@ -66,6 +68,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   onRestoreCheckpoint,
   onClearTaskLogs,
   onDeleteTask,
+  onCancelTask,
   activeMarkdownContent,
   onRunSingleChecklistItem,
   onOpenFileInEditor,
@@ -74,6 +77,28 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   const [contextTarget, setContextTarget] =
     useState<SidebarContextMenuTarget | null>(null);
   const [viewTab, setViewTab] = useState<'activity' | 'terminal'>('activity');
+  const [elapsedSec, setElapsedSec] = useState<number>(0);
+
+  useEffect(() => {
+    if (selectedTask?.status === 'running') {
+      const start = selectedTask.startedAt || selectedTask.createdAt || Date.now();
+      const updateTimer = () => {
+        const diff = Math.max(0, Math.floor((Date.now() - start) / 1000));
+        setElapsedSec(diff);
+      };
+      updateTimer();
+      const timer = setInterval(updateTimer, 1000);
+      return () => clearInterval(timer);
+    } else {
+      setElapsedSec(0);
+    }
+  }, [selectedTask?.status, selectedTask?.startedAt, selectedTask?.createdAt]);
+
+  const formatTimer = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
   const pct = selectedTask
     ? selectedTask.progressPercent ??
@@ -244,10 +269,74 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
         {/* Progress Bar */}
         <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 transition-all duration-300"
+            className={`h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 transition-all duration-300 ${
+              selectedTask?.status === 'running' ? 'animate-pulse' : ''
+            }`}
             style={{ width: `${pct}%` }}
           />
         </div>
+
+        {/* Live Execution & Background Tracking Monitor Card */}
+        {selectedTask?.status === 'running' && (
+          <div className="rounded-xl border border-sky-500/30 bg-sky-950/30 p-2.5 space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center gap-1.5 font-bold text-sky-300">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
+                </span>
+                <span>Live Execution</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[11px] font-bold text-amber-300 flex items-center gap-1">
+                  <Clock size={11} />
+                  <span>{formatTimer(elapsedSec)}</span>
+                </span>
+                {onCancelTask && (
+                  <button
+                    type="button"
+                    onClick={() => onCancelTask(selectedTask.id)}
+                    className="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-[10px] font-bold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-200 font-medium leading-tight">
+              {selectedTask.progressStage === 'snapshot' && 'Creating safety snapshot & Git guard...'}
+              {selectedTask.progressStage === 'context' && 'Synchronizing workspace specification & MEMORY.md...'}
+              {selectedTask.progressStage === 'reasoning' && 'Agent reasoning engine analyzing context, AST & invariants...'}
+              {selectedTask.progressStage === 'executing' && 'Writing workspace files & streaming Markdown response...'}
+              {(!selectedTask.progressStage || selectedTask.progressStage === 'completed') && 'Running active task...'}
+            </div>
+
+            {/* Live Streaming Activity Ticker */}
+            <div className="rounded-lg bg-slate-950/90 border border-slate-800/80 p-2 text-[10px] font-mono space-y-1 max-h-24 overflow-y-auto">
+              {selectedTask.logs && selectedTask.logs.length > 0 ? (
+                selectedTask.logs.slice(-3).map((log, lIdx) => (
+                  <div key={lIdx} className="text-slate-300 truncate flex items-center gap-1">
+                    <span className="text-sky-400 select-none">&gt;</span>
+                    <span className="truncate">{log}</span>
+                  </div>
+                ))
+              ) : selectedTask.thinkingTrace && selectedTask.thinkingTrace.length > 0 ? (
+                selectedTask.thinkingTrace.slice(-2).map((trace, tIdx) => (
+                  <div key={tIdx} className="text-indigo-300 truncate flex items-center gap-1">
+                    <span className="text-indigo-400 select-none">&bull;</span>
+                    <span className="truncate">{trace}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-slate-500 flex items-center gap-1">
+                  <span className="animate-pulse">_</span>
+                  <span>Awaiting subprocess stream output...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 5 Stages Stepper */}
         <div className="space-y-1 pt-0.5">
@@ -261,7 +350,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
             return (
               <div
                 key={stage.id}
-                className={`flex items-center gap-2 text-[11px] px-2 py-1 rounded-lg transition-colors ${
+                className={`flex items-center justify-between text-[11px] px-2 py-1 rounded-lg transition-colors ${
                   isCurrent
                     ? 'bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30'
                     : isDone
@@ -269,14 +358,21 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                     : 'text-slate-500'
                 }`}
               >
-                {isCurrent ? (
-                  <Loader2 size={12} className="text-sky-400 animate-spin shrink-0" />
-                ) : isDone ? (
-                  <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
-                ) : (
-                  <Circle size={12} className="text-slate-600 shrink-0" />
+                <div className="flex items-center gap-2 min-w-0">
+                  {isCurrent ? (
+                    <Loader2 size={12} className="text-sky-400 animate-spin shrink-0" />
+                  ) : isDone ? (
+                    <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                  ) : (
+                    <Circle size={12} className="text-slate-600 shrink-0" />
+                  )}
+                  <span className="truncate">{stage.label}</span>
+                </div>
+                {isCurrent && (
+                  <span className="text-[10px] font-mono text-sky-400 shrink-0">
+                    {formatTimer(elapsedSec)}
+                  </span>
                 )}
-                <span className="truncate">{stage.label}</span>
               </div>
             );
           })}

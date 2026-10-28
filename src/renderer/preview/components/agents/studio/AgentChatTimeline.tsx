@@ -314,11 +314,32 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                     dangerouslySetInnerHTML={{ __html: renderedReplyHtml }}
                   />
                 ) : (
-                  <div className="flex items-center gap-2 p-4 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-slate-400">
-                    <Loader2 size={14} className="text-sky-400 animate-spin" />
-                    <span>
-                      {taskAgent?.name} is analyzing `{selectedTask.fileName}` and streaming the response...
-                    </span>
+                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-bold text-sky-300">
+                        <Loader2 size={14} className="text-sky-400 animate-spin" />
+                        <span>{taskAgent?.name || 'Agent'} is actively reasoning and evaluating...</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-400 font-bold">
+                        {selectedTask.progressPercent ?? 55}%
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Analyzing <span className="font-mono text-slate-200">`{selectedTask.fileName}`</span> and workspace context. Live updates are streaming below.
+                    </p>
+
+                    {/* Live streaming logs preview */}
+                    {selectedTask.logs && selectedTask.logs.length > 0 && (
+                      <div className="p-2.5 rounded-lg bg-black/60 border border-slate-800/80 font-mono text-[10px] space-y-1 max-h-32 overflow-y-auto">
+                        {selectedTask.logs.slice(-4).map((log, lIdx) => (
+                          <div key={lIdx} className="text-slate-300 truncate flex items-center gap-1.5">
+                            <span className="text-emerald-400 select-none">&gt;</span>
+                            <span className="truncate">{log}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

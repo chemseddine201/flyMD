@@ -814,6 +814,7 @@ export const AgentsControlCenter: React.FC = () => {
           onRestoreCheckpoint={handleRestoreCheckpoint}
           onClearTaskLogs={handleClearTaskLogs}
           onDeleteTask={handleDeleteTask}
+          onCancelTask={handleCancelTask}
           activeMarkdownContent={activeTab?.content || ''}
           watchedFiles={cleanWorkspaceFiles}
           onRunSingleChecklistItem={(itemText) =>

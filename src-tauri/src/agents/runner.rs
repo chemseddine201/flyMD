@@ -558,32 +558,127 @@ pub fn spawn_agent_execution(
             }
 
             if let Ok(mut child) = cmd.spawn() {
-                let mut collected_md = String::new();
+                let child_pid = child.id();
+                let spawn_msg = format!(
+                    "CLI process running (PID: {}) in `{}` - monitoring live execution...",
+                    child_pid, exec_dir
+                );
+                emit_log(format!("[CLI Engine] {}", spawn_msg));
+                update_task(&|t| {
+                    t.progress_stage = Some("reasoning".to_string());
+                    t.progress_percent = 55;
+                    t.thinking_trace.push(spawn_msg.clone());
+                    t.logs.push(format!("[CLI Spawn] {}", spawn_msg));
+                });
+
+                let (tx, rx) = std::sync::mpsc::channel::<(bool, String)>();
+
                 if let Some(stdout) = child.stdout.take() {
-                    let reader = BufReader::new(stdout);
-                    for line in reader.lines().map_while(Result::ok) {
-                        if cancel_flag.load(Ordering::Relaxed) {
-                            let _ = child.kill();
-                            finalize_task(&store, &app, &task_id, "cancelled", None);
-                            return;
+                    let tx_out = tx.clone();
+                    std::thread::spawn(move || {
+                        let reader = BufReader::new(stdout);
+                        for line in reader.lines().map_while(Result::ok) {
+                            let _ = tx_out.send((true, line));
                         }
-                        collected_md.push_str(&line);
-                        collected_md.push('\n');
-                        let snap = collected_md.clone();
-                        update_task(&|t| {
-                            t.progress_stage = Some("executing".to_string());
-                            t.progress_percent = 80;
-                            t.response_markdown = Some(snap.clone());
-                            t.logs.push(line.clone());
-                        });
-                    }
+                    });
                 }
 
                 if let Some(stderr) = child.stderr.take() {
-                    let reader = BufReader::new(stderr);
-                    for line in reader.lines().map_while(Result::ok) {
-                        if !line.trim().is_empty() {
-                            emit_log(format!("[CLI Stderr] {}", line));
+                    let tx_err = tx.clone();
+                    std::thread::spawn(move || {
+                        let reader = BufReader::new(stderr);
+                        for line in reader.lines().map_while(Result::ok) {
+                            let _ = tx_err.send((false, line));
+                        }
+                    });
+                }
+                drop(tx);
+
+                let mut collected_md = String::new();
+                let mut last_heartbeat = std::time::Instant::now();
+                let mut elapsed_sec: u64 = 0;
+                let mut current_pct: u8 = 55;
+
+                loop {
+                    if cancel_flag.load(Ordering::Relaxed) {
+                        let _ = child.kill();
+                        finalize_task(&store, &app, &task_id, "cancelled", None);
+                        return;
+                    }
+
+                    match rx.recv_timeout(Duration::from_millis(500)) {
+                        Ok((is_stdout, line)) => {
+                            if is_stdout {
+                                collected_md.push_str(&line);
+                                collected_md.push('\n');
+                                let snap = collected_md.clone();
+                                update_task(&|t| {
+                                    t.progress_stage = Some("executing".to_string());
+                                    t.progress_percent = (t.progress_percent.max(75) + 1).min(92);
+                                    t.response_markdown = Some(snap.clone());
+                                    t.logs.push(line.clone());
+                                });
+                            } else {
+                                if !line.trim().is_empty() {
+                                    emit_log(format!("[CLI Stderr] {}", line));
+                                    let err_line = format!("[stderr] {}", line);
+                                    update_task(&|t| {
+                                        t.logs.push(err_line.clone());
+                                    });
+                                }
+                            }
+                        }
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                            match child.try_wait() {
+                                Ok(Some(_status)) => {
+                                    while let Ok((is_stdout, line)) = rx.try_recv() {
+                                        if is_stdout {
+                                            collected_md.push_str(&line);
+                                            collected_md.push('\n');
+                                            let snap = collected_md.clone();
+                                            update_task(&|t| {
+                                                t.response_markdown = Some(snap.clone());
+                                                t.logs.push(line.clone());
+                                            });
+                                        } else if !line.trim().is_empty() {
+                                            let err_line = format!("[stderr] {}", line);
+                                            update_task(&|t| {
+                                                t.logs.push(err_line.clone());
+                                            });
+                                        }
+                                    }
+                                    break;
+                                }
+                                _ => {}
+                            }
+
+                            if last_heartbeat.elapsed() >= Duration::from_secs(2) {
+                                last_heartbeat = std::time::Instant::now();
+                                elapsed_sec += 2;
+                                if current_pct < 74 {
+                                    current_pct += 1;
+                                }
+
+                                let status_text = match elapsed_sec {
+                                    0..=5 => format!("Scanning workspace context & specifications ({}s elapsed)...", elapsed_sec),
+                                    6..=12 => format!("CLI reasoning engine evaluating requirements & invariants ({}s elapsed)...", elapsed_sec),
+                                    13..=22 => format!("Processing AST structures, dependencies & potential failure modes ({}s elapsed)...", elapsed_sec),
+                                    23..=35 => format!("Formulating comprehensive findings & structured synthesis ({}s elapsed)...", elapsed_sec),
+                                    _ => format!("Assembling output report & preparing workspace updates ({}s elapsed)...", elapsed_sec),
+                                };
+
+                                emit_log(format!("[CLI Heartbeat {}s] {}", elapsed_sec, status_text));
+                                update_task(&|t| {
+                                    t.progress_percent = current_pct;
+                                    t.logs.push(format!("[Heartbeat {}s] {}", elapsed_sec, status_text));
+                                    if t.thinking_trace.len() < 10 {
+                                        t.thinking_trace.push(format!("Active: {}", status_text));
+                                    }
+                                });
+                            }
+                        }
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                            break;
                         }
                     }
                 }
@@ -659,6 +754,7 @@ pub fn spawn_agent_execution(
             let step_clone = step.clone();
             update_task(&|t| {
                 t.thinking_trace.push(step_clone.clone());
+                t.logs.push(format!("[Reasoning Step] {}", step_clone));
                 t.progress_percent = (t.progress_percent + 8).min(75);
             });
         }
