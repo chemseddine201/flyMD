@@ -76,6 +76,34 @@ export interface DeliberationPreset {
 
 export type PresetKey = string;
 
+export function cleanDiscussionMarkdown(content: string): string {
+  if (!content) return '';
+  const lines = content.split('\n');
+  let inCodeFence = false;
+  const cleaned: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('```')) {
+      inCodeFence = !inCodeFence;
+      cleaned.push(line);
+      continue;
+    }
+    if (inCodeFence) {
+      cleaned.push(line);
+    } else {
+      // If line has 4 or more leading spaces outside a code block, strip the indent
+      // so CommonMark does not misinterpret body paragraphs and lists as indented <pre><code> blocks
+      if (/^\s{4,}/.test(line)) {
+        cleaned.push(line.replace(/^\s{4,}/, ''));
+      } else {
+        cleaned.push(line);
+      }
+    }
+  }
+  return cleaned.join('\n');
+}
+
 export const DEFAULT_PRESET_TEMPLATES: DeliberationPreset[] = [
   {
     id: 'architecture',
@@ -444,6 +472,26 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const [customParticipants, setCustomParticipants] = useState<DiscussionParticipant[]>(
     () => (loadSavedPresets().find((p) => p.id === 'architecture') || loadSavedPresets()[0]).participants
   );
+
+  // Discussion preview text zoom level (80% - 180%, default 100%)
+  const [turnZoom, setTurnZoom] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('flymd:discussion-zoom');
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 80 && val <= 180) return val;
+      }
+    } catch {}
+    return 100;
+  });
+
+  const handleUpdateZoom = (newZoom: number) => {
+    const clamped = Math.max(80, Math.min(180, newZoom));
+    setTurnZoom(clamped);
+    try {
+      localStorage.setItem('flymd:discussion-zoom', clamped.toString());
+    } catch {}
+  };
 
   // Load discussions on mount & subscribe to real-time events
   useEffect(() => {
@@ -1310,45 +1358,82 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                 </button>
               </div>
 
-              {/* Action Toolbar: Expand All / Collapse All & Role Filter */}
-              {activeTab === 'timeline' && (
-                <div className="flex items-center gap-2 py-1.5">
-                  <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 text-[11px]">
-                    <SlidersHorizontal size={11} className="text-slate-400" />
-                    <select
-                      value={timelineFilter}
-                      onChange={(e) => setTimelineFilter(e.target.value)}
-                      className="bg-transparent border-0 text-slate-300 focus:outline-none cursor-pointer py-0.5 text-[11px]"
-                    >
-                      <option value="all">All Participants</option>
-                      <option value="architect">Architects</option>
-                      <option value="critic">Critics</option>
-                      <option value="auditor">Auditors</option>
-                      <option value="implementer">Implementers</option>
-                      <option value="human">Human Guidance</option>
-                    </select>
-                  </div>
+              {/* Action Toolbar: Expand All / Collapse All, Role Filter & Font Zoom */}
+              <div className="flex items-center gap-2 py-1.5 flex-wrap">
+                {activeTab === 'timeline' && (
+                  <>
+                    <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 text-[11px]">
+                      <SlidersHorizontal size={11} className="text-slate-400" />
+                      <select
+                        value={timelineFilter}
+                        onChange={(e) => setTimelineFilter(e.target.value)}
+                        className="bg-transparent border-0 text-slate-300 focus:outline-none cursor-pointer py-0.5 text-[11px]"
+                      >
+                        <option value="all">All Participants</option>
+                        <option value="architect">Architects</option>
+                        <option value="critic">Critics</option>
+                        <option value="auditor">Auditors</option>
+                        <option value="implementer">Implementers</option>
+                        <option value="human">Human Guidance</option>
+                      </select>
+                    </div>
 
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExpandAll(true)}
+                      className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-[11px] flex items-center gap-1"
+                      title="Expand all turns"
+                    >
+                      <Maximize2 size={11} />
+                      <span>Expand</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExpandAll(false)}
+                      className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-[11px] flex items-center gap-1"
+                      title="Collapse all turns"
+                    >
+                      <Minimize2 size={11} />
+                      <span>Collapse</span>
+                    </button>
+                  </>
+                )}
+
+                {/* Text Size Scale Controls (A- / A+) */}
+                <div className="flex items-center gap-0.5 bg-slate-950 px-1.5 py-0.5 rounded-md border border-slate-800 text-[11px] text-slate-300 ml-auto">
                   <button
                     type="button"
-                    onClick={() => handleToggleExpandAll(true)}
-                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-[11px] flex items-center gap-1"
-                    title="Expand all turns"
+                    onClick={() => handleUpdateZoom(turnZoom - 10)}
+                    disabled={turnZoom <= 80}
+                    className="px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-40 font-bold transition-colors"
+                    title="Decrease discussion preview text size (A-)"
                   >
-                    <Maximize2 size={11} />
-                    <span>Expand</span>
+                    A-
                   </button>
+                  <span className="font-mono text-[10px] px-1 text-slate-400 select-none">
+                    {turnZoom}%
+                  </span>
                   <button
                     type="button"
-                    onClick={() => handleToggleExpandAll(false)}
-                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-[11px] flex items-center gap-1"
-                    title="Collapse all turns"
+                    onClick={() => handleUpdateZoom(turnZoom + 10)}
+                    disabled={turnZoom >= 180}
+                    className="px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-40 font-bold transition-colors"
+                    title="Increase discussion preview text size (A+)"
                   >
-                    <Minimize2 size={11} />
-                    <span>Collapse</span>
+                    A+
                   </button>
+                  {turnZoom !== 100 && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateZoom(100)}
+                      className="text-[9px] text-slate-500 hover:text-sky-400 ml-1 underline transition-colors"
+                      title="Reset text size to 100%"
+                    >
+                      Reset
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Error Banner */}
@@ -1594,9 +1679,15 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                         )}
 
                                         <div
-                                          className="markdown-body text-xs text-slate-200 leading-relaxed max-w-none"
+                                          className="markdown-body text-slate-200 leading-relaxed max-w-none transition-all"
+                                          style={{
+                                            fontSize: `${(13 * turnZoom) / 100}px`,
+                                            lineHeight: 1.65,
+                                          }}
                                           dangerouslySetInnerHTML={{
-                                            __html: markdownService.render(msg.content),
+                                            __html: markdownService.render(
+                                              cleanDiscussionMarkdown(msg.content)
+                                            ),
                                           }}
                                         />
 
@@ -1770,9 +1861,15 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   {activeReportMarkdown ? (
                     <div className="p-8 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-2xl">
                       <div
-                        className="markdown-body text-slate-200 text-sm leading-relaxed"
+                        className="markdown-body text-slate-200 leading-relaxed transition-all"
+                        style={{
+                          fontSize: `${(14 * turnZoom) / 100}px`,
+                          lineHeight: 1.65,
+                        }}
                         dangerouslySetInnerHTML={{
-                          __html: markdownService.render(activeReportMarkdown),
+                          __html: markdownService.render(
+                            cleanDiscussionMarkdown(activeReportMarkdown)
+                          ),
                         }}
                       />
                     </div>

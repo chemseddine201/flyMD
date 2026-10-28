@@ -952,6 +952,25 @@ impl DiscussionProvider for MockProvider {
             },
         };
 
+        // Normalize response body lines so CommonMark never mistakes leading indentation for raw code blocks
+        let response_body = response_body
+            .lines()
+            .map(|l| {
+                if l.starts_with("    ")
+                    && !l.trim().starts_with("```")
+                    && !l.trim().starts_with("1.")
+                    && !l.trim().starts_with("2.")
+                    && !l.trim().starts_with("3.")
+                    && !l.trim().starts_with("- ")
+                {
+                    l.trim_start()
+                } else {
+                    l
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
         // Stream in chunks
         if let Some(sink) = stream_sink {
             let chunks: Vec<&str> = response_body.split_whitespace().collect();

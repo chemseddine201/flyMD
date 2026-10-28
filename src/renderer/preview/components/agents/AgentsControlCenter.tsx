@@ -75,13 +75,9 @@ export const AgentsControlCenter: React.FC = () => {
   const [studioMode, setStudioMode] = useState<'tasks' | 'discussion'>('tasks');
 
   // Track automated multi-step repeater runs
-  const activePipelineRunRef = useRef<{
-    pipelineId: string;
-    pipelineName: string;
-    steps: AgentPipelineStep[];
-    currentStepIndex: number;
-    currentTaskId: string;
-  } | null>(null);
+  const [runningPipelineId, setRunningPipelineId] = useState<string | null>(null);
+  const [runningPipelineStepIdx, setRunningPipelineStepIdx] = useState<number>(-1);
+  const isPipelineCancelledRef = useRef<boolean>(false);
 
   // Ensure selectedAgentId stays within enabled visibleAgents
   useEffect(() => {
@@ -311,85 +307,122 @@ export const AgentsControlCenter: React.FC = () => {
     }
   };
 
-  const handleRunPipelineInStudio = async (pipeline: AgentPipelinePreset) => {
-    if (!pipeline.steps.length) return;
-    const first = pipeline.steps[0];
-    const second = pipeline.steps[1];
-    setSelectedAgentId(first.agentId);
-    setSelectedIntent(first.intent);
-    const created = await handleSendInAppChatTask(
-      `Pipeline [${pipeline.name}] — Step 1/${pipeline.steps.length} (${first.label})`,
-      {
-        agentId: first.agentId,
-        intent: first.intent,
-        pipelineId: pipeline.id,
-        nextAgentInChain: second?.agentId,
-        nextIntentInChain: second?.intent,
-      }
-    );
-    if (created?.id && pipeline.steps.length > 1) {
-      activePipelineRunRef.current = {
-        pipelineId: pipeline.id,
-        pipelineName: pipeline.name,
-        steps: [...pipeline.steps],
-        currentStepIndex: 0,
-        currentTaskId: created.id,
+  // Helper to reliably await a task reaching a terminal state (completed, cancelled, error, failed)
+  const waitForTaskFinished = (taskId: string): Promise<AgentTaskRecord | null> => {
+    return new Promise((resolve) => {
+      const checkTerminal = () => {
+        const tasks = usePreviewStore.getState().agentTasks;
+        const found = tasks.find((t) => t.id === taskId);
+        if (
+          found &&
+          (found.status === 'completed' ||
+            found.status === 'cancelled' ||
+            found.status === 'failed')
+        ) {
+          return found;
+        }
+        return null;
       };
-    } else {
-      activePipelineRunRef.current = null;
-    }
+
+      const immediate = checkTerminal();
+      if (immediate) {
+        resolve(immediate);
+        return;
+      }
+
+      const timer = setInterval(async () => {
+        if (isPipelineCancelledRef.current) {
+          clearInterval(timer);
+          resolve(null);
+          return;
+        }
+        try {
+          const tasks = await window.electronAPI.getAgentTasks();
+          usePreviewStore.getState().setAgentTasks(tasks);
+          const found = tasks.find((t) => t.id === taskId);
+          if (
+            found &&
+            (found.status === 'completed' ||
+              found.status === 'cancelled' ||
+              found.status === 'failed')
+          ) {
+            clearInterval(timer);
+            resolve(found);
+          }
+        } catch {
+          // ignore transient poll error
+        }
+      }, 500);
+
+      // Max safety timeout (15 mins)
+      setTimeout(() => {
+        clearInterval(timer);
+        const tasks = usePreviewStore.getState().agentTasks;
+        resolve(tasks.find((t) => t.id === taskId) || null);
+      }, 900000);
+    });
   };
 
-  // Automatically advance multi-step repeater pipelines when each step finishes
-  useEffect(() => {
-    const runState = activePipelineRunRef.current;
-    if (!runState) return;
-    const finishedTask = agentTasks.find(
-      (t) => t.id === runState.currentTaskId && t.status === 'completed'
-    );
-    if (!finishedTask) return;
+  const handleRunPipelineInStudio = async (pipeline: AgentPipelinePreset) => {
+    if (!pipeline.steps.length || runningPipelineId) return;
 
-    const nextIdx = runState.currentStepIndex + 1;
-    const nextStep = runState.steps[nextIdx];
-    const followingStep = runState.steps[nextIdx + 1];
+    setRunningPipelineId(pipeline.id);
+    isPipelineCancelledRef.current = false;
 
-    if (!nextStep) {
-      activePipelineRunRef.current = null;
-      return;
-    }
+    try {
+      let previousTask: AgentTaskRecord | null = null;
 
-    // Prevent duplicate triggers while dispatching next step
-    activePipelineRunRef.current = null;
+      for (let idx = 0; idx < pipeline.steps.length; idx++) {
+        if (isPipelineCancelledRef.current) break;
 
-    void (async () => {
-      setSelectedAgentId(nextStep.agentId);
-      setSelectedIntent(nextStep.intent);
-      const nextTask = await handleSendInAppChatTask(
-        `Pipeline [${runState.pipelineName}] — Step ${nextIdx + 1}/${
-          runState.steps.length
-        } (${nextStep.label}) relayed from @${finishedTask.targetAgentId}`,
-        {
-          agentId: nextStep.agentId,
-          intent: nextStep.intent,
-          filePath: finishedTask.outputReportPath || finishedTask.filePath,
-          fileName: finishedTask.fileName,
+        const currentStep = pipeline.steps[idx];
+        const nextStep = pipeline.steps[idx + 1];
+
+        setRunningPipelineStepIdx(idx);
+        setSelectedAgentId(currentStep.agentId);
+        setSelectedIntent(currentStep.intent);
+
+        const promptText = `Pipeline [${pipeline.name}] — Step ${idx + 1}/${
+          pipeline.steps.length
+        } (${currentStep.label})${
+          previousTask ? ` relayed from @${previousTask.targetAgentId}` : ''
+        }`;
+
+        const dispatchedTask = await handleSendInAppChatTask(promptText, {
+          agentId: currentStep.agentId,
+          intent: currentStep.intent,
+          filePath: previousTask?.outputReportPath || previousTask?.filePath,
+          fileName: previousTask?.fileName,
           markdownContent:
-            finishedTask.responseMarkdown || activeTab?.content || '',
-          sourceAgentId: finishedTask.targetAgentId,
-          pipelineId: runState.pipelineId,
-          nextAgentInChain: followingStep?.agentId,
-          nextIntentInChain: followingStep?.intent,
+            previousTask?.responseMarkdown || activeTab?.content || '',
+          sourceAgentId: previousTask?.targetAgentId,
+          pipelineId: pipeline.id,
+          nextAgentInChain: nextStep?.agentId,
+          nextIntentInChain: nextStep?.intent,
+        });
+
+        if (!dispatchedTask?.id) {
+          console.error(`Pipeline step ${idx + 1} failed to dispatch.`);
+          break;
         }
-      );
-      if (nextTask?.id && nextIdx + 1 < runState.steps.length) {
-        activePipelineRunRef.current = {
-          ...runState,
-          currentStepIndex: nextIdx,
-          currentTaskId: nextTask.id,
-        };
+
+        // Reliably await task completion before executing the next step
+        const completed = await waitForTaskFinished(dispatchedTask.id);
+        if (
+          !completed ||
+          completed.status !== 'completed' ||
+          isPipelineCancelledRef.current
+        ) {
+          break;
+        }
+
+        previousTask = completed;
       }
-    })();
-  }, [agentTasks]);
+    } finally {
+      setRunningPipelineId(null);
+      setRunningPipelineStepIdx(-1);
+    }
+  };
 
   const handleRelayToNextAgent = async (
     task: AgentTaskRecord,
@@ -505,6 +538,7 @@ export const AgentsControlCenter: React.FC = () => {
   };
 
   const handleCancelTask = async (taskId: string) => {
+    isPipelineCancelledRef.current = true;
     try {
       await window.electronAPI.cancelAgentTask(taskId);
       const tasks = await window.electronAPI.getAgentTasks();
@@ -757,6 +791,8 @@ export const AgentsControlCenter: React.FC = () => {
           onRemovePipelineStep={handleRemovePipelineStep}
           onResetPipelines={handleResetPipelines}
           onRunPipelineInStudio={handleRunPipelineInStudio}
+          runningPipelineId={runningPipelineId}
+          runningPipelineStepIdx={runningPipelineStepIdx}
           onDropFileOnAgent={async (agentId, customFile) => {
             setSelectedAgentId(agentId);
             await handleSendInAppChatTask('', {

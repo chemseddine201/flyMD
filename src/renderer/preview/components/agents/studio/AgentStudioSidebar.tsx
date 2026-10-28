@@ -50,6 +50,8 @@ interface AgentStudioSidebarProps {
   onRemovePipelineStep: (pipelineId: string, stepIdx: number) => void;
   onResetPipelines: () => void;
   onRunPipelineInStudio: (pipeline: AgentPipelinePreset) => void;
+  runningPipelineId?: string | null;
+  runningPipelineStepIdx?: number;
   onDropFileOnAgent: (
     agentId: AgentId,
     customFile?: { filePath: string; fileName: string; sourceAgent?: string }
@@ -84,6 +86,8 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   onRemovePipelineStep,
   onResetPipelines,
   onRunPipelineInStudio,
+  runningPipelineId,
+  runningPipelineStepIdx = -1,
   onDropFileOnAgent,
   onOpenExternalBrowser,
 }) => {
@@ -311,11 +315,25 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
 
           <button
             type="button"
+            disabled={!!runningPipelineId}
             onClick={() => onRunPipelineInStudio(primaryPipeline)}
-            className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold text-xs shadow-md shadow-indigo-500/15 transition-all"
+            className={`mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl font-bold text-xs shadow-md transition-all ${
+              runningPipelineId
+                ? 'bg-indigo-600/60 text-indigo-200 cursor-not-allowed border border-indigo-400/30'
+                : 'bg-indigo-500 hover:bg-indigo-400 text-slate-950 shadow-indigo-500/15'
+            }`}
           >
-            <Play size={12} fill="currentColor" />
-            Run {primaryPipeline.steps.length}-Step Workflow
+            {runningPipelineId ? (
+              <>
+                <Loader2 size={12} className="animate-spin text-indigo-300" />
+                <span>Running Step {runningPipelineStepIdx + 1} of {primaryPipeline.steps.length}...</span>
+              </>
+            ) : (
+              <>
+                <Play size={12} fill="currentColor" />
+                <span>Run {primaryPipeline.steps.length}-Step Workflow</span>
+              </>
+            )}
           </button>
         </div>
       )}
