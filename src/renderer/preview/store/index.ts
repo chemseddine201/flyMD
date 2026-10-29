@@ -5,5 +5,6 @@ export * from './slices/uiSlice';
 export * from './slices/settingsSlice';
 export * from './slices/agentsSlice';
 export * from './slices/discussionSlice';
+export * from './slices/projectsSlice';
 export * from './model/tabReducers';
 

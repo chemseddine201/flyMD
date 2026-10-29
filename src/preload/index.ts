@@ -18,6 +18,13 @@ import {
   DiscussionMetadata,
   DiscussionMessage,
   AvailableProviderInfo,
+  ProjectNode,
+  ProjectTreeNode,
+  CreateProjectRequest,
+  UpdateProjectRequest,
+  ProjectMemoryRecord,
+  RecallPack,
+  MemoryEntryKind,
 } from '../shared/types';
 import {
   IPC_CHANNELS,
@@ -259,6 +266,38 @@ const electronAPI = {
     ipcRenderer.on('agent:stream', handler);
     return () => ipcRenderer.removeListener('agent:stream', handler);
   },
+
+  // Hierarchical Projects & Dual-Layer Memory IPC
+  listProjects: (workspacePath: string): Promise<ProjectNode[]> =>
+    ipcRenderer.invoke('projects:list', workspacePath),
+  getProjectHierarchy: (workspacePath: string): Promise<ProjectTreeNode[]> =>
+    ipcRenderer.invoke('projects:get-hierarchy', workspacePath),
+  createProject: (workspacePath: string, req: CreateProjectRequest): Promise<ProjectNode> =>
+    ipcRenderer.invoke('projects:create', workspacePath, req),
+  updateProject: (workspacePath: string, projectId: string, req: UpdateProjectRequest): Promise<ProjectNode> =>
+    ipcRenderer.invoke('projects:update', workspacePath, projectId, req),
+  deleteProject: (workspacePath: string, projectId: string): Promise<boolean> =>
+    ipcRenderer.invoke('projects:delete', workspacePath, projectId),
+  getMasterMemory: (workspacePath: string): Promise<string> =>
+    ipcRenderer.invoke('projects:get-master-memory', workspacePath),
+  updateMasterMemory: (workspacePath: string, content: string): Promise<void> =>
+    ipcRenderer.invoke('projects:update-master-memory', workspacePath, content),
+  getProjectMemory: (workspacePath: string, projectId: string): Promise<ProjectMemoryRecord[]> =>
+    ipcRenderer.invoke('projects:get-project-memory', workspacePath, projectId),
+  appendProjectMemory: (
+    workspacePath: string,
+    projectId: string,
+    authorRole: string,
+    kind: MemoryEntryKind,
+    summary: string,
+    details?: string,
+    tags?: string[]
+  ): Promise<ProjectMemoryRecord> =>
+    ipcRenderer.invoke('projects:append-memory', workspacePath, projectId, authorRole, kind, summary, details, tags),
+  generateRecallPack: (workspacePath: string, projectId: string, maxTokens?: number): Promise<RecallPack> =>
+    ipcRenderer.invoke('projects:generate-recall-pack', workspacePath, projectId, maxTokens),
+  rollupProject: (workspacePath: string, projectId: string, summary: string): Promise<void> =>
+    ipcRenderer.invoke('projects:rollup', workspacePath, projectId, summary),
 };
 
 export type ElectronAPI = typeof electronAPI;

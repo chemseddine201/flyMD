@@ -784,20 +784,21 @@ pub fn spawn_agent_execution(
                                 });
 
                                 // Activity Settlement Detector:
-                                // If deliverables are already written and stdio/filesystem has settled for >= 15s,
+                                // If deliverables are already written and stdio/filesystem has settled,
                                 // terminate the CLI child process tree gracefully to prevent the 92% hang.
                                 let stdout_idle_sec = last_stdout_activity.elapsed().as_secs();
                                 let fs_idle_sec = last_fs_change.elapsed().as_secs();
 
-                                if !seen_created_files.is_empty() && stdout_idle_sec >= 15 && fs_idle_sec >= 15 {
+                                if !seen_created_files.is_empty() && ((fs_idle_sec >= 5 && stdout_idle_sec >= 3) || (elapsed_sec >= 10 && fs_idle_sec >= 4)) {
                                     let settle_msg = format!(
-                                        "[Settlement Detector] Workspace deliverables settled ({} file(s) touched: {}). CLI activity idle for {}s. Concluding execution.",
+                                        "[Settlement Detector] Workspace deliverables settled ({} file(s) touched: {}). Activity idle for {}s. Concluding execution.",
                                         seen_created_files.len(),
                                         seen_created_files.join(", "),
                                         stdout_idle_sec
                                     );
                                     emit_log(settle_msg.clone());
                                     update_task(&|t| {
+                                        t.progress_percent = 98;
                                         t.logs.push(settle_msg.clone());
                                         t.thinking_trace.push(settle_msg.clone());
                                     });
@@ -805,14 +806,15 @@ pub fn spawn_agent_execution(
                                     break;
                                 }
 
-                                if !collected_md.trim().is_empty() && stdout_idle_sec >= 20 && fs_idle_sec >= 15 {
+                                if !collected_md.trim().is_empty() && (stdout_idle_sec >= 6 || (fs_idle_sec >= 5 && stdout_idle_sec >= 3)) {
                                     let settle_msg = format!(
-                                        "[Settlement Detector] Markdown report deliverable received ({} bytes). CLI idle for {}s. Concluding execution.",
+                                        "[Settlement Detector] Markdown report deliverable received ({} bytes). Activity idle for {}s. Concluding execution.",
                                         collected_md.len(),
                                         stdout_idle_sec
                                     );
                                     emit_log(settle_msg.clone());
                                     update_task(&|t| {
+                                        t.progress_percent = 98;
                                         t.logs.push(settle_msg.clone());
                                         t.thinking_trace.push(settle_msg.clone());
                                     });

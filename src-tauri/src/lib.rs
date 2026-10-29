@@ -3,6 +3,7 @@ pub mod discussion;
 pub mod files;
 pub mod llm;
 pub mod pdf;
+pub mod projects;
 pub mod store;
 pub mod windows;
 pub mod workspace;
@@ -12,6 +13,7 @@ use discussion::*;
 use files::*;
 use llm::*;
 use pdf::*;
+use projects::*;
 use store::*;
 use windows::*;
 use workspace::*;
@@ -136,6 +138,7 @@ pub fn run() {
             let llm = Arc::new(LlmManager::new());
             let agents_orch = AgentOrchestrator::new(app.handle().clone(), Arc::clone(&store));
             let discussion_mgr = Arc::new(DiscussionManager::new());
+            let projects_mgr = ProjectManager::new();
 
             if let Some(sup) = store.get_supervision_config() {
                 if sup.enabled {
@@ -148,6 +151,7 @@ pub fn run() {
             app.manage(Arc::clone(&llm));
             app.manage(Arc::clone(&agents_orch));
             app.manage(Arc::clone(&discussion_mgr) as SharedDiscussionManager);
+            app.manage(projects_mgr);
 
             let show_float =
                 MenuItem::with_id(app, "show_float", "Show Float Hub", true, None::<&str>)?;
@@ -279,6 +283,17 @@ pub fn run() {
             cmd_set_discussion_step_mode,
             cmd_dispatch_targeted_action,
             cmd_get_available_providers,
+            cmd_list_projects,
+            cmd_get_project_hierarchy,
+            cmd_create_project,
+            cmd_update_project,
+            cmd_delete_project,
+            cmd_get_master_memory,
+            cmd_update_master_memory,
+            cmd_get_project_memory,
+            cmd_append_project_memory,
+            cmd_generate_recall_pack,
+            cmd_rollup_project,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

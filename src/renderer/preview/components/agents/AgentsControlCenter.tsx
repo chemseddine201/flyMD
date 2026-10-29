@@ -12,6 +12,11 @@ import {
   Loader2,
   X,
   FolderGit2,
+  FolderTree,
+  Boxes,
+  Brain,
+  FileText,
+  Rocket,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import {
@@ -29,6 +34,9 @@ import { AgentStudioSidebar } from './studio/AgentStudioSidebar';
 import { AgentChatTimeline } from './studio/AgentChatTimeline';
 import { AgentProgressInspector } from './studio/AgentProgressInspector';
 import { DiscussionStudio } from './studio/DiscussionStudio';
+import { ProjectTreeNavigator } from './projects/ProjectTreeNavigator';
+import { ProjectObservabilityHUD } from './projects/ProjectObservabilityHUD';
+import { ProjectSynthesisReportViewer } from './projects/ProjectSynthesisReportViewer';
 
 export const AgentsControlCenter: React.FC = () => {
   const agentProfiles = usePreviewStore((s) => s.agentProfiles);
@@ -73,9 +81,18 @@ export const AgentsControlCenter: React.FC = () => {
   const [clearCompletedSessions, setClearCompletedSessions] = useState(true);
   const [clearingCache, setClearingCache] = useState(false);
   const [cacheNotification, setCacheNotification] = useState<string | null>(null);
-  const [studioMode, setStudioMode] = useState<'tasks' | 'discussion'>('tasks');
+  const [lifecycleStage, setLifecycleStage] = useState<'debate' | 'report' | 'pipeline'>('pipeline');
+  const [showProjectTree, setShowProjectTree] = useState<boolean>(true);
+  const [showObservabilityHUD, setShowObservabilityHUD] = useState<boolean>(false);
   const [workspaceFocusMode, setWorkspaceFocusMode] = useState<'workspace' | 'file'>('workspace');
   const [focusFilePath, setFocusFilePath] = useState<string>('');
+
+  const projects = usePreviewStore((s) => s.projects);
+  const selectedProjectId = usePreviewStore((s) => s.selectedProjectId);
+  const activeProject = usePreviewStore((s) => s.activeProject);
+  const loadProjects = usePreviewStore((s) => s.loadProjects);
+  const rollupProject = usePreviewStore((s) => s.rollupProject);
+  const activeReportMarkdown = usePreviewStore((s) => s.activeReportMarkdown);
 
   // Track automated multi-step repeater runs
   const [runningPipelineId, setRunningPipelineId] = useState<string | null>(null);
@@ -145,6 +162,61 @@ export const AgentsControlCenter: React.FC = () => {
 
   const selectedTask =
     agentTasks.find((t) => t.id === selectedTaskId) || agentTasks[0] || null;
+
+  useEffect(() => {
+    if (resolvedWorkspace) {
+      loadProjects(resolvedWorkspace);
+    }
+  }, [resolvedWorkspace, loadProjects]);
+
+  const handleLaunchDedicatedPipeline = (preset: AgentPipelinePreset) => {
+    setPipelines((prev) => [preset, ...prev.filter((p) => p.id !== preset.id)]);
+    persistPipelines([preset, ...pipelines.filter((p) => p.id !== preset.id)]);
+    setLifecycleStage('pipeline');
+    handleRunPipelineInStudio(preset);
+  };
+
+  const handleRollupToMaster = async () => {
+    if (!resolvedWorkspace || !activeProject) return;
+    const summary = `### [Project: ${activeProject.name}] — Completed\n- **Status**: Verified by evidence\n- **Scope**: ${activeProject.scope_paths.join(', ') || 'Entire Workspace'}\n- **Timestamp**: ${new Date().toISOString()}\n`;
+    await rollupProject(resolvedWorkspace, activeProject.id, summary);
+  };
+
+  const effectiveReportMarkdown = useMemo(() => {
+    if (activeReportMarkdown && activeReportMarkdown.trim().length > 0) {
+      return activeReportMarkdown;
+    }
+    const projName = activeProject?.name || 'Workspace Core Architecture';
+    const projDesc =
+      activeProject?.description ||
+      'High-integrity system components and execution plan.';
+    return `# Synthesis Report & Execution Contract: ${projName}
+
+- **Project Node**: \`${activeProject?.id || 'root'}\`
+- **Scope Paths**: ${
+      activeProject?.scope_paths?.length
+        ? activeProject.scope_paths.join(', ')
+        : 'Entire Workspace'
+    }
+- **Epistemic Classification**: \`[Agent Consensus]\`
+
+---
+
+## 1. Executive Summary & Goals
+${projDesc}
+
+## 2. Actionable Implementation Checklist
+- [ ] Parse project specifications and establish data contracts
+- [ ] Implement core domain components and event boundaries
+- [ ] Connect state transitions and error boundaries
+- [ ] Run evidence verification and audit settlement
+
+## 3. Epistemic Acceptance Criteria
+- Zero runtime crashes on unexpected inputs
+- Decoupled modules with explicit type contracts
+- Evidence before done: all deliverable files verified in workspace
+`;
+  }, [activeReportMarkdown, activeProject]);
 
   const persistPipelines = (next: AgentPipelinePreset[]) => {
     try {
@@ -751,29 +823,69 @@ export const AgentsControlCenter: React.FC = () => {
             In-App Native Studio
           </span>
 
-          <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 ml-2">
+          {/* Project Hierarchy Tree Toggle */}
+          {resolvedWorkspace && (
             <button
               type="button"
-              onClick={() => setStudioMode('tasks')}
-              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
-                studioMode === 'tasks'
+              onClick={() => setShowProjectTree(!showProjectTree)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+                showProjectTree
+                  ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+              title="Toggle Hierarchical Projects Tree Navigator"
+            >
+              <FolderTree size={13} className="text-indigo-400" />
+              <span>Projects</span>
+            </button>
+          )}
+
+          {/* Active Project Indicator */}
+          {activeProject && (
+            <div className="hidden xl:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 text-[11px] max-w-[180px] truncate">
+              <Boxes size={12} className="shrink-0 text-indigo-400" />
+              <span className="truncate">{activeProject.name}</span>
+            </div>
+          )}
+
+          {/* 3-Stage Linear Lifecycle Switcher */}
+          <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 ml-1">
+            <button
+              type="button"
+              onClick={() => setLifecycleStage('debate')}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+                lifecycleStage === 'debate'
                   ? 'bg-sky-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="1. Multi-Agent Deliberation & Architectural Debate"
             >
-              Tasks &amp; Pipelines
+              <span>🗣️ 1. Debate</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
             </button>
             <button
               type="button"
-              onClick={() => setStudioMode('discussion')}
+              onClick={() => setLifecycleStage('report')}
               className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                studioMode === 'discussion'
+                lifecycleStage === 'report'
                   ? 'bg-sky-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="2. Synthesis Report & Operator Checkpoint Gate"
             >
-              <span>Discussion Studio</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span>📋 2. Report</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLifecycleStage('pipeline')}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+                lifecycleStage === 'pipeline'
+                  ? 'bg-sky-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="3. Dedicated DAG Pipeline Execution & Process Isolation"
+            >
+              <span>🚀 3. Pipeline</span>
             </button>
           </div>
 
@@ -841,6 +953,21 @@ export const AgentsControlCenter: React.FC = () => {
           {resolvedWorkspace && (
             <button
               type="button"
+              onClick={() => setShowObservabilityHUD(!showObservabilityHUD)}
+              className={`p-2 rounded-lg border transition-colors ${
+                showObservabilityHUD
+                  ? 'bg-purple-600/30 border-purple-500 text-purple-300'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
+              }`}
+              title="Dual-Layer Memory & Observability HUD (Master Memory, Scoped Ledger, Evidence Receipts)"
+            >
+              <Brain size={14} className="text-purple-400" />
+            </button>
+          )}
+
+          {resolvedWorkspace && (
+            <button
+              type="button"
               onClick={handleOpenSharedMemory}
               className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
               title="Open Shared Memory (.flymd/MEMORY.md)"
@@ -887,124 +1014,162 @@ export const AgentsControlCenter: React.FC = () => {
         </div>
       </header>
 
-      {/* Main 3-Pane Studio Workspace */}
-      {studioMode === 'discussion' ? (
-        <DiscussionStudio resolvedWorkspace={resolvedWorkspace} />
-      ) : (
-        <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left Sidebar: Agents, Custom Workflow Steps Repeater & Sessions */}
-        <AgentStudioSidebar
-          visibleAgents={visibleAgents}
-          allAgents={agentProfiles}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={(id) => setSelectedAgentId(id)}
-          agentTasks={agentTasks}
-          selectedTaskId={selectedTask?.id || null}
-          onSelectTask={(id) => setSelectedTaskId(id)}
-          onDeleteTask={handleDeleteTask}
-          onClearFinished={handleClearFinished}
-          onOpenAccountsModal={() => setShowAgentAccountsModal(true)}
-          pipelines={pipelines}
-          onUpdatePipelineStep={handleUpdatePipelineStep}
-          onAddPipelineStep={handleAddPipelineStep}
-          onRemovePipelineStep={handleRemovePipelineStep}
-          onResetPipelines={handleResetPipelines}
-          onRunPipelineInStudio={handleRunPipelineInStudio}
-          runningPipelineId={runningPipelineId}
-          runningPipelineStepIdx={runningPipelineStepIdx}
-          workflowExecutionMode={workflowExecutionMode}
-          onSetWorkflowExecutionMode={handleSetWorkflowExecutionMode}
-          waitingForStepApproval={waitingForStepApproval}
-          onProceedNextWorkflowStep={handleProceedNextWorkflowStep}
-          onDropFileOnAgent={async (agentId, customFile) => {
-            setSelectedAgentId(agentId);
-            await handleSendInAppChatTask('', {
-              agentId,
-              filePath: customFile?.filePath,
-              fileName: customFile?.fileName,
-              sourceAgentId: customFile?.sourceAgent,
-            });
-          }}
-          onOpenExternalBrowser={async (agentId) => {
-            await window.electronAPI.launchAgentWebAuth(agentId);
-          }}
-        />
+      {/* Main Studio Workspace with Project Navigator & Observability HUD */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Far Left: Project Hierarchy Tree Navigator */}
+        {showProjectTree && resolvedWorkspace && (
+          <ProjectTreeNavigator workspacePath={resolvedWorkspace} />
+        )}
 
-        {/* Center Pane: Interactive Multi-Agent Chat & Streaming Timeline */}
-        <AgentChatTimeline
-          visibleAgents={visibleAgents}
-          allAgents={agentProfiles}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={(id) => setSelectedAgentId(id)}
-          selectedIntent={selectedIntent}
-          onSelectIntent={(intent) => setSelectedIntent(intent)}
-          selectedTask={selectedTask}
-          activeFileName={
-            workspaceFocusMode === 'workspace'
-              ? `Entire Project (${resolvedWorkspace ? resolvedWorkspace.split(/[\\/]/).pop() : 'Root'})`
-              : focusFilePath
-                ? cleanWorkspaceFiles.find((f) => f.path === focusFilePath)?.name ||
-                  focusFilePath.split(/[\\/]/).pop() ||
-                  'Focused File'
-                : activeTab?.fileName || 'Workspace Specification'
-          }
-          activeFilePath={
-            workspaceFocusMode === 'workspace'
-              ? resolvedWorkspace
-              : focusFilePath || activeTab?.filePath || cleanWorkspaceFiles[0]?.path || ''
-          }
-          watchedFiles={cleanWorkspaceFiles}
-          selectedSourceFile={selectedSourceFile}
-          onSelectSourceFile={(path) => setSelectedSourceFile(path)}
-          onSendChatTask={async (text, attachedImages) => {
-            let promptToSend = text;
-            if (attachedImages && attachedImages.length > 0) {
-              const imagesMarkdown = attachedImages
-                .map((img) => `![${img.name}](${img.dataUrl})`)
-                .join('\n\n');
-              promptToSend = promptToSend
-                ? `${promptToSend}\n\n### Attached Reference Images:\n${imagesMarkdown}`
-                : `### Attached Reference Images:\n${imagesMarkdown}`;
-            }
-            await handleSendInAppChatTask(promptToSend);
-          }}
-          onOpenReportInTab={handleOpenReportInTab}
-          onApplyToActiveTab={handleApplyToActiveTab}
-          onRelayToNextAgent={handleRelayToNextAgent}
-          onPasteExternalReply={handlePasteExternalReply}
-          onCancelTask={handleCancelTask}
-          submitting={submitting}
-        />
+        {/* Center: Active Lifecycle Stage */}
+        {lifecycleStage === 'debate' ? (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <DiscussionStudio resolvedWorkspace={resolvedWorkspace} />
+          </div>
+        ) : lifecycleStage === 'report' ? (
+          <div className="flex-1 min-h-0 overflow-hidden p-2">
+            <ProjectSynthesisReportViewer
+              workspacePath={resolvedWorkspace}
+              reportMarkdown={effectiveReportMarkdown}
+              onLaunchDedicatedPipeline={handleLaunchDedicatedPipeline}
+              onRollupToMaster={handleRollupToMaster}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            {/* Left Sidebar: Agents, Custom Workflow Steps Repeater & Sessions */}
+            <AgentStudioSidebar
+              visibleAgents={visibleAgents}
+              allAgents={agentProfiles}
+              selectedAgentId={selectedAgentId}
+              onSelectAgent={(id) => setSelectedAgentId(id)}
+              agentTasks={agentTasks}
+              selectedTaskId={selectedTask?.id || null}
+              onSelectTask={(id) => setSelectedTaskId(id)}
+              onDeleteTask={handleDeleteTask}
+              onClearFinished={handleClearFinished}
+              onOpenAccountsModal={() => setShowAgentAccountsModal(true)}
+              pipelines={pipelines}
+              onUpdatePipelineStep={handleUpdatePipelineStep}
+              onAddPipelineStep={handleAddPipelineStep}
+              onRemovePipelineStep={handleRemovePipelineStep}
+              onResetPipelines={handleResetPipelines}
+              onRunPipelineInStudio={handleRunPipelineInStudio}
+              runningPipelineId={runningPipelineId}
+              runningPipelineStepIdx={runningPipelineStepIdx}
+              workflowExecutionMode={workflowExecutionMode}
+              onSetWorkflowExecutionMode={handleSetWorkflowExecutionMode}
+              waitingForStepApproval={waitingForStepApproval}
+              onProceedNextWorkflowStep={handleProceedNextWorkflowStep}
+              onDropFileOnAgent={async (agentId, customFile) => {
+                setSelectedAgentId(agentId);
+                await handleSendInAppChatTask('', {
+                  agentId,
+                  filePath: customFile?.filePath,
+                  fileName: customFile?.fileName,
+                  sourceAgentId: customFile?.sourceAgent,
+                });
+              }}
+              onOpenExternalBrowser={async (agentId) => {
+                await window.electronAPI.launchAgentWebAuth(agentId);
+              }}
+            />
 
-        {/* Right Pane: Live Progress, Antigravity Files Deck & Activity/Terminal Inspector */}
-        <AgentProgressInspector
-          selectedTask={selectedTask}
-          checkpoints={agentCheckpoints}
-          restoringCheckpointId={restoringCheckpointId}
-          onRestoreCheckpoint={handleRestoreCheckpoint}
-          onClearTaskLogs={handleClearTaskLogs}
-          onDeleteTask={handleDeleteTask}
-          onCancelTask={handleCancelTask}
-          activeMarkdownContent={activeTab?.content || ''}
-          watchedFiles={cleanWorkspaceFiles}
-          onRunSingleChecklistItem={(itemText) =>
-            handleSendInAppChatTask(`Execute checklist step: "${itemText}"`, {
-              intent: 'build',
-            })
-          }
-          onOpenFileInEditor={(path) => handleOpenReportInTab(path)}
-          onSelectWatchedFileForDispatch={(file) => {
-            setSelectedSourceFile(file.path);
-            handleSendInAppChatTask(`Analyze and process ${file.name}`, {
-              filePath: file.path,
-              fileName: file.name,
-              sourceAgentId: file.sourceAgent,
-            });
-          }}
-          onDeleteWorkspaceFile={handleDeleteWorkspaceFile}
-        />
+            {/* Center Pane: Interactive Multi-Agent Chat & Streaming Timeline */}
+            <AgentChatTimeline
+              visibleAgents={visibleAgents}
+              allAgents={agentProfiles}
+              selectedAgentId={selectedAgentId}
+              onSelectAgent={(id) => setSelectedAgentId(id)}
+              selectedIntent={selectedIntent}
+              onSelectIntent={(intent) => setSelectedIntent(intent)}
+              selectedTask={selectedTask}
+              activeFileName={
+                workspaceFocusMode === 'workspace'
+                  ? `Entire Project (${
+                      resolvedWorkspace
+                        ? resolvedWorkspace.split(/[\\/]/).pop()
+                        : 'Root'
+                    })`
+                  : focusFilePath
+                  ? cleanWorkspaceFiles.find((f) => f.path === focusFilePath)
+                      ?.name ||
+                    focusFilePath.split(/[\\/]/).pop() ||
+                    'Focused File'
+                  : activeTab?.fileName || 'Workspace Specification'
+              }
+              activeFilePath={
+                workspaceFocusMode === 'workspace'
+                  ? resolvedWorkspace
+                  : focusFilePath ||
+                    activeTab?.filePath ||
+                    cleanWorkspaceFiles[0]?.path ||
+                    ''
+              }
+              watchedFiles={cleanWorkspaceFiles}
+              selectedSourceFile={selectedSourceFile}
+              onSelectSourceFile={(path) => setSelectedSourceFile(path)}
+              onSendChatTask={async (text, attachedImages) => {
+                let promptToSend = text;
+                if (attachedImages && attachedImages.length > 0) {
+                  const imagesMarkdown = attachedImages
+                    .map((img) => `![${img.name}](${img.dataUrl})`)
+                    .join('\n\n');
+                  promptToSend = promptToSend
+                    ? `${promptToSend}\n\n### Attached Reference Images:\n${imagesMarkdown}`
+                    : `### Attached Reference Images:\n${imagesMarkdown}`;
+                }
+                await handleSendInAppChatTask(promptToSend);
+              }}
+              onOpenReportInTab={handleOpenReportInTab}
+              onApplyToActiveTab={handleApplyToActiveTab}
+              onRelayToNextAgent={handleRelayToNextAgent}
+              onPasteExternalReply={handlePasteExternalReply}
+              onCancelTask={handleCancelTask}
+              submitting={submitting}
+            />
+
+            {/* Right Pane: Live Progress, Antigravity Files Deck & Activity/Terminal Inspector */}
+            <AgentProgressInspector
+              selectedTask={selectedTask}
+              checkpoints={agentCheckpoints}
+              restoringCheckpointId={restoringCheckpointId}
+              onRestoreCheckpoint={handleRestoreCheckpoint}
+              onClearTaskLogs={handleClearTaskLogs}
+              onDeleteTask={handleDeleteTask}
+              onCancelTask={handleCancelTask}
+              activeMarkdownContent={activeTab?.content || ''}
+              watchedFiles={cleanWorkspaceFiles}
+              onRunSingleChecklistItem={(itemText) =>
+                handleSendInAppChatTask(
+                  `Execute checklist step: "${itemText}"`,
+                  {
+                    intent: 'build',
+                  }
+                )
+              }
+              onOpenFileInEditor={(path) => handleOpenReportInTab(path)}
+              onSelectWatchedFileForDispatch={(file) => {
+                setSelectedSourceFile(file.path);
+                handleSendInAppChatTask(`Analyze and process ${file.name}`, {
+                  filePath: file.path,
+                  fileName: file.name,
+                  sourceAgentId: file.sourceAgent,
+                });
+              }}
+              onDeleteWorkspaceFile={handleDeleteWorkspaceFile}
+            />
+          </div>
+        )}
+
+        {/* Far Right: Dual-Layer Memory & Observability HUD */}
+        {showObservabilityHUD && resolvedWorkspace && (
+          <ProjectObservabilityHUD
+            workspacePath={resolvedWorkspace}
+            onClose={() => setShowObservabilityHUD(false)}
+          />
+        )}
       </div>
-      )}
 
       {/* Floating Cache Operation Feedback Banner */}
       {cacheNotification && (

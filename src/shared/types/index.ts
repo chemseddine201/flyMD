@@ -6,4 +6,5 @@ export * from './workspace';
 export * from './tabs';
 export * from './agents';
 export * from './discussion';
+export * from './projects';
 

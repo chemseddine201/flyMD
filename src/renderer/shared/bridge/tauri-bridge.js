@@ -278,6 +278,108 @@
         clearMemory: clearMemory,
       });
     },
+
+    // Multi-Agent Discussion & Deliberation IPC
+    startDiscussion: function (config) {
+      return invoke('cmd_start_discussion', { config: config });
+    },
+    pauseDiscussion: function (sessionId) {
+      return invoke('cmd_pause_discussion', { sessionId: sessionId });
+    },
+    resumeDiscussion: function (workspacePath, sessionId) {
+      return invoke('cmd_resume_discussion', { workspacePath: workspacePath, sessionId: sessionId });
+    },
+    cancelDiscussion: function (sessionId) {
+      return invoke('cmd_cancel_discussion', { sessionId: sessionId });
+    },
+    injectDiscussionGuidance: function (sessionId, guidance) {
+      return invoke('cmd_inject_discussion_guidance', { sessionId: sessionId, guidance: guidance });
+    },
+    getDiscussionTranscript: function (workspacePath, sessionId) {
+      return invoke('cmd_get_discussion_transcript', { workspacePath: workspacePath, sessionId: sessionId });
+    },
+    getDiscussionMetadata: function (workspacePath, sessionId) {
+      return invoke('cmd_get_discussion_metadata', { workspacePath: workspacePath, sessionId: sessionId });
+    },
+    getDiscussionReport: function (workspacePath, sessionId, version) {
+      return invoke('cmd_get_discussion_report', { workspacePath: workspacePath, sessionId: sessionId, version: version || null });
+    },
+    listDiscussions: function (workspacePath) {
+      return invoke('cmd_list_discussions', { workspacePath: workspacePath });
+    },
+    deleteDiscussion: function (workspacePath, sessionId) {
+      return invoke('cmd_delete_discussion', { workspacePath: workspacePath, sessionId: sessionId });
+    },
+    clearAllDiscussions: function (workspacePath) {
+      return invoke('cmd_clear_all_discussions', { workspacePath: workspacePath });
+    },
+    setDiscussionStepMode: function (workspacePath, sessionId, enabled) {
+      return invoke('cmd_set_discussion_step_mode', { workspacePath: workspacePath, sessionId: sessionId, enabled: enabled });
+    },
+    dispatchTargetedAction: function (sessionId, agentId, actionName, actionQuery) {
+      return invoke('cmd_dispatch_targeted_action', {
+        sessionId: sessionId,
+        agentId: agentId,
+        actionName: actionName || null,
+        actionQuery: actionQuery || '',
+      });
+    },
+    getAvailableProviders: function () {
+      return invoke('cmd_get_available_providers');
+    },
+    onDiscussionEvent: makeEventListener('discussion:event'),
+
+    // Hierarchical Projects & Dual-Layer Memory IPC
+    listProjects: function (workspacePath) {
+      return invoke('cmd_list_projects', { workspacePath: workspacePath });
+    },
+    getProjectHierarchy: function (workspacePath) {
+      return invoke('cmd_get_project_hierarchy', { workspacePath: workspacePath });
+    },
+    createProject: function (workspacePath, req) {
+      return invoke('cmd_create_project', { workspacePath: workspacePath, req: req });
+    },
+    updateProject: function (workspacePath, projectId, req) {
+      return invoke('cmd_update_project', { workspacePath: workspacePath, projectId: projectId, req: req });
+    },
+    deleteProject: function (workspacePath, projectId) {
+      return invoke('cmd_delete_project', { workspacePath: workspacePath, projectId: projectId });
+    },
+    getMasterMemory: function (workspacePath) {
+      return invoke('cmd_get_master_memory', { workspacePath: workspacePath });
+    },
+    updateMasterMemory: function (workspacePath, content) {
+      return invoke('cmd_update_master_memory', { workspacePath: workspacePath, content: content });
+    },
+    getProjectMemory: function (workspacePath, projectId) {
+      return invoke('cmd_get_project_memory', { workspacePath: workspacePath, projectId: projectId });
+    },
+    appendProjectMemory: function (workspacePath, projectId, authorRole, kind, summary, details, tags) {
+      return invoke('cmd_append_project_memory', {
+        workspacePath: workspacePath,
+        projectId: projectId,
+        authorRole: authorRole,
+        kind: kind,
+        summary: summary,
+        details: details || null,
+        tags: tags || null,
+      });
+    },
+    generateRecallPack: function (workspacePath, projectId, maxTokens) {
+      return invoke('cmd_generate_recall_pack', {
+        workspacePath: workspacePath,
+        projectId: projectId,
+        maxTokens: maxTokens || null,
+      });
+    },
+    rollupProject: function (workspacePath, projectId, summary) {
+      return invoke('cmd_rollup_project', {
+        workspacePath: workspacePath,
+        projectId: projectId,
+        summary: summary,
+      });
+    },
+
     onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
     onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),
     onAgentCheckpointsUpdated: makeEventListener('agent:checkpoints-updated'),
