@@ -67,15 +67,20 @@ pub fn extract_and_write_code_blocks(
                     }
 
                     let dest = ws_path.join(&chosen_name);
-                    if dest.exists() {
-                        if let Ok(meta) = fs::metadata(&dest) {
-                            if meta.len() >= block_content.len() as u64 {
-                                created_files.push(chosen_name);
-                                continue;
-                            }
+                    let should_write = if dest.exists() {
+                        match fs::read_to_string(&dest) {
+                            Ok(existing) => existing != block_content,
+                            Err(_) => true,
                         }
-                    }
-                    if fs::write(&dest, block_content.as_bytes()).is_ok() {
+                    } else {
+                        true
+                    };
+
+                    if should_write {
+                        if fs::write(&dest, block_content.as_bytes()).is_ok() {
+                            created_files.push(chosen_name);
+                        }
+                    } else {
                         created_files.push(chosen_name);
                     }
                 }
@@ -527,7 +532,7 @@ pub fn spawn_agent_execution(
             });
 
             let prompt_arg = format!(
-                "Execute the task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". Create, write, or modify all required code/HTML/CSS/JS/Markdown files inside \"{}\". Do not ask for confirmation, execute the changes now and output a clear Markdown summary.",
+                "Execute the task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". Create, write, or modify all required code/HTML/CSS/JS/Markdown files inside \"{}\". IMPORTANT ARCHITECTURAL REQUIREMENT: If creating interactive web applications, simulations, or multi-file solutions, you MUST generate complete, production-grade code. Either create and write all companion assets (e.g. styles.css, app.js) to disk in their entirety, OR produce a 100% self-contained single-file HTML deliverable with all CSS and JS embedded. Do NOT leave broken references or missing companion files. Do not ask for confirmation, execute the changes now and output a clear Markdown summary.",
                 handoff_file.to_string_lossy(),
                 exec_dir,
                 exec_dir

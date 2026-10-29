@@ -594,19 +594,45 @@ ${projDesc}
         setSelectedAgentId(currentStep.agentId);
         setSelectedIntent(currentStep.intent);
 
+        const isFirstStep = idx === 0;
+        const assignedReport =
+          assignedReportDoc?.pipelineId === pipeline.id || assignedReportDoc
+            ? assignedReportDoc
+            : null;
+
+        const initialDocContent =
+          assignedReport?.reportMarkdown || activeTab?.content || '';
+        const initialDocName = assignedReport
+          ? `${assignedReport.pipelineName.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')}_Contract.md`
+          : (activeTab?.fileName || 'Contract.md');
+
+        const stepContextTag = assignedReport
+          ? ` | Contract: "${assignedReport.pipelineName}"`
+          : '';
+
         const promptText = `Pipeline [${pipeline.name}] — Step ${idx + 1}/${
           pipeline.steps.length
         } (${currentStep.label})${
           previousTask ? ` relayed from @${previousTask.targetAgentId}` : ''
-        }`;
+        }${stepContextTag}`;
+
+        const stepMarkdownContent = isFirstStep
+          ? initialDocContent
+          : previousTask?.responseMarkdown &&
+            previousTask.responseMarkdown.trim().length > 150
+          ? previousTask.responseMarkdown
+          : initialDocContent || previousTask?.responseMarkdown || '';
 
         const dispatchedTask = await handleSendInAppChatTask(promptText, {
           agentId: currentStep.agentId,
           intent: currentStep.intent,
-          filePath: previousTask?.outputReportPath || previousTask?.filePath,
-          fileName: previousTask?.fileName,
-          markdownContent:
-            previousTask?.responseMarkdown || activeTab?.content || '',
+          filePath: isFirstStep
+            ? (activeTab?.filePath || previousTask?.filePath)
+            : (previousTask?.outputReportPath || previousTask?.filePath || activeTab?.filePath),
+          fileName: isFirstStep
+            ? initialDocName
+            : (previousTask?.fileName || initialDocName),
+          markdownContent: stepMarkdownContent,
           sourceAgentId: previousTask?.targetAgentId,
           pipelineId: pipeline.id,
           nextAgentInChain: nextStep?.agentId,
