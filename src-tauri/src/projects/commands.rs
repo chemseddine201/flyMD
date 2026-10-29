@@ -120,3 +120,4 @@ pub fn cmd_rollup_project(
 ) -> Result<(), String> {
     projects.rollup_project(Path::new(&workspace_path), &project_id, &summary)
 }
+

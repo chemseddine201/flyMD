@@ -84,13 +84,32 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
         let intent: AgentTaskIntent = 'build';
         let agentId = fallbackAgent;
 
-        if (lower.includes('plan') || lower.includes('architect') || lower.includes('design')) {
+        if (
+          lower.includes('plan') ||
+          lower.includes('architect') ||
+          lower.includes('design') ||
+          lower.includes('research') ||
+          lower.includes('outline') ||
+          lower.includes('strategy')
+        ) {
           intent = 'refine-plan';
           agentId = fallbackAgent;
-        } else if (lower.includes('test') || lower.includes('verify') || lower.includes('audit')) {
+        } else if (
+          lower.includes('test') ||
+          lower.includes('verify') ||
+          lower.includes('audit') ||
+          lower.includes('review') ||
+          lower.includes('evaluate') ||
+          lower.includes('fact-check')
+        ) {
           intent = 'review';
           agentId = secondAgent;
-        } else if (lower.includes('fix') || lower.includes('bug')) {
+        } else if (
+          lower.includes('fix') ||
+          lower.includes('bug') ||
+          lower.includes('correct') ||
+          lower.includes('revise')
+        ) {
           intent = 'fix-bugs';
           agentId = fallbackAgent;
         } else {
@@ -107,9 +126,9 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
       });
     } else {
       steps.push(
-        { agentId: fallbackAgent, intent: 'refine-plan', label: 'Verify Contract & Specs', requireConfirmation: false },
-        { agentId: secondAgent, intent: 'build', label: 'Implement Core Components', requireConfirmation: false },
-        { agentId: fallbackAgent, intent: 'review', label: 'Evidence Audit & Settle', requireConfirmation: false }
+        { agentId: fallbackAgent, intent: 'refine-plan', label: 'Synthesize Specifications & Plan', requireConfirmation: false },
+        { agentId: secondAgent, intent: 'build', label: 'Execute Core Deliverables', requireConfirmation: false },
+        { agentId: fallbackAgent, intent: 'review', label: 'Review Deliverables & Settle', requireConfirmation: false }
       );
     }
 
@@ -272,3 +291,4 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
     </div>
   );
 };
+

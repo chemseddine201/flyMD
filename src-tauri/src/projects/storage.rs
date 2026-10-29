@@ -179,3 +179,4 @@ fn atomic_write(target: &Path, bytes: &[u8]) -> Result<(), String> {
         format!("Failed to rename tmp to target: {}", e)
     })
 }
+

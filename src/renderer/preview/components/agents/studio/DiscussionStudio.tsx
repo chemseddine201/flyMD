@@ -106,191 +106,239 @@ export function cleanDiscussionMarkdown(content: string): string {
 
 export const DEFAULT_PRESET_TEMPLATES: DeliberationPreset[] = [
   {
-    id: 'architecture',
-    name: 'System Architecture & Reliability',
-    description: 'System decomposition, invariant verification, and failure recovery.',
+    id: 'strategy',
+    name: 'Strategic Planning & Decision Analysis',
+    description: 'Multi-perspective strategic deliberation, risk assessment, and roadmap prioritization.',
     enabled: true,
     isBuiltIn: true,
     participants: [
       {
-        agentId: 'agent-architect',
+        agentId: 'agent-strategist',
         providerId: 'mock',
-        modelId: 'architect-v1',
-        displayName: 'Lead Architect',
+        modelId: 'strategist-v1',
+        displayName: 'Strategy & Vision Lead',
         role: 'architect',
-        roleDescription: 'Focus on system decomposition, API contracts, and architectural invariants.',
+        roleDescription: 'Synthesize strategic vision, core value propositions, and long-term milestones.',
         avatarColor: '#38bdf8',
         assignedSkillUris: [],
         contextBudgetTokens: 32000,
         customAction: {
-          id: 'arch-decomp',
-          name: 'Architectural Invariant Decomposition',
-          description: 'Strict modular boundary & crash-safety analysis',
-          promptDirective: 'Decompose the architecture into strict layers. Specify data-flow invariants, crash-recovery boundaries, and single points of failure.',
+          id: 'strategic-decomp',
+          name: 'Strategic Value & Milestone Analysis',
+          description: 'Value proposition, roadmap milestones & key success metrics',
+          promptDirective: 'Decompose the strategic vision into concrete phases, core value drivers, and critical measurable milestones.',
         },
       },
       {
-        agentId: 'agent-critic',
+        agentId: 'agent-risk-critic',
         providerId: 'mock',
         modelId: 'critic-v1',
-        displayName: 'Critical Adversary',
+        displayName: 'Risk & Adversarial Analyst',
         role: 'critic',
-        roleDescription: 'Challenge assumptions, highlight single points of failure, and stress edge cases.',
+        roleDescription: 'Stress-test assumptions, identify blind spots, market hurdles, and resource bottlenecks.',
         avatarColor: '#ef4444',
         assignedSkillUris: [],
         contextBudgetTokens: 32000,
         customAction: {
-          id: 'chaos-adversary',
-          name: 'Chaos Engineering & Failure Injection',
-          description: 'Cascade drops, power loss, corrupted logs & timeouts',
-          promptDirective: 'Simulate critical system failure: unexpected process termination, sudden power loss during writes, corrupted JSONL lines, and timeout cascades.',
+          id: 'risk-adversary',
+          name: 'Stress Testing & Blind Spot Identification',
+          description: 'Unintended consequences, competitor response & failure modes',
+          promptDirective: 'Challenge core assumptions vigorously. Highlight critical blind spots, external dependencies, and potential points of failure.',
         },
       },
       {
-        agentId: 'agent-implementer',
+        agentId: 'agent-operations',
         providerId: 'mock',
         modelId: 'implementer-v1',
-        displayName: 'Core Implementer',
+        displayName: 'Operations & Execution Lead',
         role: 'implementer',
-        roleDescription: 'Verify implementation feasibility, crash-safety guarantees, and disk storage atomicity.',
+        roleDescription: 'Evaluate operational feasibility, resource pacing, and actionable implementation steps.',
         avatarColor: '#10b981',
         assignedSkillUris: [],
         contextBudgetTokens: 16000,
         customAction: {
-          id: 'concurrency-stress',
-          name: 'Concurrency & Deadlock Stress Test',
-          description: 'Race conditions, file locks & zombie process hazards',
-          promptDirective: 'Stress test concurrent access scenarios. Verify atomic swap files, backpressure channels, and cleanup on process kill.',
+          id: 'ops-feasibility',
+          name: 'Tactical Execution & Feasibility Audit',
+          description: 'Implementation roadmap, resource pacing & deliverables',
+          promptDirective: 'Assess practical execution steps, required resources, delivery sequencing, and immediate first actions.',
         },
       },
     ],
   },
   {
-    id: 'security',
-    name: 'Security & Sandbox Audit',
-    description: 'Enforce process isolation, permission boundaries, and token leak prevention.',
+    id: 'research',
+    name: 'Deep Research & Investigation',
+    description: 'Epistemic inquiry, source validation, counter-evidence, and systematic synthesis.',
     enabled: true,
     isBuiltIn: true,
     participants: [
       {
-        agentId: 'agent-architect',
+        agentId: 'agent-researcher',
         providerId: 'mock',
-        modelId: 'architect-v1',
-        displayName: 'Lead Architect',
+        modelId: 'researcher-v1',
+        displayName: 'Lead Researcher',
         role: 'architect',
-        roleDescription: 'Define security boundaries, data flow boundaries, and access control models.',
-        avatarColor: '#38bdf8',
+        roleDescription: 'Formulate hypotheses, structure lines of inquiry, and synthesize exploratory findings.',
+        avatarColor: '#818cf8',
         assignedSkillUris: [],
         contextBudgetTokens: 32000,
+        customAction: {
+          id: 'research-inquiry',
+          name: 'Hypothesis Formulation & Discovery',
+          description: 'Formulate core questions and investigative pathways',
+          promptDirective: 'Map the investigative landscape, establish foundational hypotheses, and outline key questions requiring deep answers.',
+        },
       },
       {
-        agentId: 'agent-auditor',
+        agentId: 'agent-methodology-critic',
         providerId: 'mock',
         modelId: 'auditor-v1',
-        displayName: 'Security Auditor',
-        role: 'auditor',
-        roleDescription: 'Audit process-tree isolation, denylist checks, token redaction, and path traversal vulnerabilities.',
+        displayName: 'Methodology & Fact Critic',
+        role: 'critic',
+        roleDescription: 'Audit claims against empirical facts, detect biases, and verify consistency.',
         avatarColor: '#f59e0b',
         assignedSkillUris: [],
         contextBudgetTokens: 32000,
         customAction: {
-          id: 'security-audit',
-          name: 'Zero-Trust Security & Sandbox Audit',
-          description: 'Privilege isolation, path traversal & token leaks',
-          promptDirective: 'Audit against zero-trust requirements. Scrutinize filesystem read boundaries, unauthorized process elevation, and prompt injection avenues.',
+          id: 'fact-verification',
+          name: 'Epistemic Fact & Bias Audit',
+          description: 'Challenge unverified assertions and highlight confirmation biases',
+          promptDirective: 'Rigorously scrutinize claims for empirical backing. Point out unsubstantiated claims, logical fallacies, and potential biases.',
         },
       },
       {
-        agentId: 'agent-critic',
+        agentId: 'agent-synthesizer',
         providerId: 'mock',
-        modelId: 'adversary-v1',
-        displayName: 'Adversarial Tester',
-        role: 'critic',
-        roleDescription: 'Simulate privilege escalations, unsafe process arguments, and environment bypasses.',
-        avatarColor: '#ef4444',
-        assignedSkillUris: [],
-        contextBudgetTokens: 16000,
-      },
-    ],
-  },
-  {
-    id: 'multi_cli',
-    name: 'Multi-CLI Cross Deliberation',
-    description: 'Multi-provider debate across Claude Code CLI, Gemini Antigravity, and Local Core.',
-    enabled: true,
-    isBuiltIn: true,
-    participants: [
-      {
-        agentId: 'claude-architect',
-        providerId: 'claude-code',
-        modelId: 'claude-3-7-sonnet',
-        displayName: 'Claude Architect',
-        role: 'architect',
-        roleDescription: 'Deep system synthesis and cross-module structural coordination.',
-        avatarColor: '#38bdf8',
-        assignedSkillUris: [],
-        contextBudgetTokens: 32000,
-      },
-      {
-        agentId: 'gemini-planner',
-        providerId: 'gemini-antigravity',
-        modelId: 'gemini-2.5-pro',
-        displayName: 'Antigravity Gemini',
-        role: 'critic',
-        roleDescription: 'Edge-case enumeration, performance bottleneck detection, and peer critique.',
-        avatarColor: '#818cf8',
-        assignedSkillUris: [],
-        contextBudgetTokens: 32000,
-      },
-      {
-        agentId: 'rust-implementer',
-        providerId: 'mock',
-        modelId: 'rust-expert-v1',
-        displayName: 'Rust Core Engineer',
+        modelId: 'implementer-v1',
+        displayName: 'Evidence Coordinator',
         role: 'implementer',
-        roleDescription: 'Validate Rust memory safety, atomic file persistence, and subprocess lifecycle.',
-        avatarColor: '#10b981',
-        assignedSkillUris: [],
-        contextBudgetTokens: 16000,
-      },
-    ],
-  },
-  {
-    id: 'performance',
-    name: 'Performance & Refactoring',
-    description: 'Low-latency architecture, memory budgets, and algorithmic efficiency.',
-    enabled: true,
-    isBuiltIn: true,
-    participants: [
-      {
-        agentId: 'perf-architect',
-        providerId: 'mock',
-        modelId: 'perf-v1',
-        displayName: 'Systems Architect',
-        role: 'architect',
-        roleDescription: 'Focus on minimal latency, throughput optimization, and modular decoupled pipelines.',
+        roleDescription: 'Correlate findings into clear actionable conclusions and evidence-backed summaries.',
         avatarColor: '#06b6d4',
         assignedSkillUris: [],
-        contextBudgetTokens: 32000,
+        contextBudgetTokens: 16000,
       },
+    ],
+  },
+  {
+    id: 'editorial',
+    name: 'Content Strategy & Editorial Council',
+    description: 'Idea generation, narrative structuring, audience resonance, and editorial polish.',
+    enabled: true,
+    isBuiltIn: true,
+    participants: [
       {
-        agentId: 'benchmark-critic',
+        agentId: 'agent-editor',
         providerId: 'mock',
-        modelId: 'bench-v1',
-        displayName: 'Benchmark Critic',
-        role: 'critic',
-        roleDescription: 'Identify O(N^2) bottlenecks, excessive memory copies, and unnecessary blocking I/O.',
+        modelId: 'editor-v1',
+        displayName: 'Editorial Director',
+        role: 'architect',
+        roleDescription: 'Establish overarching narrative arc, message hierarchy, and thematic cohesion.',
         avatarColor: '#ec4899',
         assignedSkillUris: [],
         contextBudgetTokens: 32000,
       },
       {
-        agentId: 'lowlevel-implementer',
+        agentId: 'agent-voice-critic',
         providerId: 'mock',
-        modelId: 'lowlevel-v1',
-        displayName: 'Low-Level Implementer',
+        modelId: 'critic-v1',
+        displayName: 'Audience & Voice Critic',
+        role: 'critic',
+        roleDescription: 'Critique readability, emotional resonance, cognitive load, and potential audience objections.',
+        avatarColor: '#f43f5e',
+        assignedSkillUris: [],
+        contextBudgetTokens: 32000,
+      },
+      {
+        agentId: 'agent-draftsman',
+        providerId: 'mock',
+        modelId: 'writer-v1',
+        displayName: 'Creative Draftsman',
         role: 'implementer',
-        roleDescription: 'Propose zero-allocation designs, asynchronous streaming, and compact memory layout.',
+        roleDescription: 'Craft concrete outlines, compelling phrasing, and polished final deliverables.',
+        avatarColor: '#10b981',
+        assignedSkillUris: [],
+        contextBudgetTokens: 16000,
+      },
+    ],
+  },
+  {
+    id: 'multidisciplinary',
+    name: 'Multidisciplinary Evaluation & Governance',
+    description: 'Holistic evaluation across subject expertise, ethics, compliance, and user impact.',
+    enabled: true,
+    isBuiltIn: true,
+    participants: [
+      {
+        agentId: 'agent-subject-expert',
+        providerId: 'mock',
+        modelId: 'expert-v1',
+        displayName: 'Domain Subject Specialist',
+        role: 'architect',
+        roleDescription: 'Provide authoritative domain insights, industry standards, and best practices.',
+        avatarColor: '#3b82f6',
+        assignedSkillUris: [],
+        contextBudgetTokens: 32000,
+      },
+      {
+        agentId: 'agent-ethics-auditor',
+        providerId: 'mock',
+        modelId: 'auditor-v1',
+        displayName: 'Ethics & Compliance Auditor',
+        role: 'auditor',
+        roleDescription: 'Audit ethical implications, unintended side effects, and regulatory compliance.',
+        avatarColor: '#eab308',
+        assignedSkillUris: [],
+        contextBudgetTokens: 32000,
+      },
+      {
+        agentId: 'agent-feasibility',
+        providerId: 'mock',
+        modelId: 'critic-v1',
+        displayName: 'Pragmatic Assessor',
+        role: 'critic',
+        roleDescription: 'Evaluate real-world constraints, adoption hurdles, and practical resource requirements.',
+        avatarColor: '#6366f1',
+        assignedSkillUris: [],
+        contextBudgetTokens: 16000,
+      },
+    ],
+  },
+  {
+    id: 'architecture',
+    name: 'System Architecture & Technical Design',
+    description: 'System decomposition, invariant verification, API contracts, and failure recovery.',
+    enabled: true,
+    isBuiltIn: true,
+    participants: [
+      {
+        agentId: 'agent-architect',
+        providerId: 'mock',
+        modelId: 'architect-v1',
+        displayName: 'Lead Systems Architect',
+        role: 'architect',
+        roleDescription: 'Focus on system decomposition, interface contracts, and architectural invariants.',
+        avatarColor: '#38bdf8',
+        assignedSkillUris: [],
+        contextBudgetTokens: 32000,
+      },
+      {
+        agentId: 'agent-critic',
+        providerId: 'mock',
+        modelId: 'critic-v1',
+        displayName: 'Adversarial Reliability Tester',
+        role: 'critic',
+        roleDescription: 'Challenge assumptions, highlight single points of failure, and stress edge cases.',
+        avatarColor: '#ef4444',
+        assignedSkillUris: [],
+        contextBudgetTokens: 32000,
+      },
+      {
+        agentId: 'agent-implementer',
+        providerId: 'mock',
+        modelId: 'implementer-v1',
+        displayName: 'Core Implementation Engineer',
+        role: 'implementer',
+        roleDescription: 'Verify execution feasibility, atomic persistence guarantees, and lifecycle boundaries.',
         avatarColor: '#10b981',
         assignedSkillUris: [],
         contextBudgetTokens: 16000,
@@ -299,7 +347,7 @@ export const DEFAULT_PRESET_TEMPLATES: DeliberationPreset[] = [
   },
 ];
 
-export const STORAGE_KEY_PRESETS = 'flymd_deliberation_presets_v2';
+export const STORAGE_KEY_PRESETS = 'flymd_deliberation_presets_v3';
 
 export const loadSavedPresets = (): DeliberationPreset[] => {
   try {
@@ -912,10 +960,10 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       role: p.role || 'critic',
       roleDescription:
         p.roleDescription?.trim() ||
-        'Provide specialized domain analysis, code verification, and architectural critique.',
+        'Provide specialized domain analysis, critical perspectives, and actionable recommendations.',
       customQuery:
         p.customQuery?.trim() ||
-        'Analyze code for correctness, performance, maintainability, and accessibility.',
+        'Analyze the topic for strategic soundness, feasibility, evidence quality, and potential risks.',
       contextBudgetTokens: p.contextBudgetTokens || 16000,
     }));
 
@@ -1071,9 +1119,9 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   }, [streamingChunks]);
 
   return (
-    <div className="flex-1 flex min-h-0 bg-slate-950 text-slate-200 font-sans">
+    <div className="flex-1 h-full w-full min-h-0 flex overflow-hidden bg-slate-950 text-slate-200 font-sans">
       {/* 1. Left Session Explorer Sidebar */}
-      <div className="w-80 border-r border-slate-800/80 bg-slate-900/40 flex flex-col shrink-0">
+      <div className="w-80 h-full border-r border-slate-800/80 bg-slate-900/40 flex flex-col shrink-0 min-h-0 overflow-hidden">
         {/* Sidebar Header */}
         <div className="p-3 border-b border-slate-800 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -1182,7 +1230,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       </div>
 
       {/* 2. Main Stage Deliberation Canvas */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
+      <div className="flex-1 h-full flex flex-col min-w-0 min-h-0 overflow-hidden bg-slate-950">
         {tabFocusNotification && (
           <div className="px-4 py-2 bg-emerald-500/20 border-b border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center justify-between animate-fadeIn">
             <div className="flex items-center gap-2">
@@ -1463,7 +1511,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
             )}
 
             {/* View Tab Body */}
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               {/* TAB 1: Antigravity-Style Grouped Actions Timeline */}
               {activeTab === 'timeline' && (
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
@@ -1947,7 +1995,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
 
               {/* Persistent Human-in-the-Loop Steering & Targeted Probe Bar (Pinned at bottom of timeline) */}
               {activeTab === 'timeline' && (
-                <div className="border-t border-slate-800 bg-slate-900/95 backdrop-blur-sm">
+                <div className="shrink-0 border-t border-slate-800 bg-slate-900/95 backdrop-blur-sm">
                   {/* Expandable Targeted Probe Drawer */}
                   {showTargetedDispatch && (
                     <div className="p-3 bg-purple-950/20 border-b border-purple-500/30 animate-fadeIn">
@@ -1990,10 +2038,9 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                             >
                               <option value="Targeted Inquiry" className="bg-slate-900 text-slate-200">Targeted Inquiry</option>
                               <option value="Edge Case Stress Test" className="bg-slate-900 text-slate-200">Edge Case Stress Test</option>
-                              <option value="Invariant Verification" className="bg-slate-900 text-slate-200">Invariant Verification</option>
-                              <option value="Zero-Trust Security Probe" className="bg-slate-900 text-slate-200">Zero-Trust Security Probe</option>
-                              <option value="Concurrency Crash Probe" className="bg-slate-900 text-slate-200">Concurrency Crash Probe</option>
-                              <option value="Alternative Architecture Inquiry" className="bg-slate-900 text-slate-200">Alternative Architecture Inquiry</option>
+                              <option value="Invariant Verification" className="bg-slate-900 text-slate-200">Constraint Verification</option>
+                              <option value="Risk & Feasibility Probe" className="bg-slate-900 text-slate-200">Risk &amp; Feasibility Probe</option>
+                              <option value="Alternative Solution Inquiry" className="bg-slate-900 text-slate-200">Alternative Solution Inquiry</option>
                             </select>
                           </div>
                         </div>
@@ -2009,7 +2056,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                 handleDispatchTargetedQuery();
                               }
                             }}
-                            placeholder={`Specify inquiry or probe for ${targetedAgentId}... (e.g. 'How is crash atomicity guaranteed on Windows?')`}
+                            placeholder={`Specify inquiry or probe for ${targetedAgentId}... (e.g. 'What are the main risks, dependencies, or trade-offs?')`}
                             className="flex-1 bg-slate-950 border border-purple-500/40 rounded-lg px-3.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 transition-colors"
                           />
                           <button
@@ -2062,7 +2109,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                             handleSendGuidance();
                           }
                         }}
-                        placeholder="Intervene or steer council... (e.g. 'Prioritize SQLite over Postgres', press Enter)"
+                        placeholder="Intervene or steer council... (e.g. 'Prioritize feasibility', 'Explore alternative angles', press Enter)"
                         className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
                       />
                       <button
@@ -2088,7 +2135,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
               Multi-Agent Discussion Studio
             </h3>
             <p className="text-xs text-slate-500 max-w-md mb-6 leading-relaxed">
-              Coordinate multi-agent architectural debates with strict read-only process isolation, deterministic barrier synchronization, human-in-the-loop steering, and epistemic evidence-grading.
+              Coordinate multi-agent deliberations and structured debates across any domain with strict process isolation, deterministic synchronization, human-in-the-loop steering, and evidence grading.
             </p>
             <button
               type="button"
@@ -2131,18 +2178,18 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   type="text"
                   value={newTopic}
                   onChange={(e) => setNewTopic(e.target.value)}
-                  placeholder="e.g. SQLite Persistence vs Embedded RocksDB, Gym Workout Tracker..."
+                  placeholder="e.g. Market Expansion Strategy, Scientific Methodology Review, Product Architecture, Novel Plot Outline..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Technical Proposal &amp; Constraints</label>
+                <label className="block text-slate-300 font-semibold mb-1">Proposal, Objectives &amp; Constraints</label>
                 <textarea
                   rows={3}
                   value={newIdea}
                   onChange={(e) => setNewIdea(e.target.value)}
-                  placeholder="Describe the architectural design, trade-offs, constraints, or critical invariants to evaluate..."
+                  placeholder="Describe the core proposition, context, challenges, constraints, or specific angles to evaluate..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500 leading-relaxed transition-colors"
                 />
               </div>
@@ -2331,7 +2378,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                               type="text"
                               value={editingPreset.name}
                               onChange={(e) => setEditingPreset({ ...editingPreset, name: e.target.value })}
-                              placeholder="e.g. Database Migration & Concurrency Stress"
+                              placeholder="e.g. Market Strategy & Execution Risk, System Architecture, Policy Review..."
                               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
                             />
                           </div>
@@ -2452,7 +2499,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                       copy[pIdx] = { ...copy[pIdx], roleDescription: e.target.value };
                                       setEditingPreset({ ...editingPreset, participants: copy });
                                     }}
-                                    placeholder="Role description (e.g. Focus on memory safety and concurrency locks)"
+                                    placeholder="Role description (e.g. Focus on market risks, feasibility, or quality standards)"
                                     className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-300 focus:outline-none focus:border-sky-500 text-[11px]"
                                   />
                                 </div>
@@ -2477,7 +2524,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                       };
                                       setEditingPreset({ ...editingPreset, participants: copy });
                                     }}
-                                    placeholder="e.g. Stress test race conditions, audit single points of failure, and scrutinize SQLite write locks."
+                                    placeholder="e.g. Evaluate core assumptions, analyze edge cases, and scrutinize deliverables against key objectives."
                                     className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-slate-200 text-xs focus:outline-none focus:border-amber-500/70 leading-relaxed font-mono"
                                   />
                                 </div>
@@ -2503,7 +2550,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                               type="button"
                               onClick={handleResetPresetsToDefaults}
                               className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 transition-colors"
-                              title="Restore original 4 default presets"
+                              title="Restore default deliberation presets"
                             >
                               <RotateCcw size={11} />
                               <span>Restore Defaults</span>

@@ -158,7 +158,9 @@ export const AgentsControlCenter: React.FC = () => {
   const resolvedWorkspace =
     folderPath ||
     supervisionConfig?.path ||
-    (activeTab?.filePath ? activeTab.filePath.replace(/[\\/][^\\/]+$/, '') : '');
+    (activeTab?.filePath ? activeTab.filePath.replace(/[\\/][^\\/]+$/, '') : '') ||
+    (typeof window !== 'undefined' ? (window as any)._flymd_last_workspace : '') ||
+    '.';
 
   const selectedTask =
     agentTasks.find((t) => t.id === selectedTaskId) || agentTasks[0] || null;
@@ -186,10 +188,10 @@ export const AgentsControlCenter: React.FC = () => {
     if (activeReportMarkdown && activeReportMarkdown.trim().length > 0) {
       return activeReportMarkdown;
     }
-    const projName = activeProject?.name || 'Workspace Core Architecture';
+    const projName = activeProject?.name || 'General Project Task';
     const projDesc =
       activeProject?.description ||
-      'High-integrity system components and execution plan.';
+      'Structured execution plan, objectives, and deliverables.';
     return `# Synthesis Report & Execution Contract: ${projName}
 
 - **Project Node**: \`${activeProject?.id || 'root'}\`
@@ -202,19 +204,19 @@ export const AgentsControlCenter: React.FC = () => {
 
 ---
 
-## 1. Executive Summary & Goals
+## 1. Executive Summary & Objectives
 ${projDesc}
 
 ## 2. Actionable Implementation Checklist
-- [ ] Parse project specifications and establish data contracts
-- [ ] Implement core domain components and event boundaries
-- [ ] Connect state transitions and error boundaries
-- [ ] Run evidence verification and audit settlement
+- [ ] Review specifications, domain objectives, and requirements
+- [ ] Implement core content, deliverables, or target components
+- [ ] Cross-validate deliverables against constraints and criteria
+- [ ] Audit final outputs, settle deliverables, and mark milestone complete
 
 ## 3. Epistemic Acceptance Criteria
-- Zero runtime crashes on unexpected inputs
-- Decoupled modules with explicit type contracts
-- Evidence before done: all deliverable files verified in workspace
+- Clear alignment with core project goals
+- Rigorous verification of constraints and deliverables
+- Evidence before done: all artifacts and deliverables settled cleanly
 `;
   }, [activeReportMarkdown, activeProject]);
 
@@ -1023,11 +1025,11 @@ ${projDesc}
 
         {/* Center: Active Lifecycle Stage */}
         {lifecycleStage === 'debate' ? (
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden">
             <DiscussionStudio resolvedWorkspace={resolvedWorkspace} />
           </div>
         ) : lifecycleStage === 'report' ? (
-          <div className="flex-1 min-h-0 overflow-hidden p-2">
+          <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden p-2">
             <ProjectSynthesisReportViewer
               workspacePath={resolvedWorkspace}
               reportMarkdown={effectiveReportMarkdown}

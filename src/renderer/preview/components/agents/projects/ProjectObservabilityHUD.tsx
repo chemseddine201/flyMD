@@ -520,3 +520,4 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
     </div>
   );
 };
+

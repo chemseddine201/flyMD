@@ -64,7 +64,10 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjectName.trim() || !workspacePath) return;
+    if (!newProjectName.trim()) return;
+
+    const effectiveWorkspace =
+      workspacePath && workspacePath.trim().length > 0 ? workspacePath.trim() : '.';
 
     const scopePaths = newProjectScope
       .split(',')
@@ -78,7 +81,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
       scope_paths: scopePaths.length > 0 ? scopePaths : undefined,
     };
 
-    const res = await createProject(workspacePath, req);
+    const res = await createProject(effectiveWorkspace, req);
     if (res) {
       if (modalParentId) {
         setExpandedNodes((prev) => ({ ...prev, [modalParentId]: true }));
@@ -89,9 +92,10 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
 
   const handleDelete = async (projectId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!workspacePath) return;
+    const effectiveWorkspace =
+      workspacePath && workspacePath.trim().length > 0 ? workspacePath.trim() : '.';
     setDeletingId(projectId);
-    await deleteProject(workspacePath, projectId);
+    await deleteProject(effectiveWorkspace, projectId);
     setDeletingId(null);
   };
 
@@ -269,13 +273,13 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
             <form onSubmit={handleCreateSubmit} className="space-y-3">
               <div>
                 <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                  Project Name *
+                  Project / Topic Name *
                 </label>
                 <input
                   type="text"
                   required
                   autoFocus
-                  placeholder="e.g. Authentication Module, UI Theme Engine..."
+                  placeholder="e.g. Market Research, Content Strategy, Product Launch, Book Chapter, System Architecture..."
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
@@ -284,11 +288,11 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
 
               <div>
                 <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                  Description / Goal
+                  Description / Goals &amp; Scope
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="High-level goal or specifications for this module..."
+                  placeholder="Describe the main goal, topic, target audience, or requirements..."
                   value={newProjectDescription}
                   onChange={(e) => setNewProjectDescription(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"
@@ -296,18 +300,21 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                  Scoped Paths (Comma-separated)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-medium text-slate-400">
+                    Scoped Paths (Optional)
+                  </label>
+                  <span className="text-[10px] text-slate-500">Leave blank for general topics</span>
+                </div>
                 <input
                   type="text"
-                  placeholder="src/auth, src-tauri/src/auth, tests/auth..."
+                  placeholder="e.g. docs, research, chapters, src (optional)"
                   value={newProjectScope}
                   onChange={(e) => setNewProjectScope(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Bounded directory paths where sub-agents are allowed to create/modify files.
+                  Optional folder or document paths. Leave empty if this project covers broad topics across the workspace.
                 </p>
               </div>
 
@@ -334,3 +341,4 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     </div>
   );
 };
+
