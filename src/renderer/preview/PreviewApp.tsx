@@ -467,6 +467,10 @@ export const PreviewApp: React.FC = () => {
           });
         }}
         colorBlindSafe={store.settings.a11yConfig?.colorBlindSafe}
+        isAgentsMode={store.viewMode === 'agents'}
+        onToggleAgentsStudio={() =>
+          store.setViewMode(store.viewMode === 'agents' ? 'wysiwyg' : 'agents')
+        }
       />
 
       <Toolbar

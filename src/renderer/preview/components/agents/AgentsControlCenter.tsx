@@ -887,8 +887,17 @@ export const AgentsControlCenter: React.FC = () => {
           watchedFiles={cleanWorkspaceFiles}
           selectedSourceFile={selectedSourceFile}
           onSelectSourceFile={(path) => setSelectedSourceFile(path)}
-          onSendChatTask={async (text) => {
-            await handleSendInAppChatTask(text);
+          onSendChatTask={async (text, attachedImages) => {
+            let promptToSend = text;
+            if (attachedImages && attachedImages.length > 0) {
+              const imagesMarkdown = attachedImages
+                .map((img) => `![${img.name}](${img.dataUrl})`)
+                .join('\n\n');
+              promptToSend = promptToSend
+                ? `${promptToSend}\n\n### Attached Reference Images:\n${imagesMarkdown}`
+                : `### Attached Reference Images:\n${imagesMarkdown}`;
+            }
+            await handleSendInAppChatTask(promptToSend);
           }}
           onOpenReportInTab={handleOpenReportInTab}
           onApplyToActiveTab={handleApplyToActiveTab}

@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   AlertCircle,
   Send,
+  Bot,
 } from 'lucide-react';
 
 interface TabBarProps {
@@ -26,6 +27,8 @@ interface TabBarProps {
   onNewTab: () => void;
   onAssignTabToAgent?: (tab: TabItem) => void;
   colorBlindSafe?: boolean;
+  isAgentsMode?: boolean;
+  onToggleAgentsStudio?: () => void;
 }
 
 export const TabBar: React.FC<TabBarProps> = ({
@@ -39,6 +42,8 @@ export const TabBar: React.FC<TabBarProps> = ({
   onNewTab,
   onAssignTabToAgent,
   colorBlindSafe = false,
+  isAgentsMode = false,
+  onToggleAgentsStudio,
 }) => {
   const tabsContainerRef = useRef<HTMLDivElement>(null);
 
@@ -288,6 +293,22 @@ export const TabBar: React.FC<TabBarProps> = ({
       >
         <Plus className="w-4 h-4" />
       </button>
+
+      {onToggleAgentsStudio && (
+        <button
+          type="button"
+          onClick={onToggleAgentsStudio}
+          title="General Workspace Controller: Multi-Agent Studio & Discussion Hub"
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition shrink-0 ml-1.5 ${
+            isAgentsMode
+              ? 'bg-indigo-600 border-indigo-400 text-white shadow-sm'
+              : 'bg-slate-900 border-slate-800 text-indigo-300 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Bot className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Agents Studio</span>
+        </button>
+      )}
 
       {contextMenu.isOpen && contextMenu.tab && (
         <div

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Columns2, Eye, Code2, PenLine, Bot } from 'lucide-react';
+import { Columns2, Eye, Code2, PenLine } from 'lucide-react';
 import { ViewMode } from '../../../../shared/constants';
 
 interface ViewModeSwitchProps {
@@ -12,7 +12,7 @@ export const ViewModeSwitch: React.FC<ViewModeSwitchProps> = ({
   onChangeViewMode,
 }) => {
   return (
-    <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+    <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800" title="Document View Types">
       <button
         type="button"
         onClick={() => onChangeViewMode('wysiwyg')}
@@ -52,18 +52,6 @@ export const ViewModeSwitch: React.FC<ViewModeSwitchProps> = ({
         }`}
       >
         <Code2 className="w-3.5 h-3.5" />
-      </button>
-      <button
-        type="button"
-        onClick={() => onChangeViewMode('agents')}
-        title="Multi-Agent Workspace Supervisor & Handoff Hub"
-        className={`p-1.5 rounded flex items-center justify-center transition ${
-          viewMode === 'agents'
-            ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-            : 'text-indigo-300 hover:text-white hover:bg-indigo-500/20'
-        }`}
-      >
-        <Bot className="w-3.5 h-3.5" />
       </button>
     </div>
   );

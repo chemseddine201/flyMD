@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Bot,
   Send,
@@ -17,6 +17,9 @@ import {
   Brain,
   FileCheck2,
   Wand2,
+  Image as ImageIcon,
+  X,
+  Paperclip,
 } from 'lucide-react';
 import {
   AgentId,
@@ -28,6 +31,13 @@ import {
 import { AGENT_INTENT_PRESETS } from '../../../../../shared/constants';
 import { markdownService } from '../../../services/MarkdownService';
 import { ActionLogTimeline } from './ActionLogTimeline';
+
+export interface ChatImageAttachment {
+  id: string;
+  name: string;
+  size: number;
+  dataUrl: string;
+}
 
 interface AgentChatTimelineProps {
   visibleAgents: AgentProfile[];
@@ -42,8 +52,15 @@ interface AgentChatTimelineProps {
   watchedFiles: ScannedMdFile[];
   selectedSourceFile: string;
   onSelectSourceFile: (path: string) => void;
-  onSendChatTask: (promptText: string) => Promise<void>;
-  onOpenReportInTab: (filePath?: string, markdownFallback?: string, titleFallback?: string) => void;
+  onSendChatTask: (
+    promptText: string,
+    attachedImages?: ChatImageAttachment[]
+  ) => Promise<void>;
+  onOpenReportInTab: (
+    filePath?: string,
+    markdownFallback?: string,
+    titleFallback?: string
+  ) => void;
   onApplyToActiveTab: (markdownContent: string) => void;
   onRelayToNextAgent: (
     task: AgentTaskRecord,
@@ -77,9 +94,14 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
   submitting,
 }) => {
   const [promptInput, setPromptInput] = useState('');
+  const [attachedImages, setAttachedImages] = useState<ChatImageAttachment[]>([]);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [relayAgentId, setRelayAgentId] = useState<AgentId>('');
   const [relayIntent, setRelayIntent] = useState<AgentTaskIntent>('build');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeAgent =
     allAgents.find((a) => a.id === selectedAgentId) || visibleAgents[0];
@@ -94,12 +116,74 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
     visibleAgents.find((a) => a.id !== selectedTask?.targetAgentId)?.id ||
     'claude-code';
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const addImageFiles = (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const imageFiles = fileArray.filter((f) => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
+    imageFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        if (dataUrl) {
+          setAttachedImages((prev) => [
+            ...prev,
+            {
+              id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              name: file.name || `Pasted-Image-${Date.now()}`,
+              size: file.size,
+              dataUrl,
+            },
+          ]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      const imageFiles = Array.from(e.clipboardData.files).filter((f) =>
+        f.type.startsWith('image/')
+      );
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        addImageFiles(imageFiles);
+        return;
+      }
+    }
+    if (e.clipboardData.items) {
+      const items = Array.from(e.clipboardData.items);
+      const imageItems = items.filter((item) => item.type.startsWith('image/'));
+      if (imageItems.length > 0) {
+        e.preventDefault();
+        const files = imageItems
+          .map((item) => item.getAsFile())
+          .filter(Boolean) as File[];
+        if (files.length > 0) {
+          addImageFiles(files);
+        }
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Both Enter and Shift+Enter create a new line!
+    // Never send data on Enter.
+    if (e.key === 'Enter') {
+      e.stopPropagation();
+    }
+  };
+
+  const handleManualSend = async () => {
     if (submitting) return;
     const text = promptInput.trim();
+    if (!text && attachedImages.length === 0) return;
+
+    const imagesToSend = [...attachedImages];
     setPromptInput('');
-    await onSendChatTask(text);
+    setAttachedImages([]);
+    await onSendChatTask(text, imagesToSend);
   };
 
   const renderedReplyHtml = React.useMemo(() => {
@@ -139,7 +223,9 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                 type="button"
                 onClick={() => {
                   onSelectIntent('refine-plan');
-                  onSendChatTask('Refine and structure this Markdown specification with a clear step-by-step checklist.');
+                  onSendChatTask(
+                    'Refine and structure this Markdown specification with a clear step-by-step checklist.'
+                  );
                 }}
                 className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-sky-500/50 transition-all group"
               >
@@ -155,7 +241,9 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                 type="button"
                 onClick={() => {
                   onSelectIntent('build');
-                  onSendChatTask('Execute the checklist steps in this Markdown plan and generate the implementation report.');
+                  onSendChatTask(
+                    'Execute the checklist steps in this Markdown plan and generate the implementation report.'
+                  );
                 }}
                 className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-emerald-500/50 transition-all group"
               >
@@ -171,7 +259,9 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                 type="button"
                 onClick={() => {
                   onSelectIntent('review');
-                  onSendChatTask('Audit this Markdown specification and implementation for edge cases, bugs, and security risks.');
+                  onSendChatTask(
+                    'Audit this Markdown specification and implementation for edge cases, bugs, and security risks.'
+                  );
                 }}
                 className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-amber-500/50 transition-all group"
               >
@@ -201,12 +291,20 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                     {selectedTask.fileName}
                   </span>
                 </div>
-                <p className="text-xs text-slate-200 leading-relaxed">
-                  {selectedTask.customPrompt ||
+                <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap select-text">
+                  {selectedTask.customPrompt ? (
+                    <div
+                      className="prose prose-invert text-xs max-w-none prose-img:max-h-72 prose-img:rounded-xl prose-img:border prose-img:border-slate-800/80 prose-img:my-2"
+                      dangerouslySetInnerHTML={{
+                        __html: markdownService.render(selectedTask.customPrompt),
+                      }}
+                    />
+                  ) : (
                     AGENT_INTENT_PRESETS.find((p) => p.id === selectedTask.intent)
                       ?.description ||
-                    `Process ${selectedTask.fileName} in ${selectedTask.intent} mode.`}
-                </p>
+                    `Process ${selectedTask.fileName} in ${selectedTask.intent} mode.`
+                  )}
+                </div>
               </div>
             </div>
 
@@ -260,123 +358,124 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                   onOpenFile={(fp) => onOpenReportInTab(fp)}
                 />
 
-                {/* Rendered Markdown Response */}
-                {renderedReplyHtml ? (
-                  <div
-                    className="markdown-body prose prose-invert max-w-none text-xs leading-relaxed p-4 rounded-xl bg-slate-950/90 border border-slate-800/90"
-                    dangerouslySetInnerHTML={{ __html: renderedReplyHtml }}
-                  />
-                ) : (
-                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs font-bold text-sky-300">
-                        <Loader2 size={14} className="text-sky-400 animate-spin" />
-                        <span>{taskAgent?.name || 'Agent'} is actively reasoning and evaluating...</span>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400 font-bold">
-                        {selectedTask.progressPercent ?? 55}%
+                {/* Rendered Markdown Output Document */}
+                {selectedTask.responseMarkdown ? (
+                  <div className="space-y-3 pt-2 border-t border-slate-800">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <FileCheck2 size={13} className="text-emerald-400" />
+                        Agent Markdown Deliverable
                       </span>
+                      {selectedTask.outputReportPath && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onOpenReportInTab(selectedTask.outputReportPath)
+                          }
+                          className="flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300 underline"
+                        >
+                          <span>Open in Tab</span>
+                          <ExternalLink size={11} />
+                        </button>
+                      )}
                     </div>
 
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Analyzing <span className="font-mono text-slate-200">`{selectedTask.fileName}`</span> and workspace context. Live updates are streaming below.
-                    </p>
-
-                    {/* Live streaming logs preview */}
-                    {selectedTask.logs && selectedTask.logs.length > 0 && (
-                      <div className="p-2.5 rounded-lg bg-black/60 border border-slate-800/80 font-mono text-[10px] space-y-1 max-h-32 overflow-y-auto">
-                        {selectedTask.logs.slice(-4).map((log, lIdx) => (
-                          <div key={lIdx} className="text-slate-300 truncate flex items-center gap-1.5">
-                            <span className="text-emerald-400 select-none">&gt;</span>
-                            <span className="truncate">{log}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <div
+                      className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs leading-relaxed overflow-x-auto max-h-[500px] select-text prose prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: renderedReplyHtml }}
+                    />
+                  </div>
+                ) : selectedTask.status === 'running' ? (
+                  <div className="py-8 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                    <Loader2 size={24} className="text-sky-400 animate-spin" />
+                    <span>Agent is generating live markdown deliverable...</span>
+                  </div>
+                ) : (
+                  <div className="py-4 text-xs text-slate-400 italic">
+                    Task completed. View logs or generated report in tabs.
                   </div>
                 )}
 
-                {/* Bottom Action & Relay Handoff Bar inside the Agent Reply */}
-                <div className="pt-3 border-t border-slate-800/90 flex flex-wrap items-center justify-between gap-2.5">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onOpenReportInTab(
-                          selectedTask.outputReportPath,
-                          selectedTask.responseMarkdown,
-                          `Report-${selectedTask.fileName}`
-                        )
-                      }
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 text-[11px] font-bold transition-colors"
-                    >
-                      <ExternalLink size={12} />
-                      Open Report as Tab
-                    </button>
-
+                {/* Bottom Agent Action Bar: Quick Apply & Direct Relay */}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80 flex-wrap">
+                  <div className="flex items-center gap-2">
                     {selectedTask.responseMarkdown && (
                       <button
                         type="button"
                         onClick={() =>
                           onApplyToActiveTab(selectedTask.responseMarkdown || '')
                         }
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 text-[11px] font-bold transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-all"
                       >
                         <Wand2 size={12} />
-                        Apply to Active Tab
+                        <span>Apply to Active Tab</span>
                       </button>
                     )}
 
                     <button
                       type="button"
                       onClick={() => onPasteExternalReply(selectedTask)}
-                      title="If you copied a reply from an external browser or IDE, click to attach it here"
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all"
+                      title="Paste external CLI/Web response into this task"
                     >
                       <ClipboardPaste size={12} />
-                      Paste Clipboard Reply
+                      <span className="hidden sm:inline">Paste External Output</span>
                     </button>
                   </div>
 
-                  {/* Direct 1-Click Relay to Next Agent in Chat */}
-                  <div className="flex items-center gap-1.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl px-2.5 py-1">
-                    <span className="text-[10px] font-bold uppercase text-indigo-300">
-                      Next Step:
+                  {/* Immediate Agent-to-Agent Handoff Relay Dropdown */}
+                  <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                    <span className="text-[10px] font-bold text-slate-400 pl-1">
+                      Relay to:
                     </span>
                     <select
                       value={effectiveRelayAgent}
-                      onChange={(e) => setRelayAgentId(e.target.value)}
-                      className="bg-slate-900 text-white text-[11px] font-bold rounded px-1.5 py-0.5 border border-slate-700"
+                      onChange={(e) =>
+                        setRelayAgentId(e.target.value as AgentId)
+                      }
+                      className="bg-transparent text-sky-300 font-bold text-xs focus:outline-none cursor-pointer"
                     >
-                      {visibleAgents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          @{a.shortName}
-                        </option>
-                      ))}
+                      {visibleAgents
+                        .filter((a) => a.id !== selectedTask.targetAgentId)
+                        .map((a) => (
+                          <option key={a.id} value={a.id} className="bg-slate-900">
+                            @{a.name}
+                          </option>
+                        ))}
                     </select>
+
                     <select
                       value={relayIntent}
                       onChange={(e) =>
                         setRelayIntent(e.target.value as AgentTaskIntent)
                       }
-                      className="bg-slate-900 text-sky-300 text-[11px] font-semibold rounded px-1.5 py-0.5 border border-slate-700"
+                      className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer"
                     >
-                      {AGENT_INTENT_PRESETS.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title}
-                        </option>
-                      ))}
+                      <option value="review" className="bg-slate-900">
+                        Review
+                      </option>
+                      <option value="build" className="bg-slate-900">
+                        Build
+                      </option>
+                      <option value="fix-bugs" className="bg-slate-900">
+                        Fix Bugs
+                      </option>
+                      <option value="refine-plan" className="bg-slate-900">
+                        Plan
+                      </option>
                     </select>
+
                     <button
                       type="button"
+                      disabled={submitting}
                       onClick={() =>
                         onRelayToNextAgent(
                           selectedTask,
-                          effectiveRelayAgent,
+                          effectiveRelayAgent as AgentId,
                           relayIntent
                         )
                       }
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-slate-950 text-[11px] font-bold transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition-all disabled:opacity-50"
                     >
                       <span>Relay</span>
                       <ArrowRight size={11} />
@@ -389,11 +488,31 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
         )}
       </div>
 
-      {/* Bottom Interactive Chat Composer Bar (Antigravity / Claude Code Style) */}
-      <form
-        onSubmit={handleSubmit}
-        className="border-t border-slate-800/90 bg-slate-900/95 p-3.5 space-y-2.5"
+      {/* Bottom Interactive Chat Composer Bar (Accepts Images, 3-Line Height, Enter -> Newline, Manual Send Only) */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragOver(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragOver(false);
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            addImageFiles(e.dataTransfer.files);
+          }
+        }}
+        className={`border-t border-slate-800/90 bg-slate-900/95 p-3.5 space-y-2.5 transition-colors ${
+          isDragOver ? 'bg-sky-950/40 ring-2 ring-sky-500/50' : ''
+        }`}
       >
+        {/* Composer Controls: Target Agent, Mode, Scope Selector */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             {/* @Agent Selector Pill */}
@@ -446,7 +565,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                 className="bg-transparent text-slate-200 font-medium text-xs focus:outline-none truncate cursor-pointer"
               >
                 <option value={activeFilePath} className="bg-slate-900">
-                  Active Tab: {activeFileName}
+                  Target: {activeFileName}
                 </option>
                 {watchedFiles
                   .filter((f) => f.path !== activeFilePath)
@@ -461,33 +580,112 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
           </div>
 
           <span className="text-[10px] text-slate-400 hidden sm:inline">
-            Runs directly inside FlyMD Studio • Auto-creates safety checkpoint
+            Paste images (Ctrl+V) or drag &amp; drop • Click Send button to dispatch
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
+        {/* Attached Images Preview Strip */}
+        {attachedImages.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5">
+            {attachedImages.map((img) => (
+              <div
+                key={img.id}
+                className="relative group shrink-0 rounded-xl border border-slate-700 bg-slate-950 p-1.5 flex items-center gap-2 shadow-sm"
+              >
+                <img
+                  src={img.dataUrl}
+                  alt={img.name}
+                  className="w-12 h-12 object-cover rounded-lg border border-slate-800"
+                />
+                <div className="text-[10px] pr-2 max-w-[130px]">
+                  <div className="font-semibold text-slate-200 truncate">{img.name}</div>
+                  <div className="text-slate-500 font-mono">
+                    {(img.size / 1024).toFixed(1)} KB
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAttachedImages((prev) =>
+                      prev.filter((i) => i.id !== img.id)
+                    )
+                  }
+                  title="Remove image"
+                  className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-md transition-transform hover:scale-110"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Multi-Line Textarea (3 rows default height) */}
+        <div className="space-y-2">
+          <textarea
+            ref={textareaRef}
+            rows={3}
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
-            placeholder={`Message @${activeAgent?.shortName || 'Agent'} about ${activeFileName} (or press Enter to run ${selectedIntent.toUpperCase()} mode)...`}
-            className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={`Message @${activeAgent?.shortName || 'Agent'} about ${activeFileName}...\n(Enter or Shift+Enter creates a new line. Click Send button to dispatch)`}
+            className="w-full min-h-[76px] p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500 leading-relaxed font-sans resize-y"
           />
-          <button
-            type="submit"
-            disabled={submitting}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-bold text-xs shadow-lg shadow-sky-500/20 transition-all shrink-0"
-          >
-            {submitting ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Send size={14} />
-            )}
-            <span>Send to @{activeAgent?.shortName}</span>
-          </button>
+
+          {/* Action Row: Attach Image Picker & Manual Send Button */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) addImageFiles(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach images (or paste screenshot with Ctrl+V, or drag & drop)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-medium transition shrink-0"
+              >
+                <ImageIcon size={13} className="text-sky-400" />
+                <span>Attach Image</span>
+                {attachedImages.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-bold">
+                    {attachedImages.length}
+                  </span>
+                )}
+              </button>
+
+              <span className="text-[11px] text-slate-500 hidden md:inline">
+                Enter creates a new line
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleManualSend}
+              disabled={
+                submitting ||
+                (!promptInput.trim() && attachedImages.length === 0)
+              }
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-bold text-xs shadow-lg shadow-sky-500/20 transition-all shrink-0 cursor-pointer disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Send size={14} />
+              )}
+              <span>Send to @{activeAgent?.shortName || 'Agent'}</span>
+            </button>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 };
-
