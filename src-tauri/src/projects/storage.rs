@@ -5,13 +5,25 @@ use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
+/// Resolves a guaranteed writable base path for workspace operations.
+pub fn resolve_safe_workspace(workspace_path: &Path) -> PathBuf {
+    if !workspace_path.as_os_str().is_empty() && workspace_path != Path::new(".") {
+        let _ = fs::create_dir_all(workspace_path);
+        return workspace_path.to_path_buf();
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        if fs::create_dir_all(cwd.join(".flymd")).is_ok() {
+            return cwd;
+        }
+    }
+    let temp_flymd = std::env::temp_dir().join("FlyMD_Projects");
+    let _ = fs::create_dir_all(&temp_flymd);
+    temp_flymd
+}
+
 /// Resolves `.flymd/projects` base path inside the workspace.
 pub fn get_projects_dir(workspace_path: &Path) -> PathBuf {
-    let base = if workspace_path.as_os_str().is_empty() || workspace_path == Path::new(".") {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-    } else {
-        workspace_path.to_path_buf()
-    };
+    let base = resolve_safe_workspace(workspace_path);
     base.join(".flymd").join("projects")
 }
 
@@ -22,11 +34,7 @@ pub fn get_project_node_dir(workspace_path: &Path, project_id: &str) -> PathBuf 
 
 /// Resolves the master memory path: `.flymd/MASTER_MEMORY.md`.
 pub fn get_master_memory_path(workspace_path: &Path) -> PathBuf {
-    let base = if workspace_path.as_os_str().is_empty() || workspace_path == Path::new(".") {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-    } else {
-        workspace_path.to_path_buf()
-    };
+    let base = resolve_safe_workspace(workspace_path);
     base.join(".flymd").join("MASTER_MEMORY.md")
 }
 

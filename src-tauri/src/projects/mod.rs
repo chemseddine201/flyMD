@@ -69,7 +69,22 @@ impl ProjectManager {
         workspace_path: &Path,
         req: CreateProjectRequest,
     ) -> Result<ProjectNode, String> {
-        let mut tree = self.get_or_load_tree(workspace_path);
+        let effective_ws = if (workspace_path.as_os_str().is_empty() || workspace_path == Path::new("."))
+            && req.scope_paths.as_ref().and_then(|p| p.first()).map(|s| Path::new(s).is_absolute() || Path::new(s).exists()).unwrap_or(false)
+        {
+            let candidate = Path::new(&req.scope_paths.as_ref().unwrap()[0]);
+            if candidate.is_dir() {
+                candidate.to_path_buf()
+            } else if let Some(parent) = candidate.parent() {
+                parent.to_path_buf()
+            } else {
+                storage::resolve_safe_workspace(workspace_path)
+            }
+        } else {
+            storage::resolve_safe_workspace(workspace_path)
+        };
+
+        let mut tree = self.get_or_load_tree(&effective_ws);
         let id = format!("proj-{}", now_ms());
 
         let node = ProjectNode {
@@ -87,7 +102,7 @@ impl ProjectManager {
 
         // Validate tree constraints
         tree.insert(node.clone())?;
-        storage::save_project_node(workspace_path, &node)?;
+        storage::save_project_node(&effective_ws, &node)?;
 
         // Update cache
         let mut lock = self.tree_cache.lock().unwrap();
@@ -95,7 +110,7 @@ impl ProjectManager {
 
         // Record initial creation in scoped memory
         let _ = memory::record_scoped_memory(
-            workspace_path,
+            &effective_ws,
             &id,
             "system",
             MemoryEntryKind::Decision,

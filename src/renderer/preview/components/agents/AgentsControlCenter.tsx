@@ -169,7 +169,16 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
     return BUILTIN_AGENT_PIPELINES;
   });
 
+  const [customWorkspace, setCustomWorkspace] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('flymd:custom-workspace-override') || null;
+    } catch {
+      return null;
+    }
+  });
+
   const resolvedWorkspace =
+    customWorkspace ||
     propFolderPath ||
     folderPath ||
     propSupervisionConfig?.path ||
@@ -178,6 +187,55 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
     (activeTab?.filePath ? activeTab.filePath.replace(/[\\/][^\\/]+$/, '') : '') ||
     (typeof window !== 'undefined' ? (window as any)._flymd_last_workspace : '') ||
     '.';
+
+  const handleWorkspaceChange = (newWs: string) => {
+    setCustomWorkspace(newWs);
+    try {
+      localStorage.setItem('flymd:custom-workspace-override', newWs);
+      if (typeof window !== 'undefined') {
+        (window as any)._flymd_last_workspace = newWs;
+      }
+    } catch {}
+    loadProjects(newWs);
+  };
+
+  // Live Progress Inspector resizable width (persisted)
+  const [inspectorWidth, setInspectorWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('flymd:agents-inspector-width');
+      return saved ? parseInt(saved, 10) : 340;
+    } catch {
+      return 340;
+    }
+  });
+
+  const isInspectorResizingRef = useRef(false);
+
+  const handleInspectorResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isInspectorResizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = inspectorWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isInspectorResizingRef.current) return;
+      const delta = startX - moveEvent.clientX;
+      const newWidth = Math.max(260, Math.min(750, startWidth + delta));
+      setInspectorWidth(newWidth);
+      try {
+        localStorage.setItem('flymd:agents-inspector-width', String(newWidth));
+      } catch {}
+    };
+
+    const handleMouseUp = () => {
+      isInspectorResizingRef.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   const selectedTask =
     agentTasks.find((t) => t.id === selectedTaskId) || agentTasks[0] || null;
@@ -325,6 +383,15 @@ ${projDesc}
     stepIdx: number,
     updates: { agentId?: AgentId; intent?: AgentTaskIntent; label?: string }
   ) => {
+    if (runningPipelineId === pipelineId) {
+      isPipelineCancelledRef.current = true;
+      setRunningPipelineId(null);
+      setRunningPipelineStepIdx(-1);
+      setWaitingForStepApproval(null);
+      if (proceedNextStepResolverRef.current) {
+        proceedNextStepResolverRef.current();
+      }
+    }
     setPipelines((prev) => {
       const next = prev.map((p) => {
         if (p.id !== pipelineId) return p;
@@ -339,6 +406,15 @@ ${projDesc}
   };
 
   const handleAddPipelineStep = (pipelineId: string) => {
+    if (runningPipelineId === pipelineId) {
+      isPipelineCancelledRef.current = true;
+      setRunningPipelineId(null);
+      setRunningPipelineStepIdx(-1);
+      setWaitingForStepApproval(null);
+      if (proceedNextStepResolverRef.current) {
+        proceedNextStepResolverRef.current();
+      }
+    }
     const defaultAgent = visibleAgents[0]?.id || 'antigravity';
     setPipelines((prev) => {
       const next = prev.map((p) => {
@@ -371,6 +447,15 @@ ${projDesc}
   };
 
   const handleRemovePipelineStep = (pipelineId: string, stepIdx: number) => {
+    if (runningPipelineId === pipelineId) {
+      isPipelineCancelledRef.current = true;
+      setRunningPipelineId(null);
+      setRunningPipelineStepIdx(-1);
+      setWaitingForStepApproval(null);
+      if (proceedNextStepResolverRef.current) {
+        proceedNextStepResolverRef.current();
+      }
+    }
     setPipelines((prev) => {
       const next = prev.map((p) => {
         if (p.id !== pipelineId) return p;
@@ -384,6 +469,15 @@ ${projDesc}
   };
 
   const handleResetPipelines = () => {
+    if (runningPipelineId) {
+      isPipelineCancelledRef.current = true;
+      setRunningPipelineId(null);
+      setRunningPipelineStepIdx(-1);
+      setWaitingForStepApproval(null);
+      if (proceedNextStepResolverRef.current) {
+        proceedNextStepResolverRef.current();
+      }
+    }
     const fallbackAgent = visibleAgents[0]?.id || 'antigravity';
     const secondAgent = visibleAgents[1]?.id || fallbackAgent;
     const reset = BUILTIN_AGENT_PIPELINES.map((p) => ({
@@ -830,6 +924,8 @@ ${projDesc}
 
   const handleCancelTask = async (taskId: string) => {
     isPipelineCancelledRef.current = true;
+    setRunningPipelineId(null);
+    setRunningPipelineStepIdx(-1);
     if (proceedNextStepResolverRef.current) {
       proceedNextStepResolverRef.current();
     }
@@ -844,6 +940,7 @@ ${projDesc}
   };
 
   const handleClearFinished = async () => {
+    if (runningPipelineId) return;
     try {
       const remaining = await window.electronAPI.clearAgentTasks();
       setAgentTasks(remaining);
@@ -853,6 +950,7 @@ ${projDesc}
   };
 
   const handleDeleteTask = async (taskId: string) => {
+    if (runningPipelineId) return;
     try {
       if (window.electronAPI.deleteAgentTask) {
         const remaining = await window.electronAPI.deleteAgentTask(taskId);
@@ -869,6 +967,7 @@ ${projDesc}
   };
 
   const handleClearTaskLogs = async (taskId: string) => {
+    if (runningPipelineId) return;
     try {
       if (window.electronAPI.clearAgentTaskLogs) {
         await window.electronAPI.clearAgentTaskLogs(taskId);
@@ -1151,7 +1250,11 @@ ${projDesc}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Far Left: Project Hierarchy Tree Navigator */}
         {showProjectTree && resolvedWorkspace && (
-          <ProjectTreeNavigator workspacePath={resolvedWorkspace} />
+          <ProjectTreeNavigator
+            workspacePath={resolvedWorkspace}
+            onClose={() => setShowProjectTree(false)}
+            onWorkspaceChange={handleWorkspaceChange}
+          />
         )}
 
         {/* Center: Active Lifecycle Stage */}
@@ -1192,6 +1295,15 @@ ${projDesc}
               onRemovePipelineStep={handleRemovePipelineStep}
               onResetPipelines={handleResetPipelines}
               onRunPipelineInStudio={handleRunPipelineInStudio}
+              onCancelPipeline={() => {
+                isPipelineCancelledRef.current = true;
+                setRunningPipelineId(null);
+                setRunningPipelineStepIdx(-1);
+                setWaitingForStepApproval(null);
+                if (proceedNextStepResolverRef.current) {
+                  proceedNextStepResolverRef.current();
+                }
+              }}
               runningPipelineId={runningPipelineId}
               runningPipelineStepIdx={runningPipelineStepIdx}
               workflowExecutionMode={workflowExecutionMode}
@@ -1323,8 +1435,25 @@ ${projDesc}
               />
             </div>
 
+            {/* Splitter Drag Handle between Center Chat Pane and Live Progress Inspector */}
+            <div
+              onMouseDown={handleInspectorResizeMouseDown}
+              onDoubleClick={() => {
+                setInspectorWidth(340);
+                try {
+                  localStorage.setItem('flymd:agents-inspector-width', '340');
+                } catch {}
+              }}
+              title="Drag to resize Live Progress Inspector (Double-click to reset to 340px)"
+              className="w-1.5 h-full bg-slate-900/60 hover:bg-sky-500/80 active:bg-sky-500 cursor-col-resize z-20 transition-colors shrink-0 flex items-center justify-center group select-none"
+            >
+              <div className="w-0.5 h-8 bg-slate-700/80 group-hover:bg-sky-200 rounded transition-colors" />
+            </div>
+
             {/* Right Pane: Live Progress, Antigravity Files Deck & Activity/Terminal Inspector */}
             <AgentProgressInspector
+              width={inspectorWidth}
+              isPipelineRunning={!!runningPipelineId}
               selectedTask={selectedTask}
               checkpoints={agentCheckpoints}
               restoringCheckpointId={restoringCheckpointId}

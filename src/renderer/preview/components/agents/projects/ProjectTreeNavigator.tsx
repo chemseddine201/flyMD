@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   FolderTree,
   FolderPlus,
+  Folder,
   ChevronRight,
   ChevronDown,
   Trash2,
@@ -14,6 +15,9 @@ import {
   Clock,
   Activity,
   Boxes,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
 } from 'lucide-react';
 import { usePreviewStore } from '../../../store';
 import {
@@ -25,10 +29,14 @@ import {
 
 interface ProjectTreeNavigatorProps {
   workspacePath: string;
+  onClose?: () => void;
+  onWorkspaceChange?: (newWorkspace: string) => void;
 }
 
 export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   workspacePath,
+  onClose,
+  onWorkspaceChange,
 }) => {
   const projectHierarchy = usePreviewStore((s) => s.projectHierarchy);
   const selectedProjectId = usePreviewStore((s) => s.selectedProjectId);
@@ -44,8 +52,61 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectScope, setNewProjectScope] = useState('');
+  const [customWorkspacePath, setCustomWorkspacePath] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Collapsible and Resizable sidebar states
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('flymd:projects-tree-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [treeWidth, setTreeWidth] = useState<number>(() => {
+    try {
+      return parseInt(localStorage.getItem('flymd:projects-tree-width') || '288', 10);
+    } catch {
+      return 288;
+    }
+  });
+
+  const isResizingRef = useRef(false);
+
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = treeWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(220, Math.min(500, startWidth + delta));
+      setTreeWidth(newWidth);
+      try {
+        localStorage.setItem('flymd:projects-tree-width', String(newWidth));
+      } catch {}
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const toggleCollapse = (collapsed: boolean) => {
+    setIsCollapsed(collapsed);
+    try {
+      localStorage.setItem('flymd:projects-tree-collapsed', String(collapsed));
+    } catch {}
+  };
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -61,6 +122,9 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     setNewProjectName('');
     setNewProjectDescription('');
     setNewProjectScope('');
+    setCustomWorkspacePath(
+      workspacePath && workspacePath.trim() !== '.' ? workspacePath.trim() : ''
+    );
     setSubmitError(null);
     setShowCreateModal(true);
   };
@@ -70,13 +134,26 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     if (!newProjectName.trim()) return;
     setSubmitError(null);
 
-    const effectiveWorkspace =
-      workspacePath && workspacePath.trim().length > 0 ? workspacePath.trim() : '.';
-
     const scopePaths = newProjectScope
       .split(',')
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
+
+    let effectiveWorkspace = customWorkspacePath.trim();
+    if (!effectiveWorkspace) {
+      effectiveWorkspace =
+        workspacePath && workspacePath.trim().length > 0 && workspacePath.trim() !== '.'
+          ? workspacePath.trim()
+          : '';
+    }
+
+    if (!effectiveWorkspace && scopePaths.length > 0 && /^[a-zA-Z]:[\\/]|^[\\/]/.test(scopePaths[0])) {
+      effectiveWorkspace = scopePaths[0];
+    }
+
+    if (!effectiveWorkspace) {
+      effectiveWorkspace = '.';
+    }
 
     const req: CreateProjectRequest = {
       parent_id: modalParentId,
@@ -89,6 +166,9 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     if (res) {
       if (modalParentId) {
         setExpandedNodes((prev) => ({ ...prev, [modalParentId]: true }));
+      }
+      if (effectiveWorkspace !== '.' && effectiveWorkspace !== workspacePath) {
+        onWorkspaceChange?.(effectiveWorkspace);
       }
       setShowCreateModal(false);
     } else {
@@ -220,26 +300,93 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     );
   };
 
+  // -------------------------------------------------------------------------
+  // Collapsed Sidebar Rail Mode
+  // -------------------------------------------------------------------------
+  if (isCollapsed) {
+    return (
+      <aside
+        onClick={() => toggleCollapse(false)}
+        title="Click to expand Projects Tree"
+        className="w-10 shrink-0 h-full border-r border-slate-800/90 bg-slate-950/80 hover:bg-slate-900/90 cursor-pointer flex flex-col items-center py-3 gap-3 transition-colors select-none group"
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleCollapse(false);
+          }}
+          title="Expand Projects Tree"
+          className="p-1 rounded-md text-slate-400 hover:text-indigo-300 hover:bg-slate-800 transition-colors"
+        >
+          <PanelLeftOpen className="w-4 h-4 text-indigo-400" />
+        </button>
+
+        <div
+          title={`${projectHierarchy.length} Projects Registered`}
+          className="w-5 h-5 rounded-full bg-indigo-950/90 border border-indigo-700/60 text-[10px] text-indigo-300 font-mono flex items-center justify-center font-bold"
+        >
+          {projectHierarchy.length}
+        </div>
+
+        <div
+          className="text-[10px] font-bold uppercase tracking-wider text-slate-500 group-hover:text-slate-300 transition-colors mt-2"
+          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+        >
+          Projects Tree
+        </div>
+      </aside>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Expanded & Resizable Sidebar Mode
+  // -------------------------------------------------------------------------
   return (
-    <div className="flex flex-col h-full border-r border-slate-800/80 bg-slate-950/50 backdrop-blur-sm w-72 shrink-0">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-800/80 bg-slate-900/60">
-        <div className="flex items-center gap-2">
-          <FolderTree className="w-4 h-4 text-indigo-400" />
-          <span className="font-semibold text-xs tracking-wider uppercase text-slate-200">
+    <div
+      style={{ width: `${treeWidth}px` }}
+      className="relative flex flex-col h-full border-r border-slate-800/80 bg-slate-950/60 backdrop-blur-sm shrink-0 select-none"
+    >
+      {/* Header with Collapsible & Close Controls */}
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-800/80 bg-slate-900/70">
+        <div className="flex items-center gap-2 min-w-0">
+          <FolderTree className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span className="font-semibold text-xs tracking-wider uppercase text-slate-200 truncate">
             Projects Tree
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={() => handleOpenCreateModal(null)}
-          title="Create Root Project"
-          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-indigo-600/80 hover:bg-indigo-600 text-white shadow-sm transition-colors"
-        >
-          <FolderPlus className="w-3.5 h-3.5" />
-          <span>New Project</span>
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleOpenCreateModal(null)}
+            title="Create Master Project"
+            className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-indigo-600/80 hover:bg-indigo-600 text-white shadow-xs transition-colors"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+            <span>New</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => toggleCollapse(true)}
+            title="Collapse Projects Sidebar"
+            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            <PanelLeftClose className="w-3.5 h-3.5" />
+          </button>
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close Projects Navigator"
+              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-rose-300 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Hierarchy Tree List */}
@@ -249,7 +396,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
             <Layers className="w-8 h-8 mb-2 stroke-[1.5] text-slate-600" />
             <p className="text-xs font-medium text-slate-400">No Projects Defined</p>
             <p className="text-[11px] text-slate-500 mt-1">
-              Create a root project to organize debates, reports, and isolated pipelines.
+              Create a master project to organize debates, reports, and isolated pipelines.
             </p>
             <button
               type="button"
@@ -266,18 +413,34 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
 
       {/* Footer Info */}
       <div className="px-3 py-2 border-t border-slate-800/80 bg-slate-900/40 text-[11px] text-slate-400 flex items-center justify-between">
-        <span>{projectHierarchy.length} Root Projects</span>
-        <span className="text-[10px] text-slate-500">OMH Scoped Trees</span>
+        <span>{projectHierarchy.length} Master Projects</span>
+        <span className="text-[10px] text-slate-500 font-mono">OMH Trees</span>
       </div>
+
+      {/* Resizable Divider Handle (Drag right/left) */}
+      <div
+        onMouseDown={handleResizeMouseDown}
+        title="Drag to resize Projects Tree"
+        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-indigo-500/60 z-30 transition-colors"
+      />
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl p-4 text-slate-100 animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2 mb-3">
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              {modalParentId ? 'Create Child Sub-Project' : 'Create Master Project'}
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                {modalParentId ? 'Create Child Sub-Project' : 'Create Master Project'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             {submitError && (
               <div className="mb-3 p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] leading-relaxed">
@@ -294,11 +457,46 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                   type="text"
                   required
                   autoFocus
-                  placeholder="e.g. Market Research, Content Strategy, Product Launch, Book Chapter, System Architecture..."
+                  placeholder="e.g. Physics Quantum Lab, Market Research, Book Chapter, System Architecture..."
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
+              </div>
+
+              {/* Target Project / Workspace Directory */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-medium text-slate-400">
+                    Target Workspace Directory
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const selected = await window.electronAPI?.openFolderDialog?.();
+                      if (selected) {
+                        setCustomWorkspacePath(selected);
+                      }
+                    }}
+                    className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
+                  >
+                    <Folder className="w-3 h-3" /> Browse Folder...
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder={
+                    workspacePath && workspacePath !== '.'
+                      ? workspacePath
+                      : 'e.g. G:\\xampp-httpdocs\\my-project (or click Browse Folder)'
+                  }
+                  value={customWorkspacePath}
+                  onChange={(e) => setCustomWorkspacePath(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 font-mono text-[11px]"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Directory where project metadata, `.flymd` ledgers, and files are stored.
+                </p>
               </div>
 
               <div>
@@ -319,7 +517,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                   <label className="block text-[11px] font-medium text-slate-400">
                     Scoped Paths (Optional)
                   </label>
-                  <span className="text-[10px] text-slate-500">Leave blank for general topics</span>
+                  <span className="text-[10px] text-slate-500">Comma-separated</span>
                 </div>
                 <input
                   type="text"
@@ -329,7 +527,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Optional folder or document paths. Leave empty if this project covers broad topics across the workspace.
+                  Optional subfolder or document filters for AI memory recall. Leave blank for full workspace coverage.
                 </p>
               </div>
 
@@ -357,4 +555,3 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     </div>
   );
 };
-

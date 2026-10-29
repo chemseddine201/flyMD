@@ -43,6 +43,8 @@ interface AgentProgressInspectorProps {
   onOpenFileInEditor: (filePath?: string) => void;
   onSelectWatchedFileForDispatch?: (file: ScannedMdFile) => void;
   onDeleteWorkspaceFile?: (filePath: string) => Promise<void> | void;
+  width?: number;
+  isPipelineRunning?: boolean;
 }
 
 interface TouchedFile {
@@ -73,6 +75,8 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   onRunSingleChecklistItem,
   onOpenFileInEditor,
   onDeleteWorkspaceFile,
+  width,
+  isPipelineRunning = false,
 }) => {
   const [contextTarget, setContextTarget] =
     useState<SidebarContextMenuTarget | null>(null);
@@ -243,7 +247,10 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   };
 
   return (
-    <aside className="w-80 shrink-0 h-full border-l border-slate-800/90 bg-slate-900/75 flex flex-col p-3.5 space-y-3.5 select-none overflow-hidden">
+    <aside
+      style={{ width: `${width || 340}px` }}
+      className="shrink-0 h-full border-l border-slate-800/90 bg-slate-900/75 flex flex-col p-3.5 space-y-3.5 select-none overflow-hidden"
+    >
       {/* 1. Live Progress & Git Guard Stepper */}
       <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 space-y-2.5 shrink-0">
         <div className="flex items-center justify-between">
@@ -253,7 +260,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
           </span>
           <div className="flex items-center gap-2">
             <span className="text-xs font-extrabold text-sky-300">{pct}%</span>
-            {selectedTask && selectedTask.status !== 'running' && onDeleteTask && (
+            {selectedTask && selectedTask.status !== 'running' && !isPipelineRunning && onDeleteTask && (
               <button
                 type="button"
                 onClick={() => onDeleteTask(selectedTask.id)}
