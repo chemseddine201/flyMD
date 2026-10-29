@@ -5,12 +5,23 @@ use super::{ProjectTreeNode, SharedProjectManager};
 use std::path::Path;
 use tauri::State;
 
+fn resolve_effective_ws(workspace_path: &str) -> String {
+    if workspace_path.trim().is_empty() || workspace_path.trim() == "." {
+        std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| ".".to_string())
+    } else {
+        workspace_path.to_string()
+    }
+}
+
 #[tauri::command]
 pub fn cmd_list_projects(
     projects: State<'_, SharedProjectManager>,
     workspace_path: String,
 ) -> Vec<ProjectNode> {
-    projects.list_projects(Path::new(&workspace_path))
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.list_projects(Path::new(&ws))
 }
 
 #[tauri::command]
@@ -18,7 +29,8 @@ pub fn cmd_get_project_hierarchy(
     projects: State<'_, SharedProjectManager>,
     workspace_path: String,
 ) -> Vec<ProjectTreeNode> {
-    projects.get_hierarchy(Path::new(&workspace_path))
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.get_hierarchy(Path::new(&ws))
 }
 
 #[tauri::command]
@@ -27,7 +39,8 @@ pub fn cmd_create_project(
     workspace_path: String,
     req: CreateProjectRequest,
 ) -> Result<ProjectNode, String> {
-    projects.create_project(Path::new(&workspace_path), req)
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.create_project(Path::new(&ws), req)
 }
 
 #[tauri::command]
@@ -37,7 +50,8 @@ pub fn cmd_update_project(
     project_id: String,
     req: UpdateProjectRequest,
 ) -> Result<ProjectNode, String> {
-    projects.update_project(Path::new(&workspace_path), &project_id, req)
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.update_project(Path::new(&ws), &project_id, req)
 }
 
 #[tauri::command]
@@ -46,7 +60,8 @@ pub fn cmd_delete_project(
     workspace_path: String,
     project_id: String,
 ) -> Result<bool, String> {
-    projects.delete_project(Path::new(&workspace_path), &project_id)
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.delete_project(Path::new(&ws), &project_id)
 }
 
 #[tauri::command]
@@ -54,7 +69,8 @@ pub fn cmd_get_master_memory(
     projects: State<'_, SharedProjectManager>,
     workspace_path: String,
 ) -> String {
-    projects.get_master_memory(Path::new(&workspace_path))
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.get_master_memory(Path::new(&ws))
 }
 
 #[tauri::command]
@@ -63,7 +79,8 @@ pub fn cmd_update_master_memory(
     workspace_path: String,
     content: String,
 ) -> Result<(), String> {
-    projects.update_master_memory(Path::new(&workspace_path), &content)
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.update_master_memory(Path::new(&ws), &content)
 }
 
 #[tauri::command]
@@ -72,7 +89,8 @@ pub fn cmd_get_project_memory(
     workspace_path: String,
     project_id: String,
 ) -> Vec<ProjectMemoryRecord> {
-    projects.get_project_memory(Path::new(&workspace_path), &project_id)
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.get_project_memory(Path::new(&ws), &project_id)
 }
 
 #[tauri::command]
@@ -86,8 +104,9 @@ pub fn cmd_append_project_memory(
     details: Option<String>,
     tags: Option<Vec<String>>,
 ) -> Result<ProjectMemoryRecord, String> {
+    let ws = resolve_effective_ws(&workspace_path);
     projects.append_project_memory(
-        Path::new(&workspace_path),
+        Path::new(&ws),
         &project_id,
         &author_role,
         kind,
@@ -104,8 +123,9 @@ pub fn cmd_generate_recall_pack(
     project_id: String,
     max_tokens: Option<usize>,
 ) -> RecallPack {
+    let ws = resolve_effective_ws(&workspace_path);
     projects.generate_recall_pack(
-        Path::new(&workspace_path),
+        Path::new(&ws),
         &project_id,
         max_tokens.unwrap_or(2000),
     )
@@ -118,6 +138,7 @@ pub fn cmd_rollup_project(
     project_id: String,
     summary: String,
 ) -> Result<(), String> {
-    projects.rollup_project(Path::new(&workspace_path), &project_id, &summary)
+    let ws = resolve_effective_ws(&workspace_path);
+    projects.rollup_project(Path::new(&ws), &project_id, &summary)
 }
 

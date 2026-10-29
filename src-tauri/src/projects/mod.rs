@@ -15,12 +15,13 @@ pub use storage::*;
 pub use tree::*;
 pub use types::*;
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// Central manager and thread-safe façade for project hierarchies and dual-layer memories.
 pub struct ProjectManager {
-    tree_cache: Arc<Mutex<Option<ProjectTree>>>,
+    tree_cache: Arc<Mutex<HashMap<PathBuf, ProjectTree>>>,
 }
 
 pub type SharedProjectManager = Arc<ProjectManager>;
@@ -28,26 +29,27 @@ pub type SharedProjectManager = Arc<ProjectManager>;
 impl ProjectManager {
     pub fn new() -> SharedProjectManager {
         Arc::new(Self {
-            tree_cache: Arc::new(Mutex::new(None)),
+            tree_cache: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
     /// Invalidate in-memory cache to force reloading from disk on next read.
     pub fn invalidate_cache(&self) {
         let mut lock = self.tree_cache.lock().unwrap();
-        *lock = None;
+        lock.clear();
     }
 
     /// Load or retrieve cached project tree for the workspace.
     fn get_or_load_tree(&self, workspace_path: &Path) -> ProjectTree {
+        let effective_ws = storage::resolve_safe_workspace(workspace_path);
         let mut lock = self.tree_cache.lock().unwrap();
-        if let Some(ref t) = *lock {
+        if let Some(t) = lock.get(&effective_ws) {
             return t.clone();
         }
 
-        let nodes = storage::load_all_projects(workspace_path);
+        let nodes = storage::load_all_projects(&effective_ws);
         let tree = ProjectTree::from_nodes(nodes);
-        *lock = Some(tree.clone());
+        lock.insert(effective_ws, tree.clone());
         tree
     }
 
@@ -69,20 +71,7 @@ impl ProjectManager {
         workspace_path: &Path,
         req: CreateProjectRequest,
     ) -> Result<ProjectNode, String> {
-        let effective_ws = if (workspace_path.as_os_str().is_empty() || workspace_path == Path::new("."))
-            && req.scope_paths.as_ref().and_then(|p| p.first()).map(|s| Path::new(s).is_absolute() || Path::new(s).exists()).unwrap_or(false)
-        {
-            let candidate = Path::new(&req.scope_paths.as_ref().unwrap()[0]);
-            if candidate.is_dir() {
-                candidate.to_path_buf()
-            } else if let Some(parent) = candidate.parent() {
-                parent.to_path_buf()
-            } else {
-                storage::resolve_safe_workspace(workspace_path)
-            }
-        } else {
-            storage::resolve_safe_workspace(workspace_path)
-        };
+        let effective_ws = storage::resolve_safe_workspace(workspace_path);
 
         let mut tree = self.get_or_load_tree(&effective_ws);
         let id = format!("proj-{}", now_ms());
@@ -106,7 +95,7 @@ impl ProjectManager {
 
         // Update cache
         let mut lock = self.tree_cache.lock().unwrap();
-        *lock = Some(tree);
+        lock.insert(effective_ws.clone(), tree);
 
         // Record initial creation in scoped memory
         let _ = memory::record_scoped_memory(
@@ -129,7 +118,8 @@ impl ProjectManager {
         project_id: &str,
         req: UpdateProjectRequest,
     ) -> Result<ProjectNode, String> {
-        let mut tree = self.get_or_load_tree(workspace_path);
+        let effective_ws = storage::resolve_safe_workspace(workspace_path);
+        let mut tree = self.get_or_load_tree(&effective_ws);
         let mut current = tree
             .get(project_id)
             .cloned()
@@ -156,25 +146,26 @@ impl ProjectManager {
         current.updated_at = now_ms();
 
         tree.insert(current.clone())?;
-        storage::save_project_node(workspace_path, &current)?;
+        storage::save_project_node(&effective_ws, &current)?;
 
         let mut lock = self.tree_cache.lock().unwrap();
-        *lock = Some(tree);
+        lock.insert(effective_ws, tree);
 
         Ok(current)
     }
 
     /// Deletes a project node and all of its recursive child sub-projects.
     pub fn delete_project(&self, workspace_path: &Path, project_id: &str) -> Result<bool, String> {
-        let mut tree = self.get_or_load_tree(workspace_path);
+        let effective_ws = storage::resolve_safe_workspace(workspace_path);
+        let mut tree = self.get_or_load_tree(&effective_ws);
         let removed_ids = tree.remove_subtree(project_id);
 
         for id in &removed_ids {
-            let _ = storage::delete_project_dir(workspace_path, id);
+            let _ = storage::delete_project_dir(&effective_ws, id);
         }
 
         let mut lock = self.tree_cache.lock().unwrap();
-        *lock = Some(tree);
+        lock.insert(effective_ws, tree);
 
         Ok(!removed_ids.is_empty())
     }

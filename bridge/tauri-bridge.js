@@ -357,7 +357,61 @@
     getAvailableProviders: function () {
       return invoke('cmd_get_available_providers');
     },
+    getCurrentWorkingDirectory: function () {
+      return invoke('cmd_get_cwd');
+    },
     onDiscussionEvent: makeEventListener('discussion:event'),
+
+    // Hierarchical Projects & Dual-Layer Memory IPC
+    listProjects: function (workspacePath) {
+      return invoke('cmd_list_projects', { workspacePath: workspacePath });
+    },
+    getProjectHierarchy: function (workspacePath) {
+      return invoke('cmd_get_project_hierarchy', { workspacePath: workspacePath });
+    },
+    createProject: function (workspacePath, req) {
+      return invoke('cmd_create_project', { workspacePath: workspacePath, req: req });
+    },
+    updateProject: function (workspacePath, projectId, req) {
+      return invoke('cmd_update_project', { workspacePath: workspacePath, projectId: projectId, req: req });
+    },
+    deleteProject: function (workspacePath, projectId) {
+      return invoke('cmd_delete_project', { workspacePath: workspacePath, projectId: projectId });
+    },
+    getMasterMemory: function (workspacePath) {
+      return invoke('cmd_get_master_memory', { workspacePath: workspacePath });
+    },
+    updateMasterMemory: function (workspacePath, content) {
+      return invoke('cmd_update_master_memory', { workspacePath: workspacePath, content: content });
+    },
+    getProjectMemory: function (workspacePath, projectId) {
+      return invoke('cmd_get_project_memory', { workspacePath: workspacePath, projectId: projectId });
+    },
+    appendProjectMemory: function (workspacePath, projectId, authorRole, kind, summary, details, tags) {
+      return invoke('cmd_append_project_memory', {
+        workspacePath: workspacePath,
+        projectId: projectId,
+        authorRole: authorRole,
+        kind: kind,
+        summary: summary,
+        details: details || null,
+        tags: tags || null,
+      });
+    },
+    generateRecallPack: function (workspacePath, projectId, maxTokens) {
+      return invoke('cmd_generate_recall_pack', {
+        workspacePath: workspacePath,
+        projectId: projectId,
+        maxTokens: maxTokens || null,
+      });
+    },
+    rollupProject: function (workspacePath, projectId, summary) {
+      return invoke('cmd_rollup_project', {
+        workspacePath: workspacePath,
+        projectId: projectId,
+        summary: summary,
+      });
+    },
     onAgentProfilesUpdated: makeEventListener('agent:profiles-updated'),
     onAgentTasksUpdated: makeEventListener('agent:tasks-updated'),
     onAgentCheckpointsUpdated: makeEventListener('agent:checkpoints-updated'),

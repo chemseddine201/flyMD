@@ -169,35 +169,28 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
     return BUILTIN_AGENT_PIPELINES;
   });
 
-  const [customWorkspace, setCustomWorkspace] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('flymd:custom-workspace-override') || null;
-    } catch {
-      return null;
+  const [cwdWorkspace, setCwdWorkspace] = useState<string>('');
+
+  useEffect(() => {
+    if (!folderPath && !propFolderPath && window.electronAPI?.getCurrentWorkingDirectory) {
+      window.electronAPI.getCurrentWorkingDirectory().then((cwd) => {
+        if (cwd && cwd !== '.') {
+          setCwdWorkspace(cwd);
+        }
+      }).catch(() => {});
     }
-  });
+  }, [folderPath, propFolderPath]);
 
   const resolvedWorkspace =
-    customWorkspace ||
     propFolderPath ||
     folderPath ||
     propSupervisionConfig?.path ||
     supervisionConfig?.path ||
     (propActiveTab?.filePath ? propActiveTab.filePath.replace(/[\\/][^\\/]+$/, '') : '') ||
     (activeTab?.filePath ? activeTab.filePath.replace(/[\\/][^\\/]+$/, '') : '') ||
+    cwdWorkspace ||
     (typeof window !== 'undefined' ? (window as any)._flymd_last_workspace : '') ||
     '.';
-
-  const handleWorkspaceChange = (newWs: string) => {
-    setCustomWorkspace(newWs);
-    try {
-      localStorage.setItem('flymd:custom-workspace-override', newWs);
-      if (typeof window !== 'undefined') {
-        (window as any)._flymd_last_workspace = newWs;
-      }
-    } catch {}
-    loadProjects(newWs);
-  };
 
   // Live Progress Inspector resizable width (persisted)
   const [inspectorWidth, setInspectorWidth] = useState<number>(() => {
@@ -1253,7 +1246,6 @@ ${projDesc}
           <ProjectTreeNavigator
             workspacePath={resolvedWorkspace}
             onClose={() => setShowProjectTree(false)}
-            onWorkspaceChange={handleWorkspaceChange}
           />
         )}
 

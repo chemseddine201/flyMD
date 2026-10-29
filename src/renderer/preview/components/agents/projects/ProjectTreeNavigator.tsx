@@ -52,7 +52,6 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectScope, setNewProjectScope] = useState('');
-  const [customWorkspacePath, setCustomWorkspacePath] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -122,9 +121,6 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     setNewProjectName('');
     setNewProjectDescription('');
     setNewProjectScope('');
-    setCustomWorkspacePath(
-      workspacePath && workspacePath.trim() !== '.' ? workspacePath.trim() : ''
-    );
     setSubmitError(null);
     setShowCreateModal(true);
   };
@@ -139,21 +135,10 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
 
-    let effectiveWorkspace = customWorkspacePath.trim();
-    if (!effectiveWorkspace) {
-      effectiveWorkspace =
-        workspacePath && workspacePath.trim().length > 0 && workspacePath.trim() !== '.'
-          ? workspacePath.trim()
-          : '';
-    }
-
-    if (!effectiveWorkspace && scopePaths.length > 0 && /^[a-zA-Z]:[\\/]|^[\\/]/.test(scopePaths[0])) {
-      effectiveWorkspace = scopePaths[0];
-    }
-
-    if (!effectiveWorkspace) {
-      effectiveWorkspace = '.';
-    }
+    const effectiveWorkspace =
+      workspacePath && workspacePath.trim().length > 0 && workspacePath.trim() !== '.'
+        ? workspacePath.trim()
+        : '.';
 
     const req: CreateProjectRequest = {
       parent_id: modalParentId,
@@ -167,13 +152,11 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
       if (modalParentId) {
         setExpandedNodes((prev) => ({ ...prev, [modalParentId]: true }));
       }
-      if (effectiveWorkspace !== '.' && effectiveWorkspace !== workspacePath) {
-        onWorkspaceChange?.(effectiveWorkspace);
-      }
       setShowCreateModal(false);
     } else {
+      const storeErr = usePreviewStore.getState().projectsError;
       setSubmitError(
-        projectsError ||
+        storeErr ||
           'Failed to initialize project on disk. Please ensure the workspace directory exists and is writable.'
       );
     }
@@ -464,39 +447,16 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                 />
               </div>
 
-              {/* Target Project / Workspace Directory */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-medium text-slate-400">
-                    Target Workspace Directory
-                  </label>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const selected = await window.electronAPI?.openFolderDialog?.();
-                      if (selected) {
-                        setCustomWorkspacePath(selected);
-                      }
-                    }}
-                    className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
-                  >
-                    <Folder className="w-3 h-3" /> Browse Folder...
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  placeholder={
-                    workspacePath && workspacePath !== '.'
-                      ? workspacePath
-                      : 'e.g. G:\\xampp-httpdocs\\my-project (or click Browse Folder)'
-                  }
-                  value={customWorkspacePath}
-                  onChange={(e) => setCustomWorkspacePath(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 font-mono text-[11px]"
-                />
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Directory where project metadata, `.flymd` ledgers, and files are stored.
-                </p>
+              {/* Active Workspace Directory Indicator */}
+              <div className="flex items-center gap-2 text-[11px] text-slate-300 bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1.5 select-none">
+                <Folder className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="text-slate-400 shrink-0">Workspace:</span>
+                <span
+                  className="font-mono text-slate-200 truncate font-medium text-[11px]"
+                  title={workspacePath && workspacePath !== '.' ? workspacePath : 'Current Working Directory'}
+                >
+                  {workspacePath && workspacePath !== '.' ? workspacePath : 'Current Working Directory'}
+                </span>
               </div>
 
               <div>

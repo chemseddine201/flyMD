@@ -5,6 +5,7 @@ import { registerWindowHandlers } from './windowHandlers';
 import { registerSettingsHandlers } from './settingsHandlers';
 import { registerWorkspaceHandlers } from './workspaceHandlers';
 import { registerLlmHandlers } from './llmHandlers';
+import { registerProjectHandlers } from './projectHandlers';
 
 export function registerIpcHandlers(appContainer: AppContainer = container): void {
   registerFileHandlers(appContainer);
@@ -13,5 +14,6 @@ export function registerIpcHandlers(appContainer: AppContainer = container): voi
   registerSettingsHandlers(appContainer);
   registerWorkspaceHandlers(appContainer);
   registerLlmHandlers(appContainer);
+  registerProjectHandlers(appContainer);
 }
 

@@ -327,6 +327,9 @@
     getAvailableProviders: function () {
       return invoke('cmd_get_available_providers');
     },
+    getCurrentWorkingDirectory: function () {
+      return invoke('cmd_get_cwd');
+    },
     onDiscussionEvent: makeEventListener('discussion:event'),
 
     // Hierarchical Projects & Dual-Layer Memory IPC

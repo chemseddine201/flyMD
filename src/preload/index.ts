@@ -268,6 +268,8 @@ const electronAPI = {
   },
 
   // Hierarchical Projects & Dual-Layer Memory IPC
+  getCurrentWorkingDirectory: (): Promise<string> =>
+    ipcRenderer.invoke('workspace:get-cwd'),
   listProjects: (workspacePath: string): Promise<ProjectNode[]> =>
     ipcRenderer.invoke('projects:list', workspacePath),
   getProjectHierarchy: (workspacePath: string): Promise<ProjectTreeNode[]> =>

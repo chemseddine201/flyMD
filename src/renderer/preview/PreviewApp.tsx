@@ -80,6 +80,14 @@ export const PreviewApp: React.FC = () => {
         const files = await window.electronAPI.scanFolder(cfg.path, cfg.scanMode || 'full-tree');
         store.setFolder(cfg.path, cfg.name, files);
         store.setSidebarCollapsed(false);
+      } else if (!store.folderPath && window.electronAPI.getCurrentWorkingDirectory) {
+        window.electronAPI.getCurrentWorkingDirectory().then(async (cwd) => {
+          if (cwd && cwd !== '.' && !store.folderPath) {
+            const folderName = cwd.split(/[\\/]/).pop() || 'Workspace';
+            const files = await window.electronAPI.scanFolder(cwd, 'full-tree').catch(() => []);
+            store.setFolder(cwd, folderName, files || []);
+          }
+        }).catch(() => {});
       }
     });
     window.electronAPI.discoverAgents?.().then(store.setAgentProfiles).catch(() => {});

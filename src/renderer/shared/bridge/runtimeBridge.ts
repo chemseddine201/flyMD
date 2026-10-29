@@ -5,6 +5,13 @@ import {
   HistoryItem,
   ScannedMdFile,
   TranslationRequest,
+  CreateProjectRequest,
+  ProjectNode,
+  ProjectTreeNode,
+  UpdateProjectRequest,
+  ProjectMemoryRecord,
+  RecallPack,
+  MemoryEntryKind,
 } from '../../../shared/types';
 import {
   FileFilter,
@@ -512,6 +519,144 @@ export function ensureRuntimeBridge(): void {
     },
     onSupervisedTreeUpdated: (callback: (files: ScannedMdFile[]) => void) => {
       return supervisedTreeEmitter.subscribe(callback);
+    },
+
+    // Hierarchical Projects & Dual-Layer Memory
+    getCurrentWorkingDirectory: async (): Promise<string> => {
+      return activeVirtualFolder?.path || '.';
+    },
+    listProjects: async (workspacePath: string): Promise<ProjectNode[]> => {
+      try {
+        const key = `flymd_projects_${workspacePath || '.'}`;
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    },
+    getProjectHierarchy: async (workspacePath: string): Promise<ProjectTreeNode[]> => {
+      try {
+        const key = `flymd_projects_${workspacePath || '.'}`;
+        const raw = localStorage.getItem(key);
+        const list: ProjectNode[] = raw ? JSON.parse(raw) : [];
+        const map = new Map<string, ProjectTreeNode>();
+        for (const p of list) {
+          map.set(p.id, { ...p, children: [] });
+        }
+        const roots: ProjectTreeNode[] = [];
+        for (const node of map.values()) {
+          if (node.parent_id && map.has(node.parent_id)) {
+            map.get(node.parent_id)!.children.push(node);
+          } else {
+            roots.push(node);
+          }
+        }
+        return roots;
+      } catch {
+        return [];
+      }
+    },
+    createProject: async (workspacePath: string, req: CreateProjectRequest): Promise<ProjectNode> => {
+      const now = Date.now();
+      const node: ProjectNode = {
+        id: `proj-${now}`,
+        parent_id: req.parent_id || null,
+        name: req.name.trim(),
+        description: (req.description || '').trim(),
+        scope_paths: req.scope_paths || [],
+        status: 'idle',
+        active_debate_id: null,
+        active_pipeline_id: null,
+        created_at: now,
+        updated_at: now,
+      };
+      const key = `flymd_projects_${workspacePath || '.'}`;
+      const raw = localStorage.getItem(key);
+      const list: ProjectNode[] = raw ? JSON.parse(raw) : [];
+      list.push(node);
+      localStorage.setItem(key, JSON.stringify(list));
+      return node;
+    },
+    updateProject: async (workspacePath: string, projectId: string, req: UpdateProjectRequest): Promise<ProjectNode> => {
+      const key = `flymd_projects_${workspacePath || '.'}`;
+      const raw = localStorage.getItem(key);
+      const list: ProjectNode[] = raw ? JSON.parse(raw) : [];
+      const found = list.find((p) => p.id === projectId);
+      if (!found) throw new Error(`Project ${projectId} not found.`);
+      if (req.name !== undefined) found.name = req.name.trim();
+      if (req.description !== undefined) found.description = req.description.trim();
+      if (req.scope_paths !== undefined) found.scope_paths = req.scope_paths;
+      if (req.status !== undefined) found.status = req.status;
+      found.updated_at = Date.now();
+      localStorage.setItem(key, JSON.stringify(list));
+      return found;
+    },
+    deleteProject: async (workspacePath: string, projectId: string): Promise<boolean> => {
+      const key = `flymd_projects_${workspacePath || '.'}`;
+      const raw = localStorage.getItem(key);
+      const list: ProjectNode[] = raw ? JSON.parse(raw) : [];
+      const filtered = list.filter((p) => p.id !== projectId && p.parent_id !== projectId);
+      localStorage.setItem(key, JSON.stringify(filtered));
+      return true;
+    },
+    getMasterMemory: async (workspacePath: string): Promise<string> => {
+      const key = `flymd_master_memory_${workspacePath || '.'}`;
+      return localStorage.getItem(key) || '# Master Shared Memory\n\nNo invariants recorded yet.\n';
+    },
+    updateMasterMemory: async (workspacePath: string, content: string): Promise<void> => {
+      const key = `flymd_master_memory_${workspacePath || '.'}`;
+      localStorage.setItem(key, content);
+    },
+    getProjectMemory: async (_workspacePath: string, projectId: string): Promise<ProjectMemoryRecord[]> => {
+      const key = `flymd_project_memory_${projectId}`;
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    },
+    appendProjectMemory: async (
+      _workspacePath: string,
+      projectId: string,
+      authorRole: string,
+      kind: MemoryEntryKind,
+      summary: string,
+      details?: string,
+      tags?: string[]
+    ): Promise<ProjectMemoryRecord> => {
+      const key = `flymd_project_memory_${projectId}`;
+      const raw = localStorage.getItem(key);
+      const records: ProjectMemoryRecord[] = raw ? JSON.parse(raw) : [];
+      const rec: ProjectMemoryRecord = {
+        id: `mem-${Date.now()}`,
+        project_id: projectId,
+        timestamp: Date.now(),
+        author_role: authorRole,
+        kind,
+        summary,
+        details: details || null,
+        tags: tags || [],
+      };
+      records.push(rec);
+      localStorage.setItem(key, JSON.stringify(records));
+      return rec;
+    },
+    generateRecallPack: async (workspacePath: string, projectId: string): Promise<RecallPack> => {
+      const masterKey = `flymd_master_memory_${workspacePath || '.'}`;
+      const masterContent = localStorage.getItem(masterKey) || '';
+      const memKey = `flymd_project_memory_${projectId}`;
+      const memRaw = localStorage.getItem(memKey);
+      const memRecords: ProjectMemoryRecord[] = memRaw ? JSON.parse(memRaw) : [];
+      const scoped = memRecords.map((r) => `- [${r.kind}] ${r.summary}`).join('\n');
+      return {
+        project_id: projectId,
+        master_invariants: masterContent,
+        scoped_context: scoped,
+        estimated_tokens: Math.ceil((masterContent.length + scoped.length) / 4),
+        rendered_markdown: `## Master Memory\n${masterContent}\n\n## Scoped Memory\n${scoped}`,
+      };
+    },
+    rollupProject: async (workspacePath: string, projectId: string, summary: string): Promise<void> => {
+      const masterKey = `flymd_master_memory_${workspacePath || '.'}`;
+      const current = localStorage.getItem(masterKey) || '';
+      localStorage.setItem(masterKey, `${current}\n\n### Rollup ${projectId}\n${summary}\n`);
     },
   };
 

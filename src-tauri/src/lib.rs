@@ -74,6 +74,13 @@ fn cmd_save_settings(
 }
 
 #[tauri::command]
+fn cmd_get_cwd() -> String {
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| ".".to_string())
+}
+
+#[tauri::command]
 fn cmd_scan_folder(
     workspace: tauri::State<'_, SharedWorkspaceManager>,
     dir_path: String,
@@ -283,6 +290,7 @@ pub fn run() {
             cmd_set_discussion_step_mode,
             cmd_dispatch_targeted_action,
             cmd_get_available_providers,
+            cmd_get_cwd,
             cmd_list_projects,
             cmd_get_project_hierarchy,
             cmd_create_project,
