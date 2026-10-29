@@ -132,7 +132,11 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
 
       <div className="flex-1 h-full flex overflow-hidden relative min-w-0">
         {viewMode === 'agents' ? (
-          <AgentsControlCenter />
+          <AgentsControlCenter
+            folderPath={folderPath}
+            activeTab={activeTab ? { id: activeTab.id, filePath: activeTab.filePath, title: activeTab.fileName } : undefined}
+            supervisionConfig={supervisionConfig || undefined}
+          />
         ) : !activeTab ? (
           <EmptyWorkspaceView
             onOpenFile={onOpenFile}

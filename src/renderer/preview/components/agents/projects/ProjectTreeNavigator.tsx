@@ -36,6 +36,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   const createProject = usePreviewStore((s) => s.createProject);
   const deleteProject = usePreviewStore((s) => s.deleteProject);
   const isProjectsLoading = usePreviewStore((s) => s.isProjectsLoading);
+  const projectsError = usePreviewStore((s) => s.projectsError);
 
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -44,6 +45,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectScope, setNewProjectScope] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,12 +61,14 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     setNewProjectName('');
     setNewProjectDescription('');
     setNewProjectScope('');
+    setSubmitError(null);
     setShowCreateModal(true);
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectName.trim()) return;
+    setSubmitError(null);
 
     const effectiveWorkspace =
       workspacePath && workspacePath.trim().length > 0 ? workspacePath.trim() : '.';
@@ -87,6 +91,11 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
         setExpandedNodes((prev) => ({ ...prev, [modalParentId]: true }));
       }
       setShowCreateModal(false);
+    } else {
+      setSubmitError(
+        projectsError ||
+          'Failed to initialize project on disk. Please ensure the workspace directory exists and is writable.'
+      );
     }
   };
 
@@ -270,6 +279,12 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
               {modalParentId ? 'Create Child Sub-Project' : 'Create Master Project'}
             </h3>
 
+            {submitError && (
+              <div className="mb-3 p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] leading-relaxed">
+                {submitError}
+              </div>
+            )}
+
             <form onSubmit={handleCreateSubmit} className="space-y-3">
               <div>
                 <label className="block text-[11px] font-medium text-slate-400 mb-1">
@@ -329,9 +344,10 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                 <button
                   type="submit"
                   disabled={!newProjectName.trim() || isProjectsLoading}
-                  className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm transition-colors"
+                  className="px-3.5 py-1.5 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium shadow-sm transition-colors flex items-center gap-1.5"
                 >
-                  Create Project
+                  {isProjectsLoading && <Activity className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isProjectsLoading ? 'Creating Project...' : 'Create Project'}</span>
                 </button>
               </div>
             </form>

@@ -63,6 +63,7 @@ import { markdownService } from '../../../services/MarkdownService';
 
 interface DiscussionStudioProps {
   resolvedWorkspace: string;
+  onNavigateToReport?: () => void;
 }
 
 export interface DeliberationPreset {
@@ -434,6 +435,7 @@ const ROUND_METADATA = [
 
 export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   resolvedWorkspace,
+  onNavigateToReport,
 }) => {
   const discussions = usePreviewStore((s: PreviewStoreState) => s.discussions);
   const activeSessionId = usePreviewStore((s: PreviewStoreState) => s.activeSessionId);
@@ -1360,6 +1362,34 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   </button>
                 )}
 
+                {/* Go to Report Button when Settled or Completed */}
+                {(activeMeta.status === 'completed' ||
+                  activeMeta.status === 'awaiting_review' ||
+                  activeMeta.currentRound >= 3) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onNavigateToReport) {
+                        onNavigateToReport();
+                      } else {
+                        setActiveTab('report');
+                        if (!activeReportMarkdown) {
+                          loadReport(
+                            resolvedWorkspace,
+                            activeSessionId,
+                            activeMeta.latestReportVersion || 1
+                          );
+                        }
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-sm"
+                    title="Deliberation settled. Review full synthesis report."
+                  >
+                    <FileText size={13} />
+                    <span>Go to Report &rarr;</span>
+                  </button>
+                )}
+
                 {/* Open in Tab Quick Button */}
                 <button
                   type="button"
@@ -1875,6 +1905,54 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                         >
                           <FastForward size={13} />
                           <span>Continue Next Turn</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Concluded / Settled Deliberation Action Card */}
+                  {(activeMeta.status === 'completed' ||
+                    activeMeta.status === 'awaiting_review' ||
+                    (activeMeta.currentRound >= 3 && !isRunning)) && (
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-sky-950/30 to-indigo-950/40 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-fadeIn">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                          <CheckCircle size={18} />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                            <span>Deliberation Concluded &amp; Evidence Graded</span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">
+                              Consensus Settled
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-1 max-w-xl leading-relaxed">
+                            Council debate has reached consensus across {activeMeta.currentRound || 1} round(s).
+                            The structured synthesis report and actionable checklist are ready for review and pipeline assignment.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onNavigateToReport) {
+                              onNavigateToReport();
+                            } else {
+                              setActiveTab('report');
+                              if (!activeReportMarkdown) {
+                                loadReport(
+                                  resolvedWorkspace,
+                                  activeSessionId,
+                                  activeMeta.latestReportVersion || 1
+                                );
+                              }
+                            }
+                          }}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 text-xs font-bold transition-all shadow-md hover:scale-[1.02]"
+                        >
+                          <FileText size={14} />
+                          <span>Review &amp; Open Synthesis Report &rarr;</span>
                         </button>
                       </div>
                     </div>

@@ -7,7 +7,12 @@ use std::path::{Path, PathBuf};
 
 /// Resolves `.flymd/projects` base path inside the workspace.
 pub fn get_projects_dir(workspace_path: &Path) -> PathBuf {
-    workspace_path.join(".flymd").join("projects")
+    let base = if workspace_path.as_os_str().is_empty() || workspace_path == Path::new(".") {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else {
+        workspace_path.to_path_buf()
+    };
+    base.join(".flymd").join("projects")
 }
 
 /// Resolves the specific folder for a project node: `.flymd/projects/{id}`.
@@ -17,7 +22,12 @@ pub fn get_project_node_dir(workspace_path: &Path, project_id: &str) -> PathBuf 
 
 /// Resolves the master memory path: `.flymd/MASTER_MEMORY.md`.
 pub fn get_master_memory_path(workspace_path: &Path) -> PathBuf {
-    workspace_path.join(".flymd").join("MASTER_MEMORY.md")
+    let base = if workspace_path.as_os_str().is_empty() || workspace_path == Path::new(".") {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else {
+        workspace_path.to_path_buf()
+    };
+    base.join(".flymd").join("MASTER_MEMORY.md")
 }
 
 /// Saves a project node configuration atomically.
@@ -172,11 +182,25 @@ pub fn write_master_memory(workspace_path: &Path, content: &str) -> Result<(), S
 
 /// Helper for atomic file replacement.
 fn atomic_write(target: &Path, bytes: &[u8]) -> Result<(), String> {
+    if let Some(parent) = target.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
     let tmp_path = target.with_extension(format!("tmp.{}", super::types::now_ms()));
     fs::write(&tmp_path, bytes).map_err(|e| format!("Failed to write tmp file: {}", e))?;
-    fs::rename(&tmp_path, target).map_err(|e| {
+
+    if target.exists() {
+        let _ = fs::remove_file(target);
+    }
+
+    if let Err(e) = fs::rename(&tmp_path, target) {
+        // Fallback for Windows cross-volume, file locks, or network shares
+        if let Err(ce) = fs::copy(&tmp_path, target) {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(format!("Failed to write target file: {} (rename error: {})", ce, e));
+        }
         let _ = fs::remove_file(&tmp_path);
-        format!("Failed to rename tmp to target: {}", e)
-    })
+    }
+
+    Ok(())
 }
 
