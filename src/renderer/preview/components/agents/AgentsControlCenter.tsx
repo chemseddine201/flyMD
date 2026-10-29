@@ -82,6 +82,41 @@ export const AgentsControlCenter: React.FC = () => {
   const [runningPipelineStepIdx, setRunningPipelineStepIdx] = useState<number>(-1);
   const isPipelineCancelledRef = useRef<boolean>(false);
 
+  // Workflow Execution Mode: 'auto' (uninterrupted relay) vs. 'manual' (step approval required)
+  const [workflowExecutionMode, setWorkflowExecutionMode] = useState<'auto' | 'manual'>(() => {
+    try {
+      return (localStorage.getItem('flymd:workflow-execution-mode') as 'auto' | 'manual') || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+
+  const handleSetWorkflowExecutionMode = (mode: 'auto' | 'manual') => {
+    setWorkflowExecutionMode(mode);
+    try {
+      localStorage.setItem('flymd:workflow-execution-mode', mode);
+    } catch {}
+  };
+
+  const [waitingForStepApproval, setWaitingForStepApproval] = useState<{
+    completedStepIdx: number;
+    nextStepIdx: number;
+    nextAgentName: string;
+    nextIntent: string;
+    completedTaskId: string;
+    filesCreatedCount: number;
+  } | null>(null);
+
+  const proceedNextStepResolverRef = useRef<(() => void) | null>(null);
+
+  const handleProceedNextWorkflowStep = () => {
+    if (proceedNextStepResolverRef.current) {
+      const resolve = proceedNextStepResolverRef.current;
+      proceedNextStepResolverRef.current = null;
+      resolve();
+    }
+  };
+
   // Ensure selectedAgentId stays within enabled visibleAgents
   useEffect(() => {
     if (
@@ -439,10 +474,36 @@ export const AgentsControlCenter: React.FC = () => {
         }
 
         previousTask = completed;
+
+        // If there is a next step and Manual mode is active, pause and request user approval
+        if (idx + 1 < pipeline.steps.length && workflowExecutionMode === 'manual') {
+          const nextAgent = agentProfiles.find((a) => a.id === nextStep?.agentId);
+          const touchedFiles = (completed.toolActions || []).filter(
+            (a) => a.kind === 'write' || a.label.toLowerCase().includes('file')
+          ).length;
+
+          setWaitingForStepApproval({
+            completedStepIdx: idx,
+            nextStepIdx: idx + 1,
+            nextAgentName: nextAgent?.name || nextStep?.agentId || 'Agent',
+            nextIntent: nextStep?.intent || 'next step',
+            completedTaskId: completed.id,
+            filesCreatedCount: touchedFiles,
+          });
+
+          await new Promise<void>((resolve) => {
+            proceedNextStepResolverRef.current = resolve;
+          });
+
+          setWaitingForStepApproval(null);
+          if (isPipelineCancelledRef.current) break;
+        }
       }
     } finally {
       setRunningPipelineId(null);
       setRunningPipelineStepIdx(-1);
+      setWaitingForStepApproval(null);
+      proceedNextStepResolverRef.current = null;
       try {
         localStorage.removeItem('flymd:active-pipeline-run');
       } catch {}
@@ -564,6 +625,10 @@ export const AgentsControlCenter: React.FC = () => {
 
   const handleCancelTask = async (taskId: string) => {
     isPipelineCancelledRef.current = true;
+    if (proceedNextStepResolverRef.current) {
+      proceedNextStepResolverRef.current();
+    }
+    setWaitingForStepApproval(null);
     try {
       await window.electronAPI.cancelAgentTask(taskId);
       const tasks = await window.electronAPI.getAgentTasks();
@@ -847,6 +912,10 @@ export const AgentsControlCenter: React.FC = () => {
           onRunPipelineInStudio={handleRunPipelineInStudio}
           runningPipelineId={runningPipelineId}
           runningPipelineStepIdx={runningPipelineStepIdx}
+          workflowExecutionMode={workflowExecutionMode}
+          onSetWorkflowExecutionMode={handleSetWorkflowExecutionMode}
+          waitingForStepApproval={waitingForStepApproval}
+          onProceedNextWorkflowStep={handleProceedNextWorkflowStep}
           onDropFileOnAgent={async (agentId, customFile) => {
             setSelectedAgentId(agentId);
             await handleSendInAppChatTask('', {

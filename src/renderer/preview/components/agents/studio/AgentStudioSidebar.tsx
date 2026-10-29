@@ -52,6 +52,17 @@ interface AgentStudioSidebarProps {
   onRunPipelineInStudio: (pipeline: AgentPipelinePreset) => void;
   runningPipelineId?: string | null;
   runningPipelineStepIdx?: number;
+  workflowExecutionMode?: 'auto' | 'manual';
+  onSetWorkflowExecutionMode?: (mode: 'auto' | 'manual') => void;
+  waitingForStepApproval?: {
+    completedStepIdx: number;
+    nextStepIdx: number;
+    nextAgentName: string;
+    nextIntent: string;
+    completedTaskId: string;
+    filesCreatedCount: number;
+  } | null;
+  onProceedNextWorkflowStep?: () => void;
   onDropFileOnAgent: (
     agentId: AgentId,
     customFile?: { filePath: string; fileName: string; sourceAgent?: string }
@@ -88,6 +99,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   onRunPipelineInStudio,
   runningPipelineId,
   runningPipelineStepIdx = -1,
+  workflowExecutionMode = 'auto',
+  onSetWorkflowExecutionMode,
+  waitingForStepApproval,
+  onProceedNextWorkflowStep,
   onDropFileOnAgent,
   onOpenExternalBrowser,
 }) => {
@@ -210,6 +225,34 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
               Workflow Steps ({primaryPipeline.steps.length})
             </span>
             <div className="flex items-center gap-1.5">
+              {onSetWorkflowExecutionMode && (
+                <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-md p-0.5 text-[9px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => onSetWorkflowExecutionMode('auto')}
+                    className={`px-1.5 py-0.5 rounded transition-colors ${
+                      workflowExecutionMode === 'auto'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Auto Mode: Automatically advances to next step when an agent finishes"
+                  >
+                    ⚡ Auto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSetWorkflowExecutionMode('manual')}
+                    className={`px-1.5 py-0.5 rounded transition-colors ${
+                      workflowExecutionMode === 'manual'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Manual Mode: Pauses after each step with an approval card to review before continuing"
+                  >
+                    ✋ Manual
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => onAddPipelineStep(primaryPipeline.id)}
@@ -240,13 +283,39 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 visibleAgents.find((a) => a.id === effectiveAgentId) ||
                 allAgents.find((a) => a.id === effectiveAgentId);
 
+              const isRunningThisStep =
+                !!runningPipelineId && runningPipelineStepIdx === idx;
+              const isFinishedThisStep =
+                !!runningPipelineId &&
+                runningPipelineStepIdx !== undefined &&
+                runningPipelineStepIdx > idx;
+              const isWaitingThisStep =
+                !!waitingForStepApproval &&
+                waitingForStepApproval.nextStepIdx === idx;
+
               return (
                 <div
                   key={`${primaryPipeline.id}-${idx}`}
-                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-slate-950/90 border border-slate-800 text-xs"
+                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-colors ${
+                    isRunningThisStep
+                      ? 'bg-indigo-950/80 border-indigo-500/60 shadow-sm'
+                      : isWaitingThisStep
+                      ? 'bg-amber-950/40 border-amber-500/50'
+                      : isFinishedThisStep
+                      ? 'bg-slate-950/70 border-emerald-500/30'
+                      : 'bg-slate-950/90 border-slate-800'
+                  }`}
                 >
-                  <span className="text-[10px] font-extrabold text-indigo-400 shrink-0 w-4">
-                    {idx + 1}.
+                  <span className="text-[10px] font-extrabold shrink-0 w-4 flex items-center justify-center">
+                    {isFinishedThisStep ? (
+                      <CheckCircle2 size={11} className="text-emerald-400" />
+                    ) : isRunningThisStep ? (
+                      <Loader2 size={11} className="animate-spin text-sky-400" />
+                    ) : isWaitingThisStep ? (
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    ) : (
+                      <span className="text-indigo-400">{idx + 1}.</span>
+                    )}
                   </span>
 
                   {/* Step Action/Intent Dropdown */}
@@ -313,6 +382,33 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             })}
           </div>
 
+          {/* Manual Mode Step Approval Action Card */}
+          {waitingForStepApproval && onProceedNextWorkflowStep && (
+            <div className="mt-2.5 p-2.5 rounded-xl border border-amber-500/50 bg-amber-950/40 text-amber-200 space-y-1.5 shadow-md animate-fadeIn">
+              <div className="flex items-center justify-between text-[11px] font-bold">
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <CheckCircle2 size={12} />
+                  Step {waitingForStepApproval.completedStepIdx + 1} Complete
+                </span>
+                {waitingForStepApproval.filesCreatedCount > 0 && (
+                  <span className="text-[9px] text-amber-300 font-mono">
+                    {waitingForStepApproval.filesCreatedCount} file{waitingForStepApproval.filesCreatedCount > 1 ? 's' : ''} generated
+                  </span>
+                )}
+              </div>
+              <div className="text-[10px] text-zinc-300 leading-tight">
+                Ready for <span className="font-semibold text-white">@{waitingForStepApproval.nextAgentName}</span> ({waitingForStepApproval.nextIntent.toUpperCase()})
+              </div>
+              <button
+                type="button"
+                onClick={onProceedNextWorkflowStep}
+                className="w-full mt-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 shadow transition-colors cursor-pointer"
+              >
+                <span>Proceed to Step {waitingForStepApproval.nextStepIdx + 1} &gt;</span>
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             disabled={!!runningPipelineId}
@@ -326,7 +422,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             {runningPipelineId ? (
               <>
                 <Loader2 size={12} className="animate-spin text-indigo-300" />
-                <span>Running Step {runningPipelineStepIdx + 1} of {primaryPipeline.steps.length}...</span>
+                <span>Running Step {(runningPipelineStepIdx ?? 0) + 1} of {primaryPipeline.steps.length}...</span>
               </>
             ) : (
               <>

@@ -96,10 +96,13 @@ pub fn atomic_write_json<T: Serialize>(target: &Path, value: &T) -> Result<(), S
 fn is_pid_alive(pid: u32) -> bool {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         use std::process::Command;
-        // Check with tasklist command on Windows
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        // Check with tasklist command on Windows without flashing a console window
         if let Ok(output) = Command::new("tasklist")
             .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout);
@@ -132,10 +135,15 @@ impl SessionLock {
                             session_id, lock_data.pid
                         ));
                     } else {
-                        // Stale lock detected, override safely
+                        // Stale lock from dead PID detected: self-healing prune
                         let _ = fs::remove_file(&lock_path);
                     }
+                } else {
+                    // Corrupted lock file: self-healing prune
+                    let _ = fs::remove_file(&lock_path);
                 }
+            } else {
+                let _ = fs::remove_file(&lock_path);
             }
         }
 

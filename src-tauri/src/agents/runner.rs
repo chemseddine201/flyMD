@@ -1,5 +1,6 @@
 //! Agent execution runner: handles CLI subprocess streaming, markdown synthesis, and workspace sync.
 
+use super::process_manager::ProcessTreeManager;
 use super::types::{now_ms, AgentStreamEvent, AgentTaskRecord, AgentToolAction};
 use crate::store::SharedStore;
 use std::fs;
@@ -431,6 +432,7 @@ pub fn spawn_agent_execution(
     instructions: String,
     source_markdown: String,
     cancel_flag: Arc<AtomicBool>,
+    process_manager: ProcessTreeManager,
 ) {
     let profiles = super::discovery::discover_agent_profiles(&store.get_agent_credentials());
     let profile = profiles
@@ -524,26 +526,10 @@ pub fn spawn_agent_execution(
                 ));
             });
 
-            let user_context = if !source_markdown.trim().is_empty() && source_markdown.len() < 4000
-            {
-                format!(
-                    "\n\nTask Specification Document ({}):\n{}",
-                    record.file_name,
-                    source_markdown.trim()
-                )
-            } else {
-                format!(
-                    "\n\nRead the task specification document at: \"{}\"",
-                    handoff_file.to_string_lossy()
-                )
-            };
-
             let prompt_arg = format!(
-                "Execute this mission directly in \"{}\" ({}):\n{}{}\n\nIMPORTANT: Create, write, or modify all required code/HTML/CSS/JS/Markdown files directly inside \"{}\". Do not ask for confirmation, execute the changes now and output a clear Markdown summary.",
+                "Execute the task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". Create, write, or modify all required code/HTML/CSS/JS/Markdown files inside \"{}\". Do not ask for confirmation, execute the changes now and output a clear Markdown summary.",
+                handoff_file.to_string_lossy(),
                 exec_dir,
-                record.intent.to_uppercase(),
-                instructions,
-                user_context,
                 exec_dir
             );
 
@@ -622,6 +608,12 @@ pub fn spawn_agent_execution(
                 cmd.creation_flags(CREATE_NO_WINDOW);
             }
 
+            // Enforce UTF-8 across all CLI child processes to prevent non-ASCII / Arabic mojibake
+            cmd.env("PYTHONIOENCODING", "utf-8")
+                .env("PYTHONUTF8", "1")
+                .env("LANG", "en_US.UTF-8")
+                .env("LC_ALL", "en_US.UTF-8");
+
             cmd.current_dir(&exec_dir)
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
@@ -637,6 +629,9 @@ pub fn spawn_agent_execution(
 
             if let Ok(mut child) = cmd.spawn() {
                 let child_pid = child.id();
+                // Strictly register this task's exact spawned PID for isolated process management
+                process_manager.register_task_process(&task_id, child_pid, &agent_id, &exec_dir);
+
                 let spawn_msg = format!(
                     "CLI process running (PID: {}) in `{}` - monitoring live execution...",
                     child_pid, exec_dir
@@ -674,18 +669,22 @@ pub fn spawn_agent_execution(
 
                 let mut collected_md = String::new();
                 let mut last_heartbeat = std::time::Instant::now();
+                let mut last_stdout_activity = std::time::Instant::now();
+                let mut last_fs_change = std::time::Instant::now();
+                let mut seen_created_files: Vec<String> = Vec::new();
                 let mut elapsed_sec: u64 = 0;
                 let mut current_pct: u8 = 55;
 
                 loop {
                     if cancel_flag.load(Ordering::Relaxed) {
-                        let _ = child.kill();
+                        process_manager.terminate_task_tree(&task_id);
                         finalize_task(&store, &app, &task_id, "cancelled", None);
                         return;
                     }
 
                     match rx.recv_timeout(Duration::from_millis(500)) {
                         Ok((is_stdout, line)) => {
+                            last_stdout_activity = std::time::Instant::now();
                             if is_stdout {
                                 collected_md.push_str(&line);
                                 collected_md.push('\n');
@@ -755,30 +754,71 @@ pub fn spawn_agent_execution(
 
                                 let task_started_at = record.started_at.unwrap_or(record.created_at);
                                 emit_log(format!("[CLI Heartbeat {}s] {}", elapsed_sec, status_text));
+
+                                // Periodic live detection of files written to workspace
+                                let live_files = scan_workspace_modified_files(&exec_dir, task_started_at);
+                                if live_files.len() > seen_created_files.len() || live_files != seen_created_files {
+                                    seen_created_files = live_files.clone();
+                                    last_fs_change = std::time::Instant::now();
+                                }
+
                                 update_task(&|t| {
                                     t.progress_percent = current_pct;
                                     t.logs.push(format!("[Heartbeat {}s] {}", elapsed_sec, status_text));
                                     if t.thinking_trace.len() < 12 {
                                         t.thinking_trace.push(format!("Active: {}", status_text));
                                     }
-                                    // Periodic live detection of files written to workspace
-                                    if elapsed_sec % 6 == 0 {
-                                        let live_files = scan_workspace_modified_files(&exec_dir, task_started_at);
-                                        for lf in live_files {
-                                            if !t.tool_actions.iter().any(|a| a.label.contains(&lf)) {
-                                                t.tool_actions.push(AgentToolAction::new(
-                                                    format!("tool-code-{}", now_ms()),
-                                                    "write".to_string(),
-                                                    format!("Workspace File `{}`", lf),
-                                                    Some(format!("{}\\{}", exec_dir, lf)),
-                                                    "done".to_string(),
-                                                    now_ms(),
-                                                ));
-                                                t.thinking_trace.push(format!("Live Sync: Generated workspace file `{}`", lf));
-                                            }
+                                    for lf in &live_files {
+                                        if !t.tool_actions.iter().any(|a| a.label.contains(lf)) {
+                                            t.tool_actions.push(AgentToolAction::new(
+                                                format!("tool-code-{}", now_ms()),
+                                                "write".to_string(),
+                                                format!("Workspace File `{}`", lf),
+                                                Some(format!("{}\\{}", exec_dir, lf)),
+                                                "done".to_string(),
+                                                now_ms(),
+                                            ));
+                                            t.thinking_trace.push(format!("Live Sync: Generated workspace file `{}`", lf));
                                         }
                                     }
                                 });
+
+                                // Activity Settlement Detector:
+                                // If deliverables are already written and stdio/filesystem has settled for >= 15s,
+                                // terminate the CLI child process tree gracefully to prevent the 92% hang.
+                                let stdout_idle_sec = last_stdout_activity.elapsed().as_secs();
+                                let fs_idle_sec = last_fs_change.elapsed().as_secs();
+
+                                if !seen_created_files.is_empty() && stdout_idle_sec >= 15 && fs_idle_sec >= 15 {
+                                    let settle_msg = format!(
+                                        "[Settlement Detector] Workspace deliverables settled ({} file(s) touched: {}). CLI activity idle for {}s. Concluding execution.",
+                                        seen_created_files.len(),
+                                        seen_created_files.join(", "),
+                                        stdout_idle_sec
+                                    );
+                                    emit_log(settle_msg.clone());
+                                    update_task(&|t| {
+                                        t.logs.push(settle_msg.clone());
+                                        t.thinking_trace.push(settle_msg.clone());
+                                    });
+                                    process_manager.terminate_task_tree(&task_id);
+                                    break;
+                                }
+
+                                if !collected_md.trim().is_empty() && stdout_idle_sec >= 20 && fs_idle_sec >= 15 {
+                                    let settle_msg = format!(
+                                        "[Settlement Detector] Markdown report deliverable received ({} bytes). CLI idle for {}s. Concluding execution.",
+                                        collected_md.len(),
+                                        stdout_idle_sec
+                                    );
+                                    emit_log(settle_msg.clone());
+                                    update_task(&|t| {
+                                        t.logs.push(settle_msg.clone());
+                                        t.thinking_trace.push(settle_msg.clone());
+                                    });
+                                    process_manager.terminate_task_tree(&task_id);
+                                    break;
+                                }
                             }
                         }
                         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
@@ -788,6 +828,7 @@ pub fn spawn_agent_execution(
                 }
 
                 let _ = child.wait();
+                process_manager.unregister_task_process(&task_id);
 
                 let task_started_at = record.started_at.unwrap_or(record.created_at);
                 let mut created_files = scan_workspace_modified_files(&exec_dir, task_started_at);

@@ -905,6 +905,20 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       });
     }
 
+    // Guard against empty custom agent role fields to prevent simulation stalls
+    const sanitizedParticipants = participants.map((p, idx) => ({
+      ...p,
+      displayName: p.displayName?.trim() || `Specialist Agent ${idx + 1}`,
+      role: p.role || 'critic',
+      roleDescription:
+        p.roleDescription?.trim() ||
+        'Provide specialized domain analysis, code verification, and architectural critique.',
+      customQuery:
+        p.customQuery?.trim() ||
+        'Analyze code for correctness, performance, maintainability, and accessibility.',
+      contextBudgetTokens: p.contextBudgetTokens || 16000,
+    }));
+
     const config: DiscussionConfig = {
       schemaVersion: 1,
       sessionId,
@@ -913,7 +927,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       workspacePath: resolvedWorkspace,
       maxRounds: Math.min(10, Math.max(1, parseInt(maxRoundsInput, 10) || maxRounds || 3)),
       turnTimeoutSecs: Math.min(600, Math.max(15, parseInt(turnTimeoutInput, 10) || turnTimeoutSecs || 120)),
-      participants,
+      participants: sanitizedParticipants,
       activeSkillUris: [],
       stepMode: enableStepModeInNew,
     };

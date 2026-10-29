@@ -10,12 +10,14 @@
 pub mod checkpoint;
 pub mod commands;
 pub mod discovery;
+pub mod process_manager;
 pub mod runner;
 pub mod types;
 
 pub use checkpoint::*;
 pub use commands::*;
 pub use discovery::*;
+pub use process_manager::*;
 pub use runner::*;
 pub use types::*;
 
@@ -32,6 +34,7 @@ pub struct AgentOrchestrator {
     pub(crate) store: SharedStore,
     pub(crate) app_handle: AppHandle,
     pub(crate) cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    pub process_manager: ProcessTreeManager,
 }
 
 pub type SharedAgentOrchestrator = Arc<AgentOrchestrator>;
@@ -42,6 +45,7 @@ impl AgentOrchestrator {
             store,
             app_handle,
             cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            process_manager: ProcessTreeManager::new(),
         })
     }
 
@@ -589,6 +593,7 @@ impl AgentOrchestrator {
             instructions,
             body_to_process,
             cancel_flag,
+            self.process_manager.clone(),
         );
 
         Ok(record)
@@ -598,6 +603,7 @@ impl AgentOrchestrator {
         if let Some(flag) = self.cancel_flags.lock().unwrap().get(task_id) {
             flag.store(true, Ordering::Relaxed);
         }
+        self.process_manager.terminate_task_tree(task_id);
         runner::finalize_task(&self.store, &self.app_handle, task_id, "cancelled", None);
         self.store.get_agent_tasks()
     }
@@ -624,6 +630,7 @@ impl AgentOrchestrator {
         if let Some(flag) = self.cancel_flags.lock().unwrap().get(task_id) {
             flag.store(true, Ordering::Relaxed);
         }
+        self.process_manager.terminate_task_tree(task_id);
         let mut tasks = self.store.get_agent_tasks();
         tasks.retain(|t| t.id != task_id);
         self.store.save_agent_tasks(tasks.clone());

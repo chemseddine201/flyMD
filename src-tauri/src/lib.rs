@@ -177,6 +177,8 @@ pub fn run() {
                         open_file_in_preview_helper(app, "");
                     }
                     "quit" => {
+                        let orch = app.state::<SharedAgentOrchestrator>();
+                        orch.process_manager.terminate_all_flymd_tasks();
                         app.exit(0);
                     }
                     _ => {}
@@ -278,6 +280,13 @@ pub fn run() {
             cmd_dispatch_targeted_action,
             cmd_get_available_providers,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
+                if let Some(orch) = app_handle.try_state::<SharedAgentOrchestrator>() {
+                    orch.process_manager.terminate_all_flymd_tasks();
+                }
+            }
+        });
 }
