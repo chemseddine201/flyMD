@@ -20,5 +20,6 @@ export interface FolderSupervisionConfig {
   autoOpenNew: boolean;
   scanMode?: ScanDepthMode;
   collectExternalAgentArtifacts?: boolean;
+  allowedExtensions?: string[];
 }
 

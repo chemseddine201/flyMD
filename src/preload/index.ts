@@ -151,8 +151,8 @@ const electronAPI = {
   // Folder Supervision & Tree Scan
   openFolderDialog: (): Promise<string | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.FOLDER.OPEN_DIALOG),
-  scanFolder: (dirPath: string, scanMode?: any): Promise<ScannedMdFile[]> =>
-    ipcRenderer.invoke(IPC_CHANNELS.FOLDER.SCAN, dirPath, scanMode),
+  scanFolder: (dirPath: string, scanMode?: any, allowedExtensions?: string[]): Promise<ScannedMdFile[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FOLDER.SCAN, dirPath, scanMode, allowedExtensions),
   setSupervision: (config: FolderSupervisionConfig): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.FOLDER.SET_SUPERVISION, config),
   getSupervision: (): Promise<FolderSupervisionConfig | null> =>

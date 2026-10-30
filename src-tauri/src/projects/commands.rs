@@ -5,14 +5,36 @@ use super::{ProjectTreeNode, SharedProjectManager};
 use std::path::Path;
 use tauri::State;
 
-fn resolve_effective_ws(workspace_path: &str) -> String {
-    if workspace_path.trim().is_empty() || workspace_path.trim() == "." {
-        std::env::current_dir()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| ".".to_string())
-    } else {
-        workspace_path.to_string()
+fn resolve_effective_ws_with_req(workspace_path: &str, req: Option<&CreateProjectRequest>) -> String {
+    let trimmed = workspace_path.trim();
+    if !trimmed.is_empty() && trimmed != "." {
+        return trimmed.to_string();
     }
+
+    // If workspace_path is default or empty, check if request has an absolute scoped path
+    if let Some(r) = req {
+        if let Some(ref scopes) = r.scope_paths {
+            for s in scopes {
+                let p = Path::new(s.trim());
+                if p.is_absolute() && (p.is_dir() || p.parent().map(|par| par.is_dir()).unwrap_or(false)) {
+                    let dir_to_use = if p.is_dir() {
+                        p.to_string_lossy().to_string()
+                    } else {
+                        p.parent().unwrap().to_string_lossy().to_string()
+                    };
+                    return dir_to_use;
+                }
+            }
+        }
+    }
+
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| ".".to_string())
+}
+
+fn resolve_effective_ws(workspace_path: &str) -> String {
+    resolve_effective_ws_with_req(workspace_path, None)
 }
 
 #[tauri::command]
@@ -39,7 +61,7 @@ pub fn cmd_create_project(
     workspace_path: String,
     req: CreateProjectRequest,
 ) -> Result<ProjectNode, String> {
-    let ws = resolve_effective_ws(&workspace_path);
+    let ws = resolve_effective_ws_with_req(&workspace_path, Some(&req));
     projects.create_project(Path::new(&ws), req)
 }
 

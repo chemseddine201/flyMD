@@ -22,6 +22,23 @@ const IGNORED_DIRS = new Set([
   '.nuxt',
 ]);
 
+function isAllowedFile(filename: string, allowedExtensions?: string[]): boolean {
+  if (filename.startsWith('.')) return false;
+  if (!allowedExtensions || allowedExtensions.length === 0) {
+    return MD_REGEX.test(filename);
+  }
+  if (allowedExtensions.some((ext) => ext === '*' || ext === '*.*')) {
+    return true;
+  }
+  const lower = filename.toLowerCase();
+  return allowedExtensions.some((ext) => {
+    const clean = ext.trim().toLowerCase();
+    if (!clean) return false;
+    const dotExt = clean.startsWith('.') ? clean : `.${clean}`;
+    return lower.endsWith(dotExt);
+  });
+}
+
 export class WorkspaceService {
   private activeWatcher: fs.FSWatcher | null = null;
   private currentConfig: FolderSupervisionConfig | null = null;
@@ -44,13 +61,22 @@ export class WorkspaceService {
     return this.currentConfig || this.store.getSupervisionConfig();
   }
 
-  public async scanDirectory(rootPath: string, scanMode: ScanDepthMode = 'full-tree'): Promise<ScannedMdFile[]> {
+  public async scanDirectory(
+    rootPath: string,
+    scanMode: ScanDepthMode = 'full-tree',
+    allowedExtensions?: string[]
+  ): Promise<ScannedMdFile[]> {
+    const effectiveExts =
+      allowedExtensions && allowedExtensions.length > 0
+        ? allowedExtensions
+        : this.getCurrentConfig()?.allowedExtensions || ['.md', '.markdown'];
+
     const results: ScannedMdFile[] = [];
 
     if (scanMode === 'shallow') {
-      await this.scanShallow(rootPath, results);
+      await this.scanShallow(rootPath, results, effectiveExts);
     } else {
-      await this.walk(rootPath, rootPath, results);
+      await this.walk(rootPath, rootPath, results, effectiveExts);
     }
 
     // Sort newest first: compare the most recent of (createdAt, modifiedAt)
@@ -68,12 +94,12 @@ export class WorkspaceService {
     return results;
   }
 
-  private async scanShallow(rootPath: string, results: ScannedMdFile[]) {
+  private async scanShallow(rootPath: string, results: ScannedMdFile[], allowedExts: string[]) {
     try {
       const entries = await fs.promises.readdir(rootPath, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (entry.isFile() && MD_REGEX.test(entry.name)) {
+        if (entry.isFile() && isAllowedFile(entry.name, allowedExts)) {
           const fullPath = path.join(rootPath, entry.name);
           try {
             const stat = await fs.promises.stat(fullPath);
@@ -98,7 +124,7 @@ export class WorkspaceService {
     }
   }
 
-  private async walk(currentDir: string, rootPath: string, results: ScannedMdFile[]) {
+  private async walk(currentDir: string, rootPath: string, results: ScannedMdFile[], allowedExts: string[]) {
     try {
       const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
 
@@ -107,10 +133,10 @@ export class WorkspaceService {
 
         if (entry.isDirectory()) {
           if (!IGNORED_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
-            await this.walk(fullPath, rootPath, results);
+            await this.walk(fullPath, rootPath, results, allowedExts);
           }
         } else if (entry.isFile()) {
-          if (MD_REGEX.test(entry.name)) {
+          if (isAllowedFile(entry.name, allowedExts)) {
             try {
               const stat = await fs.promises.stat(fullPath);
               const relativePath = path.relative(rootPath, fullPath);
@@ -164,7 +190,7 @@ export class WorkspaceService {
       const isShallow = config.scanMode === 'shallow';
       this.activeWatcher = fs.watch(config.path, { recursive: !isShallow }, (_eventType, filename) => {
         if (!filename) return;
-        if (!MD_REGEX.test(filename)) return;
+        if (!isAllowedFile(filename, config.allowedExtensions)) return;
 
         const parts = filename.split(/[\\/]/);
         if (isShallow && parts.length > 1) {

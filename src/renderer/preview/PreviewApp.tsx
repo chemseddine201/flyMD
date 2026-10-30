@@ -77,14 +77,14 @@ export const PreviewApp: React.FC = () => {
     window.electronAPI.getSupervision().then(async (cfg) => {
       if (cfg && cfg.path) {
         store.setSupervisionConfig(cfg);
-        const files = await window.electronAPI.scanFolder(cfg.path, cfg.scanMode || 'full-tree');
+        const files = await window.electronAPI.scanFolder(cfg.path, cfg.scanMode || 'full-tree', cfg.allowedExtensions);
         store.setFolder(cfg.path, cfg.name, files);
         store.setSidebarCollapsed(false);
       } else if (!store.folderPath && window.electronAPI.getCurrentWorkingDirectory) {
         window.electronAPI.getCurrentWorkingDirectory().then(async (cwd) => {
           if (cwd && cwd !== '.' && !store.folderPath) {
             const folderName = cwd.split(/[\\/]/).pop() || 'Workspace';
-            const files = await window.electronAPI.scanFolder(cwd, 'full-tree').catch(() => []);
+            const files = await window.electronAPI.scanFolder(cwd, 'full-tree', store.settings.defaultAllowedExtensions).catch(() => []);
             store.setFolder(cwd, folderName, files || []);
           }
         }).catch(() => {});
@@ -382,7 +382,7 @@ export const PreviewApp: React.FC = () => {
     store.setSupervisionConfig(config);
     await window.electronAPI.setSupervision(config);
     if (config.path) {
-      const files = await window.electronAPI.scanFolder(config.path, config.scanMode || 'full-tree');
+      const files = await window.electronAPI.scanFolder(config.path, config.scanMode || 'full-tree', config.allowedExtensions);
       store.setFolderFiles(files);
     }
   };
@@ -400,13 +400,13 @@ export const PreviewApp: React.FC = () => {
     };
     store.setSupervisionConfig(updatedConfig);
     await window.electronAPI.setSupervision(updatedConfig);
-    const files = await window.electronAPI.scanFolder(store.folderPath, mode);
+    const files = await window.electronAPI.scanFolder(store.folderPath, mode, store.supervisionConfig?.allowedExtensions);
     store.setFolderFiles(files);
   };
 
   const handleRefreshFolder = async () => {
     if (store.folderPath) {
-      const files = await window.electronAPI.scanFolder(store.folderPath, store.scanMode);
+      const files = await window.electronAPI.scanFolder(store.folderPath, store.scanMode, store.supervisionConfig?.allowedExtensions);
       store.setFolderFiles(files);
     }
   };

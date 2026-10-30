@@ -33,6 +33,9 @@ fn default_scan_mode() -> String {
 fn default_width_mode() -> String {
     "wide".to_string()
 }
+fn default_allowed_extensions() -> Vec<String> {
+    vec![".md".to_string(), ".markdown".to_string()]
+}
 fn default_llm_config() -> crate::llm::LLMConfig {
     crate::llm::LLMConfig {
         provider: "ollama".to_string(),
@@ -84,6 +87,8 @@ pub struct AppSettings {
     pub preview_width_mode: String,
     #[serde(rename = "a11yConfig", default)]
     pub a11y_config: AccessibilityConfig,
+    #[serde(rename = "defaultAllowedExtensions", default = "default_allowed_extensions")]
+    pub default_allowed_extensions: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -102,6 +107,7 @@ impl Default for AppSettings {
             llm_config: default_llm_config(),
             preview_width_mode: default_width_mode(),
             a11y_config: AccessibilityConfig::default(),
+            default_allowed_extensions: default_allowed_extensions(),
         }
     }
 }
@@ -158,6 +164,8 @@ pub struct FolderSupervisionConfig {
     pub scan_mode: String,
     #[serde(rename = "collectExternalAgentArtifacts", default = "default_true")]
     pub collect_external_agent_artifacts: bool,
+    #[serde(rename = "allowedExtensions", default = "default_allowed_extensions")]
+    pub allowed_extensions: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -3,6 +3,7 @@ import {
   FolderTree,
   FolderPlus,
   Folder,
+  FolderOpen,
   ChevronRight,
   ChevronDown,
   Trash2,
@@ -52,6 +53,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectScope, setNewProjectScope] = useState('');
+  const [modalWorkspacePath, setModalWorkspacePath] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -122,7 +124,29 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     setNewProjectDescription('');
     setNewProjectScope('');
     setSubmitError(null);
+    const storeFolderPath = usePreviewStore.getState().folderPath;
+    const defaultWs =
+      workspacePath && workspacePath.trim().length > 0 && workspacePath.trim() !== '.'
+        ? workspacePath.trim()
+        : storeFolderPath && storeFolderPath.trim().length > 0
+        ? storeFolderPath.trim()
+        : '';
+    setModalWorkspacePath(defaultWs);
     setShowCreateModal(true);
+  };
+
+  const handleBrowseModalWorkspace = async () => {
+    try {
+      const selected = await window.electronAPI?.openFolderDialog?.();
+      if (selected) {
+        setModalWorkspacePath(selected);
+        if (onWorkspaceChange) {
+          onWorkspaceChange(selected);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to pick folder:', err);
+    }
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -135,8 +159,22 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
 
+    // If modalWorkspacePath is set, prefer that.
+    // Otherwise check if a scope path contains an absolute directory!
+    let chosenWs = modalWorkspacePath.trim();
+    if (!chosenWs || chosenWs === '.') {
+      for (const p of scopePaths) {
+        if (/^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('/')) {
+          chosenWs = p;
+          break;
+        }
+      }
+    }
+
     const effectiveWorkspace =
-      workspacePath && workspacePath.trim().length > 0 && workspacePath.trim() !== '.'
+      chosenWs && chosenWs.length > 0 && chosenWs !== '.'
+        ? chosenWs
+        : workspacePath && workspacePath.trim().length > 0 && workspacePath.trim() !== '.'
         ? workspacePath.trim()
         : '.';
 
@@ -447,16 +485,35 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                 />
               </div>
 
-              {/* Active Workspace Directory Indicator */}
-              <div className="flex items-center gap-2 text-[11px] text-slate-300 bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1.5 select-none">
-                <Folder className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <span className="text-slate-400 shrink-0">Workspace:</span>
-                <span
-                  className="font-mono text-slate-200 truncate font-medium text-[11px]"
-                  title={workspacePath && workspacePath !== '.' ? workspacePath : 'Current Working Directory'}
-                >
-                  {workspacePath && workspacePath !== '.' ? workspacePath : 'Current Working Directory'}
-                </span>
+              {/* Workspace Directory Selector with Native Folder Picker */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-medium text-slate-400">
+                    Workspace Directory
+                  </label>
+                  <span className="text-[10px] text-slate-500">Auto-detected from opened folder or CWD</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus-within:border-indigo-500">
+                    <Folder className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="e.g. G:\xampp-httpdocs\fly4 or . (Current Directory)"
+                      value={modalWorkspacePath}
+                      onChange={(e) => setModalWorkspacePath(e.target.value)}
+                      className="w-full bg-transparent border-0 focus:outline-none text-xs text-slate-200 font-mono"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleBrowseModalWorkspace}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs shrink-0 transition"
+                    title="Select folder via native dialog..."
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Browse...</span>
+                  </button>
+                </div>
               </div>
 
               <div>

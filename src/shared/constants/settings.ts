@@ -42,4 +42,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   textDirection: 'auto',
   previewWidthMode: 'wide',
   a11yConfig: DEFAULT_A11Y_CONFIG,
+  defaultAllowedExtensions: ['.md', '.markdown'],
 };

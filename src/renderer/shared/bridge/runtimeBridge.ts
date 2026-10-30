@@ -477,7 +477,7 @@ export function ensureRuntimeBridge(): void {
       });
     },
 
-    scanFolder: async (dirPath: string, scanMode?: any): Promise<ScannedMdFile[]> => {
+    scanFolder: async (dirPath: string, scanMode?: any, allowedExtensions?: string[]): Promise<ScannedMdFile[]> => {
       if (!activeVirtualFolder.files || activeVirtualFolder.files.length === 0) {
         return [];
       }

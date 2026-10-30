@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, AppTheme, PreviewWidthMode, AccessibilityConfig } from '../../../shared/types';
 import { DEFAULT_A11Y_CONFIG } from '../../../shared/constants';
-import { Settings, X, Save, Eye, Palette } from 'lucide-react';
+import { Settings, X, Save, Eye, Palette, FileCode, Plus, Check, Asterisk } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -9,6 +9,18 @@ interface SettingsModalProps {
   settings: AppSettings;
   onSave: (settings: Partial<AppSettings>) => void;
 }
+
+const SETTINGS_COMMON_PRESETS = [
+  { label: 'Markdown', ext: '.md', icon: '📝' },
+  { label: 'Text', ext: '.txt', icon: '📄' },
+  { label: 'HTML', ext: '.html', icon: '🌐' },
+  { label: 'CSS', ext: '.css', icon: '🎨' },
+  { label: 'JavaScript', ext: '.js', icon: '⚡' },
+  { label: 'TypeScript', ext: '.ts', icon: '🔷' },
+  { label: 'JSON', ext: '.json', icon: '📦' },
+  { label: 'Python', ext: '.py', icon: '🐍' },
+  { label: 'Rust', ext: '.rs', icon: '🦀' },
+];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -20,6 +32,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [confirmMultipleTabs, setConfirmMultipleTabs] = useState<boolean>(() => {
     return localStorage.getItem('flymd_skip_close_tab_confirm') !== 'true';
   });
+  const [customExtInput, setCustomExtInput] = useState<string>('');
 
   useEffect(() => {
     setFormData(settings);
@@ -27,6 +40,82 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [settings, isOpen]);
 
   if (!isOpen) return null;
+
+  const currentExts = formData.defaultAllowedExtensions || ['.md', '.markdown'];
+  const isAllFiles = currentExts.includes('*.*') || currentExts.includes('*');
+
+  const normalizeExt = (raw: string): string => {
+    const trimmed = raw.trim().toLowerCase();
+    if (!trimmed) return '';
+    if (trimmed === '*' || trimmed === '*.*') return '*.*';
+    return trimmed.startsWith('.') ? trimmed : `.${trimmed}`;
+  };
+
+  const handleAddExtension = (extToAdd?: string) => {
+    const target = extToAdd || customExtInput;
+    const clean = normalizeExt(target);
+    if (!clean) return;
+
+    if (clean === '*.*') {
+      setFormData((prev) => ({ ...prev, defaultAllowedExtensions: ['*.*'] }));
+      setCustomExtInput('');
+      return;
+    }
+
+    const withoutWildcard = currentExts.filter((e) => e !== '*' && e !== '*.*');
+    if (!withoutWildcard.includes(clean)) {
+      setFormData((prev) => ({
+        ...prev,
+        defaultAllowedExtensions: [...withoutWildcard, clean],
+      }));
+    }
+    setCustomExtInput('');
+  };
+
+  const handleRemoveExtension = (extToRemove: string) => {
+    const updated = currentExts.filter((e) => e !== extToRemove);
+    setFormData((prev) => ({
+      ...prev,
+      defaultAllowedExtensions: updated.length === 0 ? ['.md', '.markdown'] : updated,
+    }));
+  };
+
+  const handleTogglePreset = (ext: string) => {
+    const clean = normalizeExt(ext);
+    if (isAllFiles) {
+      setFormData((prev) => ({
+        ...prev,
+        defaultAllowedExtensions: ['.md', '.markdown', clean],
+      }));
+      return;
+    }
+    if (currentExts.includes(clean)) {
+      handleRemoveExtension(clean);
+    } else {
+      handleAddExtension(clean);
+    }
+  };
+
+  const handleSetMarkdownOnly = () => {
+    setFormData((prev) => ({
+      ...prev,
+      defaultAllowedExtensions: ['.md', '.markdown'],
+    }));
+  };
+
+  const handleSetWebDev = () => {
+    setFormData((prev) => ({
+      ...prev,
+      defaultAllowedExtensions: ['.md', '.markdown', '.html', '.css', '.js', '.ts', '.json'],
+    }));
+  };
+
+  const handleToggleAllFiles = () => {
+    setFormData((prev) => ({
+      ...prev,
+      defaultAllowedExtensions: isAllFiles ? ['.md', '.markdown'] : ['*.*'],
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,6 +417,151 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }}
                 className="w-4 h-4 accent-sky-500 rounded"
               />
+            </div>
+
+            {/* Default Supervised Extensions & File Types */}
+            <div className="space-y-2.5 pt-3 border-t border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-slate-300 flex items-center gap-1.5">
+                  <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Default Supervised Extensions for New Folders</span>
+                </label>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {isAllFiles ? '*.*' : `${currentExts.length} extensions`}
+                </span>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSetMarkdownOnly}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium border transition ${
+                    !isAllFiles &&
+                    currentExts.length <= 2 &&
+                    currentExts.every((e) => e === '.md' || e === '.markdown')
+                      ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📝 Markdown Only
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSetWebDev}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium border transition ${
+                    !isAllFiles && currentExts.includes('.html') && currentExts.includes('.js')
+                      ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  🌐 Web Dev (.html, .css, .js, .ts)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleAllFiles}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium border transition flex items-center gap-1 ${
+                    isAllFiles
+                      ? 'bg-amber-600/30 border-amber-500 text-amber-200'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Asterisk className="w-2.5 h-2.5 text-amber-400" />
+                  <span>All Files (*.*)</span>
+                </button>
+              </div>
+
+              {/* Active Extension Chips */}
+              <div className="p-2.5 bg-slate-950/70 rounded-lg border border-slate-800">
+                {isAllFiles ? (
+                  <div className="flex items-center gap-2 py-0.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-[10px] font-semibold">
+                      *.* (All files supervised)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSetMarkdownOnly}
+                      className="text-[10px] text-slate-400 hover:text-slate-200 underline"
+                    >
+                      Reset to Markdown only
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 min-h-[26px] items-center">
+                    {currentExts.map((ext) => (
+                      <span
+                        key={ext}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-mono text-[10px]"
+                      >
+                        <span>{ext}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExtension(ext)}
+                          title={`Remove ${ext}`}
+                          className="hover:text-rose-400 text-slate-400 p-0.5 rounded transition"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Quick toggle common presets */}
+              {!isAllFiles && (
+                <div className="flex flex-wrap gap-1">
+                  {SETTINGS_COMMON_PRESETS.map((p) => {
+                    const isSelected = currentExts.includes(p.ext);
+                    return (
+                      <button
+                        key={p.ext}
+                        type="button"
+                        onClick={() => handleTogglePreset(p.ext)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition flex items-center gap-1 border ${
+                          isSelected
+                            ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-200'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                        }`}
+                      >
+                        <span>{p.icon}</span>
+                        <span>{p.ext}</span>
+                        {isSelected && <Check className="w-2.5 h-2.5 text-indigo-400" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add Custom Extension Tag */}
+              {!isAllFiles && (
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  <input
+                    type="text"
+                    placeholder="Add extension (e.g. py, tsx, yaml, sql...)"
+                    value={customExtInput}
+                    onChange={(e) => setCustomExtInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddExtension();
+                      }
+                    }}
+                    className="flex-1 px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 font-mono placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddExtension()}
+                    disabled={!customExtInput.trim()}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg font-medium text-xs flex items-center gap-1 transition"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

@@ -85,9 +85,10 @@ fn cmd_scan_folder(
     workspace: tauri::State<'_, SharedWorkspaceManager>,
     dir_path: String,
     scan_mode: Option<String>,
+    allowed_extensions: Option<Vec<String>>,
 ) -> Vec<ScannedMdFile> {
     let mode = scan_mode.unwrap_or_else(|| "full-tree".to_string());
-    workspace.scan_directory(&dir_path, &mode)
+    workspace.scan_directory(&dir_path, &mode, allowed_extensions.as_deref())
 }
 
 #[tauri::command]

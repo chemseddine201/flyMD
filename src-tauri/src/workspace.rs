@@ -60,6 +60,41 @@ fn is_markdown(name: &str) -> bool {
         || lower.ends_with(".txt")
 }
 
+pub fn is_allowed_file(fname: &str, allowed_exts: &[String]) -> bool {
+    // Never allow hidden files or dotfiles (.git, .DS_Store, etc.)
+    if fname.starts_with('.') {
+        return false;
+    }
+
+    // Wildcard * or *.* allows any non-hidden file
+    if allowed_exts.iter().any(|ext| ext == "*" || ext == "*.*") {
+        return true;
+    }
+
+    // If allowed_exts list is empty, default to markdown
+    if allowed_exts.is_empty() {
+        return is_markdown(fname);
+    }
+
+    let lower_name = fname.to_lowercase();
+    for ext in allowed_exts {
+        let clean = ext.trim().to_lowercase();
+        if clean.is_empty() {
+            continue;
+        }
+        let dot_ext = if clean.starts_with('.') {
+            clean
+        } else {
+            format!(".{}", clean)
+        };
+        if lower_name.ends_with(&dot_ext) {
+            return true;
+        }
+    }
+
+    false
+}
+
 fn is_ignored_dir(name: &str) -> bool {
     // Ignore all hidden/dot directories (.flymd, .agent, .claude, .git, .vscode, etc.)
     if name.starts_with('.') {
@@ -155,11 +190,26 @@ impl WorkspaceManager {
         })
     }
 
-    pub fn scan_directory(&self, root_str: &str, scan_mode: &str) -> Vec<ScannedMdFile> {
+    pub fn scan_directory(
+        &self,
+        root_str: &str,
+        scan_mode: &str,
+        allowed_extensions: Option<&[String]>,
+    ) -> Vec<ScannedMdFile> {
         let root = Path::new(root_str);
         if !root.exists() || !root.is_dir() {
             return Vec::new();
         }
+
+        let config_exts = self.store.get_supervision_config().map(|c| c.allowed_extensions);
+        let default_exts = vec![".md".to_string(), ".markdown".to_string()];
+        let effective_exts: &[String] = match allowed_extensions {
+            Some(exts) if !exts.is_empty() => exts,
+            _ => config_exts
+                .as_deref()
+                .filter(|e| !e.is_empty())
+                .unwrap_or(&default_exts),
+        };
 
         let mut results = Vec::new();
         let is_shallow = scan_mode == "shallow";
@@ -170,7 +220,7 @@ impl WorkspaceManager {
                     let path = entry.path();
                     if path.is_file() {
                         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                            if !file_name.starts_with('.') && is_markdown(file_name) {
+                            if !file_name.starts_with('.') && is_allowed_file(file_name, effective_exts) {
                                 if let Ok(meta) = entry.metadata() {
                                     let mtime = meta
                                         .modified()
@@ -221,7 +271,7 @@ impl WorkspaceManager {
                 let path = entry.path();
                 if path.is_file() {
                     if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                        if is_markdown(file_name) {
+                        if is_allowed_file(file_name, effective_exts) {
                             if let Ok(meta) = entry.metadata() {
                                 let mtime = meta
                                     .modified()
@@ -298,6 +348,7 @@ impl WorkspaceManager {
         let session_start = self.session_start_time;
         let known_files = Arc::clone(&self.known_files);
         let debounce_map = Arc::clone(&self.debounce_map);
+        let allowed_exts = config.allowed_extensions.clone();
 
         let watcher_res = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
             if let Ok(event) = res {
@@ -311,7 +362,7 @@ impl WorkspaceManager {
                                 Some(n) => n,
                                 None => continue,
                             };
-                            if !is_markdown(fname) {
+                            if !is_allowed_file(fname, &allowed_exts) {
                                 continue;
                             }
 

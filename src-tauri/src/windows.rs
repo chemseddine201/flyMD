@@ -244,7 +244,7 @@ pub async fn cmd_open_in_preview(
 
     let p = Path::new(&file_path);
     if p.is_dir() {
-        let files = workspace.scan_directory(&file_path, "full-tree");
+        let files = workspace.scan_directory(&file_path, "full-tree", None);
         let name = p
             .file_name()
             .and_then(|n| n.to_str())
@@ -258,6 +258,7 @@ pub async fn cmd_open_in_preview(
             auto_open_new: true,
             scan_mode: "full-tree".to_string(),
             collect_external_agent_artifacts: true,
+            allowed_extensions: vec![".md".to_string(), ".markdown".to_string()],
         };
         workspace.set_supervision(config);
 

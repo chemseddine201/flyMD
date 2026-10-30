@@ -8,6 +8,10 @@ import {
   Folder,
   FolderOpen,
   FileText,
+  FileCode,
+  Globe,
+  Code,
+  Braces,
   ChevronsDownUp,
   ChevronsUpDown,
 } from 'lucide-react';
@@ -20,6 +24,28 @@ interface AppSystemFolderTreeProps {
   searchQuery?: string;
   colorBlindSafe?: boolean;
 }
+
+const renderFileIcon = (fileName: string, isSelected: boolean) => {
+  const lower = fileName.toLowerCase();
+  const ext = lower.split('.').pop() || '';
+
+  if (ext === 'html' || ext === 'htm') {
+    return <Globe className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-300' : 'text-amber-400 group-hover:text-amber-300'}`} />;
+  }
+  if (ext === 'css' || ext === 'scss' || ext === 'less') {
+    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-pink-300' : 'text-pink-400 group-hover:text-pink-300'}`} />;
+  }
+  if (ext === 'js' || ext === 'jsx' || ext === 'ts' || ext === 'tsx') {
+    return <Code className={`w-3.5 h-3.5 ${isSelected ? 'text-yellow-300' : 'text-yellow-400 group-hover:text-yellow-300'}`} />;
+  }
+  if (ext === 'json' || ext === 'yaml' || ext === 'yml' || ext === 'toml' || ext === 'xml') {
+    return <Braces className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-300' : 'text-emerald-400 group-hover:text-emerald-300'}`} />;
+  }
+  if (ext === 'py' || ext === 'rs' || ext === 'go' || ext === 'php' || ext === 'sh') {
+    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-cyan-300' : 'text-cyan-400 group-hover:text-cyan-300'}`} />;
+  }
+  return <FileText className={`w-3.5 h-3.5 ${isSelected ? 'text-sky-400' : 'text-slate-400 group-hover:text-sky-300'}`} />;
+};
 
 export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
   files,
@@ -157,11 +183,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
         }`}
       >
         <div className="relative shrink-0">
-          <FileText
-            className={`w-3.5 h-3.5 ${
-              isSelected ? 'text-sky-400' : 'text-slate-400 group-hover:text-sky-300'
-            }`}
-          />
+          {renderFileIcon(node.name, isSelected)}
           {file.isNew && (
             <span
               title="New / recently created file"

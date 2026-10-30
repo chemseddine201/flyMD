@@ -23,8 +23,8 @@ export function registerWorkspaceHandlers(container: AppContainer): void {
 
   ipcMain.handle(
     IPC_CHANNELS.FOLDER.SCAN,
-    async (_event, folderPath: string, scanMode?: ScanDepthMode): Promise<ScannedMdFile[]> => {
-      return await container.workspaceService.scanDirectory(folderPath, scanMode);
+    async (_event, folderPath: string, scanMode?: ScanDepthMode, allowedExtensions?: string[]): Promise<ScannedMdFile[]> => {
+      return await container.workspaceService.scanDirectory(folderPath, scanMode, allowedExtensions);
     }
   );
 

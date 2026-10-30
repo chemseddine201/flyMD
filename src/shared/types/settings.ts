@@ -35,6 +35,7 @@ export interface AppSettings {
   textDirection?: TextDirection;
   previewWidthMode?: PreviewWidthMode;
   a11yConfig?: AccessibilityConfig;
+  defaultAllowedExtensions?: string[];
 }
 
 export interface WindowState {

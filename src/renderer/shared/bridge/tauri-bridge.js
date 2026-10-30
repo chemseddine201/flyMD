@@ -183,8 +183,12 @@
     openFolderDialog: function () {
       return invoke('cmd_open_folder_dialog');
     },
-    scanFolder: function (dirPath, scanMode) {
-      return invoke('cmd_scan_folder', { dirPath: dirPath, scanMode: scanMode });
+    scanFolder: function (dirPath, scanMode, allowedExtensions) {
+      return invoke('cmd_scan_folder', {
+        dirPath: dirPath,
+        scanMode: scanMode,
+        allowedExtensions: allowedExtensions || null,
+      });
     },
     setSupervision: function (config) {
       return invoke('cmd_set_supervision', { config: config });

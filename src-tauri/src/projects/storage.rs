@@ -8,12 +8,19 @@ use std::path::{Path, PathBuf};
 /// Resolves a guaranteed writable base path for workspace operations.
 pub fn resolve_safe_workspace(workspace_path: &Path) -> PathBuf {
     if !workspace_path.as_os_str().is_empty() && workspace_path != Path::new(".") {
-        let _ = fs::create_dir_all(workspace_path);
-        return workspace_path.to_path_buf();
+        if fs::create_dir_all(workspace_path).is_ok() {
+            let test_dir = workspace_path.join(".flymd");
+            if fs::create_dir_all(&test_dir).is_ok() {
+                return workspace_path.to_path_buf();
+            }
+        }
     }
     if let Ok(cwd) = std::env::current_dir() {
-        if fs::create_dir_all(cwd.join(".flymd")).is_ok() {
-            return cwd;
+        if cwd != Path::new("C:\\Windows\\System32") {
+            let test_dir = cwd.join(".flymd");
+            if fs::create_dir_all(&test_dir).is_ok() {
+                return cwd;
+            }
         }
     }
     let temp_flymd = std::env::temp_dir().join("FlyMD_Projects");
