@@ -24,6 +24,7 @@ import { usePreviewStore, selectActiveTab } from '../../store';
 import {
   AGENT_INTENT_PRESETS,
   BUILTIN_AGENT_PIPELINES,
+  STARTER_CUSTOM_PIPELINE_ACTIONS,
 } from '../../../../shared/constants';
 import {
   AgentId,
@@ -31,6 +32,7 @@ import {
   AgentPipelineStep,
   AgentTaskIntent,
   AgentTaskRecord,
+  CustomPipelineAction,
 } from '../../../../shared/types';
 import { AgentStudioSidebar } from './studio/AgentStudioSidebar';
 import { AgentChatTimeline } from './studio/AgentChatTimeline';
@@ -39,6 +41,7 @@ import { DiscussionStudio } from './studio/DiscussionStudio';
 import { ProjectTreeNavigator } from './projects/ProjectTreeNavigator';
 import { ProjectObservabilityHUD } from './projects/ProjectObservabilityHUD';
 import { ProjectSynthesisReportViewer } from './projects/ProjectSynthesisReportViewer';
+import { CustomPipelineActionsModal } from './studio/CustomPipelineActionsModal';
 
 interface AgentsControlCenterProps {
   folderPath?: string;
@@ -168,6 +171,52 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
     } catch {}
     return BUILTIN_AGENT_PIPELINES;
   });
+
+  // User-Defined Custom Pipeline Actions Library
+  const [customActions, setCustomActions] = useState<CustomPipelineAction[]>(() => {
+    try {
+      const saved = localStorage.getItem('flymd:custom-pipeline-actions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return STARTER_CUSTOM_PIPELINE_ACTIONS;
+  });
+
+  const [showCustomActionsModal, setShowCustomActionsModal] = useState<boolean>(false);
+
+  const handleSaveCustomAction = (action: CustomPipelineAction) => {
+    setCustomActions((prev) => {
+      const existingIdx = prev.findIndex((a) => a.id === action.id);
+      let updated: CustomPipelineAction[];
+      if (existingIdx >= 0) {
+        updated = prev.map((a, idx) => (idx === existingIdx ? action : a));
+      } else {
+        updated = [...prev, action];
+      }
+      try {
+        localStorage.setItem(
+          'flymd:custom-pipeline-actions',
+          JSON.stringify(updated)
+        );
+      } catch {}
+      return updated;
+    });
+  };
+
+  const handleDeleteCustomAction = (actionId: string) => {
+    setCustomActions((prev) => {
+      const filtered = prev.filter((a) => a.id !== actionId);
+      try {
+        localStorage.setItem(
+          'flymd:custom-pipeline-actions',
+          JSON.stringify(filtered)
+        );
+      } catch {}
+      return filtered;
+    });
+  };
 
   const [cwdWorkspace, setCwdWorkspace] = useState<string>('');
 
@@ -374,7 +423,7 @@ ${projDesc}
   const handleUpdatePipelineStep = (
     pipelineId: string,
     stepIdx: number,
-    updates: { agentId?: AgentId; intent?: AgentTaskIntent; label?: string }
+    updates: Partial<AgentPipelineStep>
   ) => {
     if (runningPipelineId === pipelineId) {
       isPipelineCancelledRef.current = true;
@@ -417,22 +466,41 @@ ${projDesc}
             ? 'refine-plan'
             : p.steps.length === 1
             ? 'build'
-            : 'review';
+            : p.steps.length === 2
+            ? 'review'
+            : 'fix-bugs';
         const presetLabel =
           AGENT_INTENT_PRESETS.find((ip) => ip.id === nextIntent)?.title ||
           nextIntent;
+        const newStep: AgentPipelineStep = {
+          stepId: `step-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          agentId: defaultAgent,
+          intent: nextIntent,
+          label: `${p.steps.length + 1}. ${presetLabel}`,
+          requireConfirmation: false,
+          status: 'pending',
+        };
         return {
           ...p,
-          steps: [
-            ...p.steps,
-            {
-              agentId: defaultAgent,
-              intent: nextIntent,
-              label: presetLabel,
-              requireConfirmation: false,
-            },
-          ],
+          steps: [...p.steps, newStep],
         };
+      });
+      persistPipelines(next);
+      return next;
+    });
+  };
+
+  const handleClearStepDoneStatus = (pipelineId: string) => {
+    setPipelines((prev) => {
+      const next = prev.map((p) => {
+        if (p.id !== pipelineId) return p;
+        const steps = p.steps.map((s) => ({
+          ...s,
+          status: 'pending' as const,
+          completedTaskId: undefined,
+          completedAt: undefined,
+        }));
+        return { ...p, steps };
       });
       persistPipelines(next);
       return next;
@@ -572,6 +640,9 @@ ${projDesc}
       pipelineId?: string;
       nextAgentInChain?: AgentId;
       nextIntentInChain?: AgentTaskIntent;
+      epistemicPolicy?: 'collaborative' | 'independent-audit';
+      customActionLabel?: string;
+      stepNote?: string;
     }
   ): Promise<AgentTaskRecord | null> => {
     setSubmitting(true);
@@ -593,6 +664,9 @@ ${projDesc}
         pipelineId: overrides?.pipelineId,
         nextAgentInChain: overrides?.nextAgentInChain,
         nextIntentInChain: overrides?.nextIntentInChain,
+        epistemicPolicy: overrides?.epistemicPolicy,
+        customActionLabel: overrides?.customActionLabel,
+        stepNote: overrides?.stepNote,
       });
 
       const [tasks, checkpoints] = await Promise.all([
@@ -719,13 +793,32 @@ ${projDesc}
   const handleRunPipelineInStudio = async (pipeline: AgentPipelinePreset) => {
     if (!pipeline.steps.length || runningPipelineId) return;
 
+    // Find the first step that is not yet completed (Incremental Extension)
+    const firstPendingIdx = pipeline.steps.findIndex(
+      (s) => s.status !== 'completed'
+    );
+    if (firstPendingIdx === -1) {
+      // All steps already completed
+      return;
+    }
+
     setRunningPipelineId(pipeline.id);
     isPipelineCancelledRef.current = false;
 
     try {
       let previousTask: AgentTaskRecord | null = null;
+      if (firstPendingIdx > 0) {
+        const prevCompletedStep = pipeline.steps[firstPendingIdx - 1];
+        if (prevCompletedStep?.completedTaskId) {
+          const allCurrentTasks = usePreviewStore.getState().agentTasks;
+          previousTask =
+            allCurrentTasks.find(
+              (t) => t.id === prevCompletedStep.completedTaskId
+            ) || null;
+        }
+      }
 
-      for (let idx = 0; idx < pipeline.steps.length; idx++) {
+      for (let idx = firstPendingIdx; idx < pipeline.steps.length; idx++) {
         if (isPipelineCancelledRef.current) break;
 
         const currentStep = pipeline.steps[idx];
@@ -734,6 +827,19 @@ ${projDesc}
         setRunningPipelineStepIdx(idx);
         setSelectedAgentId(currentStep.agentId);
         setSelectedIntent(currentStep.intent);
+
+        // Mark current step as running in pipeline state
+        setPipelines((prev) => {
+          const next = prev.map((p) => {
+            if (p.id !== pipeline.id) return p;
+            const steps = p.steps.map((s, sIdx) =>
+              sIdx === idx ? { ...s, status: 'running' as const } : s
+            );
+            return { ...p, steps };
+          });
+          persistPipelines(next);
+          return next;
+        });
 
         const isFirstStep = idx === 0;
         const assignedReport =
@@ -751,11 +857,31 @@ ${projDesc}
           ? ` | Contract: "${assignedReport.pipelineName}"`
           : '';
 
-        const promptText = `Pipeline [${pipeline.name}] — Step ${idx + 1}/${
+        const customAct = currentStep.customActionId
+          ? customActions.find((a) => a.id === currentStep.customActionId) ||
+            STARTER_CUSTOM_PIPELINE_ACTIONS.find(
+              (a) => a.id === currentStep.customActionId
+            )
+          : null;
+
+        let promptText = `Pipeline [${pipeline.name}] — Step ${idx + 1}/${
           pipeline.steps.length
         } (${currentStep.label})${
           previousTask ? ` relayed from @${previousTask.targetAgentId}` : ''
         }${stepContextTag}`;
+
+        if (customAct?.promptTemplate) {
+          promptText = `${promptText}\n\n[Action Directive]: ${customAct.promptTemplate}`;
+        }
+        if (currentStep.stepNote) {
+          promptText = `[STEP ${idx + 1} DIRECTIVE / ERROR REPORT]:\n${currentStep.stepNote}\n\n${promptText}`;
+        }
+
+        const effectivePolicy =
+          customAct?.epistemicPolicy ||
+          (currentStep.intent === 'review' || currentStep.intent === 'fix-bugs'
+            ? 'independent-audit'
+            : 'collaborative');
 
         const stepMarkdownContent = composeEpistemicStepPayload(
           initialDocContent,
@@ -779,10 +905,24 @@ ${projDesc}
           pipelineId: pipeline.id,
           nextAgentInChain: nextStep?.agentId,
           nextIntentInChain: nextStep?.intent,
+          epistemicPolicy: effectivePolicy,
+          customActionLabel: customAct?.name,
+          stepNote: currentStep.stepNote,
         });
 
         if (!dispatchedTask?.id) {
           console.error(`Pipeline step ${idx + 1} failed to dispatch.`);
+          setPipelines((prev) => {
+            const next = prev.map((p) => {
+              if (p.id !== pipeline.id) return p;
+              const steps = p.steps.map((s, sIdx) =>
+                sIdx === idx ? { ...s, status: 'failed' as const } : s
+              );
+              return { ...p, steps };
+            });
+            persistPipelines(next);
+            return next;
+          });
           break;
         }
 
@@ -806,8 +946,46 @@ ${projDesc}
           completed.status !== 'completed' ||
           isPipelineCancelledRef.current
         ) {
+          setPipelines((prev) => {
+            const next = prev.map((p) => {
+              if (p.id !== pipeline.id) return p;
+              const steps = p.steps.map((s, sIdx) =>
+                sIdx === idx
+                  ? {
+                      ...s,
+                      status: (completed?.status === 'failed'
+                        ? 'failed'
+                        : 'pending') as any,
+                    }
+                  : s
+              );
+              return { ...p, steps };
+            });
+            persistPipelines(next);
+            return next;
+          });
           break;
         }
+
+        // Mark this step permanently completed
+        setPipelines((prev) => {
+          const next = prev.map((p) => {
+            if (p.id !== pipeline.id) return p;
+            const steps = p.steps.map((s, sIdx) =>
+              sIdx === idx
+                ? {
+                    ...s,
+                    status: 'completed' as const,
+                    completedTaskId: completed.id,
+                    completedAt: Date.now(),
+                  }
+                : s
+            );
+            return { ...p, steps };
+          });
+          persistPipelines(next);
+          return next;
+        });
 
         previousTask = completed;
 
@@ -860,10 +1038,16 @@ ${projDesc}
   const handleRelayToNextAgent = async (
     task: AgentTaskRecord,
     nextAgentId: AgentId,
-    nextIntent: AgentTaskIntent
+    nextIntent: AgentTaskIntent,
+    customActionId?: string
   ) => {
     setSelectedAgentId(nextAgentId);
     setSelectedIntent(nextIntent);
+    const customAct = customActionId
+      ? customActions.find((a) => a.id === customActionId) ||
+        STARTER_CUSTOM_PIPELINE_ACTIONS.find((a) => a.id === customActionId)
+      : null;
+
     const originalContract =
       assignedReportDoc?.reportMarkdown || activeTab?.content || '';
     const relayPayload = composeEpistemicStepPayload(
@@ -873,17 +1057,24 @@ ${projDesc}
       false,
       task.targetAgentId
     );
-    await handleSendInAppChatTask(
-      `Relayed from @${task.targetAgentId} (${task.intent}) → Continue with ${nextIntent.toUpperCase()}`,
-      {
-        agentId: nextAgentId,
-        intent: nextIntent,
-        filePath: task.outputReportPath || task.filePath,
-        fileName: task.fileName,
-        markdownContent: relayPayload,
-        sourceAgentId: task.targetAgentId,
-      }
-    );
+
+    let prompt = `Relayed from @${task.targetAgentId} (${task.intent}) → Continue with ${
+      customAct?.name.toUpperCase() || nextIntent.toUpperCase()
+    }`;
+    if (customAct?.promptTemplate) {
+      prompt = `${prompt}\n\n[Action Directive]: ${customAct.promptTemplate}`;
+    }
+
+    await handleSendInAppChatTask(prompt, {
+      agentId: nextAgentId,
+      intent: nextIntent,
+      filePath: task.outputReportPath || task.filePath,
+      fileName: task.fileName,
+      markdownContent: relayPayload,
+      sourceAgentId: task.targetAgentId,
+      epistemicPolicy: customAct?.epistemicPolicy,
+      customActionLabel: customAct?.name,
+    });
   };
 
   const handleOpenReportInTab = async (
@@ -944,6 +1135,10 @@ ${projDesc}
   };
 
   const handlePasteExternalReply = async (task: AgentTaskRecord) => {
+    if (task.status === 'running' || (runningPipelineId && !waitingForStepApproval)) {
+      alert('Cannot paste external reply while an agent or workflow is actively running.');
+      return;
+    }
     try {
       const text = await navigator.clipboard.readText();
       if (!text || !text.trim()) {
@@ -1378,6 +1573,9 @@ ${projDesc}
               onOpenExternalBrowser={async (agentId) => {
                 await window.electronAPI.launchAgentWebAuth(agentId);
               }}
+              customActions={customActions}
+              onOpenCustomActionsModal={() => setShowCustomActionsModal(true)}
+              onClearStepDoneStatus={handleClearStepDoneStatus}
             />
 
             {/* Center Pane: Interactive Multi-Agent Chat & Streaming Timeline */}
@@ -1470,7 +1668,7 @@ ${projDesc}
                 watchedFiles={cleanWorkspaceFiles}
                 selectedSourceFile={selectedSourceFile}
                 onSelectSourceFile={(path) => setSelectedSourceFile(path)}
-                onSendChatTask={async (text, attachedImages) => {
+                onSendChatTask={async (text, attachedImages, customActionId) => {
                   let promptToSend = text;
                   if (attachedImages && attachedImages.length > 0) {
                     const imagesMarkdown = attachedImages
@@ -1480,14 +1678,33 @@ ${projDesc}
                       ? `${promptToSend}\n\n### Attached Reference Images:\n${imagesMarkdown}`
                       : `### Attached Reference Images:\n${imagesMarkdown}`;
                   }
-                  await handleSendInAppChatTask(promptToSend);
+                  const customAct = customActionId
+                    ? customActions.find((a) => a.id === customActionId) ||
+                      STARTER_CUSTOM_PIPELINE_ACTIONS.find(
+                        (a) => a.id === customActionId
+                      )
+                    : null;
+                  if (customAct?.promptTemplate) {
+                    promptToSend = `${promptToSend}\n\n[Action Directive]: ${customAct.promptTemplate}`;
+                  }
+                  await handleSendInAppChatTask(promptToSend, {
+                    epistemicPolicy: customAct?.epistemicPolicy,
+                    customActionLabel: customAct?.name,
+                  });
                 }}
                 onOpenReportInTab={handleOpenReportInTab}
                 onApplyToActiveTab={handleApplyToActiveTab}
-                onRelayToNextAgent={handleRelayToNextAgent}
+                onRelayToNextAgent={(task, nextAgentId, nextIntent, customActionId) =>
+                  handleRelayToNextAgent(task, nextAgentId, nextIntent, customActionId)
+                }
                 onPasteExternalReply={handlePasteExternalReply}
                 onCancelTask={handleCancelTask}
                 submitting={submitting}
+                runningPipelineId={runningPipelineId}
+                workflowExecutionMode={workflowExecutionMode}
+                waitingForStepApproval={waitingForStepApproval}
+                customActions={customActions}
+                onOpenCustomActionsModal={() => setShowCustomActionsModal(true)}
               />
             </div>
 
@@ -1681,6 +1898,15 @@ ${projDesc}
           </div>
         </div>
       )}
+
+      {/* User-Defined Custom Pipeline Actions Library Modal */}
+      <CustomPipelineActionsModal
+        isOpen={showCustomActionsModal}
+        onClose={() => setShowCustomActionsModal(false)}
+        customActions={customActions}
+        onSaveAction={handleSaveCustomAction}
+        onDeleteAction={handleDeleteCustomAction}
+      />
     </div>
   );
 };

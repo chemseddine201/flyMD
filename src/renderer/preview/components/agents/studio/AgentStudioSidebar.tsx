@@ -22,18 +22,26 @@ import {
   BookOpen,
   Wrench,
   ShieldAlert,
+  Sparkles,
+  StickyNote,
+  Sliders,
+  Lock,
 } from 'lucide-react';
 import {
   AgentId,
   AgentPipelinePreset,
+  AgentPipelineStep,
   AgentProfile,
   AgentTaskIntent,
   AgentTaskRecord,
+  CustomPipelineAction,
 } from '../../../../../shared/types';
 import {
   AGENT_INTENT_PRESETS,
   BUILTIN_AGENT_PIPELINES,
+  STARTER_CUSTOM_PIPELINE_ACTIONS,
 } from '../../../../../shared/constants';
+import { renderCustomActionIcon } from './CustomPipelineActionsModal';
 import {
   SidebarContextMenuTarget,
   SidebarItemContextMenu,
@@ -54,7 +62,7 @@ interface AgentStudioSidebarProps {
   onUpdatePipelineStep: (
     pipelineId: string,
     stepIdx: number,
-    updates: { agentId?: AgentId; intent?: AgentTaskIntent; label?: string }
+    updates: Partial<AgentPipelineStep>
   ) => void;
   onAddPipelineStep: (pipelineId: string) => void;
   onRemovePipelineStep: (pipelineId: string, stepIdx: number) => void;
@@ -79,6 +87,9 @@ interface AgentStudioSidebarProps {
     customFile?: { filePath: string; fileName: string; sourceAgent?: string }
   ) => void;
   onOpenExternalBrowser: (agentId: AgentId) => void;
+  customActions?: CustomPipelineAction[];
+  onOpenCustomActionsModal?: () => void;
+  onClearStepDoneStatus?: (pipelineId: string) => void;
 }
 
 const INTENT_SHORT_LABELS: Record<AgentTaskIntent, string> = {
@@ -127,10 +138,22 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   onProceedNextWorkflowStep,
   onDropFileOnAgent,
   onOpenExternalBrowser,
+  customActions = [],
+  onOpenCustomActionsModal,
+  onClearStepDoneStatus,
 }) => {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [contextMenuTarget, setContextMenuTarget] =
     useState<SidebarContextMenuTarget | null>(null);
+
+  const [activeStepNoteIdx, setActiveStepNoteIdx] = useState<number | null>(null);
+  const [stepNoteDraft, setStepNoteDraft] = useState<string>('');
+  const [showResetMenu, setShowResetMenu] = useState<boolean>(false);
+
+  const availableCustomActions =
+    customActions && customActions.length > 0
+      ? customActions
+      : STARTER_CUSTOM_PIPELINE_ACTIONS;
 
   // Resizable width container state (persisted)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -322,6 +345,18 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 </div>
               )}
 
+              {/* Manage Custom Actions Library: Sparkles Icon */}
+              {onOpenCustomActionsModal && (
+                <button
+                  type="button"
+                  onClick={onOpenCustomActionsModal}
+                  title="Manage Custom Pipeline Actions (Report, Security Audit, etc.)"
+                  className="p-1 rounded text-slate-400 hover:text-indigo-300 hover:bg-slate-800 transition-colors"
+                >
+                  <Sparkles size={11} className="text-indigo-400" />
+                </button>
+              )}
+
               {/* Add Step: Icon Only */}
               <button
                 type="button"
@@ -335,20 +370,72 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 <Plus size={11} />
               </button>
 
-              {/* Reset: Icon Only */}
-              <button
-                type="button"
-                disabled={isEditingLocked}
-                onClick={() => confirmOrExecuteModification(onResetPipelines)}
-                title="Reset Workflow Steps"
-                className="p-1 rounded text-slate-400 hover:text-sky-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <RotateCcw size={11} />
-              </button>
+              {/* Reset: Icon Only with 2-option Menu */}
+              <div className="relative">
+                <button
+                  type="button"
+                  disabled={isEditingLocked}
+                  onClick={() => {
+                    const hasDone = primaryPipeline.steps.some(
+                      (s) => s.status === 'completed'
+                    );
+                    if (hasDone) {
+                      setShowResetMenu((prev) => !prev);
+                    } else {
+                      confirmOrExecuteModification(onResetPipelines);
+                    }
+                  }}
+                  title="Reset Workflow Steps"
+                  className="p-1 rounded text-slate-400 hover:text-sky-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <RotateCcw size={11} />
+                </button>
+                {showResetMenu && (
+                  <div className="absolute top-7 right-0 z-50 bg-slate-900 border border-slate-700/90 rounded-xl shadow-2xl p-2 w-60 space-y-1 text-xs animate-in fade-in select-none">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-1">
+                      Reset Workflow
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClearStepDoneStatus?.(primaryPipeline.id);
+                        setShowResetMenu(false);
+                      }}
+                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-sky-300 transition-colors"
+                    >
+                      <div className="font-bold text-xs">Clear Done Status</div>
+                      <div className="text-[10px] text-slate-400 leading-tight">
+                        Keep steps, re-run from Step 1
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        confirmOrExecuteModification(onResetPipelines);
+                        setShowResetMenu(false);
+                      }}
+                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-rose-950/40 text-rose-300 transition-colors"
+                    >
+                      <div className="font-bold text-xs">Restore Default Template</div>
+                      <div className="text-[10px] text-slate-400 leading-tight">
+                        Reset to Plan → Build → Review
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowResetMenu(false)}
+                      className="w-full text-center py-1 text-[10px] text-slate-500 hover:text-slate-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+          {/* Workflow Steps List */}
+          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
             {primaryPipeline.steps.map((step, idx) => {
               const effectiveAgentId = visibleAgents.some((a) => a.id === step.agentId)
                 ? step.agentId
@@ -357,12 +444,14 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 visibleAgents.find((a) => a.id === effectiveAgentId) ||
                 allAgents.find((a) => a.id === effectiveAgentId);
 
+              const isStepCompleted = step.status === 'completed';
               const isRunningThisStep =
                 !!runningPipelineId && runningPipelineStepIdx === idx;
               const isFinishedThisStep =
-                !!runningPipelineId &&
-                runningPipelineStepIdx !== undefined &&
-                runningPipelineStepIdx > idx;
+                isStepCompleted ||
+                (!!runningPipelineId &&
+                  runningPipelineStepIdx !== undefined &&
+                  runningPipelineStepIdx > idx);
               const isWaitingThisStep =
                 !!waitingForStepApproval &&
                 waitingForStepApproval.nextStepIdx === idx;
@@ -372,135 +461,305 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 runningPipelineStepIdx < idx &&
                 !isWaitingThisStep;
 
+              // Completed steps are locked so their configuration cannot be damaged
               const isStepDisabled =
-                isEditingLocked || (!!runningPipelineId && isFinishedThisStep);
+                isEditingLocked ||
+                isStepCompleted ||
+                (!!runningPipelineId && isRunningThisStep);
+
+              const stepCustomAction = step.customActionId
+                ? availableCustomActions.find((a) => a.id === step.customActionId)
+                : null;
+
+              const stepActionIcon = stepCustomAction
+                ? renderCustomActionIcon(
+                    stepCustomAction.iconKey || 'file-text',
+                    'text-indigo-400 shrink-0 w-3 h-3'
+                  )
+                : INTENT_ICONS[step.intent] || (
+                    <Wrench size={12} className="text-indigo-400 shrink-0" />
+                  );
 
               return (
-                <div
-                  key={`${primaryPipeline.id}-${idx}`}
-                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all duration-200 ${
-                    isRunningThisStep
-                      ? 'bg-sky-950/90 border-2 border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.45)] animate-pulse'
-                      : isWaitingThisStep
-                      ? 'bg-amber-950/70 border border-amber-500/80 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
-                      : isFinishedThisStep
-                      ? 'bg-emerald-950/60 border border-emerald-500/60 text-emerald-200 shadow-xs'
-                      : isUpcomingStep
-                      ? 'bg-slate-950/40 border border-slate-800/60 opacity-55 text-slate-500'
-                      : 'bg-slate-950/90 border border-slate-800 hover:border-slate-700 text-slate-300'
-                  }`}
-                >
-                  <span className="text-[10px] font-extrabold shrink-0 w-4 flex items-center justify-center">
-                    {isFinishedThisStep ? (
-                      <CheckCircle2
-                        size={13}
-                        className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]"
-                      />
-                    ) : isRunningThisStep ? (
-                      <Loader2 size={13} className="animate-spin text-sky-400" />
-                    ) : isWaitingThisStep ? (
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                    ) : (
-                      <span
-                        className={
-                          runningPipelineId
-                            ? 'text-slate-600 font-mono'
-                            : 'text-indigo-400 font-mono font-bold'
+                <div key={`${primaryPipeline.id}-${step.stepId || idx}`}>
+                  <div
+                    onClick={() => {
+                      if (isStepCompleted && step.completedTaskId) {
+                        onSelectTask(step.completedTaskId);
+                      }
+                    }}
+                    title={
+                      isStepCompleted && step.completedTaskId
+                        ? 'Step completed! Click to view deliverable and logs in studio'
+                        : undefined
+                    }
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all duration-200 ${
+                      isRunningThisStep
+                        ? 'bg-sky-950/90 border-2 border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.45)] animate-pulse'
+                        : isWaitingThisStep
+                        ? 'bg-amber-950/70 border border-amber-500/80 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                        : isFinishedThisStep
+                        ? 'bg-emerald-950/60 border border-emerald-500/60 text-emerald-200 shadow-xs cursor-pointer hover:border-emerald-400/90'
+                        : isUpcomingStep
+                        ? 'bg-slate-950/40 border border-slate-800/60 opacity-55 text-slate-500'
+                        : 'bg-slate-950/90 border border-slate-800 hover:border-slate-700 text-slate-300'
+                    }`}
+                  >
+                    <span className="text-[10px] font-extrabold shrink-0 w-4 flex items-center justify-center">
+                      {isFinishedThisStep ? (
+                        <CheckCircle2
+                          size={13}
+                          className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                        />
+                      ) : isRunningThisStep ? (
+                        <Loader2 size={13} className="animate-spin text-sky-400" />
+                      ) : isWaitingThisStep ? (
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+                      ) : (
+                        <span
+                          className={
+                            runningPipelineId
+                              ? 'text-slate-600 font-mono'
+                              : 'text-indigo-400 font-mono font-bold'
+                          }
+                        >
+                          {idx + 1}.
+                        </span>
+                      )}
+                    </span>
+
+                    {/* Step Action/Intent Dropdown with Custom Actions */}
+                    <div className="flex items-center gap-1 shrink-0 bg-slate-900/90 border border-slate-700 rounded px-1.5 py-0.5">
+                      {stepActionIcon}
+                      <select
+                        value={
+                          step.customActionId
+                            ? `custom:${step.customActionId}`
+                            : step.intent
                         }
+                        disabled={isStepDisabled}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '__manage_custom__') {
+                            onOpenCustomActionsModal?.();
+                            return;
+                          }
+                          if (val.startsWith('custom:')) {
+                            const caId = val.replace('custom:', '');
+                            const ca = availableCustomActions.find(
+                              (a) => a.id === caId
+                            );
+                            confirmOrExecuteModification(() => {
+                              onUpdatePipelineStep(primaryPipeline.id, idx, {
+                                intent: 'custom',
+                                customActionId: caId,
+                                label: `${idx + 1}. ${ca?.name || 'Custom Action'}`,
+                              });
+                            });
+                          } else {
+                            const newIntent = val as AgentTaskIntent;
+                            confirmOrExecuteModification(() => {
+                              onUpdatePipelineStep(primaryPipeline.id, idx, {
+                                intent: newIntent,
+                                customActionId: undefined,
+                                label: `${idx + 1}. ${
+                                  INTENT_SHORT_LABELS[newIntent] || newIntent
+                                }`,
+                              });
+                            });
+                          }
+                        }}
+                        title={
+                          isStepCompleted
+                            ? 'Completed step (locked)'
+                            : 'Step Action Intent'
+                        }
+                        className="bg-transparent text-indigo-300 font-bold text-[10px] focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                       >
-                        {idx + 1}.
+                        {AGENT_INTENT_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {INTENT_SHORT_LABELS[preset.id] || preset.title}
+                          </option>
+                        ))}
+                        {availableCustomActions.length > 0 && (
+                          <optgroup
+                            label="Custom Actions"
+                            className="bg-slate-900 text-indigo-300 font-semibold"
+                          >
+                            {availableCustomActions.map((ca) => (
+                              <option
+                                key={ca.id}
+                                value={`custom:${ca.id}`}
+                                className="bg-slate-900 text-slate-100"
+                              >
+                                ✨ {ca.shortLabel || ca.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {onOpenCustomActionsModal && (
+                          <option
+                            value="__manage_custom__"
+                            className="bg-slate-900 text-sky-400 font-bold"
+                          >
+                            + Manage Custom...
+                          </option>
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Enabled Agent Dropdown */}
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{
+                          backgroundColor: stepAgent?.accentColor || '#38bdf8',
+                        }}
+                      />
+                      <select
+                        value={effectiveAgentId}
+                        disabled={isStepDisabled}
+                        onChange={(e) => {
+                          const newAgentId = e.target.value;
+                          confirmOrExecuteModification(() => {
+                            onUpdatePipelineStep(primaryPipeline.id, idx, {
+                              agentId: newAgentId,
+                            });
+                          });
+                        }}
+                        title={
+                          isStepCompleted
+                            ? 'Completed step (locked)'
+                            : 'Select Enabled Agent for this step'
+                        }
+                        className="w-full bg-slate-900/90 text-white font-semibold text-[11px] rounded px-1 py-0.5 border border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer disabled:cursor-not-allowed truncate"
+                      >
+                        {visibleAgents.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Status Badges */}
+                    {isFinishedThisStep && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+                        DONE
                       </span>
                     )}
-                  </span>
+                    {isRunningThisStep && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-sky-500 text-slate-950 shadow-xs animate-pulse shrink-0">
+                        RUNNING
+                      </span>
+                    )}
+                    {isWaitingThisStep && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                        PAUSED
+                      </span>
+                    )}
 
-                  {/* Step Action/Intent Dropdown with Icon */}
-                  <div className="flex items-center gap-1 shrink-0 bg-slate-900/90 border border-slate-700 rounded px-1.5 py-0.5">
-                    {INTENT_ICONS[step.intent] || <Wrench size={12} className="text-indigo-400" />}
-                    <select
-                      value={step.intent}
-                      disabled={isStepDisabled}
-                      onChange={(e) => {
-                        const newIntent = e.target.value as AgentTaskIntent;
-                        confirmOrExecuteModification(() => {
-                          onUpdatePipelineStep(primaryPipeline.id, idx, {
-                            intent: newIntent,
-                            label: `${idx + 1}. ${INTENT_SHORT_LABELS[newIntent] || newIntent}`,
-                          });
-                        });
-                      }}
-                      title="Step Action Intent"
-                      className="bg-transparent text-indigo-300 font-bold text-[10px] focus:outline-none cursor-pointer disabled:cursor-not-allowed"
-                    >
-                      {AGENT_INTENT_PRESETS.map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {INTENT_SHORT_LABELS[preset.id] || preset.title}
-                        </option>
-                      ))}
-                    </select>
+                    {/* Step Note Button (Only for pending steps) */}
+                    {!isStepCompleted && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (activeStepNoteIdx === idx) {
+                            setActiveStepNoteIdx(null);
+                          } else {
+                            setActiveStepNoteIdx(idx);
+                            setStepNoteDraft(step.stepNote || '');
+                          }
+                        }}
+                        title={
+                          step.stepNote
+                            ? `Step Note: "${step.stepNote.slice(0, 40)}..." (Click to edit)`
+                            : 'Attach error trace / step directive'
+                        }
+                        className={`p-1 rounded transition-colors relative shrink-0 ${
+                          step.stepNote
+                            ? 'text-amber-400 bg-amber-950/60 border border-amber-500/40 hover:bg-amber-900/50'
+                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <StickyNote size={11} />
+                        {step.stepNote && (
+                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        )}
+                      </button>
+                    )}
+
+                    {/* Remove Step Button (Only for pending steps) */}
+                    {!isStepCompleted && primaryPipeline.steps.length > 1 && (
+                      <button
+                        type="button"
+                        disabled={isStepDisabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          confirmOrExecuteModification(() =>
+                            onRemovePipelineStep(primaryPipeline.id, idx)
+                          );
+                        }}
+                        title="Remove this step"
+                        className="p-0.5 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
                   </div>
 
-                  {/* Enabled Agent Dropdown */}
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{
-                        backgroundColor: stepAgent?.accentColor || '#38bdf8',
-                      }}
-                    />
-                    <select
-                      value={effectiveAgentId}
-                      disabled={isStepDisabled}
-                      onChange={(e) => {
-                        const newAgentId = e.target.value;
-                        confirmOrExecuteModification(() => {
-                          onUpdatePipelineStep(primaryPipeline.id, idx, {
-                            agentId: newAgentId,
-                          });
-                        });
-                      }}
-                      title="Select Enabled Agent for this step"
-                      className="w-full bg-slate-900/90 text-white font-semibold text-[11px] rounded px-1 py-0.5 border border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer disabled:cursor-not-allowed truncate"
-                    >
-                      {visibleAgents.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Status Badges */}
-                  {isFinishedThisStep && (
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
-                      DONE
-                    </span>
-                  )}
-                  {isRunningThisStep && (
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-sky-500 text-slate-950 shadow-xs animate-pulse shrink-0">
-                      RUNNING
-                    </span>
-                  )}
-                  {isWaitingThisStep && (
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
-                      PAUSED
-                    </span>
-                  )}
-
-                  {/* Remove Step Button: Icon Only */}
-                  {primaryPipeline.steps.length > 1 && (
-                    <button
-                      type="button"
-                      disabled={isStepDisabled}
-                      onClick={() =>
-                        confirmOrExecuteModification(() =>
-                          onRemovePipelineStep(primaryPipeline.id, idx)
-                        )
-                      }
-                      title="Remove this step"
-                      className="p-0.5 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                    >
-                      <X size={11} />
-                    </button>
+                  {/* Inline Step Note Editor Popover */}
+                  {activeStepNoteIdx === idx && (
+                    <div className="p-2 bg-slate-900/95 border border-amber-500/50 rounded-lg text-xs space-y-1.5 mt-1 animate-fadeIn">
+                      <div className="flex items-center justify-between text-[10px] text-amber-300 font-bold">
+                        <span className="flex items-center gap-1">
+                          <StickyNote size={10} /> Step {idx + 1} Directive / Error Log:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveStepNoteIdx(null)}
+                          className="text-slate-500 hover:text-slate-300"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={stepNoteDraft}
+                        onChange={(e) => setStepNoteDraft(e.target.value)}
+                        placeholder="e.g. TypeError: canvas_appHeader.getContext is not a function in app.js:29..."
+                        className="w-full p-1.5 rounded bg-slate-950 border border-slate-700 text-slate-100 text-[11px] placeholder-slate-600 focus:outline-none focus:border-amber-400 font-mono"
+                      />
+                      <div className="flex justify-end gap-1.5">
+                        {step.stepNote && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onUpdatePipelineStep(primaryPipeline.id, idx, {
+                                stepNote: undefined,
+                              });
+                              setActiveStepNoteIdx(null);
+                            }}
+                            className="px-2 py-0.5 text-[10px] text-rose-400 hover:bg-rose-950/40 rounded"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUpdatePipelineStep(primaryPipeline.id, idx, {
+                              stepNote: stepNoteDraft.trim() || undefined,
+                            });
+                            setActiveStepNoteIdx(null);
+                          }}
+                          className="px-2.5 py-0.5 text-[10px] bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded shadow-xs cursor-pointer"
+                        >
+                          Save Directive
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -539,31 +798,84 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             </div>
           )}
 
-          <button
-            type="button"
-            disabled={!!runningPipelineId}
-            onClick={() => onRunPipelineInStudio(primaryPipeline)}
-            className={`mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl font-bold text-xs shadow-md transition-all ${
-              runningPipelineId
-                ? 'bg-indigo-600/60 text-indigo-200 cursor-not-allowed border border-indigo-400/30'
-                : 'bg-indigo-500 hover:bg-indigo-400 text-slate-950 shadow-indigo-500/15'
-            }`}
-          >
-            {runningPipelineId ? (
-              <>
-                <Loader2 size={12} className="animate-spin text-indigo-300" />
-                <span>
-                  Running Step {(runningPipelineStepIdx ?? 0) + 1} of{' '}
-                  {primaryPipeline.steps.length}...
-                </span>
-              </>
-            ) : (
-              <>
-                <Play size={12} fill="currentColor" />
-                <span>Run {primaryPipeline.steps.length}-Step Workflow</span>
-              </>
-            )}
-          </button>
+          {/* Smart Incremental Workflow Run Button */}
+          {(() => {
+            const completedCount = primaryPipeline.steps.filter(
+              (s) => s.status === 'completed'
+            ).length;
+            const allDone =
+              primaryPipeline.steps.length > 0 &&
+              completedCount === primaryPipeline.steps.length;
+            const firstPendingIdx = primaryPipeline.steps.findIndex(
+              (s) => s.status !== 'completed'
+            );
+            const pendingCount = primaryPipeline.steps.length - completedCount;
+
+            return (
+              <div className="mt-2.5 space-y-1.5">
+                <button
+                  type="button"
+                  disabled={!!runningPipelineId}
+                  onClick={() => onRunPipelineInStudio(primaryPipeline)}
+                  className={`w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl font-bold text-xs shadow-md transition-all ${
+                    runningPipelineId
+                      ? 'bg-indigo-600/60 text-indigo-200 cursor-not-allowed border border-indigo-400/30'
+                      : allDone
+                      ? 'bg-slate-800 text-emerald-300 border border-emerald-500/40 cursor-default'
+                      : completedCount > 0
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20 cursor-pointer'
+                      : 'bg-indigo-500 hover:bg-indigo-400 text-slate-950 shadow-indigo-500/15 cursor-pointer'
+                  }`}
+                >
+                  {runningPipelineId ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin text-indigo-300" />
+                      <span>
+                        Running Step {(runningPipelineStepIdx ?? 0) + 1} of{' '}
+                        {primaryPipeline.steps.length}...
+                      </span>
+                    </>
+                  ) : allDone ? (
+                    <>
+                      <CheckCircle2 size={13} className="text-emerald-400" />
+                      <span>All {primaryPipeline.steps.length} Steps Finished</span>
+                    </>
+                  ) : completedCount > 0 ? (
+                    <>
+                      <Play size={12} fill="currentColor" />
+                      <span>
+                        {pendingCount === 1
+                          ? `Run Step ${firstPendingIdx + 1} (${
+                              primaryPipeline.steps[firstPendingIdx]?.label ||
+                              'New Step'
+                            })`
+                          : `Continue Workflow (${pendingCount} Steps from Step ${
+                              firstPendingIdx + 1
+                            })`}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Play size={12} fill="currentColor" />
+                      <span>Run {primaryPipeline.steps.length}-Step Workflow</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Prominent "+ Extend Workflow" Button when all finished */}
+                {allDone && !runningPipelineId && (
+                  <button
+                    type="button"
+                    onClick={() => onAddPipelineStep(primaryPipeline.id)}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer animate-fadeIn"
+                  >
+                    <Plus size={13} />
+                    <span>+ Extend Workflow with Next Step</span>
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

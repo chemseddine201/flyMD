@@ -31,6 +31,31 @@ export type AgentTaskIntent =
   | 'explain'
   | 'custom';
 
+export type CustomActionEpistemicPolicy =
+  | 'collaborative'
+  | 'independent-audit';
+
+export type CustomActionIconKey =
+  | 'file-text'
+  | 'shield'
+  | 'sparkles'
+  | 'book-open'
+  | 'terminal'
+  | 'check-circle';
+
+export interface CustomPipelineAction {
+  id: string;
+  name: string;
+  shortLabel: string;
+  description: string;
+  promptTemplate: string;
+  outputFileHint?: string;
+  epistemicPolicy: CustomActionEpistemicPolicy;
+  iconKey: CustomActionIconKey;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type AgentTaskStatus =
   | 'queued'
   | 'awaiting-confirmation'
@@ -111,6 +136,12 @@ export interface ChecklistItem {
   lineNumber: number;
 }
 
+export type PipelineStepExecutionStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed';
+
 export interface AgentTaskRequest {
   targetAgentId: AgentId;
   sourceAgentId?: AgentId;
@@ -129,6 +160,9 @@ export interface AgentTaskRequest {
   pipelineId?: string;
   nextAgentInChain?: AgentId;
   nextIntentInChain?: AgentTaskIntent;
+  epistemicPolicy?: CustomActionEpistemicPolicy | string;
+  customActionLabel?: string;
+  stepNote?: string;
 }
 
 export interface AgentTaskRecord {
@@ -160,6 +194,8 @@ export interface AgentTaskRecord {
   progressStage?: AgentProgressStage;
   progressPercent?: number;
   toolActions?: AgentToolAction[];
+  customActionId?: string;
+  stepNote?: string;
 }
 
 export interface AgentCheckpoint {
@@ -182,10 +218,16 @@ export interface AgentStreamEvent {
 }
 
 export interface AgentPipelineStep {
+  stepId?: string;
   agentId: AgentId;
   intent: AgentTaskIntent;
+  customActionId?: string;
+  stepNote?: string;
   label: string;
   requireConfirmation: boolean;
+  status?: PipelineStepExecutionStatus;
+  completedTaskId?: string;
+  completedAt?: number;
 }
 
 export interface AgentPipelinePreset {

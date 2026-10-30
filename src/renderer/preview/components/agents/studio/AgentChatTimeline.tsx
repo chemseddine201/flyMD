@@ -27,8 +27,12 @@ import {
   AgentTaskIntent,
   AgentTaskRecord,
   ScannedMdFile,
+  CustomPipelineAction,
 } from '../../../../../shared/types';
-import { AGENT_INTENT_PRESETS } from '../../../../../shared/constants';
+import {
+  AGENT_INTENT_PRESETS,
+  STARTER_CUSTOM_PIPELINE_ACTIONS,
+} from '../../../../../shared/constants';
 import { markdownService } from '../../../services/MarkdownService';
 import { ActionLogTimeline } from './ActionLogTimeline';
 
@@ -54,7 +58,8 @@ interface AgentChatTimelineProps {
   onSelectSourceFile: (path: string) => void;
   onSendChatTask: (
     promptText: string,
-    attachedImages?: ChatImageAttachment[]
+    attachedImages?: ChatImageAttachment[],
+    customActionId?: string
   ) => Promise<void>;
   onOpenReportInTab: (
     filePath?: string,
@@ -65,11 +70,17 @@ interface AgentChatTimelineProps {
   onRelayToNextAgent: (
     task: AgentTaskRecord,
     nextAgentId: AgentId,
-    nextIntent: AgentTaskIntent
+    nextIntent: AgentTaskIntent,
+    customActionId?: string
   ) => Promise<void>;
   onPasteExternalReply: (task: AgentTaskRecord) => Promise<void>;
   onCancelTask: (taskId: string) => void;
   submitting: boolean;
+  runningPipelineId?: string | null;
+  workflowExecutionMode?: 'auto' | 'manual';
+  waitingForStepApproval?: any;
+  customActions?: CustomPipelineAction[];
+  onOpenCustomActionsModal?: () => void;
 }
 
 export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
@@ -92,6 +103,11 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
   onPasteExternalReply,
   onCancelTask,
   submitting,
+  runningPipelineId,
+  workflowExecutionMode = 'auto',
+  waitingForStepApproval,
+  customActions = [],
+  onOpenCustomActionsModal,
 }) => {
   const [promptInput, setPromptInput] = useState('');
   const [attachedImages, setAttachedImages] = useState<ChatImageAttachment[]>([]);
@@ -99,6 +115,27 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [relayAgentId, setRelayAgentId] = useState<AgentId>('');
   const [relayIntent, setRelayIntent] = useState<AgentTaskIntent>('build');
+  const [selectedCustomActionId, setSelectedCustomActionId] = useState<string>('');
+  const [relayCustomActionId, setRelayCustomActionId] = useState<string>('');
+
+  const availableCustomActions =
+    customActions.length > 0 ? customActions : STARTER_CUSTOM_PIPELINE_ACTIONS;
+
+  // Execution action guards:
+  // When task is actively streaming/submitting OR an automated pipeline is in progress without pause,
+  // manual conflicting actions are disabled to prevent state corruption.
+  const isTaskRunning = selectedTask?.status === 'running' || submitting;
+  const isPipelineActive = !!runningPipelineId;
+  const isPausedForApproval = !!waitingForStepApproval;
+
+  const isPasteExternalDisabled =
+    !selectedTask || isTaskRunning || (isPipelineActive && !isPausedForApproval);
+
+  const isRelayDisabled =
+    !selectedTask || isTaskRunning || (isPipelineActive && !isPausedForApproval);
+
+  const isComposerDisabled =
+    submitting || (isPipelineActive && !isPausedForApproval);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -176,14 +213,15 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
   };
 
   const handleManualSend = async () => {
-    if (submitting) return;
+    if (isComposerDisabled) return;
     const text = promptInput.trim();
     if (!text && attachedImages.length === 0) return;
 
     const imagesToSend = [...attachedImages];
+    const customActId = selectedCustomActionId;
     setPromptInput('');
     setAttachedImages([]);
-    await onSendChatTask(text, imagesToSend);
+    await onSendChatTask(text, imagesToSend, customActId || undefined);
   };
 
   const renderedReplyHtml = React.useMemo(() => {
@@ -414,9 +452,16 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
 
                     <button
                       type="button"
+                      disabled={isPasteExternalDisabled}
                       onClick={() => onPasteExternalReply(selectedTask)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all"
-                      title="Paste external CLI/Web response into this task"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-medium transition-all"
+                      title={
+                        isTaskRunning
+                          ? 'Agent is actively generating — paste is locked'
+                          : isPipelineActive && !isPausedForApproval
+                          ? 'Automated pipeline in progress — pause or cancel to paste output'
+                          : 'Paste external CLI/Web response into this task'
+                      }
                     >
                       <ClipboardPaste size={12} />
                       <span className="hidden sm:inline">Paste External Output</span>
@@ -424,16 +469,23 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                   </div>
 
                   {/* Immediate Agent-to-Agent Handoff Relay Dropdown */}
-                  <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                  <div
+                    className={`flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border text-xs transition-colors ${
+                      isRelayDisabled
+                        ? 'border-slate-800/60 opacity-60'
+                        : 'border-slate-800'
+                    }`}
+                  >
                     <span className="text-[10px] font-bold text-slate-400 pl-1">
                       Relay to:
                     </span>
                     <select
                       value={effectiveRelayAgent}
+                      disabled={isRelayDisabled}
                       onChange={(e) =>
                         setRelayAgentId(e.target.value as AgentId)
                       }
-                      className="bg-transparent text-sky-300 font-bold text-xs focus:outline-none cursor-pointer"
+                      className="bg-transparent text-sky-300 font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                     >
                       {visibleAgents
                         .filter((a) => a.id !== selectedTask.targetAgentId)
@@ -445,11 +497,19 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                     </select>
 
                     <select
-                      value={relayIntent}
-                      onChange={(e) =>
-                        setRelayIntent(e.target.value as AgentTaskIntent)
-                      }
-                      className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer"
+                      value={relayCustomActionId ? `custom:${relayCustomActionId}` : relayIntent}
+                      disabled={isRelayDisabled}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.startsWith('custom:')) {
+                          setRelayIntent('custom');
+                          setRelayCustomActionId(val.replace('custom:', ''));
+                        } else {
+                          setRelayIntent(val as AgentTaskIntent);
+                          setRelayCustomActionId('');
+                        }
+                      }}
+                      className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                     >
                       <option value="review" className="bg-slate-900">
                         Review
@@ -463,19 +523,51 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       <option value="refine-plan" className="bg-slate-900">
                         Plan
                       </option>
+                      <option value="write-tests" className="bg-slate-900">
+                        Tests
+                      </option>
+                      <option value="explain" className="bg-slate-900">
+                        Explain
+                      </option>
+                      {availableCustomActions.length > 0 && (
+                        <optgroup
+                          label="Custom Actions"
+                          className="bg-slate-900 text-indigo-300 font-semibold"
+                        >
+                          {availableCustomActions.map((ca) => (
+                            <option
+                              key={ca.id}
+                              value={`custom:${ca.id}`}
+                              className="bg-slate-900 text-slate-100"
+                            >
+                              ✨ {ca.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
 
                     <button
                       type="button"
-                      disabled={submitting}
+                      disabled={isRelayDisabled}
                       onClick={() =>
                         onRelayToNextAgent(
                           selectedTask,
                           effectiveRelayAgent as AgentId,
-                          relayIntent
+                          relayIntent,
+                          relayCustomActionId || undefined
                         )
                       }
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition-all disabled:opacity-50"
+                      title={
+                        isTaskRunning
+                          ? 'Task is currently running — cannot relay'
+                          : isPipelineActive && !isPausedForApproval
+                          ? 'Workflow in progress — pause (Manual mode) or cancel workflow to branch/relay'
+                          : isPipelineActive && isPausedForApproval
+                          ? 'Branch relay from paused step'
+                          : 'Relay deliverable to next agent'
+                      }
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <span>Relay</span>
                       <ArrowRight size={11} />
@@ -512,6 +604,31 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
           isDragOver ? 'bg-sky-950/40 ring-2 ring-sky-500/50' : ''
         }`}
       >
+        {/* Workflow Active Execution / Approval Guard Notification Banner */}
+        {isPipelineActive && !isPausedForApproval && (
+          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-indigo-950/70 border border-indigo-500/50 text-indigo-200 text-xs shadow-inner">
+            <div className="flex items-center gap-2">
+              <Loader2 size={13} className="animate-spin text-sky-400 shrink-0" />
+              <span className="font-semibold text-white">Workflow In Progress:</span>
+              <span className="text-slate-300 text-[11px]">
+                Composer and manual dispatch are locked until workflow steps pause or complete.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {isPausedForApproval && (
+          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-amber-950/70 border border-amber-500/60 text-amber-200 text-xs shadow-inner">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+              <span className="font-semibold text-white">Workflow Paused (Manual Mode):</span>
+              <span className="text-zinc-200 text-[11px]">
+                You can send steering instructions to @{activeAgent?.name || 'Agent'} or proceed with the workflow in the sidebar.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Composer Controls: Target Agent, Mode, Scope Selector */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
@@ -526,8 +643,9 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
               <span className="text-[10px] font-bold text-slate-400">Agent:</span>
               <select
                 value={selectedAgentId}
+                disabled={isComposerDisabled}
                 onChange={(e) => onSelectAgent(e.target.value)}
-                className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer"
+                className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
               >
                 {visibleAgents.map((a) => (
                   <option key={a.id} value={a.id} className="bg-slate-900">
@@ -542,17 +660,51 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
               <Sparkles size={11} className="text-sky-400" />
               <span className="text-[10px] font-bold text-slate-400">Mode:</span>
               <select
-                value={selectedIntent}
-                onChange={(e) =>
-                  onSelectIntent(e.target.value as AgentTaskIntent)
-                }
-                className="bg-transparent text-sky-300 font-bold text-xs focus:outline-none cursor-pointer"
+                value={selectedCustomActionId ? `custom:${selectedCustomActionId}` : selectedIntent}
+                disabled={isComposerDisabled}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__manage_custom__') {
+                    onOpenCustomActionsModal?.();
+                    return;
+                  }
+                  if (val.startsWith('custom:')) {
+                    const cId = val.replace('custom:', '');
+                    onSelectIntent('custom');
+                    setSelectedCustomActionId(cId);
+                  } else {
+                    onSelectIntent(val as AgentTaskIntent);
+                    setSelectedCustomActionId('');
+                  }
+                }}
+                className="bg-transparent text-sky-300 font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
               >
                 {AGENT_INTENT_PRESETS.map((p) => (
                   <option key={p.id} value={p.id} className="bg-slate-900">
                     {p.title}
                   </option>
                 ))}
+                {availableCustomActions.length > 0 && (
+                  <optgroup
+                    label="Custom Actions"
+                    className="bg-slate-900 text-indigo-300 font-semibold"
+                  >
+                    {availableCustomActions.map((ca) => (
+                      <option
+                        key={ca.id}
+                        value={`custom:${ca.id}`}
+                        className="bg-slate-900 text-slate-100"
+                      >
+                        ✨ {ca.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {onOpenCustomActionsModal && (
+                  <option value="__manage_custom__" className="bg-slate-900 text-sky-400 font-bold">
+                    + Manage Custom Actions...
+                  </option>
+                )}
               </select>
             </div>
 
@@ -561,8 +713,9 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
               <FileCheck2 size={12} className="text-emerald-400 shrink-0" />
               <select
                 value={selectedSourceFile || activeFilePath}
+                disabled={isComposerDisabled}
                 onChange={(e) => onSelectSourceFile(e.target.value)}
-                className="bg-transparent text-slate-200 font-medium text-xs focus:outline-none truncate cursor-pointer"
+                className="bg-transparent text-slate-200 font-medium text-xs focus:outline-none truncate cursor-pointer disabled:cursor-not-allowed"
               >
                 <option value={activeFilePath} className="bg-slate-900">
                   Target: {activeFileName}
@@ -625,12 +778,17 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
           <textarea
             ref={textareaRef}
             rows={3}
+            disabled={isComposerDisabled}
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={`Message @${activeAgent?.shortName || 'Agent'} about ${activeFileName}...\n(Enter or Shift+Enter creates a new line. Click Send button to dispatch)`}
-            className="w-full min-h-[76px] p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500 leading-relaxed font-sans resize-y"
+            placeholder={
+              isPipelineActive && !isPausedForApproval
+                ? 'Workflow running — manual input locked until pipeline completes or pauses...'
+                : `Message @${activeAgent?.shortName || 'Agent'} about ${activeFileName}...\n(Enter or Shift+Enter creates a new line. Click Send button to dispatch)`
+            }
+            className="w-full min-h-[76px] p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500 leading-relaxed font-sans resize-y disabled:opacity-50 disabled:cursor-not-allowed"
           />
 
           {/* Action Row: Attach Image Picker & Manual Send Button */}
@@ -641,6 +799,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                 type="file"
                 accept="image/*"
                 multiple
+                disabled={isComposerDisabled}
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files) addImageFiles(e.target.files);
@@ -649,9 +808,10 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
               />
               <button
                 type="button"
+                disabled={isComposerDisabled}
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach images (or paste screenshot with Ctrl+V, or drag & drop)"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-medium transition shrink-0"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-medium transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ImageIcon size={13} className="text-sky-400" />
                 <span>Attach Image</span>
@@ -671,10 +831,15 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
               type="button"
               onClick={handleManualSend}
               disabled={
-                submitting ||
+                isComposerDisabled ||
                 (!promptInput.trim() && attachedImages.length === 0)
               }
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-bold text-xs shadow-lg shadow-sky-500/20 transition-all shrink-0 cursor-pointer disabled:cursor-not-allowed"
+              title={
+                isPipelineActive && !isPausedForApproval
+                  ? 'Workflow running — manual dispatch locked'
+                  : `Send to @${activeAgent?.shortName || 'Agent'}`
+              }
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-slate-950 font-bold text-xs shadow-lg shadow-sky-500/20 transition-all shrink-0 cursor-pointer disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <Loader2 size={14} className="animate-spin" />

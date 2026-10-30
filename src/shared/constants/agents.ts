@@ -2,6 +2,7 @@ import {
   AgentProfile,
   AgentTaskIntent,
   AgentPipelinePreset,
+  CustomPipelineAction,
 } from '../types/agents';
 
 export const BUILTIN_AGENTS: AgentProfile[] = [
@@ -247,4 +248,50 @@ export const BUILTIN_AGENT_PIPELINES: AgentPipelinePreset[] = [
     ],
   },
 ];
+
+export const STARTER_CUSTOM_PIPELINE_ACTIONS: CustomPipelineAction[] = [
+  {
+    id: 'custom-action-report',
+    name: 'Comprehensive Project & Delivery Report',
+    shortLabel: 'Report',
+    description:
+      'Generates an executive completion report documenting architecture, created deliverables, checklist status, and remaining items.',
+    promptTemplate:
+      'Generate a comprehensive project & delivery summary report in Markdown. Detail the implemented components, file architecture, checklist invariants, and verification outcome. Write the deliverable directly to `PROJECT_REPORT.md` in the workspace.',
+    outputFileHint: 'PROJECT_REPORT.md',
+    epistemicPolicy: 'collaborative',
+    iconKey: 'file-text',
+    createdAt: 1730300000000,
+    updatedAt: 1730300000000,
+  },
+  {
+    id: 'custom-action-security-audit',
+    name: 'Security & Vulnerability Audit',
+    shortLabel: 'Sec Audit',
+    description:
+      'Inspects raw code for input sanitization, buffer safety, auth leakage, and injection vulnerabilities.',
+    promptTemplate:
+      'Perform a rigorous, adversarial security audit of the workspace code. Look for unhandled input boundaries, potential injection, secret leaks, and edge-case errors. Conclude with an independent résumé before proposing security mitigations.',
+    outputFileHint: 'SECURITY_AUDIT.md',
+    epistemicPolicy: 'independent-audit',
+    iconKey: 'shield',
+    createdAt: 1730300000000,
+    updatedAt: 1730300000000,
+  },
+  {
+    id: 'custom-action-api-docs',
+    name: 'API & Developer Documentation',
+    shortLabel: 'Docs',
+    description:
+      'Extracts DOM IDs, exported functions, and data schemas into a clean README or API reference.',
+    promptTemplate:
+      'Inspect the workspace code and generate clean developer documentation. Document the public functions, DOM structures, state machine events, and usage examples into `API_DOCUMENTATION.md`.',
+    outputFileHint: 'API_DOCUMENTATION.md',
+    epistemicPolicy: 'collaborative',
+    iconKey: 'book-open',
+    createdAt: 1730300000000,
+    updatedAt: 1730300000000,
+  },
+];
+
 

@@ -330,8 +330,10 @@ fn synthesize_logic_script_for_html(html: &str, script_name: &str) -> String {
     let mut canvas_ids = Vec::new();
     let has_selftest = html.contains("runSelfTestBtn") || html.contains("selftest");
 
-    for part in html.split("<button") {
-        if let Some(id_part) = part.split("id=").nth(1) {
+    // Skip chunk 0 (everything before the first <button) and only inspect the opening tag
+    for part in html.split("<button").skip(1) {
+        let tag_open = part.split('>').next().unwrap_or("");
+        if let Some(id_part) = tag_open.split("id=").nth(1) {
             let q = id_part.chars().next().unwrap_or(' ');
             if q == '"' || q == '\'' {
                 let id: String = id_part.chars().skip(1).take_while(|&c| c != q).collect();
@@ -341,8 +343,11 @@ fn synthesize_logic_script_for_html(html: &str, script_name: &str) -> String {
             }
         }
     }
-    for part in html.split("<canvas") {
-        if let Some(id_part) = part.split("id=").nth(1) {
+    // Skip chunk 0 (everything before the first <canvas) and only inspect the opening tag
+    // This prevents matching non-canvas parent elements (e.g. <header id="appHeader">) as a canvas!
+    for part in html.split("<canvas").skip(1) {
+        let tag_open = part.split('>').next().unwrap_or("");
+        if let Some(id_part) = tag_open.split("id=").nth(1) {
             let q = id_part.chars().next().unwrap_or(' ');
             if q == '"' || q == '\'' {
                 let id: String = id_part.chars().skip(1).take_while(|&c| c != q).collect();
@@ -471,8 +476,9 @@ pub fn ensure_companion_assets_exist(
     };
 
     let mut referenced_scripts = Vec::new();
-    for part in html_content.split("<script") {
-        if let Some(src_part) = part.split("src=").nth(1) {
+    for part in html_content.split("<script").skip(1) {
+        let tag_open = part.split('>').next().unwrap_or("");
+        if let Some(src_part) = tag_open.split("src=").nth(1) {
             let quote_char = src_part.chars().next().unwrap_or(' ');
             if quote_char == '"' || quote_char == '\'' {
                 let path_val: String = src_part.chars().skip(1).take_while(|&c| c != quote_char).collect();
@@ -484,9 +490,10 @@ pub fn ensure_companion_assets_exist(
     }
 
     let mut referenced_styles = Vec::new();
-    for part in html_content.split("<link") {
-        if part.contains("stylesheet") {
-            if let Some(href_part) = part.split("href=").nth(1) {
+    for part in html_content.split("<link").skip(1) {
+        let tag_open = part.split('>').next().unwrap_or("");
+        if tag_open.contains("stylesheet") {
+            if let Some(href_part) = tag_open.split("href=").nth(1) {
                 let quote_char = href_part.chars().next().unwrap_or(' ');
                 if quote_char == '"' || quote_char == '\'' {
                     let path_val: String = href_part.chars().skip(1).take_while(|&c| c != quote_char).collect();
@@ -502,9 +509,7 @@ pub fn ensure_companion_assets_exist(
         let script_dest = ws.join(&script_name);
         let exists_and_valid = script_dest.exists() && script_dest.metadata().map(|m| m.len() > 100).unwrap_or(false);
         if exists_and_valid {
-            if !created_files.contains(&script_name) {
-                created_files.push(script_name);
-            }
+            // Already exists on disk: do not synthesize and do not claim that THIS task created it
             continue;
         }
 
@@ -553,9 +558,7 @@ pub fn ensure_companion_assets_exist(
         let style_dest = ws.join(&style_name);
         let exists_and_valid = style_dest.exists() && style_dest.metadata().map(|m| m.len() > 50).unwrap_or(false);
         if exists_and_valid {
-            if !created_files.contains(&style_name) {
-                created_files.push(style_name);
-            }
+            // Already exists on disk: do not synthesize and do not claim that THIS task created it
             continue;
         }
 
@@ -1056,6 +1059,7 @@ pub fn spawn_agent_execution(
             });
 
             let exec_path_ref = Path::new(&exec_dir);
+            let pre_digests = crate::projects::cache::scan_workspace_digest(exec_path_ref, 64);
             let cached_pkt = crate::projects::cache::load_cognitive_packet(exec_path_ref);
             let epistemic_dec = crate::discussion::epistemic::evaluate_pipeline_epistemic_policy(
                 &record.intent,
@@ -1086,13 +1090,31 @@ pub fn spawn_agent_execution(
                 }
             };
 
-            let prompt_arg = format!(
-                "Execute the task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". {} Create, write, or modify all required code/HTML/CSS/JS/Markdown files inside \"{}\". CRITICAL REQUIREMENT: For any interactive web application, UI, simulation, or tool, you MUST write the FULL, WORKING, UNTRUNCATED CODE files directly to disk in the workspace: index.html, styles.css, AND app.js. If index.html references app.js via <script src=\"app.js\">, you MUST create and write app.js completely to disk with all interactivity, calculations, and event handlers. Do NOT leave app.js missing or empty, and do NOT stop after writing only HTML or CSS. Execute all file writes immediately without asking for user confirmation.",
-                handoff_file.to_string_lossy(),
-                exec_dir,
-                epistemic_cli_clause,
-                exec_dir
-            );
+            let custom_err_directive = record
+                .custom_prompt
+                .as_deref()
+                .or(record.step_note.as_deref())
+                .unwrap_or("")
+                .trim();
+
+            let prompt_arg = if record.intent == "fix-bugs" || !custom_err_directive.is_empty() {
+                format!(
+                    "CRITICAL BUG FIX / TARGET DIRECTIVE: \"{}\"\nExecute the fix specification written in UTF-8 at \"{}\" directly in workspace \"{}\". {}\nInspect the suspect files on disk (app.js, index.html, styles.css, etc.), diagnose the exact root cause, and write the corrected code directly to the files in \"{}\". Do NOT ask for confirmation. Apply the fix immediately.",
+                    custom_err_directive,
+                    handoff_file.to_string_lossy(),
+                    exec_dir,
+                    epistemic_cli_clause,
+                    exec_dir
+                )
+            } else {
+                format!(
+                    "Execute the task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". {} Create, write, or modify all required code/HTML/CSS/JS/Markdown files inside \"{}\". CRITICAL REQUIREMENT: For any interactive web application, UI, simulation, or tool, you MUST write the FULL, WORKING, UNTRUNCATED CODE files directly to disk in the workspace: index.html, styles.css, AND app.js. If index.html references app.js via <script src=\"app.js\">, you MUST create and write app.js completely to disk with all interactivity, calculations, and event handlers. Do NOT leave app.js missing or empty, and do NOT stop after writing only HTML or CSS. Execute all file writes immediately without asking for user confirmation.",
+                    handoff_file.to_string_lossy(),
+                    exec_dir,
+                    epistemic_cli_clause,
+                    exec_dir
+                )
+            };
 
             let bin_lower = bin.to_lowercase();
             let mut cmd = if bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat") {
@@ -1110,6 +1132,8 @@ pub fn spawn_agent_execution(
                         &exec_dir,
                         "--mode",
                         "accept-edits",
+                        "--output-format",
+                        "stream-json",
                     ]);
                 } else if agent_id == "claude-code" && warm_cli_continue {
                     c.args([
@@ -1160,6 +1184,8 @@ pub fn spawn_agent_execution(
                             &exec_dir,
                             "--mode",
                             "accept-edits",
+                            "--output-format",
+                            "stream-json",
                         ]);
                         c
                     }
@@ -1261,14 +1287,40 @@ pub fn spawn_agent_execution(
                         Ok((is_stdout, line)) => {
                             last_stdout_activity = std::time::Instant::now();
                             if is_stdout {
-                                collected_md.push_str(&line);
-                                collected_md.push('\n');
+                                let (display_line, delta_text) = if line.trim_start().starts_with('{') {
+                                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                                        if let Some(delta) = val.pointer("/step_update/text_delta").and_then(|v| v.as_str()) {
+                                            (String::new(), Some(delta.to_string()))
+                                        } else if let Some(resp) = val.pointer("/result/response").and_then(|v| v.as_str()) {
+                                            (format!("[CLI Engine Result] Completed ({} bytes)", resp.len()), if collected_md.is_empty() { Some(resp.to_string()) } else { None })
+                                        } else if let Some(ev) = val.get("event").and_then(|v| v.as_str()) {
+                                            (format!("[CLI Engine] Event: {}", ev), None)
+                                        } else {
+                                            (String::new(), None)
+                                        }
+                                    } else {
+                                        (line.clone(), Some(line.clone()))
+                                    }
+                                } else {
+                                    (line.clone(), Some(line.clone()))
+                                };
+
+                                if let Some(txt) = delta_text {
+                                    collected_md.push_str(&txt);
+                                    if !txt.ends_with('\n') {
+                                        collected_md.push('\n');
+                                    }
+                                }
                                 let snap = collected_md.clone();
                                 update_task(&|t| {
                                     t.progress_stage = Some("executing".to_string());
                                     t.progress_percent = (t.progress_percent.max(75) + 1).min(96);
-                                    t.response_markdown = Some(snap.clone());
-                                    t.logs.push(line.clone());
+                                    if !snap.is_empty() {
+                                        t.response_markdown = Some(snap.clone());
+                                    }
+                                    if !display_line.is_empty() {
+                                        t.logs.push(display_line.clone());
+                                    }
                                 });
                             } else {
                                 if !line.trim().is_empty() {
@@ -1377,12 +1429,24 @@ pub fn spawn_agent_execution(
                                 let stdout_idle_sec = last_stdout_activity.elapsed().as_secs();
                                 let fs_idle_sec = last_fs_change.elapsed().as_secs();
 
+                                let is_code_task = record.intent == "build" || record.intent == "fix-bugs";
+                                let code_files_touched = seen_created_files.iter().any(|f| {
+                                    let low = f.to_ascii_lowercase();
+                                    low.ends_with(".js") || low.ends_with(".ts") || low.ends_with(".html") || low.ends_with(".css") || low.ends_with(".py") || low.ends_with(".rs")
+                                });
+
                                 // Settlement Detector Condition 1: Deliverables touched
+                                // For code-generating tasks, touching a `.md` file does NOT settle the execution!
                                 if !seen_created_files.is_empty() {
                                     let has_pending_companion = check_missing_html_companions(&exec_dir, &seen_created_files);
                                     let companion_ready = !has_pending_companion || elapsed_sec >= 120;
+                                    let allow_settle = if is_code_task {
+                                        code_files_touched && companion_ready
+                                    } else {
+                                        companion_ready
+                                    };
 
-                                    if companion_ready && fs_idle_sec >= 25 && stdout_idle_sec >= 20 && elapsed_sec >= 35 {
+                                    if allow_settle && fs_idle_sec >= 25 && stdout_idle_sec >= 20 && elapsed_sec >= 35 {
                                         let settle_msg = format!(
                                             "[Settlement Detector] Workspace deliverables settled ({} file(s) touched: {}). Activity idle for {}s (fs: {}s). Concluding execution.",
                                             seen_created_files.len(),
@@ -1402,7 +1466,13 @@ pub fn spawn_agent_execution(
                                 }
 
                                 // Settlement Detector Condition 2: Markdown report deliverable received
-                                if !collected_md.trim().is_empty() && stdout_idle_sec >= 20 && elapsed_sec >= 30 {
+                                let allow_md_settle = if is_code_task {
+                                    code_files_touched && !collected_md.trim().is_empty() && stdout_idle_sec >= 20 && elapsed_sec >= 30
+                                } else {
+                                    !collected_md.trim().is_empty() && stdout_idle_sec >= 20 && elapsed_sec >= 30
+                                };
+
+                                if allow_md_settle {
                                     let settle_msg = format!(
                                         "[Settlement Detector] Markdown report deliverable received ({} bytes). Stdout idle for {}s. Concluding execution.",
                                         collected_md.len(),
@@ -1420,7 +1490,6 @@ pub fn spawn_agent_execution(
 
                                 // Settlement Detector Condition 3: Safety Max-Timeout Ceiling
                                 // Permits adequate reasoning time (up to 360s) for heavy code generation tasks
-                                let is_code_task = record.intent == "build" || record.intent == "fix-bugs";
                                 let max_timeout_sec = if is_code_task { 360 } else { 210 };
                                 let max_idle_sec = if is_code_task { 240 } else { 120 };
 
@@ -1515,7 +1584,40 @@ pub fn spawn_agent_execution(
                     ensure_companion_assets_exist(&exec_dir, &mut created_files, &collected_md);
                 }
 
+                let post_digests = crate::projects::cache::scan_workspace_digest(Path::new(&exec_dir), 64);
+                let mut actually_modified_files: Vec<String> = Vec::new();
                 for cf in &created_files {
+                    let was_pre = pre_digests.get(cf);
+                    let is_post = post_digests.get(cf);
+                    let changed = match (was_pre, is_post) {
+                        (None, Some(_)) => true,
+                        (Some(a), Some(b)) => a.sha256 != b.sha256,
+                        _ => false,
+                    };
+                    if changed && !actually_modified_files.contains(cf) {
+                        actually_modified_files.push(cf.clone());
+                    }
+                }
+
+                if record.intent == "fix-bugs" && actually_modified_files.is_empty() && collected_md.trim().is_empty() {
+                    emit_log("[Fix Bugs Verification] WARNING: Zero workspace code files were modified and no patch was generated by the agent.".to_string());
+                    finalize_task(
+                        &store,
+                        &app,
+                        &task_id,
+                        "failed",
+                        Some("The agent did not make any file changes or fix the reported bug in the workspace.".to_string()),
+                    );
+                    return;
+                }
+
+                let effective_files_to_report = if !actually_modified_files.is_empty() {
+                    actually_modified_files
+                } else {
+                    created_files
+                };
+
+                for cf in &effective_files_to_report {
                     emit_log(format!("[FlyMD Workspace Sync] Workspace File: `{}`", cf));
                     let cf_clone = cf.clone();
                     update_task(&|t| {
@@ -1530,7 +1632,7 @@ pub fn spawn_agent_execution(
                     });
                 }
 
-                if !collected_md.trim().is_empty() || !created_files.is_empty() {
+                if !collected_md.trim().is_empty() || !effective_files_to_report.is_empty() {
                     let raw_report_body = if !collected_md.trim().is_empty() {
                         collected_md.clone()
                     } else {
@@ -1539,7 +1641,7 @@ pub fn spawn_agent_execution(
                             agent_name,
                             record.file_name,
                             exec_dir,
-                            created_files.iter().map(|f| format!("- `{}`", f)).collect::<Vec<_>>().join("\n")
+                            effective_files_to_report.iter().map(|f| format!("- `{}`", f)).collect::<Vec<_>>().join("\n")
                         )
                     };
                     let clean_report_body = persist_task_cognitive_handoff(
@@ -1550,7 +1652,7 @@ pub fn spawn_agent_execution(
                         &source_markdown,
                         &raw_report_body,
                         Some(&agent_id),
-                        &created_files,
+                        &effective_files_to_report,
                     );
                     fs::write(&report_file, &clean_report_body).ok();
                     let duration_ms = (now_ms() - task_started_at).max(0) as u64;

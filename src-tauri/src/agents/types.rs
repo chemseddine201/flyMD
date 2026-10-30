@@ -205,6 +205,12 @@ pub struct AgentTaskRequest {
     pub next_agent_in_chain: Option<String>,
     #[serde(rename = "nextIntentInChain")]
     pub next_intent_in_chain: Option<String>,
+    #[serde(rename = "epistemicPolicy", default)]
+    pub epistemic_policy: Option<String>,
+    #[serde(rename = "customActionLabel", default)]
+    pub custom_action_label: Option<String>,
+    #[serde(rename = "stepNote", default)]
+    pub step_note: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -261,6 +267,10 @@ pub struct AgentTaskRecord {
     pub progress_percent: u8,
     #[serde(rename = "toolActions", default)]
     pub tool_actions: Vec<AgentToolAction>,
+    #[serde(rename = "customActionId", default)]
+    pub custom_action_id: Option<String>,
+    #[serde(rename = "stepNote", default)]
+    pub step_note: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

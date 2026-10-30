@@ -217,6 +217,26 @@ pub fn evaluate_pipeline_epistemic_policy(
     packet: Option<&CognitiveHandoffPacket>,
     prior_execution_failed: bool,
 ) -> EpistemicDecision {
+    evaluate_pipeline_epistemic_policy_with_override(
+        intent,
+        is_first_step,
+        workspace_path,
+        packet,
+        prior_execution_failed,
+        None,
+    )
+}
+
+/// Evaluates epistemic routing for a Multi-Agent Pipeline with an optional explicit policy override
+/// (e.g., from a user-defined CustomPipelineAction: "collaborative" vs. "independent-audit").
+pub fn evaluate_pipeline_epistemic_policy_with_override(
+    intent: &str,
+    is_first_step: bool,
+    workspace_path: &Path,
+    packet: Option<&CognitiveHandoffPacket>,
+    prior_execution_failed: bool,
+    policy_override: Option<&str>,
+) -> EpistemicDecision {
     let mut triggers = Vec::new();
     let mut files_to_reread = Vec::new();
 
@@ -255,59 +275,79 @@ pub fn evaluate_pipeline_epistemic_policy(
     }
 
     let normalized_intent = intent.trim().to_ascii_lowercase();
-    let mode = match normalized_intent.as_str() {
-        "fix-bugs" => {
-            triggers.push(ReReadTrigger::AdversarialRoleTransition);
-            if files_to_reread.is_empty() {
-                files_to_reread = select_priority_audit_files(workspace_path, 4);
-            }
+    let clean_policy = policy_override.map(|p| p.trim().to_ascii_lowercase());
+
+    let mode = if clean_policy.as_deref() == Some("independent-audit") {
+        triggers.push(ReReadTrigger::AdversarialRoleTransition);
+        if files_to_reread.is_empty() {
+            files_to_reread = select_priority_audit_files(workspace_path, 4);
+        }
+        EpistemicMode::BlindIndependentAudit
+    } else if clean_policy.as_deref() == Some("collaborative") {
+        if prior_execution_failed {
             EpistemicMode::GroundTruthRebuild
-        }
-        "review" => {
-            triggers.push(ReReadTrigger::AdversarialRoleTransition);
-            if files_to_reread.is_empty() {
-                files_to_reread = select_priority_audit_files(workspace_path, 4);
-            }
-            EpistemicMode::BlindIndependentAudit
-        }
-        "refine-plan" => {
-            if is_first_step || packet.is_none() {
-                EpistemicMode::PrimaryMapper
-            } else if !triggers.is_empty() {
-                EpistemicMode::DeltaVerify
-            } else {
-                EpistemicMode::DirectInherit
-            }
-        }
-        "write-tests" => {
-            if files_to_reread.is_empty() {
-                files_to_reread = select_priority_audit_files(workspace_path, 3);
-            }
+        } else if packet.is_none() || is_first_step {
+            EpistemicMode::PrimaryMapper
+        } else if !triggers.is_empty() {
             EpistemicMode::DeltaVerify
+        } else {
+            EpistemicMode::DirectInherit
         }
-        "explain" => {
-            if prior_execution_failed {
+    } else {
+        match normalized_intent.as_str() {
+            "fix-bugs" => {
+                triggers.push(ReReadTrigger::AdversarialRoleTransition);
+                if files_to_reread.is_empty() {
+                    files_to_reread = select_priority_audit_files(workspace_path, 4);
+                }
                 EpistemicMode::GroundTruthRebuild
-            } else if packet.is_some() && drifted_is_empty(&triggers) {
-                EpistemicMode::DirectInherit
-            } else if packet.is_some() {
-                EpistemicMode::DeltaVerify
-            } else {
-                EpistemicMode::PrimaryMapper
             }
-        }
-        "build" | _ => {
-            if prior_execution_failed {
+            "review" => {
+                triggers.push(ReReadTrigger::AdversarialRoleTransition);
+                if files_to_reread.is_empty() {
+                    files_to_reread = select_priority_audit_files(workspace_path, 4);
+                }
+                EpistemicMode::BlindIndependentAudit
+            }
+            "refine-plan" => {
+                if is_first_step || packet.is_none() {
+                    EpistemicMode::PrimaryMapper
+                } else if !triggers.is_empty() {
+                    EpistemicMode::DeltaVerify
+                } else {
+                    EpistemicMode::DirectInherit
+                }
+            }
+            "write-tests" => {
                 if files_to_reread.is_empty() {
                     files_to_reread = select_priority_audit_files(workspace_path, 3);
                 }
-                EpistemicMode::GroundTruthRebuild
-            } else if packet.is_none() {
-                EpistemicMode::PrimaryMapper
-            } else if !triggers.is_empty() {
                 EpistemicMode::DeltaVerify
-            } else {
-                EpistemicMode::DirectInherit
+            }
+            "explain" => {
+                if prior_execution_failed {
+                    EpistemicMode::GroundTruthRebuild
+                } else if packet.is_some() && drifted_is_empty(&triggers) {
+                    EpistemicMode::DirectInherit
+                } else if packet.is_some() {
+                    EpistemicMode::DeltaVerify
+                } else {
+                    EpistemicMode::PrimaryMapper
+                }
+            }
+            "build" | _ => {
+                if prior_execution_failed {
+                    if files_to_reread.is_empty() {
+                        files_to_reread = select_priority_audit_files(workspace_path, 3);
+                    }
+                    EpistemicMode::GroundTruthRebuild
+                } else if packet.is_none() {
+                    EpistemicMode::PrimaryMapper
+                } else if !triggers.is_empty() {
+                    EpistemicMode::DeltaVerify
+                } else {
+                    EpistemicMode::DirectInherit
+                }
             }
         }
     };

@@ -483,12 +483,13 @@ impl AgentOrchestrator {
         });
 
         let is_first_step = req.source_agent_id.is_none();
-        let epistemic_decision = crate::discussion::epistemic::evaluate_pipeline_epistemic_policy(
+        let epistemic_decision = crate::discussion::epistemic::evaluate_pipeline_epistemic_policy_with_override(
             &req.intent,
             is_first_step,
             ws_path,
             cognitive_pkt.as_ref(),
             prior_failed,
+            req.epistemic_policy.as_deref(),
         );
         let warm_cli_continue = crate::discussion::epistemic::can_reuse_cli_session_continuously(
             &epistemic_decision,
@@ -508,19 +509,49 @@ impl AgentOrchestrator {
                 epistemic_decision.requires_blind_self_conclusion(),
             );
 
-        // Prefix-Pinned Token-0 Handoff Package:
-        // 1. Immutable Specification Contract at Token 0
-        // 2. Role-Aware Epistemic Cache / Blind Raw Slices
-        // 3. Direct Peer Directives (@Role / @Agent)
-        // 4. Mission & Handoff Footer
-        let mut handoff_content = format!(
-            "# FlyMD Immutable Project Specification & Contract (`{}`)\n\n{}\n\n---\n\n",
-            req.file_name,
-            body_to_process.trim()
-        );
+        // Token-0 Priority Decision:
+        // If this is a bug fix or has specific custom directives / error traces,
+        // pin the Mission Directives at Token 0 so the agent immediately sees what must be fixed
+        // instead of burying it under a large completed spec.
+        let is_targeted_directive = req.intent == "fix-bugs"
+            || req.custom_prompt.as_ref().map(|p| !p.trim().is_empty()).unwrap_or(false)
+            || req.step_note.as_ref().map(|p| !p.trim().is_empty()).unwrap_or(false);
 
-        handoff_content.push_str(&epistemic_section);
-        handoff_content.push_str("\n---\n\n");
+        let mut handoff_content = String::new();
+
+        if is_targeted_directive {
+            handoff_content.push_str(&format!(
+                "# PRIORITY MISSION DIRECTIVES & TARGET BUG REPORT\n\n\
+                 - **Target Agent**: `{}`\n\
+                 - **Source Agent**: `{}`\n\
+                 - **Intent Mode**: `{}`\n\
+                 - **Epistemic Mode**: `{}`\n\
+                 - **Workspace Path**: `{}`\n\n\
+                 ### Mission Directives & Instructions to Execute:\n{}\n\n\
+                 ---\n\n",
+                req.target_agent_id,
+                req.source_agent_id.as_deref().unwrap_or("User"),
+                req.intent,
+                epistemic_decision.mode.as_label(),
+                effective_ws,
+                instructions
+            ));
+            handoff_content.push_str(&epistemic_section);
+            handoff_content.push_str("\n---\n\n");
+            handoff_content.push_str(&format!(
+                "# Project Specification & Reference Contract (`{}`)\n\n{}\n\n---\n\n",
+                req.file_name,
+                body_to_process.trim()
+            ));
+        } else {
+            handoff_content.push_str(&format!(
+                "# FlyMD Immutable Project Specification & Contract (`{}`)\n\n{}\n\n---\n\n",
+                req.file_name,
+                body_to_process.trim()
+            ));
+            handoff_content.push_str(&epistemic_section);
+            handoff_content.push_str("\n---\n\n");
+        }
 
         if let Some(ref pkt) = cognitive_pkt {
             let inbox = crate::projects::cache::filter_peer_messages_for_agent(
@@ -546,22 +577,24 @@ impl AgentOrchestrator {
             handoff_content.push_str("\n\n---\n\n");
         }
 
-        handoff_content.push_str(&format!(
-            "## Active Agent Mission Metadata & Instructions\n\n\
-             - **Target Agent**: `{}`\n\
-             - **Source Agent**: `{}`\n\
-             - **Intent Mode**: `{}`\n\
-             - **Epistemic Mode**: `{}`\n\
-             - **Workspace Path**: `{}`\n\n\
-             {}\n{}\n",
-            req.target_agent_id,
-            req.source_agent_id.as_deref().unwrap_or("User"),
-            req.intent,
-            epistemic_decision.mode.as_label(),
-            effective_ws,
-            instructions,
-            handoff_footer
-        ));
+        if !is_targeted_directive {
+            handoff_content.push_str(&format!(
+                "## Active Agent Mission Metadata & Instructions\n\n\
+                 - **Target Agent**: `{}`\n\
+                 - **Source Agent**: `{}`\n\
+                 - **Intent Mode**: `{}`\n\
+                 - **Epistemic Mode**: `{}`\n\
+                 - **Workspace Path**: `{}`\n\n\
+                 {}\n",
+                req.target_agent_id,
+                req.source_agent_id.as_deref().unwrap_or("User"),
+                req.intent,
+                epistemic_decision.mode.as_label(),
+                effective_ws,
+                instructions
+            ));
+        }
+        handoff_content.push_str(&format!("{}\n", handoff_footer));
 
         fs::write(&handoff_file, &handoff_content).ok();
 
@@ -632,6 +665,8 @@ impl AgentOrchestrator {
                 "done".to_string(),
                 now_ms(),
             )],
+            custom_action_id: req.custom_action_label.clone(),
+            step_note: req.step_note.clone(),
         };
 
         let memory_entry = format!(
