@@ -107,7 +107,10 @@ struct EventStreamSink {
 #[async_trait]
 impl StreamSink for EventStreamSink {
     async fn on_chunk(&self, chunk: &str) {
-        let mut guard = self.suppress_handoff.lock().unwrap();
+        let mut guard = self
+            .suppress_handoff
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if *guard {
             if let Some(end_idx) = chunk.to_ascii_lowercase().find("</handoff_state>") {
                 *guard = false;
@@ -684,7 +687,13 @@ impl DiscussionOrchestrator {
             if spoken_agent_ids.len() >= active_participants.len() {
                 if current_round >= self.config.max_rounds {
                     let generator = super::report::ReportGenerator::new(self.session_dir.clone());
-                    let _ = generator.generate_report(&self.config, &mut self.metadata);
+                    if let Err(rep_err) =
+                        generator.generate_report(&self.config, &mut self.metadata)
+                    {
+                        self.metadata.error_message =
+                            Some(format!("Report synthesis warning: {}", rep_err));
+                        let _ = save_metadata(&self.session_dir, &self.metadata);
+                    }
                     self.transition_status(DiscussionStatus::AwaitingReview)?;
                     self.release_lock();
                     return Ok(DiscussionStatus::AwaitingReview);
@@ -835,7 +844,11 @@ impl DiscussionOrchestrator {
 
                 // Synthesize 12-section evidence report
                 let generator = super::report::ReportGenerator::new(self.session_dir.clone());
-                let _ = generator.generate_report(&self.config, &mut self.metadata);
+                if let Err(rep_err) = generator.generate_report(&self.config, &mut self.metadata) {
+                    self.metadata.error_message =
+                        Some(format!("Report synthesis warning: {}", rep_err));
+                    let _ = save_metadata(&self.session_dir, &self.metadata);
+                }
                 self.transition_status(DiscussionStatus::AwaitingReview)?;
                 self.release_lock();
                 return Ok(DiscussionStatus::AwaitingReview);
@@ -857,7 +870,10 @@ impl DiscussionOrchestrator {
         let _ = save_metadata(&self.session_dir, &self.metadata);
 
         let generator = super::report::ReportGenerator::new(self.session_dir.clone());
-        let _ = generator.generate_report(&self.config, &mut self.metadata);
+        if let Err(rep_err) = generator.generate_report(&self.config, &mut self.metadata) {
+            self.metadata.error_message = Some(format!("Report synthesis warning: {}", rep_err));
+            let _ = save_metadata(&self.session_dir, &self.metadata);
+        }
         self.transition_status(DiscussionStatus::AwaitingReview)?;
         self.release_lock();
         Ok(DiscussionStatus::AwaitingReview)

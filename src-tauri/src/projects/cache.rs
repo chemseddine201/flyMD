@@ -304,8 +304,13 @@ pub fn extract_file_contracts_and_symbols(
                     }
                 }
             }
-            if end + marker.len() < rest.len() {
-                rest = &after[end..];
+            let advance = if end > 0 {
+                end.min(after.len())
+            } else {
+                after.chars().next().map(|c| c.len_utf8()).unwrap_or(0)
+            };
+            if advance > 0 && advance < after.len() {
+                rest = &after[advance..];
             } else {
                 break;
             }

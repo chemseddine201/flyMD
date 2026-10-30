@@ -93,20 +93,26 @@ pub fn atomic_write_json<T: Serialize>(target: &Path, value: &T) -> Result<(), S
 }
 
 /// Check if a process ID is currently running on the system.
-fn is_pid_alive(pid: u32) -> bool {
+pub fn is_pid_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         use std::process::Command;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        // Check with tasklist command on Windows without flashing a console window
+        // Exact CSV second-column PID match without flashing a console window
         if let Ok(output) = Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout);
-            return text.contains(&pid.to_string());
+            let needle = format!("\"{}\"", pid);
+            return text
+                .lines()
+                .any(|line| line.split(',').nth(1).map(|col| col.trim()) == Some(needle.as_str()));
         }
         false
     }
@@ -114,6 +120,25 @@ fn is_pid_alive(pid: u32) -> bool {
     {
         Path::new(&format!("/proc/{}", pid)).exists()
     }
+}
+
+/// Returns `true` only if `.session.lock` exists and belongs to a different live OS process.
+/// Automatically prunes stale locks left behind by dead/crashed processes.
+pub fn has_live_external_lock(session_dir: &Path) -> bool {
+    let lock_path = session_dir.join(".session.lock");
+    if !lock_path.exists() {
+        return false;
+    }
+    let my_pid = std::process::id();
+    if let Ok(bytes) = fs::read(&lock_path) {
+        if let Ok(lock_data) = serde_json::from_slice::<SessionLockData>(&bytes) {
+            if lock_data.pid != my_pid && is_pid_alive(lock_data.pid) {
+                return true;
+            }
+        }
+    }
+    let _ = fs::remove_file(&lock_path);
+    false
 }
 
 /// Single-session file lock to prevent concurrent executions of the same session.

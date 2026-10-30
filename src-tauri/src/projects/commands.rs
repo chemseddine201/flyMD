@@ -19,8 +19,10 @@ fn resolve_effective_ws_with_req(workspace_path: &str, req: Option<&CreateProjec
                 if p.is_absolute() && (p.is_dir() || p.parent().map(|par| par.is_dir()).unwrap_or(false)) {
                     let dir_to_use = if p.is_dir() {
                         p.to_string_lossy().to_string()
+                    } else if let Some(par) = p.parent() {
+                        par.to_string_lossy().to_string()
                     } else {
-                        p.parent().unwrap().to_string_lossy().to_string()
+                        p.to_string_lossy().to_string()
                     };
                     return dir_to_use;
                 }

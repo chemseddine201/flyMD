@@ -259,11 +259,11 @@ impl AppStore {
     }
 
     pub fn get_settings(&self) -> AppSettings {
-        self.data.lock().unwrap().settings.clone()
+        self.data.lock().unwrap_or_else(|e| e.into_inner()).settings.clone()
     }
 
     pub fn save_settings(&self, partial: serde_json::Value) -> AppSettings {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         if let Ok(mut current_val) = serde_json::to_value(&guard.settings) {
             if let (Some(c_obj), Some(p_obj)) = (current_val.as_object_mut(), partial.as_object()) {
                 for (k, v) in p_obj {
@@ -281,11 +281,11 @@ impl AppStore {
     }
 
     pub fn get_history(&self) -> Vec<HistoryItem> {
-        self.data.lock().unwrap().history.clone()
+        self.data.lock().unwrap_or_else(|e| e.into_inner()).history.clone()
     }
 
     pub fn add_history(&self, item: HistoryItem) -> Vec<HistoryItem> {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.history.retain(|h| h.path != item.path);
         guard.history.insert(0, item);
         if guard.history.len() > 20 {
@@ -298,7 +298,7 @@ impl AppStore {
     }
 
     pub fn remove_history(&self, id: &str) -> Vec<HistoryItem> {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.history.retain(|h| h.id != id);
         let res = guard.history.clone();
         drop(guard);
@@ -307,18 +307,18 @@ impl AppStore {
     }
 
     pub fn clear_history(&self) {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.history.clear();
         drop(guard);
         self.save();
     }
 
     pub fn get_float_bounds(&self) -> FloatBounds {
-        self.data.lock().unwrap().float_bounds.clone()
+        self.data.lock().unwrap_or_else(|e| e.into_inner()).float_bounds.clone()
     }
 
     pub fn update_float_bounds(&self, x: i32, y: i32) {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.float_bounds = FloatBounds {
             x: Some(x),
             y: Some(y),
@@ -326,7 +326,7 @@ impl AppStore {
     }
 
     pub fn set_float_bounds(&self, x: i32, y: i32) {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.float_bounds = FloatBounds {
             x: Some(x),
             y: Some(y),
@@ -336,11 +336,11 @@ impl AppStore {
     }
 
     pub fn get_supervision_config(&self) -> Option<FolderSupervisionConfig> {
-        self.data.lock().unwrap().supervision_config.clone()
+        self.data.lock().unwrap_or_else(|e| e.into_inner()).supervision_config.clone()
     }
 
     pub fn set_supervision_config(&self, config: Option<FolderSupervisionConfig>) {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.supervision_config = config;
         drop(guard);
         self.save();
@@ -349,29 +349,29 @@ impl AppStore {
     pub fn get_agent_credentials(
         &self,
     ) -> std::collections::HashMap<String, crate::agents::AgentCredentialConfig> {
-        self.data.lock().unwrap().agent_credentials.clone()
+        self.data.lock().unwrap_or_else(|e| e.into_inner()).agent_credentials.clone()
     }
 
     pub fn set_agent_credential(&self, agent_id: &str, cred: crate::agents::AgentCredentialConfig) {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.agent_credentials.insert(agent_id.to_string(), cred);
         drop(guard);
         self.save();
     }
 
     pub fn remove_agent_credential(&self, agent_id: &str) {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.agent_credentials.remove(agent_id);
         drop(guard);
         self.save();
     }
 
     pub fn get_agent_tasks(&self) -> Vec<crate::agents::AgentTaskRecord> {
-        self.data.lock().unwrap().agent_tasks.clone()
+        self.data.lock().unwrap_or_else(|e| e.into_inner()).agent_tasks.clone()
     }
 
     pub fn save_agent_tasks(&self, tasks: Vec<crate::agents::AgentTaskRecord>) {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.agent_tasks = tasks;
         if guard.agent_tasks.len() > 50 {
             guard.agent_tasks.truncate(50);
@@ -381,11 +381,11 @@ impl AppStore {
     }
 
     pub fn get_agent_checkpoints(&self) -> Vec<crate::agents::AgentCheckpoint> {
-        self.data.lock().unwrap().agent_checkpoints.clone()
+        self.data.lock().unwrap_or_else(|e| e.into_inner()).agent_checkpoints.clone()
     }
 
     pub fn save_agent_checkpoints(&self, checkpoints: Vec<crate::agents::AgentCheckpoint>) {
-        let mut guard = self.data.lock().unwrap();
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.agent_checkpoints = checkpoints;
         if guard.agent_checkpoints.len() > 30 {
             guard.agent_checkpoints.truncate(30);

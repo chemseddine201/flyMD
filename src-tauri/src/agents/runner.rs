@@ -966,6 +966,11 @@ pub fn spawn_agent_execution(
     let user_cred = creds.get(&record.target_agent_id).cloned();
 
     std::thread::spawn(move || {
+        let panic_task_id = record.id.clone();
+        let panic_store = Arc::clone(&store);
+        let panic_app = app.clone();
+
+        let run_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
         let task_id = record.id.clone();
         let agent_id = record.target_agent_id.clone();
         let agent_name = profile
@@ -1708,6 +1713,24 @@ pub fn spawn_agent_execution(
         ));
 
         finalize_task(&store, &app, &task_id, "completed", None);
+        }));
+
+        if let Err(panic_payload) = run_result {
+            let reason = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                (*s).to_string()
+            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unexpected runtime panic inside agent worker thread".to_string()
+            };
+            finalize_task(
+                &panic_store,
+                &panic_app,
+                &panic_task_id,
+                "failed",
+                Some(format!("Recovered safely from internal execution panic: {}", reason)),
+            );
+        }
     });
 }
 

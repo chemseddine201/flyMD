@@ -37,14 +37,14 @@ impl ProjectManager {
 
     /// Invalidate in-memory cache to force reloading from disk on next read.
     pub fn invalidate_cache(&self) {
-        let mut lock = self.tree_cache.lock().unwrap();
+        let mut lock = self.tree_cache.lock().unwrap_or_else(|e| e.into_inner());
         lock.clear();
     }
 
     /// Load or retrieve cached project tree for the workspace.
     fn get_or_load_tree(&self, workspace_path: &Path) -> ProjectTree {
         let effective_ws = storage::resolve_safe_workspace(workspace_path);
-        let mut lock = self.tree_cache.lock().unwrap();
+        let mut lock = self.tree_cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(t) = lock.get(&effective_ws) {
             return t.clone();
         }
@@ -96,7 +96,7 @@ impl ProjectManager {
         storage::save_project_node(&effective_ws, &node)?;
 
         // Update cache
-        let mut lock = self.tree_cache.lock().unwrap();
+        let mut lock = self.tree_cache.lock().unwrap_or_else(|e| e.into_inner());
         lock.insert(effective_ws.clone(), tree);
 
         // Record initial creation in scoped memory
@@ -150,7 +150,7 @@ impl ProjectManager {
         tree.insert(current.clone())?;
         storage::save_project_node(&effective_ws, &current)?;
 
-        let mut lock = self.tree_cache.lock().unwrap();
+        let mut lock = self.tree_cache.lock().unwrap_or_else(|e| e.into_inner());
         lock.insert(effective_ws, tree);
 
         Ok(current)
@@ -166,7 +166,7 @@ impl ProjectManager {
             let _ = storage::delete_project_dir(&effective_ws, id);
         }
 
-        let mut lock = self.tree_cache.lock().unwrap();
+        let mut lock = self.tree_cache.lock().unwrap_or_else(|e| e.into_inner());
         lock.insert(effective_ws, tree);
 
         Ok(!removed_ids.is_empty())

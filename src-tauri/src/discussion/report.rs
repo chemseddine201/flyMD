@@ -58,6 +58,15 @@ pub fn redact_secrets(input: &str) -> String {
     redacted
 }
 
+/// Truncates a UTF-8 string safely at a character boundary (never slicing mid-codepoint on
+/// multi-byte Arabic, CJK, or emoji sequences), appending `"..."` if truncated.
+pub fn truncate_utf8_chars(s: &str, max_chars: usize) -> String {
+    match s.char_indices().nth(max_chars) {
+        Some((byte_idx, _)) => format!("{}...", &s[..byte_idx]),
+        None => s.to_string(),
+    }
+}
+
 pub struct ReportGenerator {
     pub session_dir: PathBuf,
 }
@@ -180,8 +189,8 @@ impl ReportGenerator {
                     substantive_lines.join(" ")
                 };
 
-                let clean_summary = if summary.len() > 240 {
-                    format!("{}...", &summary[..237])
+                let clean_summary = if summary.chars().count() > 240 {
+                    truncate_utf8_chars(&summary, 237)
                 } else {
                     summary
                 };
@@ -409,6 +418,104 @@ mod tests {
         assert!(v2_path.exists());
         assert_eq!(metadata.latest_report_version, 2);
         assert!(v1_path.exists()); // v1 is preserved!
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_arabic_multibyte_utf8_report_generation_never_panics() {
+        use crate::discussion::storage::append_transcript_message;
+        use crate::discussion::types::{DiscussionMessage, DiscussionMessageKind};
+
+        let temp_dir = std::env::temp_dir().join(format!("flymd_rep_arabic_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let arabic_topic = "درس في الفيزياء النظرية و التطبيقية".to_string();
+        let arabic_idea = "شرح تطور فيزياء الضوء حتى الوصول الى نظرية الكم بطريقة مسلية و تساعد الطلاب في طور الثانوي على فهم الموضوع بشكل سلس و مرح.".to_string();
+
+        let config = DiscussionConfig {
+            schema_version: 1,
+            session_id: "disc-fly5-regression".to_string(),
+            topic: arabic_topic.clone(),
+            user_idea: arabic_idea.clone(),
+            workspace_path: temp_dir.to_string_lossy().to_string(),
+            max_rounds: 5,
+            turn_timeout_secs: 240,
+            participants: vec![DiscussionParticipant {
+                agent_id: "agent-lead".to_string(),
+                provider_id: "mock".to_string(),
+                model_id: "custom-expert-v1".to_string(),
+                display_name: "Teacher".to_string(),
+                role: AgentRole::Custom("Teacher".to_string()),
+                role_description: "Primary domain specialist".to_string(),
+                avatar_color: "#38bdf8".to_string(),
+                assigned_skill_uris: Vec::new(),
+                context_budget_tokens: 32000,
+                custom_action: None,
+                custom_query: None,
+                thinking_enabled: true,
+            }],
+            active_skill_uris: Vec::new(),
+            step_mode: false,
+        };
+
+        // Exact message structure from FLY5 where byte index 237 landed mid-character inside 'ى' (0xD9 0x89)
+        let msg = DiscussionMessage {
+            id: "msg-r1-lead".to_string(),
+            session_id: "disc-fly5-regression".to_string(),
+            round_number: 1,
+            turn_index: 1,
+            author_agent_id: "agent-lead".to_string(),
+            author_role: "custom".to_string(),
+            author_provider: "mock".to_string(),
+            message_kind: DiscussionMessageKind::InitialAnalysis,
+            target_peer_ids: vec![],
+            content: format!(
+                "### Position Paper by agent-lead (custom)\n\n\
+                 **Domain Analysis for Topic**: *{}*\n\
+                 Focus Area / Action: Teacher\n\
+                 #### 1. Foundational Perspective\n\
+                 - **Core Focus**: Domain analysis for {}\n\
+                 - **Proposed Approach**: Coordinate role specialization with deterministic barrier synchronization.\n",
+                arabic_topic, arabic_idea
+            ),
+            timestamp: now_ms(),
+            token_usage: None,
+            duration_ms: 1200,
+            truncated: false,
+            thinking_content: None,
+            action_name: Some("Teacher".to_string()),
+            model_id: Some("adaptive-domain-simulator".to_string()),
+            simulated: true,
+            author_display_name: Some("Teacher".to_string()),
+        };
+        append_transcript_message(&temp_dir, &msg).unwrap();
+
+        let mut metadata = DiscussionMetadata {
+            schema_version: 1,
+            session_id: "disc-fly5-regression".to_string(),
+            topic: Some(arabic_topic),
+            status: super::super::types::DiscussionStatus::Running,
+            current_round: 1,
+            created_at: now_ms(),
+            started_at: Some(now_ms()),
+            updated_at: now_ms(),
+            completed_at: None,
+            total_messages: 1,
+            total_tokens: 602,
+            error_message: None,
+            active_disagreements_count: 0,
+            decisions_count: 0,
+            latest_report_version: 0,
+        };
+
+        let gen = ReportGenerator::new(temp_dir.clone());
+        let report_path = gen
+            .generate_report(&config, &mut metadata)
+            .expect("Arabic UTF-8 report synthesis must never panic or fail");
+        let content = fs::read_to_string(&report_path).unwrap();
+        assert!(content.contains("درس في الفيزياء النظرية و التطبيقية"));
+        assert!(content.contains("Round 1 Deliberation Summary"));
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

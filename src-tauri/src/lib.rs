@@ -141,6 +141,41 @@ pub fn run() {
                 .path()
                 .app_config_dir()
                 .unwrap_or_else(|_| Path::new(".").to_path_buf());
+            let panic_log_path = config_dir.join("panic-recovery.log");
+            let prev_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                let loc = info
+                    .location()
+                    .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+                    .unwrap_or_else(|| "unknown".to_string());
+                let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+                    (*s).to_string()
+                } else if let Some(s) = info.payload().downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "non-string panic payload".to_string()
+                };
+                let entry = format!(
+                    "[{}] Thread {:?} panicked at {}: {}\n",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0),
+                    std::thread::current().name().unwrap_or("unnamed"),
+                    loc,
+                    payload
+                );
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&panic_log_path)
+                {
+                    use std::io::Write;
+                    let _ = f.write_all(entry.as_bytes());
+                }
+                prev_hook(info);
+            }));
+
             let store = AppStore::new(config_dir);
             let workspace = WorkspaceManager::new(app.handle().clone(), Arc::clone(&store));
             let llm = Arc::new(LlmManager::new());

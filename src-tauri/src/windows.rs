@@ -53,7 +53,7 @@ pub fn get_or_create_preview_window(
 
     let settings = store.get_settings();
     let bounds = {
-        let guard = store.data.lock().unwrap();
+        let guard = store.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.preview_bounds.clone()
     };
 
@@ -276,14 +276,14 @@ pub async fn cmd_open_in_preview(
                     "hist_{}",
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
+                        .unwrap_or_default()
                         .as_millis()
                 ),
                 path: file_path.clone(),
                 name: file_entry.name.clone(),
                 last_opened: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_millis() as i64,
                 preview: file_entry.content.chars().take(150).collect(),
                 size: file_entry.content.len() as u64,

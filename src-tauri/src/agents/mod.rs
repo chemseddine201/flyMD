@@ -672,7 +672,7 @@ impl AgentOrchestrator {
         let app_handle = self.app_handle.clone();
         let cancel_flag = Arc::new(AtomicBool::new(false));
         {
-            let mut flags = self.cancel_flags.lock().unwrap();
+            let mut flags = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner());
             flags.insert(task_id.clone(), Arc::clone(&cancel_flag));
         }
 
@@ -692,7 +692,7 @@ impl AgentOrchestrator {
     }
 
     pub fn cancel_task(&self, task_id: &str) -> Vec<AgentTaskRecord> {
-        if let Some(flag) = self.cancel_flags.lock().unwrap().get(task_id) {
+        if let Some(flag) = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner()).get(task_id) {
             flag.store(true, Ordering::Relaxed);
         }
         self.process_manager.terminate_task_tree(task_id);
@@ -719,7 +719,7 @@ impl AgentOrchestrator {
     }
 
     pub fn delete_task(&self, task_id: &str) -> Vec<AgentTaskRecord> {
-        if let Some(flag) = self.cancel_flags.lock().unwrap().get(task_id) {
+        if let Some(flag) = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner()).get(task_id) {
             flag.store(true, Ordering::Relaxed);
         }
         self.process_manager.terminate_task_tree(task_id);

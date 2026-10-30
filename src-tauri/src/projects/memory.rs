@@ -126,12 +126,15 @@ pub fn build_recall_pack(
         scoped_context.trim()
     );
 
-    // Budget enforcement (~4 characters per token heuristic)
+    // Budget enforcement (~4 characters per token heuristic) — strictly UTF-8 char-boundary safe
     let estimated_tokens = rendered.len() / 4;
     if estimated_tokens > max_tokens && max_tokens > 100 {
-        let char_limit = max_tokens * 4;
-        if rendered.len() > char_limit {
-            rendered.truncate(char_limit);
+        let mut byte_limit = (max_tokens * 4).min(rendered.len());
+        while byte_limit > 0 && !rendered.is_char_boundary(byte_limit) {
+            byte_limit -= 1;
+        }
+        if rendered.len() > byte_limit {
+            rendered.truncate(byte_limit);
             rendered.push_str("\n\n_[Recall Pack truncated to preserve token budget]_");
         }
     }
@@ -180,5 +183,25 @@ mod tests {
         assert!(extracted.contains("Must use UTF-8"));
         assert!(extracted.contains("Strict PID kill"));
         assert!(!extracted.contains("Project A"));
+    }
+
+    #[test]
+    fn test_arabic_recall_pack_truncation_never_panics() {
+        let temp_dir = std::env::temp_dir().join("flymd_arabic_recall_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let arabic_heavy = format!(
+            "# Master\n\n## 1. System Invariants\n- {}\n\n## 2. Completed\n",
+            "شرح تطور فيزياء الضوء حتى الوصول إلى نظرية الكم بطريقة مسلية للطلاب ".repeat(60)
+        );
+        storage::write_master_memory(&temp_dir, &arabic_heavy).unwrap();
+        let tree = ProjectTree::new();
+
+        // Sweep across multiple odd/even token budgets so `max_tokens * 4` hits every byte offset
+        for budget in 101..125 {
+            let pack = build_recall_pack(&temp_dir, &tree, "root", budget);
+            assert!(!pack.rendered_markdown.is_empty());
+        }
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

@@ -317,7 +317,7 @@ impl WorkspaceManager {
         });
 
         {
-            let mut kf = self.known_files.lock().unwrap();
+            let mut kf = self.known_files.lock().unwrap_or_else(|e| e.into_inner());
             kf.clear();
             for f in &results {
                 kf.insert(f.path.clone(), f.modified_at);
@@ -329,7 +329,7 @@ impl WorkspaceManager {
 
     pub fn set_supervision(&self, config: FolderSupervisionConfig) -> bool {
         {
-            let mut w_guard = self.active_watcher.lock().unwrap();
+            let mut w_guard = self.active_watcher.lock().unwrap_or_else(|e| e.into_inner());
             *w_guard = None;
         }
 
@@ -377,7 +377,7 @@ impl WorkspaceManager {
                             let path_str = path.to_string_lossy().to_string();
 
                             {
-                                let mut dm = debounce_map.lock().unwrap();
+                                let mut dm = debounce_map.lock().unwrap_or_else(|e| e.into_inner());
                                 if let Some(last_time) = dm.get(&path_str) {
                                     if last_time.elapsed() < Duration::from_millis(300) {
                                         continue;
@@ -402,7 +402,7 @@ impl WorkspaceManager {
 
                                 let is_create_kind = matches!(event.kind, EventKind::Create(_));
                                 let is_new = {
-                                    let mut kf = known_files.lock().unwrap();
+                                    let mut kf = known_files.lock().unwrap_or_else(|e| e.into_inner());
                                     let known = kf.contains_key(&path_str);
                                     kf.insert(path_str.clone(), mtime);
                                     is_create_kind || !known || ctime >= session_start
@@ -450,7 +450,7 @@ impl WorkspaceManager {
                 .watch(Path::new(&config.path), recursive_mode)
                 .is_ok()
             {
-                let mut w_guard = self.active_watcher.lock().unwrap();
+                let mut w_guard = self.active_watcher.lock().unwrap_or_else(|e| e.into_inner());
                 *w_guard = Some(watcher);
                 println!(
                     "[WorkspaceManager] Now supervising {} (mode: {}, autoOpen: {})",

@@ -40,7 +40,7 @@ impl ProcessTreeManager {
         if root_pid == 0 {
             return;
         }
-        let mut map = self.processes.lock().unwrap();
+        let mut map = self.processes.lock().unwrap_or_else(|e| e.into_inner());
         map.insert(
             task_id.to_string(),
             TrackedProcess {
@@ -55,13 +55,13 @@ impl ProcessTreeManager {
 
     /// Unregister a task process once it completes or terminates normally.
     pub fn unregister_task_process(&self, task_id: &str) {
-        let mut map = self.processes.lock().unwrap();
+        let mut map = self.processes.lock().unwrap_or_else(|e| e.into_inner());
         map.remove(task_id);
     }
 
     /// Get the tracked PID for a specific task.
     pub fn get_task_pid(&self, task_id: &str) -> Option<u32> {
-        let map = self.processes.lock().unwrap();
+        let map = self.processes.lock().unwrap_or_else(|e| e.into_inner());
         map.get(task_id).map(|p| p.root_pid)
     }
 
@@ -78,7 +78,7 @@ impl ProcessTreeManager {
     /// External processes running in other workspaces/terminals are 100% untouched.
     pub fn terminate_task_tree(&self, task_id: &str) -> bool {
         let tracked = {
-            let mut map = self.processes.lock().unwrap();
+            let mut map = self.processes.lock().unwrap_or_else(|e| e.into_inner());
             map.remove(task_id)
         };
 
@@ -95,7 +95,7 @@ impl ProcessTreeManager {
     /// Only processes registered in this manager will be terminated.
     pub fn terminate_all_flymd_tasks(&self) {
         let procs = {
-            let mut map = self.processes.lock().unwrap();
+            let mut map = self.processes.lock().unwrap_or_else(|e| e.into_inner());
             let all: Vec<TrackedProcess> = map.values().cloned().collect();
             map.clear();
             all

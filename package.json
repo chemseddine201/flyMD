@@ -1,7 +1,7 @@
 {
   "name": "fly-md",
-  "version": "1.0.0",
-  "description": "On-the-fly cross-platform Markdown viewer, editor, and Ollama translator with a floating circular drop widget",
+  "version": "2.0.0",
+  "description": "Ultra-lightweight Tauri v2 Markdown supervisor, Multi-Agent Studio, Evidence-Graded Debate Engine & Epistemic Cache Handoff Hub",
   "main": "dist-electron/main/index.js",
   "author": "FlyMD Team",
   "license": "MIT",
