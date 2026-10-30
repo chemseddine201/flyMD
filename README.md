@@ -8,7 +8,7 @@
 
 > **Ultra-lightweight Tauri v2 + Rust Markdown Supervisor, Native Multi-Agent Studio, Evidence-Graded Debate Engine & Role-Aware Epistemic Cache Handoff Hub.**
 
-[![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-purple.svg)](CHANGELOG.md)
+[![Version: 2.0.1](https://img.shields.io/badge/Version-2.0.1-purple.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Framework: Tauri v2](https://img.shields.io/badge/Runtime-Tauri_v2_(Rust)-orange.svg)](https://tauri.app)
 [![Multi-Agent Studio](https://img.shields.io/badge/Multi--Agent-Studio_%26_Debate_Hub-6366f1.svg)](#-whats-new-in-flymd-v200)

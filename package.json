@@ -1,6 +1,6 @@
 {
   "name": "fly-md",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Ultra-lightweight Tauri v2 Markdown supervisor, Multi-Agent Studio, Evidence-Graded Debate Engine & Epistemic Cache Handoff Hub",
   "main": "dist-electron/main/index.js",
   "author": "FlyMD Team",

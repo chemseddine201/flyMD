@@ -11,7 +11,10 @@ node_modules
 dist
 dist-electron
 dist-ssr
-release
+release/*
+!release/RELEASE_NOTES.md
+!release/SHA256SUMS.txt
+!release/*.sha256
 *.local
 
 # Editor directories and files

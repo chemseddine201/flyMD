@@ -2,6 +2,26 @@
 
 All notable changes to **FlyMD** are documented in this file.
 
+## [2.0.1] - 2026-10-30
+
+### Fixed
+- **HTML Canvas Parser Tag Boundary (`runner.rs`)**: Resolved regex tag boundary in `synthesize_logic_script_for_html` ensuring only genuine `<canvas ... id="...">` tags are bound to 2D rendering contexts, preventing non-canvas tags like `<header id="appHeader">` from producing `canvas_appHeader.getContext('2d')` runtime crashes.
+- **Companion Deliverable 0-Byte Overwrite Protection (`runner.rs`)**: Hardened `ensure_companion_assets_exist` so existing code files (`app.js`, `styles.css`) on disk are preserved, never overwritten with generic stubs, and never falsely claimed as created by the current task.
+- **CLI Non-Buffering NDJSON Streaming (`runner.rs`)**: Configured `agy.exe` with `--output-format stream-json` and a live NDJSON line reader, ensuring thought traces and live streaming tokens reach the UI immediately without buffering.
+- **Settlement Detector Code-File Guard (`runner.rs`)**: Upgraded settlement detector conditions to require `code_files_touched > 0` before settling code tasks (`build` and `fix-bugs`), preventing tasks from terminating prematurely on markdown reports alone before files are written.
+- **Cryptographic Workspace Pre/Post Verification (`runner.rs`)**: Added SHA-256 workspace digest verification before and after `fix-bugs` tasks, guaranteeing genuine file alterations on disk.
+
+### Added
+- **Active Execution Guards (`AgentChatTimeline`)**: Automatically disables `Paste External Output`, `Relay ->`, and the bottom Chat Composer while an agent task or deliberation round is in progress, preventing split-brain states and accidental race conditions.
+- **Custom User-Defined Pipeline Actions Library (`CustomPipelineActionsModal`)**: Full modal dialog enabling users to create, customize, and persist reusable pipeline actions (e.g., `report`, `benchmark`, `security-audit`, `deploy`) with custom icons, epistemic policies (`Fast Inherit`, `Delta Verify`, `Blind Independent Audit`, `Ground Truth Rebuild`), and system prompt overrides.
+- **Extendable & Incremental Workflow Execution (`AgentStudioSidebar` & `AgentsControlCenter`)**:
+  - Completed pipeline steps are locked with an emerald `✓ DONE` badge and protected against unintended changes.
+  - Interactive `StickyNote` popover to attach bug fixes, error logs, and user directives directly to individual steps.
+  - Smart "Run Pending Steps" begins execution from the first pending step without resetting already-finished work.
+  - Non-destructive step appending allows adding new steps to extend the pipeline dynamically.
+
+---
+
 ## [2.0.0] - 2026-10-30
 
 ### Added
