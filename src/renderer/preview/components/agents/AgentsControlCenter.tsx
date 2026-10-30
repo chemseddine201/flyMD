@@ -662,6 +662,60 @@ ${projDesc}
     });
   };
 
+  // Compresses upstream prose into high-signal checklists & directives while keeping the original contract intact,
+  // and withholds subjective upstream prose on adversarial verification steps (`review` / `fix-bugs`) to prevent confirmation bias.
+  const composeEpistemicStepPayload = (
+    originalContract: string,
+    upstreamOutput: string | undefined,
+    targetIntent: AgentTaskIntent,
+    isFirstStep: boolean,
+    upstreamAgentId?: string
+  ): string => {
+    const cleanContract = (originalContract || '').trim();
+    const cleanUpstream = (upstreamOutput || '').trim();
+
+    if (isFirstStep || !cleanUpstream) {
+      return cleanContract || cleanUpstream;
+    }
+
+    // Blind Audit / Ground-Truth Rebuild: withhold upstream subjective prose summary so Critic/Reviewer
+    // inspects raw disk files against the Immutable Original Contract and concludes its own résumé first.
+    if (targetIntent === 'review' || targetIntent === 'fix-bugs') {
+      return cleanContract || cleanUpstream;
+    }
+
+    // Collaborative Inheritance (`build`, `write-tests`, `explain`, `refine-plan`):
+    // Extract compact actionable delta (checklists, @Role directives, key headings/invariants) instead of re-sending full essays.
+    const highSignalLines = cleanUpstream
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(
+        (l) =>
+          l.startsWith('- [ ]') ||
+          l.startsWith('* [ ]') ||
+          l.startsWith('@') ||
+          l.startsWith('- @') ||
+          l.startsWith('### ') ||
+          l.includes('Invariant') ||
+          l.includes('Contract') ||
+          l.includes('<independent_resume>')
+      )
+      .slice(0, 28);
+
+    const compactDelta =
+      highSignalLines.length >= 3
+        ? highSignalLines.join('\n')
+        : cleanUpstream.slice(0, 1800);
+
+    if (!cleanContract) {
+      return compactDelta;
+    }
+
+    return `${cleanContract}\n\n---\n\n## Upstream Compact Delta (from @${
+      upstreamAgentId || 'previous-agent'
+    })\n${compactDelta}`;
+  };
+
   const handleRunPipelineInStudio = async (pipeline: AgentPipelinePreset) => {
     if (!pipeline.steps.length || runningPipelineId) return;
 
@@ -703,12 +757,13 @@ ${projDesc}
           previousTask ? ` relayed from @${previousTask.targetAgentId}` : ''
         }${stepContextTag}`;
 
-        const stepMarkdownContent = isFirstStep
-          ? initialDocContent
-          : previousTask?.responseMarkdown &&
-            previousTask.responseMarkdown.trim().length > 150
-          ? previousTask.responseMarkdown
-          : initialDocContent || previousTask?.responseMarkdown || '';
+        const stepMarkdownContent = composeEpistemicStepPayload(
+          initialDocContent,
+          previousTask?.responseMarkdown,
+          currentStep.intent,
+          isFirstStep,
+          previousTask?.targetAgentId
+        );
 
         const dispatchedTask = await handleSendInAppChatTask(promptText, {
           agentId: currentStep.agentId,
@@ -809,6 +864,15 @@ ${projDesc}
   ) => {
     setSelectedAgentId(nextAgentId);
     setSelectedIntent(nextIntent);
+    const originalContract =
+      assignedReportDoc?.reportMarkdown || activeTab?.content || '';
+    const relayPayload = composeEpistemicStepPayload(
+      originalContract,
+      task.responseMarkdown,
+      nextIntent,
+      false,
+      task.targetAgentId
+    );
     await handleSendInAppChatTask(
       `Relayed from @${task.targetAgentId} (${task.intent}) → Continue with ${nextIntent.toUpperCase()}`,
       {
@@ -816,7 +880,7 @@ ${projDesc}
         intent: nextIntent,
         filePath: task.outputReportPath || task.filePath,
         fileName: task.fileName,
-        markdownContent: task.responseMarkdown || activeTab?.content || '',
+        markdownContent: relayPayload,
         sourceAgentId: task.targetAgentId,
       }
     );

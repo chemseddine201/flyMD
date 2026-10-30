@@ -141,16 +141,26 @@ pub fn append_project_memory(workspace_path: &str, entry_markdown: &str) {
     fs::write(&mem_file, current).ok();
 }
 
+/// Safely returns up to the last `max_bytes` of a UTF-8 string on a valid character boundary.
+pub fn safe_tail_utf8(content: &str, max_bytes: usize) -> String {
+    if content.len() <= max_bytes {
+        return content.to_string();
+    }
+    let min_start = content.len() - max_bytes;
+    let start_idx = content
+        .char_indices()
+        .map(|(idx, _)| idx)
+        .find(|&idx| idx >= min_start)
+        .unwrap_or(content.len());
+    content[start_idx..].to_string()
+}
+
 /// Reads recent history from `.flymd/MEMORY.md` for cross-agent context synchronization.
 pub fn read_project_memory(workspace_path: &str) -> String {
     let mem_file = Path::new(workspace_path).join(".flymd").join("MEMORY.md");
     if mem_file.exists() {
         let content = fs::read_to_string(&mem_file).unwrap_or_default();
-        if content.len() > 4000 {
-            content[content.len() - 4000..].to_string()
-        } else {
-            content
-        }
+        safe_tail_utf8(&content, 4000)
     } else {
         String::new()
     }
@@ -214,6 +224,20 @@ pub fn clear_workspace_memory_and_cache(
         }
     }
 
+    // 3b. Clean cross-model cognitive cache
+    let cache_dir = flymd_dir.join("cache");
+    if cache_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&cache_dir) {
+            let count = entries
+                .flatten()
+                .filter(|e| fs::remove_file(e.path()).is_ok())
+                .count();
+            if count > 0 {
+                cleared_items.push(format!("{} cognitive cache packet(s)", count));
+            }
+        }
+    }
+
     // 4. Optionally clear MEMORY.md
     if clear_memory {
         let mem_file = flymd_dir.join("MEMORY.md");
@@ -231,5 +255,19 @@ pub fn clear_workspace_memory_and_cache(
             "Successfully cleared: {}",
             cleared_items.join(", ")
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_safe_tail_utf8_with_multibyte_arabic() {
+        let arabic_block = "مواصفات المحاكاة الفيزيائية التفاعلية — التحقق من سلامة الذاكرة المشتركة\n".repeat(120);
+        assert!(arabic_block.len() > 6000);
+        let sliced = safe_tail_utf8(&arabic_block, 4000);
+        assert!(sliced.len() <= 4000);
+        assert!(!sliced.is_empty());
     }
 }

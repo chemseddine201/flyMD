@@ -840,6 +840,10 @@ pub fn synthesize_intelligent_agent_markdown(
             }
         }
         "review" => {
+            chunks.push(format!(
+                "\n<independent_resume>\nIndependent audit of `{}` raw workspace assets completed against specification invariants before evaluating upstream claims.\n</independent_resume>\n",
+                file_name
+            ));
             chunks.push(
                 "\n### 1. Architecture & Code Quality Audit\n\
                  | Check Category | Status | Findings & Recommendation |\n\
@@ -1046,10 +1050,42 @@ pub fn spawn_agent_execution(
                 ));
             });
 
+            let exec_path_ref = Path::new(&exec_dir);
+            let cached_pkt = crate::projects::cache::load_cognitive_packet(exec_path_ref);
+            let epistemic_dec = crate::discussion::epistemic::evaluate_pipeline_epistemic_policy(
+                &record.intent,
+                record.source_agent_id.is_none(),
+                exec_path_ref,
+                cached_pkt.as_ref(),
+                false,
+            );
+            let warm_cli_continue =
+                crate::discussion::epistemic::can_reuse_cli_session_continuously(
+                    &epistemic_dec,
+                    &agent_id,
+                    record.pipeline_id.as_deref(),
+                    cached_pkt.as_ref(),
+                    now_ms(),
+                );
+
+            let epistemic_cli_clause = match epistemic_dec.mode {
+                crate::discussion::epistemic::EpistemicMode::DirectInherit => {
+                    "FAST-PATH COGNITIVE CACHE ACTIVE: The handoff package contains cryptographically verified SHA-256 file hashes, DOM IDs, and exported symbols. Do NOT waste turns running directory scans or re-reading untouched verified files; proceed directly to writing/updating target deliverables."
+                }
+                crate::discussion::epistemic::EpistemicMode::BlindIndependentAudit
+                | crate::discussion::epistemic::EpistemicMode::GroundTruthRebuild => {
+                    "BLIND INDEPENDENT AUDIT ACTIVE: Inspect raw workspace files on disk first, output an <independent_resume>...</independent_resume> summarizing actual on-disk code behavior before evaluating claims, and report or fix any missing logic."
+                }
+                _ => {
+                    "Use the verified SHA-256 Workspace Digest in the handoff package to avoid redundant scans of unchanged files."
+                }
+            };
+
             let prompt_arg = format!(
-                "Execute the task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". Create, write, or modify all required code/HTML/CSS/JS/Markdown files inside \"{}\". CRITICAL REQUIREMENT: For any interactive web application, UI, simulation, or tool, you MUST write the FULL, WORKING, UNTRUNCATED CODE files directly to disk in the workspace: index.html, styles.css, AND app.js. If index.html references app.js via <script src=\"app.js\">, you MUST create and write app.js completely to disk with all interactivity, calculations, and event handlers. Do NOT leave app.js missing or empty, and do NOT stop after writing only HTML or CSS. Execute all file writes immediately without asking for user confirmation.",
+                "Execute the task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". {} Create, write, or modify all required code/HTML/CSS/JS/Markdown files inside \"{}\". CRITICAL REQUIREMENT: For any interactive web application, UI, simulation, or tool, you MUST write the FULL, WORKING, UNTRUNCATED CODE files directly to disk in the workspace: index.html, styles.css, AND app.js. If index.html references app.js via <script src=\"app.js\">, you MUST create and write app.js completely to disk with all interactivity, calculations, and event handlers. Do NOT leave app.js missing or empty, and do NOT stop after writing only HTML or CSS. Execute all file writes immediately without asking for user confirmation.",
                 handoff_file.to_string_lossy(),
                 exec_dir,
+                epistemic_cli_clause,
                 exec_dir
             );
 
@@ -1070,6 +1106,17 @@ pub fn spawn_agent_execution(
                         "--mode",
                         "accept-edits",
                     ]);
+                } else if agent_id == "claude-code" && warm_cli_continue {
+                    c.args([
+                        "/C",
+                        &bin,
+                        "-c",
+                        "-p",
+                        &prompt_arg,
+                        "--dangerously-skip-permissions",
+                        "--add-dir",
+                        &exec_dir,
+                    ]);
                 } else {
                     c.args([
                         "/C",
@@ -1086,6 +1133,9 @@ pub fn spawn_agent_execution(
                 match agent_id.as_str() {
                     "claude-code" => {
                         let mut c = Command::new(&bin);
+                        if warm_cli_continue {
+                            c.arg("-c");
+                        }
                         c.args([
                             "-p",
                             &prompt_arg,
@@ -1391,11 +1441,61 @@ pub fn spawn_agent_execution(
                     }
                 }
 
-                let _ = child.wait();
+                let exit_status = child.wait().ok();
                 process_manager.unregister_task_process(&task_id);
 
                 let task_started_at = record.started_at.unwrap_or(record.created_at);
                 let mut created_files = scan_workspace_modified_files(&exec_dir, task_started_at);
+
+                // Safe Stateless Retry: if `-c` (`warm_cli_continue`) exited non-zero without output, retry stateless `-p`
+                let exited_err = exit_status.map(|s| !s.success()).unwrap_or(true);
+                if warm_cli_continue
+                    && exited_err
+                    && collected_md.trim().is_empty()
+                    && created_files.is_empty()
+                    && !cancel_flag.load(Ordering::Relaxed)
+                {
+                    emit_log("[CLI Cache Fallback] Warm session unavailable; retrying stateless `-p` with cognitive cache envelope...".to_string());
+                    let mut fallback_cmd = if bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat") {
+                        let mut c = Command::new("cmd.exe");
+                        c.args([
+                            "/C",
+                            &bin,
+                            "-p",
+                            &prompt_arg,
+                            "--dangerously-skip-permissions",
+                            "--add-dir",
+                            &exec_dir,
+                        ]);
+                        c
+                    } else {
+                        let mut c = Command::new(&bin);
+                        c.args([
+                            "-p",
+                            &prompt_arg,
+                            "--dangerously-skip-permissions",
+                            "--add-dir",
+                            &exec_dir,
+                        ]);
+                        c
+                    };
+                    #[cfg(target_os = "windows")]
+                    {
+                        use std::os::windows::process::CommandExt;
+                        fallback_cmd.creation_flags(0x08000000);
+                    }
+                    fallback_cmd
+                        .env("PYTHONIOENCODING", "utf-8")
+                        .env("PYTHONUTF8", "1")
+                        .current_dir(&exec_dir);
+                    if let Ok(out) = fallback_cmd.output() {
+                        let stdout_txt = String::from_utf8_lossy(&out.stdout);
+                        if !stdout_txt.trim().is_empty() {
+                            collected_md.push_str(&stdout_txt);
+                        }
+                        created_files = scan_workspace_modified_files(&exec_dir, task_started_at);
+                    }
+                }
                 for cf in extract_and_write_code_blocks(&exec_dir, &record.file_name, &collected_md) {
                     if !created_files.contains(&cf) {
                         created_files.push(cf);
@@ -1426,26 +1526,37 @@ pub fn spawn_agent_execution(
                 }
 
                 if !collected_md.trim().is_empty() || !created_files.is_empty() {
-                    let report_body = if !collected_md.trim().is_empty() {
+                    let raw_report_body = if !collected_md.trim().is_empty() {
                         collected_md.clone()
                     } else {
                         format!(
-                            "## {} — Execution Summary (`{}`)\n\n                             Agent execution completed successfully in `{}`.\n\n                             ### Workspace Files Touched & Created:\n{}\n",
+                            "## {} — Execution Summary (`{}`)\n\nAgent execution completed successfully in `{}`.\n\n### Workspace Files Touched & Created:\n{}\n",
                             agent_name,
                             record.file_name,
                             exec_dir,
                             created_files.iter().map(|f| format!("- `{}`", f)).collect::<Vec<_>>().join("\n")
                         )
                     };
-                    fs::write(&report_file, &report_body).ok();
+                    let clean_report_body = persist_task_cognitive_handoff(
+                        &exec_dir,
+                        &agent_id,
+                        &record.intent,
+                        record.pipeline_id.as_deref(),
+                        &source_markdown,
+                        &raw_report_body,
+                        Some(&agent_id),
+                        &created_files,
+                    );
+                    fs::write(&report_file, &clean_report_body).ok();
                     let duration_ms = (now_ms() - task_started_at).max(0) as u64;
                     update_task(&|t| {
+                        t.response_markdown = Some(clean_report_body.clone());
                         for tool in t.tool_actions.iter_mut() {
                             tool.status = "done".to_string();
                             if tool.kind == "cli" && tool.duration_ms.is_none() {
                                 tool.duration_ms = Some(duration_ms);
-                                if !collected_md.trim().is_empty() {
-                                    tool.output = Some(collected_md.lines().take(20).collect::<Vec<_>>().join("\n"));
+                                if !clean_report_body.trim().is_empty() {
+                                    tool.output = Some(clean_report_body.lines().take(20).collect::<Vec<_>>().join("\n"));
                                 }
                             }
                         }
@@ -1548,30 +1659,42 @@ pub fn spawn_agent_execution(
         } else {
             ensure_companion_assets_exist(&exec_dir, &mut created_files, &accumulated_md);
         }
-        for cf in created_files {
+        for cf in &created_files {
             emit_log(format!("[FlyMD Workspace Sync] Created file: `{}`", cf));
+            let cf_clone = cf.clone();
             update_task(&|t| {
                 t.tool_actions.push(AgentToolAction::new(
                     format!("tool-code-{}", now_ms()),
                     "write".to_string(),
-                    format!("Created Workspace File `{}`", cf),
-                    Some(format!("{}\\{}", exec_dir, cf)),
+                    format!("Created Workspace File `{}`", cf_clone),
+                    Some(format!("{}\\{}", exec_dir, cf_clone)),
                     "done".to_string(),
                     now_ms(),
                 ));
             });
         }
 
-        fs::write(&report_file, &accumulated_md).ok();
+        let clean_accumulated = persist_task_cognitive_handoff(
+            &exec_dir,
+            &agent_id,
+            &record.intent,
+            record.pipeline_id.as_deref(),
+            &source_markdown,
+            &accumulated_md,
+            None,
+            &created_files,
+        );
+        fs::write(&report_file, &clean_accumulated).ok();
 
         update_task(&|t| {
+            t.response_markdown = Some(clean_accumulated.clone());
             for tool in t.tool_actions.iter_mut() {
                 tool.status = "done".to_string();
             }
             t.tool_actions.push(AgentToolAction::new(
                 format!("tool-verify-{}", now_ms()),
                 "verify".to_string(),
-                "Verified Markdown Report & Updated Shared Memory".to_string(),
+                "Verified Markdown Report & Updated Cognitive Cache".to_string(),
                 Some(report_file.to_string_lossy().to_string()),
                 "done".to_string(),
                 now_ms(),
@@ -1586,6 +1709,67 @@ pub fn spawn_agent_execution(
 
         finalize_task(&store, &app, &task_id, "completed", None);
     });
+}
+
+/// Persists SHA-256 workspace digests, `<independent_resume>`, invariants, and `@Role` peer directives
+/// into `.flymd/cache/cognitive_state.json` and appends a compact verified entry to `.flymd/MEMORY.md`.
+fn persist_task_cognitive_handoff(
+    exec_dir: &str,
+    agent_id: &str,
+    intent: &str,
+    pipeline_id: Option<&str>,
+    original_contract: &str,
+    raw_output_md: &str,
+    used_cli_agent_id: Option<&str>,
+    touched_files: &[String],
+) -> String {
+    let ws_path = Path::new(exec_dir);
+    let parsed = crate::projects::cache::parse_handoff_blocks_from_markdown(
+        raw_output_md,
+        agent_id,
+        intent,
+    );
+    let step_num = if original_contract.contains("## Upstream Compact Delta") {
+        2
+    } else {
+        1
+    };
+    let pkt = crate::projects::cache::update_workspace_cognitive_cache(
+        ws_path,
+        agent_id,
+        intent,
+        pipeline_id,
+        step_num,
+        Some(original_contract),
+        raw_output_md,
+        used_cli_agent_id,
+    );
+
+    let mut mem_entry = format!(
+        "### [{}] Completed `{}` via `{}` (Verified Files: {})\n",
+        now_ms(),
+        intent,
+        agent_id,
+        pkt.workspace_digest.len()
+    );
+    if !touched_files.is_empty() {
+        mem_entry.push_str(&format!(
+            "- **Touched Files**: {}\n",
+            touched_files
+                .iter()
+                .take(8)
+                .map(|f| format!("`{}`", f))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if let Some(ref resume) = parsed.independent_resume {
+        let short_res: String = resume.lines().take(3).collect::<Vec<_>>().join(" ");
+        mem_entry.push_str(&format!("- **Independent Audit Conclusion**: {}\n", short_res));
+    }
+    super::checkpoint::append_project_memory(exec_dir, &mem_entry);
+
+    parsed.clean_markdown
 }
 
 pub fn finalize_task(
@@ -1709,6 +1893,39 @@ console.log("Interactive Physics Ready");
 
         let styles_css = temp_dir.join("styles.css");
         assert!(styles_css.exists());
+
+        fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_persist_task_cognitive_handoff_updates_cache_and_strips_envelope() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_test_handoff_cache_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        fs::write(
+            temp_dir.join("index.html"),
+            "<!DOCTYPE html><html><body><canvas id=\"mainCanvas\"></canvas></body></html>",
+        )
+        .unwrap();
+
+        let raw_md = "## Review Report\n<independent_resume>Verified `#mainCanvas` exists on disk.</independent_resume>\n- @Implementer: Keep 60fps loop pure.\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"60fps canvas loop\"],\"peerMessages\":[{\"toRole\":\"Implementer\",\"kind\":\"directive\",\"message\":\"Bind to #mainCanvas\"}]}</handoff_state>";
+
+        let cleaned = persist_task_cognitive_handoff(
+            temp_dir.to_str().unwrap(),
+            "claude-code",
+            "review",
+            Some("pipe-42"),
+            "# Original Spec",
+            raw_md,
+            Some("claude-code"),
+            &["index.html".to_string()],
+        );
+
+        assert!(!cleaned.contains("<handoff_state>"));
+        let pkt = crate::projects::cache::load_cognitive_packet(&temp_dir).unwrap();
+        assert!(pkt.workspace_digest.contains_key("index.html"));
+        assert_eq!(pkt.last_cli_agent_id.as_deref(), Some("claude-code"));
+        assert!(!pkt.independent_resumes.is_empty());
+        assert!(!pkt.peer_messages.is_empty());
 
         fs::remove_dir_all(&temp_dir).ok();
     }

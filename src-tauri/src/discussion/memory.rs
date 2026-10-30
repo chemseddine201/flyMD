@@ -1,10 +1,21 @@
 //! Memory and Context Manager: decision ledger, disagreement registry, and budget-constrained context assembly.
 
+use super::epistemic::{
+    build_epistemic_prompt_section, format_handoff_state_emission_protocol, EpistemicDecision,
+};
+use super::runner::ChatMessageFrame;
 use super::storage::{atomic_write_json, read_transcript_with_recovery};
-use super::types::{now_ms, DecisionItem, DisagreementItem, DisagreementStatus, DiscussionMessage};
+use super::types::{
+    now_ms, DecisionItem, DisagreementItem, DisagreementStatus, DiscussionMessage,
+    DiscussionMessageKind, DiscussionParticipant,
+};
+use crate::projects::cache::{
+    filter_peer_messages_for_agent, format_compact_digest_markdown, scan_workspace_digest,
+    CognitiveHandoffPacket, PeerDirectMessage,
+};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct MemoryManager {
     session_dir: PathBuf,
@@ -230,6 +241,343 @@ impl MemoryManager {
 
         Ok((context_buffer, truncated))
     }
+
+    /// Loads persisted direct `@Role` / `@agent` peer messages for this discussion session.
+    pub fn load_peer_messages(&self) -> Vec<PeerDirectMessage> {
+        let path = self.session_dir.join("peer_bus.json");
+        if path.exists() {
+            if let Ok(bytes) = fs::read(&path) {
+                if let Ok(items) = serde_json::from_slice::<Vec<PeerDirectMessage>>(&bytes) {
+                    return items;
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    /// Appends new direct peer messages to `peer_bus.json`.
+    pub fn append_peer_messages(&self, new_msgs: &[PeerDirectMessage]) -> Result<(), String> {
+        if new_msgs.is_empty() {
+            return Ok(());
+        }
+        let mut list = self.load_peer_messages();
+        for m in new_msgs {
+            if !list
+                .iter()
+                .any(|x| x.from_agent == m.from_agent && x.to_target == m.to_target && x.message == m.message)
+            {
+                list.push(m.clone());
+            }
+        }
+        let path = self.session_dir.join("peer_bus.json");
+        atomic_write_json(&path, &list)
+    }
+
+    /// Builds (and pins on disk) the immutable Token-0 Shared System Prefix.
+    /// Guaranteed 100% byte-identical across ALL participants and ALL rounds of the session
+    /// so Ollama, DeepSeek, OpenAI, Kimi, and Anthropic hit hardware prefix KV caches.
+    pub fn get_or_init_shared_system_prefix(
+        &self,
+        topic: &str,
+        user_idea: &str,
+        workspace_path: &Path,
+    ) -> String {
+        let prefix_file = self.session_dir.join("shared_prefix.md");
+        if prefix_file.exists() {
+            if let Ok(existing) = fs::read_to_string(&prefix_file) {
+                if !existing.trim().is_empty() {
+                    return existing;
+                }
+            }
+        }
+
+        let mut prefix = String::new();
+        prefix.push_str(
+            "# FlyMD Multi-Agent Deliberation Protocol (Immutable Shared Prefix)\n\
+             - Ground every architectural, security, and implementation claim in concrete technical evidence.\n\
+             - Never fabricate file contents, APIs, or runtime capabilities.\n\
+             - Surface genuine engineering trade-offs rather than conforming prematurely.\n\
+             - Communicate directly with peer roles (`@Architect`, `@Implementer`, `@Critic`, `@Auditor`) to pass verified contracts and resolve disputes without redundant file re-reading.\n\n",
+        );
+        prefix.push_str(&format!("## Discussion Topic\n{}\n\n", topic.trim()));
+        prefix.push_str(&format!(
+            "## Original User Proposal & Core Constraints\n{}\n\n",
+            user_idea.trim()
+        ));
+
+        let initial_digest = scan_workspace_digest(workspace_path, 36);
+        if !initial_digest.is_empty() {
+            let pkt = CognitiveHandoffPacket {
+                producer_agent: "workspace-indexer".to_string(),
+                producer_role: "Baseline".to_string(),
+                workspace_digest: initial_digest,
+                ..Default::default()
+            };
+            prefix.push_str(&format_compact_digest_markdown(&pkt, false));
+        }
+
+        let _ = fs::write(&prefix_file, &prefix);
+        prefix
+    }
+
+    /// Compresses a completed round into an immutable ~200–350 token ledger block (`round_{r}_ledger.md`).
+    /// Once written, it never mutates in later rounds, preserving multi-round prefix KV cache alignment.
+    pub fn get_or_freeze_round_digest(&self, round: u32) -> Result<Option<String>, String> {
+        let ledger_file = self.session_dir.join(format!("round_{}_ledger.md", round));
+        if ledger_file.exists() {
+            if let Ok(cached) = fs::read_to_string(&ledger_file) {
+                if !cached.trim().is_empty() {
+                    return Ok(Some(cached));
+                }
+            }
+        }
+
+        let (transcript, _) = read_transcript_with_recovery(&self.session_dir)?;
+        let round_msgs: Vec<&DiscussionMessage> = transcript
+            .iter()
+            .filter(|m| m.round_number == round)
+            .collect();
+        if round_msgs.is_empty() {
+            return Ok(None);
+        }
+
+        let mut digest = format!("## Immutable Round {} Deliberation Ledger\n\n", round);
+        for m in round_msgs {
+            if m.message_kind == DiscussionMessageKind::UserIntervention {
+                digest.push_str(&format!(
+                    "- **[Human Facilitator Steer]**: {}\n",
+                    m.content.trim()
+                ));
+                continue;
+            }
+
+            digest.push_str(&format!(
+                "### `@{} ({})`\n",
+                m.author_agent_id, m.author_role
+            ));
+
+            // Keep high-signal bullets, headings, `@Peer` mentions, and `<independent_resume>` lines (max 10 lines)
+            let mut selected_lines: Vec<&str> = m
+                .content
+                .lines()
+                .map(str::trim)
+                .filter(|l| {
+                    !l.is_empty()
+                        && (l.starts_with('-')
+                            || l.starts_with('*')
+                            || l.starts_with("1.")
+                            || l.starts_with("2.")
+                            || l.starts_with('@')
+                            || l.contains("Invariant")
+                            || l.contains("Dispute")
+                            || l.contains("Consensus")
+                            || l.contains("Concession")
+                            || l.contains("<independent_resume>"))
+                })
+                .take(10)
+                .collect();
+
+            if selected_lines.is_empty() {
+                selected_lines = m
+                    .content
+                    .lines()
+                    .map(str::trim)
+                    .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                    .take(6)
+                    .collect();
+            }
+
+            for line in selected_lines {
+                let bounded: String = line.chars().take(220).collect();
+                digest.push_str(&format!("{}\n", bounded));
+            }
+            digest.push('\n');
+        }
+
+        let _ = fs::write(&ledger_file, &digest);
+        Ok(Some(digest))
+    }
+
+    /// Assembles Prefix-Pinned `ChatMessageFrame`s:
+    /// - Frame 0 (`system`, anchored): 100% shared immutable protocol + spec + workspace SHA-256 index
+    /// - Frames `1..round-1` (`user`, anchored): append-only frozen round ledgers
+    /// - Final Frame (`user`, dynamic): active role persona, `@Role` peer inbox, epistemic gate & turn directive
+    pub fn assemble_prefix_pinned_frames(
+        &self,
+        participant: &DiscussionParticipant,
+        current_round: u32,
+        topic: &str,
+        user_idea: &str,
+        workspace_path: &Path,
+        epistemic_decision: &EpistemicDecision,
+        cognitive_packet: Option<&CognitiveHandoffPacket>,
+        action_name: Option<&str>,
+        action_query: Option<&str>,
+    ) -> Result<(Vec<ChatMessageFrame>, bool), String> {
+        let mut frames = Vec::new();
+        let mut truncated = false;
+
+        // 1. Frame 0: Immutable Shared System Prefix (Token 0 KV-cache anchor)
+        let shared_prefix =
+            self.get_or_init_shared_system_prefix(topic, user_idea, workspace_path);
+        frames.push(ChatMessageFrame {
+            role: "system".to_string(),
+            content: shared_prefix,
+            cache_anchor: true,
+        });
+
+        // 2. Frames 1..current_round-1: Append-Only Frozen Round Ledgers
+        let mut total_tokens = Self::estimate_tokens(&frames[0].content);
+        let budget_cap = (participant.context_budget_tokens * 85) / 100;
+
+        for r in 1..current_round {
+            if let Some(ledger) = self.get_or_freeze_round_digest(r)? {
+                let ledger_tokens = Self::estimate_tokens(&ledger);
+                if total_tokens + ledger_tokens <= budget_cap {
+                    total_tokens += ledger_tokens;
+                    frames.push(ChatMessageFrame {
+                        role: "user".to_string(),
+                        content: ledger,
+                        cache_anchor: r + 1 == current_round,
+                    });
+                } else {
+                    truncated = true;
+                }
+            }
+        }
+
+        // 3. Final Frame: Dynamic Agent Role, Peer Inbox, Ledger Delta & Epistemic Tail
+        let mut tail = String::new();
+        tail.push_str(&format!(
+            "## Active Role Assignment\n\
+             You are **{}** (Agent ID: `{}`, Role: `{}`).\n\
+             {}\n\n",
+            participant.display_name,
+            participant.agent_id,
+            participant.role.as_str(),
+            participant.role_description.trim()
+        ));
+
+        // Direct Peer Inbox (`@Role` / `@agent_id`)
+        let all_peer_msgs = self.load_peer_messages();
+        let inbox = filter_peer_messages_for_agent(
+            &all_peer_msgs,
+            &participant.agent_id,
+            participant.role.as_str(),
+        );
+        if !inbox.is_empty() {
+            tail.push_str("### Direct Peer Messages Addressed to You\n");
+            for pm in inbox.iter().rev().take(6).rev() {
+                tail.push_str(&format!(
+                    "- From **{} ({})** [{}]: {}\n",
+                    pm.from_agent, pm.from_role, pm.kind, pm.message
+                ));
+            }
+            tail.push('\n');
+        }
+
+        // Current Round Human Facilitator Guidance (if injected before this turn)
+        let (transcript, _) = read_transcript_with_recovery(&self.session_dir)?;
+        let round_guidance: Vec<&DiscussionMessage> = transcript
+            .iter()
+            .filter(|m| {
+                m.round_number == current_round
+                    && m.message_kind == DiscussionMessageKind::UserIntervention
+            })
+            .collect();
+        if !round_guidance.is_empty() {
+            tail.push_str("### Human Facilitator Guidance for This Round\n");
+            for g in round_guidance {
+                tail.push_str(&format!("- {}\n", g.content.trim()));
+            }
+            tail.push('\n');
+        }
+
+        // Compact Settled Decisions & Active Disputes
+        let decisions = self.load_decisions();
+        if !decisions.is_empty() {
+            tail.push_str("### Locked Consensus Decisions (Do Not Re-Litigate Unless Broken)\n");
+            for d in decisions.iter().take(8) {
+                tail.push_str(&format!(
+                    "- **{}**: {} *(Round {})*\n",
+                    d.topic, d.decision, d.agreed_round
+                ));
+            }
+            tail.push('\n');
+        }
+
+        let disagreements = self.load_disagreements();
+        let active_disputes: Vec<&DisagreementItem> = disagreements
+            .iter()
+            .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
+            .collect();
+        if !active_disputes.is_empty() {
+            tail.push_str("### Active Unresolved Disputes Requiring Resolution\n");
+            for d in active_disputes.iter().take(6) {
+                tail.push_str(&format!("- **{}**:\n", d.topic));
+                for (ag, st) in &d.agent_stances {
+                    tail.push_str(&format!("  * `{}`: {}\n", ag, st.trim()));
+                }
+            }
+            tail.push('\n');
+        }
+
+        // Role-Aware Epistemic Section (Direct Cache Inheritance vs. Blind Raw-Slice Audit)
+        tail.push_str(&build_epistemic_prompt_section(
+            epistemic_decision,
+            workspace_path,
+            cognitive_packet,
+        ));
+
+        // Round Mission Directive
+        match current_round {
+            1 => {
+                tail.push_str(&format!(
+                    "### Round 1 Directive: Independent Position & Contract Mapping ({})\n\
+                     Analyze the proposal from your `{}` perspective. Establish core invariants, surface critical risks, and address targeted directives (`@Implementer`, `@Critic`, `@Architect`) to your peers.\n",
+                    participant.role.as_str(),
+                    participant.role.as_str()
+                ));
+            }
+            2 => {
+                tail.push_str(
+                    "### Round 2 Directive: Cross-Examination & Peer Inbox Response\n\
+                     Answer peer questions in your Direct Peer Inbox above, challenge unverified assumptions with concrete technical evidence, and narrow active disputes toward actionable engineering contracts.\n",
+                );
+            }
+            _ => {
+                tail.push_str(&format!(
+                    "### Round {} Directive: Rebuttal, Convergence & Final Contract\n\
+                     Resolve remaining disputes, concede points proven by technical evidence, and lock final implementation invariants.\n",
+                    current_round
+                ));
+            }
+        }
+
+        if let Some(q) = action_query.map(str::trim).filter(|s| !s.is_empty()) {
+            let label = action_name.unwrap_or("Focused Turn Directive");
+            tail.push_str(&format!("\n### {}\nSpecifically address: {}\n", label, q));
+        }
+
+        if participant.thinking_enabled {
+            tail.push_str(
+                "\n### Thinking Protocol\n\
+                 Reason step-by-step inside `<thinking>...</thinking>` before writing your structured Markdown response.\n",
+            );
+        }
+
+        tail.push_str(&format_handoff_state_emission_protocol(
+            epistemic_decision.requires_blind_self_conclusion(),
+        ));
+
+        frames.push(ChatMessageFrame {
+            role: "user".to_string(),
+            content: tail,
+            cache_anchor: false,
+        });
+
+        Ok((frames, truncated))
+    }
 }
 
 #[cfg(test)]
@@ -273,5 +621,141 @@ mod tests {
         assert_eq!(disputes[0].agent_stances.len(), 2);
 
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_prefix_pinned_frames_byte_identical_across_agents_and_rounds() {
+        use super::super::epistemic::evaluate_debate_epistemic_policy;
+        use super::super::storage::append_transcript_message;
+        use super::super::types::AgentRole;
+
+        let temp_ws = std::env::temp_dir().join(format!("flymd_kv_prefix_ws_{}", now_ms()));
+        let session_dir = temp_ws.join(".flymd").join("discussions").join("s1");
+        fs::create_dir_all(&session_dir).unwrap();
+        fs::write(
+            temp_ws.join("index.html"),
+            "<!DOCTYPE html><html><body><canvas id=\"labCanvas\"></canvas></body></html>",
+        )
+        .unwrap();
+
+        let mem = MemoryManager::new(session_dir.clone());
+        let p_arch = DiscussionParticipant {
+            agent_id: "arch-1".to_string(),
+            provider_id: "ollama".to_string(),
+            model_id: "qwen2.5:7b".to_string(),
+            display_name: "Lead Architect".to_string(),
+            role: AgentRole::Architect,
+            role_description: "System decomposition".to_string(),
+            avatar_color: "#38bdf8".to_string(),
+            assigned_skill_uris: vec![],
+            context_budget_tokens: 16000,
+            custom_action: None,
+            custom_query: None,
+            thinking_enabled: true,
+        };
+        let p_critic = DiscussionParticipant {
+            agent_id: "critic-1".to_string(),
+            provider_id: "ollama".to_string(),
+            model_id: "qwen2.5:7b".to_string(),
+            display_name: "Adversarial Critic".to_string(),
+            role: AgentRole::Critic,
+            role_description: "Stress testing".to_string(),
+            avatar_color: "#ef4444".to_string(),
+            assigned_skill_uris: vec![],
+            context_budget_tokens: 16000,
+            custom_action: None,
+            custom_query: None,
+            thinking_enabled: true,
+        };
+
+        let dec1 = evaluate_debate_epistemic_policy(&p_arch.role, 1, &temp_ws, None, &[]);
+        let dec2 = evaluate_debate_epistemic_policy(&p_critic.role, 1, &temp_ws, None, &[]);
+
+        let (frames_arch_r1, _) = mem
+            .assemble_prefix_pinned_frames(
+                &p_arch,
+                1,
+                "Physics Engine",
+                "Build 60fps simulation",
+                &temp_ws,
+                &dec1,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let (frames_critic_r1, _) = mem
+            .assemble_prefix_pinned_frames(
+                &p_critic,
+                1,
+                "Physics Engine",
+                "Build 60fps simulation",
+                &temp_ws,
+                &dec2,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+
+        // Token-0 System Frame MUST be 100% byte-identical between Architect and Critic!
+        assert_eq!(frames_arch_r1[0].content, frames_critic_r1[0].content);
+        assert!(frames_arch_r1[0].content.contains("#labCanvas"));
+        assert!(!frames_arch_r1[0].content.contains("Lead Architect"));
+        assert!(frames_arch_r1[1].content.contains("Lead Architect"));
+        assert!(frames_critic_r1[1].content.contains("Adversarial Critic"));
+
+        // Append Round 1 message and verify Round 2 keeps Frame 0 identical + appends immutable Frame 1
+        append_transcript_message(
+            &session_dir,
+            &DiscussionMessage {
+                id: "m1".to_string(),
+                session_id: "s1".to_string(),
+                round_number: 1,
+                turn_index: 1,
+                author_agent_id: "arch-1".to_string(),
+                author_role: "Architect".to_string(),
+                author_provider: "ollama".to_string(),
+                message_kind: DiscussionMessageKind::InitialAnalysis,
+                target_peer_ids: vec!["Critic".to_string()],
+                content: "- **Core Invariant**: Fixed timestep physics.\n- @Critic: Check dt clamping?".to_string(),
+                timestamp: now_ms(),
+                token_usage: None,
+                duration_ms: 10,
+                truncated: false,
+                thinking_content: None,
+                action_name: None,
+                model_id: None,
+                simulated: true,
+                author_display_name: None,
+            },
+        )
+        .unwrap();
+
+        let dec_critic_r2 = evaluate_debate_epistemic_policy(&p_critic.role, 2, &temp_ws, None, &[]);
+        let (frames_critic_r2, _) = mem
+            .assemble_prefix_pinned_frames(
+                &p_critic,
+                2,
+                "Physics Engine",
+                "Build 60fps simulation",
+                &temp_ws,
+                &dec_critic_r2,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(frames_critic_r2.len(), 3);
+        assert_eq!(frames_critic_r2[0].content, frames_arch_r1[0].content);
+        assert!(frames_critic_r2[1]
+            .content
+            .contains("Immutable Round 1 Deliberation Ledger"));
+        assert!(frames_critic_r2[2]
+            .content
+            .contains("BLIND_INDEPENDENT_AUDIT"));
+
+        let _ = fs::remove_dir_all(&temp_ws);
     }
 }

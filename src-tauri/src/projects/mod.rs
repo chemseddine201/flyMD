@@ -3,12 +3,14 @@
 //! Provides structured project management, cycle-free hierarchy operations,
 //! Scoped Project Memory (.jsonl), Master Memory (.md), and token-budgeted Recall Packs.
 
+pub mod cache;
 pub mod commands;
 pub mod memory;
 pub mod storage;
 pub mod tree;
 pub mod types;
 
+pub use cache::*;
 pub use commands::*;
 pub use memory::*;
 pub use storage::*;

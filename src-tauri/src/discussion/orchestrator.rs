@@ -1,6 +1,8 @@
 //! Discussion Orchestrator: 8-state discussion lifecycle, barrier synchronization,
 //! checkpointing, and deterministic multi-turn debate coordinator.
 
+use super::commands::provider_lookup_key;
+use super::epistemic::evaluate_debate_epistemic_policy;
 use super::memory::MemoryManager;
 use super::runner::{DiscussionProvider, ProviderError, StreamSink, TurnRequest};
 use super::storage::{
@@ -8,9 +10,12 @@ use super::storage::{
     save_metadata, SessionLock,
 };
 use super::types::{
-    AgentRole, DisagreementStatus,
-    now_ms, DiscussionConfig, DiscussionMessage, DiscussionMessageKind, DiscussionMetadata,
-    DiscussionParticipant, DiscussionStatus, TokenUsage, CURRENT_SCHEMA_VERSION,
+    now_ms, AgentRole, DisagreementStatus, DiscussionConfig, DiscussionMessage,
+    DiscussionMessageKind, DiscussionMetadata, DiscussionParticipant, DiscussionStatus, TokenUsage,
+    CURRENT_SCHEMA_VERSION,
+};
+use crate::projects::cache::{
+    load_cognitive_packet, parse_handoff_blocks_from_markdown, update_workspace_cognitive_cache,
 };
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -96,11 +101,49 @@ struct EventStreamSink {
     round: u32,
     agent_id: String,
     listener: Arc<dyn DiscussionEventListener>,
+    suppress_handoff: std::sync::Mutex<bool>,
 }
 
 #[async_trait]
 impl StreamSink for EventStreamSink {
     async fn on_chunk(&self, chunk: &str) {
+        let mut guard = self.suppress_handoff.lock().unwrap();
+        if *guard {
+            if let Some(end_idx) = chunk.to_ascii_lowercase().find("</handoff_state>") {
+                *guard = false;
+                let after = &chunk[end_idx + "</handoff_state>".len()..];
+                if !after.trim().is_empty() {
+                    self.listener.on_event(DiscussionEvent::TurnChunk {
+                        session_id: self.session_id.clone(),
+                        round: self.round,
+                        agent_id: self.agent_id.clone(),
+                        chunk: after.to_string(),
+                    });
+                }
+            }
+            return;
+        }
+
+        if let Some(start_idx) = chunk.to_ascii_lowercase().find("<handoff_state>") {
+            let before = &chunk[..start_idx];
+            if !before.is_empty() {
+                self.listener.on_event(DiscussionEvent::TurnChunk {
+                    session_id: self.session_id.clone(),
+                    round: self.round,
+                    agent_id: self.agent_id.clone(),
+                    chunk: before.to_string(),
+                });
+            }
+            if !chunk[start_idx..]
+                .to_ascii_lowercase()
+                .contains("</handoff_state>")
+            {
+                *guard = true;
+            }
+            return;
+        }
+        drop(guard);
+
         self.listener.on_event(DiscussionEvent::TurnChunk {
             session_id: self.session_id.clone(),
             round: self.round,
@@ -421,16 +464,7 @@ impl DiscussionOrchestrator {
             .cloned()
             .ok_or_else(|| format!("Participant '{}' not found in discussion", agent_id))?;
 
-        let provider = self
-            .providers
-            .get(&participant.provider_id)
-            .cloned()
-            .ok_or_else(|| {
-                format!(
-                    "Configured provider '{}' not found in orchestrator registry",
-                    participant.provider_id
-                )
-            })?;
+        let provider = self.resolve_participant_provider(&participant)?;
 
         let round = self.metadata.current_round;
         let turn_index = (self.metadata.total_messages + 1) as u32;
@@ -443,43 +477,52 @@ impl DiscussionOrchestrator {
             action_name: action_name.clone(),
         });
 
-        let (assembled_context, truncated) = self
-            .memory
-            .assemble_turn_context(
-                &participant.agent_id,
-                round,
-                &self.config.user_idea,
-                participant.context_budget_tokens,
-            )
-            .map_err(|e| format!("Failed to assemble context: {}", e))?;
-
         let label = action_name
             .clone()
             .unwrap_or_else(|| "Targeted User Directive".to_string());
 
-        let mut system_prompt = format!(
-            "You are {} (Role: {}).\r\n{}\r\n\
-            Ground all assertions in technical evidence. Never fabricate capabilities.\r\n\
-            A human facilitator has issued a TARGETED DIRECTIVE directly to you: \"{}\"",
-            participant.display_name,
-            participant.role.as_str(),
-            participant.role_description,
-            label
+        let ws_path = PathBuf::from(&self.config.workspace_path);
+        let cognitive_pkt = load_cognitive_packet(&ws_path);
+        let active_dispute_topics: Vec<String> = self
+            .memory
+            .load_disagreements()
+            .into_iter()
+            .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
+            .map(|d| d.topic)
+            .collect();
+        let epistemic_decision = evaluate_debate_epistemic_policy(
+            &participant.role,
+            round,
+            &ws_path,
+            cognitive_pkt.as_ref(),
+            &active_dispute_topics,
         );
 
-        if participant.thinking_enabled {
-            system_prompt.push_str(
-                "\r\n\r\nTHINKING PROTOCOL:\r\n\
-                Reason step-by-step inside <thinking>...</thinking> before providing your answer.",
-            );
-        }
+        let (frames, truncated) = self
+            .memory
+            .assemble_prefix_pinned_frames(
+                &participant,
+                round,
+                &self.config.topic,
+                &self.config.user_idea,
+                &ws_path,
+                &epistemic_decision,
+                cognitive_pkt.as_ref(),
+                Some(&label),
+                Some(&trimmed_query),
+            )
+            .map_err(|e| format!("Failed to assemble context frames: {}", e))?;
 
-        let user_prompt = format!(
-            "### TARGETED ACTION DIRECTIVE: {}\r\n\
-            **Specific Instruction**: {}\r\n\r\n\
-            **Context Background**:\r\n{}",
-            label, trimmed_query, assembled_context
-        );
+        let system_prompt = frames
+            .first()
+            .map(|f| f.content.clone())
+            .unwrap_or_default();
+        let user_prompt = frames
+            .iter()
+            .skip(1)
+            .map(|f| f.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
 
         let turn_request = TurnRequest {
             session_id: self.config.session_id.clone(),
@@ -488,6 +531,7 @@ impl DiscussionOrchestrator {
             role: participant.role.clone(),
             system_prompt,
             user_prompt,
+            messages: frames,
             context_summary: String::new(),
             timeout_secs: self.config.turn_timeout_secs,
             topic: self.config.topic.clone(),
@@ -503,6 +547,7 @@ impl DiscussionOrchestrator {
                 round,
                 agent_id: participant.agent_id.clone(),
                 listener: l.clone(),
+                suppress_handoff: std::sync::Mutex::new(false),
             }) as Box<dyn StreamSink>
         });
 
@@ -510,6 +555,9 @@ impl DiscussionOrchestrator {
             .execute_turn(turn_request, self.cancel_flag.clone(), stream_sink)
             .await
             .map_err(|e| format!("Targeted action failed: {}", e))?;
+
+        let (clean_markdown, target_peer_ids) =
+            self.ingest_turn_cognitive_state(&participant, round, &response.raw_markdown);
 
         let msg_id = format!("targeted-r{}-{}-{}", round, participant.agent_id, now_ms());
         let message = DiscussionMessage {
@@ -521,8 +569,8 @@ impl DiscussionOrchestrator {
             author_role: participant.role.as_str().to_string(),
             author_provider: participant.provider_id.clone(),
             message_kind: DiscussionMessageKind::TargetedAction,
-            target_peer_ids: Vec::new(),
-            content: response.raw_markdown,
+            target_peer_ids,
+            content: clean_markdown,
             timestamp: now_ms(),
             token_usage: Some(response.usage.clone()),
             duration_ms: response.duration_ms,
@@ -711,23 +759,34 @@ impl DiscussionOrchestrator {
                 }
             }
 
-            // Round completed successfully!
+            // Round completed successfully! Freeze immutable round ledger for subsequent prefix KV cache hits.
+            let _ = self.memory.get_or_freeze_round_digest(current_round);
             self.notify(DiscussionEvent::RoundCompleted {
                 session_id: self.config.session_id.clone(),
                 round: current_round,
             });
 
-            // 1. Record active dispute when Round 2 cross-examination completes:
+            // 1. Ensure active disputes reflect parsed peer contradictions (fallback only if models emitted none):
             if current_round == 2 {
-                let dispute_topic = format!("Architecture & State Management Strategy: {}", self.config.topic);
-                for p in &active_participants {
-                    let stance = match p.role {
-                        AgentRole::Architect => format!("Advocates for a formal state-machine architecture with strict invariant guarantees for {}.", self.config.topic),
-                        AgentRole::Critic => format!("Argues against over-abstraction, demanding low latency and minimal runtime overhead for {}.", self.config.topic),
-                        AgentRole::Implementer => format!("Proposes a pragmatic, decoupled component architecture with local reactive state for {}.", self.config.topic),
-                        _ => format!("Advocates for balanced simplicity and testability in {}.", self.config.topic),
-                    };
-                    let _ = self.memory.record_disagreement(&dispute_topic, &p.agent_id, &stance, current_round);
+                if self.memory.load_disagreements().is_empty() {
+                    let dispute_topic = format!(
+                        "Architecture & State Management Strategy: {}",
+                        self.config.topic
+                    );
+                    for p in &active_participants {
+                        let stance = match p.role {
+                            AgentRole::Architect => format!("Advocates for a formal state-machine architecture with strict invariant guarantees for {}.", self.config.topic),
+                            AgentRole::Critic => format!("Argues against over-abstraction, demanding low latency and minimal runtime overhead for {}.", self.config.topic),
+                            AgentRole::Implementer => format!("Proposes a pragmatic, decoupled component architecture with local reactive state for {}.", self.config.topic),
+                            _ => format!("Advocates for balanced simplicity and testability in {}.", self.config.topic),
+                        };
+                        let _ = self.memory.record_disagreement(
+                            &dispute_topic,
+                            &p.agent_id,
+                            &stance,
+                            current_round,
+                        );
+                    }
                 }
                 let active_disputes = self.memory.load_disagreements();
                 self.metadata.active_disagreements_count = active_disputes
@@ -738,13 +797,32 @@ impl DiscussionOrchestrator {
             }
 
             if current_round >= self.config.max_rounds {
-                // 2. Record consensus decision into ledger at final round:
-                let decision_topic = format!("Unified Architecture & Execution Blueprint: {}", self.config.topic);
-                let decision = format!("Decoupled component architecture with deterministic state handling, responsive feedback, and modular error boundaries for {}.", self.config.topic);
-                let rationale = format!("Achieves optimal balance between responsiveness, maintainability, and reliability, fulfilling requirements: {}.", self.config.user_idea);
-                let agreed_by: Vec<String> = active_participants.iter().map(|p| p.agent_id.clone()).collect();
-                let citations = vec!["architecture-blueprint".to_string(), "state-invariants".to_string(), "verification-suite".to_string()];
-                let _ = self.memory.record_decision(&decision_topic, &decision, &rationale, agreed_by, current_round, citations);
+                // 2. Ensure consensus decision ledger is populated (preserving real model-emitted decisions first):
+                if self.memory.load_decisions().is_empty() {
+                    let decision_topic = format!(
+                        "Unified Architecture & Execution Blueprint: {}",
+                        self.config.topic
+                    );
+                    let decision = format!("Decoupled component architecture with deterministic state handling, responsive feedback, and modular error boundaries for {}.", self.config.topic);
+                    let rationale = format!("Achieves optimal balance between responsiveness, maintainability, and reliability, fulfilling requirements: {}.", self.config.user_idea);
+                    let agreed_by: Vec<String> = active_participants
+                        .iter()
+                        .map(|p| p.agent_id.clone())
+                        .collect();
+                    let citations = vec![
+                        "architecture-blueprint".to_string(),
+                        "state-invariants".to_string(),
+                        "verification-suite".to_string(),
+                    ];
+                    let _ = self.memory.record_decision(
+                        &decision_topic,
+                        &decision,
+                        &rationale,
+                        agreed_by,
+                        current_round,
+                        citations,
+                    );
+                }
 
                 let decisions = self.memory.load_decisions();
                 self.metadata.decisions_count = decisions.len();
@@ -785,6 +863,104 @@ impl DiscussionOrchestrator {
         Ok(DiscussionStatus::AwaitingReview)
     }
 
+    fn resolve_participant_provider(
+        &self,
+        participant: &DiscussionParticipant,
+    ) -> Result<Arc<dyn DiscussionProvider>, String> {
+        let composite = provider_lookup_key(&participant.provider_id, &participant.model_id);
+        self.providers
+            .get(&composite)
+            .or_else(|| self.providers.get(&participant.provider_id))
+            .cloned()
+            .ok_or_else(|| {
+                format!(
+                    "Configured provider '{}' (model '{}') not found in orchestrator registry",
+                    participant.provider_id, participant.model_id
+                )
+            })
+    }
+
+    /// Parses `<handoff_state>`, `<independent_resume>`, invariants, disputes, and `@Role` peer directives
+    /// from an agent's output, persisting them to the session ledger, peer bus, and workspace `.flymd/cache/cognitive_state.json`.
+    fn ingest_turn_cognitive_state(
+        &mut self,
+        participant: &DiscussionParticipant,
+        round: u32,
+        raw_markdown: &str,
+    ) -> (String, Vec<String>) {
+        let parsed = parse_handoff_blocks_from_markdown(
+            raw_markdown,
+            &participant.agent_id,
+            participant.role.as_str(),
+        );
+
+        let mut target_peers = Vec::new();
+        for pm in &parsed.peer_messages {
+            if !target_peers.contains(&pm.to_target) {
+                target_peers.push(pm.to_target.clone());
+            }
+        }
+        let _ = self.memory.append_peer_messages(&parsed.peer_messages);
+
+        for (idx, inv) in parsed.locked_invariants.iter().take(3).enumerate() {
+            let topic = format!(
+                "{} Invariant #{} ({})",
+                participant.role.as_str(),
+                idx + 1,
+                self.config.topic
+            );
+            let _ = self.memory.record_decision(
+                &topic,
+                inv,
+                &format!(
+                    "Established by {} ({}) in Round {}",
+                    participant.display_name,
+                    participant.role.as_str(),
+                    round
+                ),
+                vec![participant.agent_id.clone()],
+                round,
+                vec![format!("round-{}", round)],
+            );
+        }
+
+        for disp in parsed.active_disputes.iter().take(2) {
+            let _ = self.memory.record_disagreement(
+                disp,
+                &participant.agent_id,
+                &format!(
+                    "{} ({}) flagged trade-off in Round {}",
+                    participant.display_name,
+                    participant.role.as_str(),
+                    round
+                ),
+                round,
+            );
+        }
+
+        let ws_path = PathBuf::from(&self.config.workspace_path);
+        let _ = update_workspace_cognitive_cache(
+            &ws_path,
+            &participant.agent_id,
+            participant.role.as_str(),
+            Some(&self.config.session_id),
+            round,
+            Some(&self.config.user_idea),
+            raw_markdown,
+            None,
+        );
+
+        self.metadata.decisions_count = self.memory.load_decisions().len();
+        self.metadata.active_disagreements_count = self
+            .memory
+            .load_disagreements()
+            .iter()
+            .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
+            .count();
+
+        (parsed.clean_markdown, target_peers)
+    }
+
     async fn execute_agent_turn(
         &mut self,
         participant: &DiscussionParticipant,
@@ -793,7 +969,10 @@ impl DiscussionOrchestrator {
     ) -> Result<(), String> {
         let action_name = participant.custom_action.as_ref().map(|a| a.name.clone());
         let action_query = participant.custom_query.clone().or_else(|| {
-            participant.custom_action.as_ref().map(|a| a.prompt_directive.clone())
+            participant
+                .custom_action
+                .as_ref()
+                .map(|a| a.prompt_directive.clone())
         });
 
         self.notify(DiscussionEvent::TurnStarted {
@@ -804,103 +983,59 @@ impl DiscussionOrchestrator {
             action_name: action_name.clone(),
         });
 
-        // 1. Resolve Provider
-        let provider = self
-            .providers
-            .get(&participant.provider_id)
-            .cloned()
-            .ok_or_else(|| {
-                format!(
-                    "Configured provider '{}' not found in orchestrator registry",
-                    participant.provider_id
-                )
-            })?;
+        // 1. Resolve Provider (composite provider_id::model_id with fallback)
+        let provider = self.resolve_participant_provider(participant)?;
 
-        // 2. Assemble context with memory manager
-        let (assembled_context, truncated) = self
+        // 2. Evaluate Role-Aware Epistemic Policy & Assemble Prefix-Pinned KV Cache Frames
+        let ws_path = PathBuf::from(&self.config.workspace_path);
+        let cognitive_pkt = load_cognitive_packet(&ws_path);
+        let active_dispute_topics: Vec<String> = self
             .memory
-            .assemble_turn_context(
-                &participant.agent_id,
-                round,
-                &self.config.user_idea,
-                participant.context_budget_tokens,
-            )
-            .map_err(|e| format!("Failed to assemble context: {}", e))?;
+            .load_disagreements()
+            .into_iter()
+            .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
+            .map(|d| d.topic)
+            .collect();
 
-        // 3. Format System & User Prompts
+        let epistemic_decision = evaluate_debate_epistemic_policy(
+            &participant.role,
+            round,
+            &ws_path,
+            cognitive_pkt.as_ref(),
+            &active_dispute_topics,
+        );
+
+        let (frames, truncated) = self
+            .memory
+            .assemble_prefix_pinned_frames(
+                participant,
+                round,
+                &self.config.topic,
+                &self.config.user_idea,
+                &ws_path,
+                &epistemic_decision,
+                cognitive_pkt.as_ref(),
+                action_name.as_deref(),
+                action_query.as_deref(),
+            )
+            .map_err(|e| format!("Failed to assemble context frames: {}", e))?;
+
         let message_kind = match round {
             1 => DiscussionMessageKind::InitialAnalysis,
             2 => DiscussionMessageKind::PeerCritique,
             _ => DiscussionMessageKind::RebuttalRevision,
         };
 
-        let mut system_prompt = format!(
-            "You are {} (Role: {}).\r\n{}\r\n\
-            You are participating in a rigorous, evidence-driven multi-agent architectural debate.\r\n\
-            Ground all assertions in technical evidence. Never fabricate capabilities.\r\n\
-            Highlight genuine technical disagreements rather than conforming prematurely.",
-            participant.display_name,
-            participant.role.as_str(),
-            participant.role_description
-        );
-
-        if participant.thinking_enabled {
-            system_prompt.push_str(
-                "\r\n\r\nTHINKING PROTOCOL:\r\n\
-                Before outputting your final answer, engage in thorough reasoning inside a <thinking>...</thinking> block.\r\n\
-                Deconstruct requirements, stress-test edge cases, evaluate failure modes, and formulate rigorous technical rationale.\r\n\
-                Then close the </thinking> tag and produce your clean, structured Markdown response.",
-            );
-        }
-
-        if let Some(ref q) = action_query {
-            system_prompt.push_str(&format!(
-                "\r\n\r\nPRIMARY DIRECTIVE FOR THIS TURN:\r\nFocus specifically on answering:\r\n{}",
-                q.trim()
-            ));
-        }
-
-        let mut user_prompt = match message_kind {
-            DiscussionMessageKind::InitialAnalysis => {
-                format!(
-                    "### Round 1: Independent Position Paper\r\n\
-                    Analyze the user's proposal from your role perspective ({}).\r\n\
-                    Propose core architecture, identify critical assumptions, and surface potential risks.\r\n\r\n\
-                    {}",
-                    participant.role.as_str(),
-                    assembled_context
-                )
-            }
-            DiscussionMessageKind::PeerCritique => {
-                format!(
-                    "### Round 2: Cross-Examination & Peer Critique\r\n\
-                    Critically examine the proposals presented by your peer agents in Round 1.\r\n\
-                    Identify unverified assumptions, single points of failure, and active trade-offs.\r\n\r\n\
-                    {}",
-                    assembled_context
-                )
-            }
-            DiscussionMessageKind::RebuttalRevision => {
-                format!(
-                    "### Round {}: Rebuttal & Revised Position\r\n\
-                    Respond to peer critiques directed at your proposal.\r\n\
-                    Acknowledge valid concessions where peer points are technically sound.\r\n\
-                    Maintain and defend your firm stance on critical requirements.\r\n\r\n\
-                    {}",
-                    round, assembled_context
-                )
-            }
-            _ => assembled_context,
-        };
-
-        if let Some(ref q) = action_query {
-            let label = action_name.as_deref().unwrap_or("Custom Action Directive");
-            user_prompt.push_str(&format!(
-                "\r\n\r\n### {}\r\nInvestigate and address: {}\r\n",
-                label,
-                q.trim()
-            ));
-        }
+        let system_prompt = frames
+            .first()
+            .map(|f| f.content.clone())
+            .unwrap_or_default();
+        let user_prompt = frames
+            .iter()
+            .skip(1)
+            .map(|f| f.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
 
         let turn_request = TurnRequest {
             session_id: self.config.session_id.clone(),
@@ -909,6 +1044,7 @@ impl DiscussionOrchestrator {
             role: participant.role.clone(),
             system_prompt,
             user_prompt,
+            messages: frames,
             context_summary: String::new(),
             timeout_secs: self.config.turn_timeout_secs,
             topic: self.config.topic.clone(),
@@ -925,6 +1061,7 @@ impl DiscussionOrchestrator {
                 round,
                 agent_id: participant.agent_id.clone(),
                 listener: l.clone(),
+                suppress_handoff: std::sync::Mutex::new(false),
             }) as Box<dyn StreamSink>
         });
 
@@ -935,6 +1072,9 @@ impl DiscussionOrchestrator {
 
         match result {
             Ok(response) => {
+                let (clean_markdown, target_peer_ids) =
+                    self.ingest_turn_cognitive_state(participant, round, &response.raw_markdown);
+
                 let msg_id = format!("msg-r{}-{}-{}", round, participant.agent_id, now_ms());
                 let message = DiscussionMessage {
                     id: msg_id.clone(),
@@ -945,8 +1085,8 @@ impl DiscussionOrchestrator {
                     author_role: participant.role.as_str().to_string(),
                     author_provider: participant.provider_id.clone(),
                     message_kind,
-                    target_peer_ids: Vec::new(),
-                    content: response.raw_markdown,
+                    target_peer_ids,
+                    content: clean_markdown,
                     timestamp: now_ms(),
                     token_usage: Some(response.usage.clone()),
                     duration_ms: response.duration_ms,

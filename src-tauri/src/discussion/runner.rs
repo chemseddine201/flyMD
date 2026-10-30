@@ -13,6 +13,14 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatMessageFrame {
+    pub role: String,
+    pub content: String,
+    #[serde(default)]
+    pub cache_anchor: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct TurnRequest {
     pub session_id: String,
@@ -21,6 +29,9 @@ pub struct TurnRequest {
     pub role: AgentRole,
     pub system_prompt: String,
     pub user_prompt: String,
+    /// Prefix-pinned multi-message sequence (`[Shared System Prefix, Immutable Round Ledgers..., Dynamic Agent Tail]`).
+    /// When non-empty, providers send these exact frames to maximize hardware prefix KV-cache hits.
+    pub messages: Vec<ChatMessageFrame>,
     pub context_summary: String,
     pub timeout_secs: u64,
     /// Discussion topic and original idea (used by the offline simulator).
@@ -30,6 +41,44 @@ pub struct TurnRequest {
     pub action_name: Option<String>,
     pub action_query: Option<String>,
     pub thinking_enabled: bool,
+}
+
+/// Builds provider-specific JSON `messages` array preserving immutable prefix frames at Token 0.
+pub fn build_http_messages_json(
+    request: &TurnRequest,
+    endpoint_url: &str,
+    is_ollama: bool,
+) -> serde_json::Value {
+    if request.messages.is_empty() {
+        return serde_json::json!([
+            { "role": "system", "content": request.system_prompt },
+            { "role": "user", "content": request.user_prompt }
+        ]);
+    }
+
+    let is_anthropic_compat = !is_ollama && endpoint_url.to_ascii_lowercase().contains("anthropic");
+    let frames: Vec<serde_json::Value> = request
+        .messages
+        .iter()
+        .map(|f| {
+            if is_anthropic_compat && f.cache_anchor {
+                serde_json::json!({
+                    "role": f.role,
+                    "content": [{
+                        "type": "text",
+                        "text": f.content,
+                        "cache_control": { "type": "ephemeral" }
+                    }]
+                })
+            } else {
+                serde_json::json!({
+                    "role": f.role,
+                    "content": f.content
+                })
+            }
+        })
+        .collect();
+    serde_json::Value::Array(frames)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -299,19 +348,34 @@ impl DiscussionProvider for CliProvider {
             return Err(ProviderError::Cancelled);
         }
 
-        // Verify denylist violation
-        if let Some(pattern) = check_denylist_violation(&request.user_prompt) {
+        // Verify denylist violation across user_prompt and multi-message frames
+        if let Some(pattern) = check_denylist_violation(&request.user_prompt).or_else(|| {
+            request
+                .messages
+                .iter()
+                .find_map(|m| check_denylist_violation(&m.content))
+        }) {
             return Err(ProviderError::AuthFailure(format!(
                 "AccessDenied: Request references prohibited sensitive path pattern '{}'",
                 pattern
             )));
         }
 
-        let full_prompt = format!(
-            "{}\n\n{}",
-            request.system_prompt.trim(),
-            request.user_prompt.trim()
-        );
+        let full_prompt = if request.messages.is_empty() {
+            format!(
+                "{}\n\n{}",
+                request.system_prompt.trim(),
+                request.user_prompt.trim()
+            )
+        } else {
+            request
+                .messages
+                .iter()
+                .map(|m| m.content.trim())
+                .filter(|c| !c.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n---\n\n")
+        };
 
         let args = self.build_cli_args(&full_prompt);
         let start = std::time::Instant::now();
@@ -546,8 +610,13 @@ impl DiscussionProvider for HttpProvider {
             return Err(ProviderError::Cancelled);
         }
 
-        // Verify denylist violation
-        if let Some(pattern) = check_denylist_violation(&request.user_prompt) {
+        // Verify denylist violation across user_prompt and multi-message frames
+        if let Some(pattern) = check_denylist_violation(&request.user_prompt).or_else(|| {
+            request
+                .messages
+                .iter()
+                .find_map(|m| check_denylist_violation(&m.content))
+        }) {
             return Err(ProviderError::AuthFailure(format!(
                 "AccessDenied: Request references prohibited sensitive path pattern '{}'",
                 pattern
@@ -559,10 +628,7 @@ impl DiscussionProvider for HttpProvider {
         let max_attempts: u32 = 3;
         let deadline = start + Duration::from_secs(request.timeout_secs.max(10));
 
-        let messages = serde_json::json!([
-            { "role": "system", "content": request.system_prompt },
-            { "role": "user", "content": request.user_prompt }
-        ]);
+        let messages = build_http_messages_json(&request, &self.endpoint_url, self.is_ollama);
 
         let response = loop {
             attempts += 1;
@@ -577,6 +643,7 @@ impl DiscussionProvider for HttpProvider {
                     "model": self.model_name,
                     "messages": messages,
                     "stream": true,
+                    "keep_alive": "15m",
                     "options": { "temperature": 0.6 }
                 });
                 self.client.post(&url).json(&body)
@@ -728,7 +795,15 @@ impl DiscussionProvider for HttpProvider {
 
         let elapsed = start.elapsed().as_millis() as u64;
         let prompt_tokens = reported_prompt.unwrap_or_else(|| {
-            estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
+            if request.messages.is_empty() {
+                estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
+            } else {
+                request
+                    .messages
+                    .iter()
+                    .map(|m| estimate_tokens(&m.content))
+                    .sum()
+            }
         });
         let completion_tokens = reported_completion
             .unwrap_or_else(|| estimate_tokens(&answer) + estimate_tokens(&thinking));
@@ -788,7 +863,12 @@ impl DiscussionProvider for MockProvider {
             return Err(ProviderError::Cancelled);
         }
 
-        if let Some(pattern) = check_denylist_violation(&request.user_prompt) {
+        if let Some(pattern) = check_denylist_violation(&request.user_prompt).or_else(|| {
+            request
+                .messages
+                .iter()
+                .find_map(|m| check_denylist_violation(&m.content))
+        }) {
             return Err(ProviderError::AuthFailure(format!(
                 "AccessDenied: Request references prohibited sensitive path pattern '{}'",
                 pattern
@@ -953,7 +1033,7 @@ impl DiscussionProvider for MockProvider {
         };
 
         // Normalize response body lines so CommonMark never mistakes leading indentation for raw code blocks
-        let response_body = response_body
+        let mut response_body = response_body
             .lines()
             .map(|l| {
                 if l.starts_with("    ")
@@ -971,7 +1051,7 @@ impl DiscussionProvider for MockProvider {
             .collect::<Vec<_>>()
             .join("\n");
 
-        // Stream in chunks
+        // Stream clean human-facing Markdown first (before appending machine `<handoff_state>` envelope)
         if let Some(sink) = stream_sink {
             let chunks: Vec<&str> = response_body.split_whitespace().collect();
             for word in chunks {
@@ -984,6 +1064,21 @@ impl DiscussionProvider for MockProvider {
         } else {
             tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms)).await;
         }
+
+        // Append structured cross-model handoff envelope & independent résumé on adversarial roles
+        let peer_handoff_footer = match &request.role {
+            AgentRole::Architect => format!(
+                "\n\n- @Implementer: Adopt decoupled state-machine contracts directly without re-scanning verified files.\n- @Critic: Stress-test recovery guards for `{}`.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Decoupled domain state machine with deterministic transition guards\"],\"activeDisputes\":[\"Formal state-machine boundaries vs reactive local state\"],\"unverifiedAssumptions\":[],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"directive\",\"message\":\"Bind view handlers strictly to exported core state actions.\"}},{{\"toRole\":\"Critic\",\"kind\":\"question\",\"message\":\"Verify edge-case recovery under rapid concurrent user events?\"}}]}}</handoff_state>",
+                topic_clean.replace('"', "'")
+            ),
+            AgentRole::Critic | AgentRole::Auditor => format!(
+                "\n\n<independent_resume>Independent raw audit of `{}` confirms boundary guards and error fallbacks are required before sign-off.</independent_resume>\n- @Implementer: Add explicit fallback guards for interrupted writes and sleep throttling.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Defensive runtime error boundaries and storage fallbacks\"],\"activeDisputes\":[\"Abstraction overhead vs sub-16ms runtime simplicity\"],\"unverifiedAssumptions\":[\"Concurrent write recovery under abrupt process termination\"],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"challenge\",\"message\":\"Ensure zero unhandled exceptions on malformed input or storage quota failure.\"}}]}}</handoff_state>",
+                topic_clean.replace('"', "'")
+            ),
+            AgentRole::Implementer => "\n\n- @Critic: Pure-function state reducer implemented with deterministic fallback recovery.\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Pure-function state engine with sub-16ms reactive view bindings\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[{\"toRole\":\"Critic\",\"kind\":\"contract\",\"message\":\"All state mutations route through pure reducer functions with unit assertions.\"}]}</handoff_state>".to_string(),
+            _ => "\n\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Deterministic barrier synchronization\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[]}</handoff_state>".to_string(),
+        };
+        response_body.push_str(&peer_handoff_footer);
 
         let elapsed = start.elapsed().as_millis() as u64;
         let char_count = response_body.chars().count();
@@ -1037,6 +1132,7 @@ mod tests {
             role: AgentRole::Architect,
             system_prompt: "You are an architect.".to_string(),
             user_prompt: "Design the system.".to_string(),
+            messages: Vec::new(),
             context_summary: String::new(),
             timeout_secs: 10,
             topic: "Architecture Design".to_string(),
@@ -1069,6 +1165,7 @@ mod tests {
             role: AgentRole::Critic,
             system_prompt: "".to_string(),
             user_prompt: "".to_string(),
+            messages: Vec::new(),
             context_summary: "".to_string(),
             timeout_secs: 10,
             topic: "Architecture Design".to_string(),
@@ -1188,5 +1285,57 @@ mod tests {
         let delta = parse_ollama_line(line).unwrap();
         assert_eq!(delta.content.as_deref(), Some("hello"));
         assert_eq!(delta.reasoning.as_deref(), Some("plan"));
+    }
+
+    #[test]
+    fn test_prefix_pinned_http_messages_and_anthropic_cache_control() {
+        let req = TurnRequest {
+            session_id: "s-kv".to_string(),
+            round_number: 2,
+            agent_id: "agent-1".to_string(),
+            role: AgentRole::Critic,
+            system_prompt: String::new(),
+            user_prompt: String::new(),
+            messages: vec![
+                ChatMessageFrame {
+                    role: "system".to_string(),
+                    content: "IMMUTABLE_SHARED_PREFIX".to_string(),
+                    cache_anchor: true,
+                },
+                ChatMessageFrame {
+                    role: "user".to_string(),
+                    content: "ROUND_1_IMMUTABLE_LEDGER".to_string(),
+                    cache_anchor: true,
+                },
+                ChatMessageFrame {
+                    role: "user".to_string(),
+                    content: "DYNAMIC_CRITIC_TAIL".to_string(),
+                    cache_anchor: false,
+                },
+            ],
+            context_summary: String::new(),
+            timeout_secs: 10,
+            topic: String::new(),
+            user_idea: String::new(),
+            action_name: None,
+            action_query: None,
+            thinking_enabled: true,
+        };
+
+        let openai_msgs = build_http_messages_json(&req, "https://api.deepseek.com", false);
+        let arr = openai_msgs.as_array().unwrap();
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0]["content"], "IMMUTABLE_SHARED_PREFIX");
+        assert_eq!(arr[1]["content"], "ROUND_1_IMMUTABLE_LEDGER");
+        assert_eq!(arr[2]["content"], "DYNAMIC_CRITIC_TAIL");
+
+        let anthropic_msgs =
+            build_http_messages_json(&req, "https://api.anthropic.com/v1", false);
+        let a_arr = anthropic_msgs.as_array().unwrap();
+        assert_eq!(
+            a_arr[0]["content"][0]["cache_control"]["type"],
+            "ephemeral"
+        );
+        assert_eq!(a_arr[2]["content"], "DYNAMIC_CRITIC_TAIL");
     }
 }

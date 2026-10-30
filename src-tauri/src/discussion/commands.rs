@@ -116,6 +116,18 @@ pub struct AvailableProviderInfo {
     pub supports_thinking: bool,
 }
 
+/// Composite lookup key (`provider_id::model_id`) so multiple participants sharing a provider
+/// (e.g. two Ollama or HTTP agents running different models) never overwrite each other's model,
+/// while two participants using the exact same model share the exact same `Arc<dyn DiscussionProvider>`.
+pub fn provider_lookup_key(provider_id: &str, model_id: &str) -> String {
+    let m = model_id.trim();
+    if m.is_empty() || m == "default" {
+        provider_id.to_string()
+    } else {
+        format!("{}::{}", provider_id, m)
+    }
+}
+
 fn build_provider_map(
     config: &DiscussionConfig,
     client: reqwest::Client,
@@ -132,11 +144,12 @@ fn build_provider_map(
     let creds = store.map(|s| s.get_agent_credentials()).unwrap_or_default();
 
     for p in &config.participants {
-        if map.contains_key(&p.provider_id) {
+        let composite_key = provider_lookup_key(&p.provider_id, &p.model_id);
+        if map.contains_key(&composite_key) {
             continue;
         }
 
-        match p.provider_id.as_str() {
+        let provider_arc: Arc<dyn DiscussionProvider> = match p.provider_id.as_str() {
             "claude-code" => {
                 let custom_bin = creds
                     .get("claude-code")
@@ -144,19 +157,13 @@ fn build_provider_map(
                     .map(PathBuf::from);
                 let exe = custom_bin.or_else(|| resolve_executable("claude"));
                 if let Some(exe_path) = exe {
-                    map.insert(
-                        p.provider_id.clone(),
-                        Arc::new(CliProvider::new(
-                            CliType::ClaudeCode,
-                            exe_path,
-                            session_sandbox.clone(),
-                        )),
-                    );
+                    Arc::new(CliProvider::new(
+                        CliType::ClaudeCode,
+                        exe_path,
+                        session_sandbox.clone(),
+                    ))
                 } else {
-                    map.insert(
-                        p.provider_id.clone(),
-                        Arc::new(MockProvider::new("claude-code")),
-                    );
+                    Arc::new(MockProvider::new("claude-code"))
                 }
             }
             "gemini-antigravity" => {
@@ -166,19 +173,13 @@ fn build_provider_map(
                     .map(PathBuf::from);
                 let exe = custom_bin.or_else(|| resolve_executable("agy"));
                 if let Some(exe_path) = exe {
-                    map.insert(
-                        p.provider_id.clone(),
-                        Arc::new(CliProvider::new(
-                            CliType::AntigravityGemini,
-                            exe_path,
-                            session_sandbox.clone(),
-                        )),
-                    );
+                    Arc::new(CliProvider::new(
+                        CliType::AntigravityGemini,
+                        exe_path,
+                        session_sandbox.clone(),
+                    ))
                 } else {
-                    map.insert(
-                        p.provider_id.clone(),
-                        Arc::new(MockProvider::new("gemini-antigravity")),
-                    );
+                    Arc::new(MockProvider::new("gemini-antigravity"))
                 }
             }
             "ollama" => {
@@ -196,17 +197,14 @@ fn build_provider_map(
                         .filter(|m| !m.trim().is_empty())
                         .unwrap_or_else(|| "qwen2.5:3b".to_string())
                 };
-                map.insert(
-                    p.provider_id.clone(),
-                    Arc::new(HttpProvider::new(
-                        &p.provider_id,
-                        client.clone(),
-                        endpoint,
-                        None,
-                        &model,
-                        true,
-                    )),
-                );
+                Arc::new(HttpProvider::new(
+                    &p.provider_id,
+                    client.clone(),
+                    endpoint,
+                    None,
+                    &model,
+                    true,
+                ))
             }
             "deepseek" | "kimi" | "http-llm" => {
                 let (default_endpoint, default_model) = match p.provider_id.as_str() {
@@ -243,25 +241,20 @@ fn build_provider_map(
                     default_model.to_string()
                 };
 
-                map.insert(
-                    p.provider_id.clone(),
-                    Arc::new(HttpProvider::new(
-                        &p.provider_id,
-                        client.clone(),
-                        default_endpoint,
-                        api_key,
-                        &model,
-                        false,
-                    )),
-                );
+                Arc::new(HttpProvider::new(
+                    &p.provider_id,
+                    client.clone(),
+                    default_endpoint,
+                    api_key,
+                    &model,
+                    false,
+                ))
             }
-            _ => {
-                map.insert(
-                    p.provider_id.clone(),
-                    Arc::new(MockProvider::new(&p.provider_id)),
-                );
-            }
-        }
+            _ => Arc::new(MockProvider::new(&p.provider_id)),
+        };
+
+        map.insert(composite_key, provider_arc.clone());
+        map.entry(p.provider_id.clone()).or_insert(provider_arc);
     }
 
     map
@@ -421,20 +414,29 @@ pub async fn cmd_resume_discussion(
         if let Some(existing) = active.get(&session_id) {
             existing.clone()
         } else {
-            // Recover from disk
-            let base_config = DiscussionConfig {
-                schema_version: 1,
-                session_id: session_id.clone(),
-                topic: String::new(),
-                user_idea: String::new(),
-                workspace_path: workspace_path.clone(),
-                max_rounds: 3,
-                turn_timeout_secs: 120,
-                participants: Vec::new(),
-                active_skill_uris: Vec::new(),
-                step_mode: false,
-            };
-            let providers = build_provider_map(&base_config, manager.client.clone(), Some(&store));
+            // Recover persisted config.json from disk first so participant providers & models are rebuilt accurately
+            let config_path = Path::new(&workspace_path)
+                .join(".flymd")
+                .join("discussions")
+                .join(&session_id)
+                .join("config.json");
+            let persisted_config = fs::read(&config_path)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<DiscussionConfig>(&b).ok())
+                .unwrap_or(DiscussionConfig {
+                    schema_version: 1,
+                    session_id: session_id.clone(),
+                    topic: String::new(),
+                    user_idea: String::new(),
+                    workspace_path: workspace_path.clone(),
+                    max_rounds: 3,
+                    turn_timeout_secs: 120,
+                    participants: Vec::new(),
+                    active_skill_uris: Vec::new(),
+                    step_mode: false,
+                });
+            let providers =
+                build_provider_map(&persisted_config, manager.client.clone(), Some(&store));
             let mut recovered = DiscussionOrchestrator::recover(
                 Path::new(&workspace_path),
                 &session_id,

@@ -457,40 +457,128 @@ impl AgentOrchestrator {
                 .unwrap_or(req.markdown_content.clone())
         };
 
-        let mut handoff_content = format!(
-            "# FlyMD Agent Task Package — `{}`\n\n\
-            > **Target Agent**: `{}`\n\
-            > **Source Agent**: `{}`\n\
-            > **Intent Mode**: `{}`\n\
-            > **Workspace Path**: `{}`\n\
-            > **Source File**: `{}`\n\
-            > **Timestamp**: `{}`\n\n\
-            ---\n\n\
-            ## Mission Instructions\n\n{}\n\n",
-            req.file_name,
-            req.target_agent_id,
-            req.source_agent_id.as_deref().unwrap_or("User"),
-            req.intent,
-            effective_ws,
-            req.file_path,
+        // Load or bootstrap Cross-Model Cognitive Cache (.flymd/cache/cognitive_state.json)
+        let existing_tasks = self.store.get_agent_tasks();
+        let prior_failed = existing_tasks
+            .iter()
+            .find(|t| {
+                t.workspace_path == effective_ws
+                    && (req.pipeline_id.is_none() || t.pipeline_id == req.pipeline_id)
+            })
+            .map(|t| t.status == "failed")
+            .unwrap_or(false);
+
+        let cognitive_pkt = crate::projects::cache::load_cognitive_packet(ws_path).or_else(|| {
+            let live_digest = crate::projects::cache::scan_workspace_digest(ws_path, 48);
+            if live_digest.is_empty() {
+                None
+            } else {
+                Some(crate::projects::cache::CognitiveHandoffPacket {
+                    producer_agent: "workspace-indexer".to_string(),
+                    producer_role: "Baseline".to_string(),
+                    workspace_digest: live_digest,
+                    ..Default::default()
+                })
+            }
+        });
+
+        let is_first_step = req.source_agent_id.is_none();
+        let epistemic_decision = crate::discussion::epistemic::evaluate_pipeline_epistemic_policy(
+            &req.intent,
+            is_first_step,
+            ws_path,
+            cognitive_pkt.as_ref(),
+            prior_failed,
+        );
+        let warm_cli_continue = crate::discussion::epistemic::can_reuse_cli_session_continuously(
+            &epistemic_decision,
+            &req.target_agent_id,
+            req.pipeline_id.as_deref(),
+            cognitive_pkt.as_ref(),
             now_ms(),
-            instructions
         );
 
-        if !shared_memory.is_empty() {
+        let epistemic_section = crate::discussion::epistemic::build_epistemic_prompt_section(
+            &epistemic_decision,
+            ws_path,
+            cognitive_pkt.as_ref(),
+        );
+        let handoff_footer =
+            crate::discussion::epistemic::format_handoff_state_emission_protocol(
+                epistemic_decision.requires_blind_self_conclusion(),
+            );
+
+        // Prefix-Pinned Token-0 Handoff Package:
+        // 1. Immutable Specification Contract at Token 0
+        // 2. Role-Aware Epistemic Cache / Blind Raw Slices
+        // 3. Direct Peer Directives (@Role / @Agent)
+        // 4. Mission & Handoff Footer
+        let mut handoff_content = format!(
+            "# FlyMD Immutable Project Specification & Contract (`{}`)\n\n{}\n\n---\n\n",
+            req.file_name,
+            body_to_process.trim()
+        );
+
+        handoff_content.push_str(&epistemic_section);
+        handoff_content.push_str("\n---\n\n");
+
+        if let Some(ref pkt) = cognitive_pkt {
+            let inbox = crate::projects::cache::filter_peer_messages_for_agent(
+                &pkt.peer_messages,
+                &req.target_agent_id,
+                &req.intent,
+            );
+            if !inbox.is_empty() {
+                handoff_content.push_str("## Direct Peer Directives Addressed to You\n\n");
+                for pm in inbox.iter().rev().take(6).rev() {
+                    handoff_content.push_str(&format!(
+                        "- From **{} ({})** [{}]: {}\n",
+                        pm.from_agent, pm.from_role, pm.kind, pm.message
+                    ));
+                }
+                handoff_content.push_str("\n---\n\n");
+            }
+        }
+
+        if !shared_memory.is_empty() && !epistemic_decision.requires_blind_self_conclusion() {
             handoff_content.push_str("## Shared Project Memory Context\n\n");
             handoff_content.push_str(&shared_memory);
             handoff_content.push_str("\n\n---\n\n");
         }
 
-        handoff_content.push_str("## Source Specification / Document Content\n\n");
-        handoff_content.push_str(&body_to_process);
-        handoff_content.push('\n');
+        handoff_content.push_str(&format!(
+            "## Active Agent Mission Metadata & Instructions\n\n\
+             - **Target Agent**: `{}`\n\
+             - **Source Agent**: `{}`\n\
+             - **Intent Mode**: `{}`\n\
+             - **Epistemic Mode**: `{}`\n\
+             - **Workspace Path**: `{}`\n\n\
+             {}\n{}\n",
+            req.target_agent_id,
+            req.source_agent_id.as_deref().unwrap_or("User"),
+            req.intent,
+            epistemic_decision.mode.as_label(),
+            effective_ws,
+            instructions,
+            handoff_footer
+        ));
 
         fs::write(&handoff_file, &handoff_content).ok();
 
         let (total_checklists, completed_checklists) =
             types::count_markdown_checklists(&body_to_process);
+
+        let epistemic_log_line = format!(
+            "[Epistemic Router] Mode: {} | Cache-Verified Files: {} | Targeted Re-Read Files: {}{}",
+            epistemic_decision.mode.as_label(),
+            epistemic_decision.unchanged_verified_files.len(),
+            epistemic_decision.files_to_reread.len(),
+            if warm_cli_continue {
+                " | Warm CLI Session Reuse: ENABLED"
+            } else {
+                ""
+            }
+        );
 
         let record = AgentTaskRecord {
             id: task_id.clone(),
@@ -518,6 +606,7 @@ impl AgentOrchestrator {
                     "[FlyMD Studio] Assigned Agent: {} | Mode: {}",
                     req.target_agent_id, req.intent
                 ),
+                epistemic_log_line.clone(),
             ],
             checklist_total: total_checklists,
             checklist_completed: completed_checklists,
@@ -526,10 +615,13 @@ impl AgentOrchestrator {
             next_agent_in_chain: req.next_agent_in_chain.clone(),
             next_intent_in_chain: req.next_intent_in_chain.clone(),
             response_markdown: None,
-            thinking_trace: vec![format!(
-                "Created task handoff specification for {} in `{}`",
-                req.target_agent_id, req.file_name
-            )],
+            thinking_trace: vec![
+                format!(
+                    "Created task handoff specification for {} in `{}`",
+                    req.target_agent_id, req.file_name
+                ),
+                epistemic_log_line,
+            ],
             progress_stage: Some("snapshot".to_string()),
             progress_percent: 20,
             tool_actions: vec![AgentToolAction::new(
