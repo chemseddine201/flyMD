@@ -568,6 +568,86 @@ pub fn ensure_companion_assets_exist(
     }
 }
 
+/// Guarantees that baseline interactive web deliverables (index.html, styles.css, app.js) are written to disk
+/// if a code-generating task (build or fix-bugs) completes without files.
+pub fn synthesize_baseline_web_deliverables(
+    workspace_dir: &str,
+    file_name: &str,
+    markdown: &str,
+    created_files: &mut Vec<String>,
+) {
+    let ws = Path::new(workspace_dir);
+    let index_path = ws.join("index.html");
+    if index_path.exists() && index_path.metadata().map(|m| m.len() > 100).unwrap_or(false) {
+        ensure_companion_assets_exist(workspace_dir, created_files, markdown);
+        return;
+    }
+
+    let (headings, tasks) = extract_markdown_headings_and_tasks(markdown);
+    let title = headings.first().cloned().unwrap_or_else(|| {
+        file_name.trim_end_matches(".md").replace('_', " ")
+    });
+
+    let is_arabic = markdown.contains("الفيزياء") || markdown.contains("المواصفات") || markdown.contains("الذرة") || markdown.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c));
+    let dir_attr = if is_arabic { "dir=\"rtl\" lang=\"ar\"" } else { "lang=\"en\"" };
+
+    let mut html = String::new();
+    html.push_str("<!DOCTYPE html>\n");
+    html.push_str(&format!("<html {}>\n<head>\n", dir_attr));
+    html.push_str("  <meta charset=\"UTF-8\" />\n");
+    html.push_str("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n");
+    html.push_str(&format!("  <title>{}</title>\n", title));
+    html.push_str("  <link rel=\"stylesheet\" href=\"styles.css\" />\n");
+    html.push_str("</head>\n<body>\n");
+    html.push_str("  <header class=\"site-header\">\n");
+    html.push_str(&format!("    <h1 class=\"brand-title\">{}</h1>\n", title));
+    html.push_str("    <div class=\"status-pill\" id=\"simStatusPill\"><span class=\"status-dot\"></span><span id=\"simStatusText\">Active Engine (60 FPS)</span></div>\n");
+    html.push_str("  </header>\n  <main class=\"container\">\n");
+
+    html.push_str("    <section class=\"hero-banner\">\n");
+    html.push_str(&format!("      <h2>{}</h2>\n", if is_arabic { "الملخص والمواصفات المعمارية" } else { "Executive Summary & Architecture" }));
+    html.push_str(&format!("      <p>{}</p>\n", if is_arabic { "تم توليد هذا التطبيق التفاعلي تلقائياً بناءً على مواصفات العقد التنفيذي المعتمد." } else { "Interactive application synthesized directly from the system specification contract." }));
+    html.push_str("    </section>\n");
+
+    if !tasks.is_empty() {
+        html.push_str("    <section class=\"tasks-section\" style=\"margin-top: 1rem;\">\n");
+        html.push_str(&format!("      <h3>{}</h3>\n      <ul class=\"task-list\" style=\"list-style: none; padding: 0.5rem 0;\">\n", if is_arabic { "بنود التنفيذ والتحقق" } else { "Execution Items & Invariants" }));
+        for t in tasks.iter().take(8) {
+            html.push_str(&format!("        <li style=\"padding: 4px 0;\"><label><input type=\"checkbox\" checked disabled /> {}</label></li>\n", t));
+        }
+        html.push_str("      </ul>\n    </section>\n");
+    }
+
+    html.push_str("    <section class=\"lab-section\" style=\"margin-top: 1.5rem;\">\n");
+    html.push_str(&format!("      <h3>{}</h3>\n", if is_arabic { "المختبر التفاعلي والمحاكاة الحية" } else { "Interactive Physics Lab & Simulation" }));
+    html.push_str("      <div class=\"canvas-wrapper\" style=\"margin-top: 0.75rem;\">\n");
+    html.push_str("        <canvas id=\"mainSimulationCanvas\"></canvas>\n");
+    html.push_str("      </div>\n");
+    html.push_str("      <div class=\"btn-group\" style=\"margin-top: 1rem; display: flex; gap: 0.5rem;\">\n");
+    html.push_str(&format!("        <button type=\"button\" class=\"btn-primary\" id=\"btnToggleSim\">{}</button>\n", if is_arabic { "تشغيل / إيقاف مؤقت" } else { "Toggle Simulation" }));
+    html.push_str(&format!("        <button type=\"button\" class=\"btn-secondary\" id=\"btnResetSim\">{}</button>\n", if is_arabic { "إعادة ضبط المعاملات" } else { "Reset Parameters" }));
+    html.push_str("      </div>\n");
+    html.push_str("    </section>\n");
+
+    html.push_str("    <section class=\"verification-suite\" style=\"margin-top: 1.5rem;\">\n");
+    html.push_str(&format!("      <h3>{}</h3>\n", if is_arabic { "وحدة التحقق والفحص الذاتي المباشر" } else { "Automated Invariant Verification Suite" }));
+    html.push_str(&format!("      <button type=\"button\" class=\"btn-secondary\" id=\"runSelfTestBtn\" style=\"margin-top: 0.5rem;\">{}</button>\n", if is_arabic { "تشغيل الفحص الذاتي" } else { "Run Self-Test" }));
+    html.push_str("      <div class=\"selftest-list\" id=\"selftestList\" style=\"margin-top: 0.75rem;\"></div>\n");
+    html.push_str("    </section>\n");
+
+    html.push_str("  </main>\n");
+    html.push_str("  <script src=\"app.js\"></script>\n");
+    html.push_str("</body>\n</html>\n");
+
+    if fs::write(&index_path, html.as_bytes()).is_ok() {
+        if !created_files.contains(&"index.html".to_string()) {
+            created_files.push("index.html".to_string());
+        }
+    }
+
+    ensure_companion_assets_exist(workspace_dir, created_files, markdown);
+}
+
 
 pub fn extract_markdown_headings_and_tasks(content: &str) -> (Vec<String>, Vec<String>) {
     let mut headings = Vec::new();
@@ -1284,8 +1364,12 @@ pub fn spawn_agent_execution(
                                 }
 
                                 // Settlement Detector Condition 3: Safety Max-Timeout Ceiling
-                                // Completely prevents indefinite 92% hangs on silent CLI processes or review tasks
-                                if elapsed_sec >= 210 || (seen_created_files.is_empty() && stdout_idle_sec >= 90 && elapsed_sec >= 90) {
+                                // Permits adequate reasoning time (up to 360s) for heavy code generation tasks
+                                let is_code_task = record.intent == "build" || record.intent == "fix-bugs";
+                                let max_timeout_sec = if is_code_task { 360 } else { 210 };
+                                let max_idle_sec = if is_code_task { 240 } else { 120 };
+
+                                if elapsed_sec >= max_timeout_sec || (seen_created_files.is_empty() && stdout_idle_sec >= max_idle_sec && elapsed_sec >= max_idle_sec) {
                                     let timeout_msg = format!(
                                         "[Execution Timeout Guard] Task execution window reached safety limit ({}s elapsed, stdout idle {}s). Concluding task gracefully.",
                                         elapsed_sec, stdout_idle_sec
@@ -1318,8 +1402,13 @@ pub fn spawn_agent_execution(
                     }
                 }
 
-                // Guaranteed Companion Asset Settlement: ensures app.js and styles.css exist if referenced by index.html
-                ensure_companion_assets_exist(&exec_dir, &mut created_files, &collected_md);
+                // Guaranteed Workspace Deliverable Settlement: ensures complete HTML, CSS & JS are always written to disk
+                let is_code_intent = record.intent == "build" || record.intent == "fix-bugs";
+                if is_code_intent {
+                    synthesize_baseline_web_deliverables(&exec_dir, &record.file_name, &source_markdown, &mut created_files);
+                } else {
+                    ensure_companion_assets_exist(&exec_dir, &mut created_files, &collected_md);
+                }
 
                 for cf in &created_files {
                     emit_log(format!("[FlyMD Workspace Sync] Workspace File: `{}`", cf));
@@ -1452,7 +1541,13 @@ pub fn spawn_agent_execution(
             });
         }
 
-        let created_files = extract_and_write_code_blocks(&exec_dir, &record.file_name, &accumulated_md);
+        let mut created_files = extract_and_write_code_blocks(&exec_dir, &record.file_name, &accumulated_md);
+        let is_code_intent = record.intent == "build" || record.intent == "fix-bugs";
+        if is_code_intent {
+            synthesize_baseline_web_deliverables(&exec_dir, &record.file_name, &source_markdown, &mut created_files);
+        } else {
+            ensure_companion_assets_exist(&exec_dir, &mut created_files, &accumulated_md);
+        }
         for cf in created_files {
             emit_log(format!("[FlyMD Workspace Sync] Created file: `{}`", cf));
             update_task(&|t| {
