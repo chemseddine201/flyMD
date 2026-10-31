@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>درس الزلازل والقوانين الزلزالية — السنة الثالثة متوسط (مختبر تفاعلي وكراس PDF مصور قابل للطبع)</title>
+  <meta name="description" content="درس تفاعلي شامل للسنة الثالثة متوسط يشرح الزلازل، خصائصها، البؤرة، المركز السطحي، الفوالق، الموجات الزلزالية P و S و L، المسجل الزلزالي، وكل القوانين الرياضية الزلزالية في شكل ملف PDF مدعوم بالصور والمخططات قابل للطبع." />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/print-pdf.css" />
+</head>
+<body>
+  <div id="app-root" dir="rtl" lang="ar">
+    <!-- حارس الأمان والاسترجاع التلقائي عند الأعطال -->
+    <div id="error-banner" class="error-banner no-print" hidden role="alert" aria-live="assertive">
+      <div class="error-banner-content">
+        <span class="error-icon">⚠️</span>
+        <div class="error-text">
+          <strong>تم تفعيل وضع الحماية الاسترجاعي:</strong>
+          <span id="error-message-text">حدث خطأ غير متوقع أثناء المعالجة وتم تأمين البيانات.</span>
+        </div>
+        <button id="btn-error-reset" type="button" class="btn btn-danger-outline">إعادة الضبط للوضع الآمن</button>
+      </div>
+    </div>
+
+    <!-- شريط التحكم العلوي الثابت -->
+    <header id="app-header" class="app-header no-print">
+      <div class="header-brand">
+        <div class="brand-badge">3 متوسط</div>
+        <div class="brand-titles">
+          <h1>الزلازل والقوانين الزلزالية — المختبر التفاعلي والكراس المصور</h1>
+          <p>علوم الطبيعة والحياة والفيزياء الجيولوجية • ملخص شامل مدعوم بالمخططات قابل للطبع PDF</p>
+        </div>
+      </div>
+
+      <div class="header-actions" role="toolbar" aria-label="أدوات العرض والطباعة">
+        <div class="mode-switch-group" role="group" aria-label="تبديل وضع العرض">
+          <button id="btn-mode-interactive" type="button" class="btn btn-mode active" aria-pressed="true">
+            <span class="btn-icon">🔬</span>
+            <span>المختبر التفاعلي + الكراس</span>
+          </button>
+          <button id="btn-mode-workbook" type="button" class="btn btn-mode" aria-pressed="false">
+            <span class="btn-icon">📄</span>
+            <span>معاينة كراس الـ PDF (5 صفحات A4)</span>
+          </button>
+        </div>
+
+        <button id="btn-toggle-audio" type="button" class="btn btn-secondary" aria-pressed="false" title="تفعيل أو كتم صوت الهزة الزلزالية">
+          <span class="btn-icon" id="audio-icon">🔇</span>
+          <span id="audio-label">الصوت الزلزالي: مكتوم</span>
+        </button>
+
+        <button id="btn-print-pdf" type="button" class="btn btn-primary-print" title="طباعة الدرس أو حفظه كملف PDF جاهز بقياس A4">
+          <span class="btn-icon">🖨️</span>
+          <span>طباعة / تحميل ملف PDF المصور</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- شريط التنقل بين الفصول التعليمية -->
+    <nav id="chapter-nav" class="chapter-nav no-print" aria-label="فصول الدرس التفاعلي">
+      <button type="button" class="nav-pill active" data-section-target="sec-simulator">1. محاكي الزلزال والسيزموغرام</button>
+      <button type="button" class="nav-pill" data-section-target="sec-calculators">2. حاسبة القوانين الزلزالية</button>
+      <button type="button" class="nav-pill" data-section-target="sec-triangulation">3. التثليث وتحديد المركز السطحي</button>
+      <button type="button" class="nav-pill" data-section-target="sec-quiz">4. التقويم التفاعلي (8 أسئلة)</button>
+      <button type="button" class="nav-pill nav-pill-pdf" data-section-target="printable-workbook">5. كراس الدرس المصور (PDF جاهز للطبع)</button>
+    </nav>
+
+    <!-- المنصة التفاعلية (المختبر الحي) -->
+    <main id="interactive-view" class="interactive-view no-print">
+
+      <!-- القسم 1: محاكي الزلزال والموجات الزلزالية الحي -->
+      <section id="sec-simulator" class="lab-section">
+        <div class="section-header">
+          <div>
+            <span class="section-kicker">الفصل العملي الأول • محاكاة فيزيائية فورية</span>
+            <h2>محاكي البؤرة، الفوالق، وانتشار الموجات الزلزالية (<span class="math-inline" dir="ltr"><var>P</var>, <var>S</var>, <var>L</var></span>)</h2>
+            <p>تحكم في مقدار الزلزال على سلم ريشتر (<span class="math-inline" dir="ltr"><var>M</var></span>)، عمق البؤرة (<span class="math-inline" dir="ltr"><var>h</var></span>)، ومسافة محطة الرصد (<span class="math-inline" dir="ltr"><var>x</var></span>)، ثم أطلق الهزة لمشاهدة انتشار الموجات وتسجيلها على السيزموغراف الحي.</p>
+          </div>
+          <div class="sim-controls-bar">
+            <button id="btn-sim-trigger" type="button" class="btn btn-trigger">⚡ إحداث هزة زلزالية</button>
+            <button id="btn-sim-pause" type="button" class="btn btn-outline" disabled>⏸️ إيقاف مؤقت</button>
+            <button id="btn-sim-reset" type="button" class="btn btn-outline">🔄 إعادة الضبط</button>
+          </div>
+        </div>
+
+        <div class="simulator-grid">
+          <!-- لوحة الرسم الجيولوجي والسيزموغرام -->
+          <div class="canvas-stage-column">
+            <div class="canvas-card">
+              <div class="canvas-card-header">
+                <span class="canvas-title">المقطع الجيولوجي للبؤرة (<span class="math-inline" dir="ltr"><var>F</var></span>) والمركز السطحي (<span class="math-inline" dir="ltr"><var>E</var></span>) وانتشار الأمواج</span>
+                <div class="wave-legend">
+                  <span class="legend-item"><i class="dot dot-p"></i> موجة أولية <span class="math-inline" dir="ltr"><var>P</var></span> (تضاغطية سريعة)</span>
+                  <span class="legend-item"><i class="dot dot-s"></i> موجة ثانوية <span class="math-inline" dir="ltr"><var>S</var></span> (قصية مستعرضة)</span>
+                  <span class="legend-item"><i class="dot dot-l"></i> موجة سطحية <span class="math-inline" dir="ltr"><var>L</var></span> (تدميرية)</span>
+                </div>
+              </div>
+              <div class="canvas-wrapper">
+                <canvas id="sim-canvas" width="860" height="420" aria-label="محاكاة المقطع الجيولوجي للزلزال"></canvas>
+              </div>
+            </div>
+
+            <div class="canvas-card">
+              <div class="canvas-card-header">
+                <span class="canvas-title">التسجيل الزلزالي الحي في محطة الرصد (السيزموغرام — Seismogram)</span>
+                <span class="canvas-subtitle">يرصد لحظة الانطلاق <span class="math-inline" dir="ltr"><var>t</var><sub>0</sub></span>، وصول <span class="math-inline" dir="ltr"><var>t</var><sub>P</sub></span>، وصول <span class="math-inline" dir="ltr"><var>t</var><sub>S</sub></span>، وفارق الزمن <span class="math-inline" dir="ltr">Δ<var>t</var> = <var>t</var><sub>S</sub> − <var>t</var><sub>P</sub></span></span>
+              </div>
+              <div class="canvas-wrapper">
+                <canvas id="seismogram-canvas" width="860" height="180" aria-label="مخطط السيزموغرام الزمني"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوحة المتغيرات الفيزيائية والمؤشرات اللحظية -->
+          <aside class="sim-sidebar">
+            <div class="control-panel-card">
+              <h3>معاملات البؤرة والمحطة</h3>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <label for="input-magnitude">مقدار الزلزال (سلم ريشتر <span class="math-inline" dir="ltr"><var>M</var></span>):</label>
+                  <output id="val-magnitude" for="input-magnitude" class="value-pill">6.5 درجات</output>
+                </div>
+                <input id="input-magnitude" type="range" min="2.0" max="9.0" step="0.1" value="6.5" />
+                <div class="range-hints"><span>2.0 (ضعيف جداً)</span><span>5.5 (متوسط)</span><span>9.0 (مدمر عالمياً)</span></div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <label for="input-depth">عمق البؤرة الزلزالية (<span class="math-inline" dir="ltr"><var>h</var></span>):</label>
+                  <output id="val-depth" for="input-depth" class="value-pill">15 كم</output>
+                </div>
+                <input id="input-depth" type="range" min="2" max="300" step="1" value="15" />
+                <div class="range-hints"><span>2 كم (بؤرة سطحية خطيرة)</span><span>70 كم (متوسطة)</span><span>300 كم (عميقة)</span></div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <label for="input-distance">مسافة محطة الرصد عن المركز السطحي (<span class="math-inline" dir="ltr"><var>x</var></span>):</label>
+                  <output id="val-distance" for="input-distance" class="value-pill">80 كم</output>
+                </div>
+                <input id="input-distance" type="range" min="10" max="500" step="1" value="80" />
+                <div class="range-hints"><span>10 كم (قريبة)</span><span>250 كم</span><span>500 كم (بعيدة)</span></div>
+              </div>
+
+              <div class="control-group">
+                <label for="select-fault-type" class="block-label">نوع الفالق الجيولوجي (الكسور الصخرية):</label>
+                <select id="select-fault-type" class="form-select">
+                  <option value="reverse" selected>فالق معكوس (Reverse Fault — قوى انضغاط وتقارب)</option>
+                  <option value="normal">فالق عادي (Normal Fault — قوى تمدد وتباعد)</option>
+                  <option value="strike-slip">فالق انزلاقي تحويلي (Strike-Slip — قوى قص أفقي)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- بطاقات القراءات الفيزيائية اللحظية -->
+            <div class="metrics-grid">
+              <div class="metric-card metric-card-danger">
+                <span class="metric-label">الشدة في المركز السطحي (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub></span> — ميركالي)</span>
+                <strong id="metric-epicentral-intensity" class="metric-value">VIII (8.4) — مخرب</strong>
+              </div>
+              <div class="metric-card metric-card-warning">
+                <span class="metric-label">الشدة عند محطة الرصد (<span class="math-inline" dir="ltr"><var>I</var>(<var>x</var>)</span>)</span>
+                <strong id="metric-station-intensity" class="metric-value">VI (5.9) — قوي</strong>
+              </div>
+              <div class="metric-card metric-card-info">
+                <span class="metric-label">فارق زمن الوصول (<span class="math-inline" dir="ltr">Δ<var>t</var> = <var>t</var><sub>S</sub> − <var>t</var><sub>P</sub></span>)</span>
+                <strong id="metric-delta-t" class="metric-value">9.69 ثانية</strong>
+              </div>
+              <div class="metric-card metric-card-energy">
+                <span class="metric-label">الطاقة الزلزالية المحررة (<span class="math-inline" dir="ltr"><var>E</var></span>)</span>
+                <strong id="metric-energy-joules" class="metric-value">3.55 × 10¹⁴ جول</strong>
+              </div>
+            </div>
+
+            <div class="pedagogical-callout">
+              <strong>💡 الاستنتاج العلمي للسنة 3 متوسط:</strong>
+              <p id="sim-pedagogical-note">كلما قل عمق البؤرة (<span class="math-inline" dir="ltr"><var>h</var></span>) زادت الشدة التدميرية في المركز السطحي (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub></span>) وتقلصت مساحة المنطقة المتضررة، وكلما زاد العمق قلت الشدة القصوى واتسع نطاق الشعور بالهزة.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- القسم 2: المختبر الحسابي لجميع قوانين الزلازل -->
+      <section id="sec-calculators" class="lab-section">
+        <div class="section-header">
+          <div>
+            <span class="section-kicker">الفصل العملي الثاني • التطبيقات الرياضية خطوة بخطوة</span>
+            <h2>المختبر الحسابي الشامل للقوانين الزلزالية</h2>
+            <p>أدخل المعطيات العددية لأي تمرين مدرسي لتحصل فوراً على الحل المفصل بالقانون والتعويض والنتيجة مع الوحدات الدولية.</p>
+          </div>
+        </div>
+
+        <div class="calculators-grid">
+          <!-- الحاسبة 1: قانون المسافة وفارق الزمن ونظرية فيثاغورس للبؤرة -->
+          <article class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-badge">القانون 1 و 2</span>
+              <h3>حاسبة المسافة البؤرية (<span class="math-inline" dir="ltr"><var>d</var></span>) والمسافة السطحية (<span class="math-inline" dir="ltr"><var>x</var></span>) من فارق الزمن (<span class="math-inline" dir="ltr">Δ<var>t</var></span>)</h3>
+            </div>
+
+            <div class="math-formula-box" dir="ltr" role="math" aria-label="قانون المسافة البؤرية والمسافة السطحية">
+              <span class="math-eq">
+                <var>d</var><sub>hypo</sub> = Δ<var>t</var> ×
+                <span class="math-frac">
+                  <span class="math-num"><var>v</var><sub>P</sub> × <var>v</var><sub>S</sub></span>
+                  <span class="math-den"><var>v</var><sub>P</sub> − <var>v</var><sub>S</sub></span>
+                </span>
+              </span>
+              <span class="math-sep" aria-hidden="true">|</span>
+              <span class="math-eq">
+                <var>x</var> =
+                <span class="math-sqrt">
+                  <span class="math-sqrt-sign">√</span><span class="math-radicand"><var>d</var><sub>hypo</sub><sup>2</sup> − <var>h</var><sup>2</sup></span>
+                </span>
+              </span>
+            </div>
+
+            <div class="calc-inputs-grid">
+              <div class="input-field">
+                <label for="calc-vp">سرعة الموجة الأولية <span class="math-inline" dir="ltr"><var>v</var><sub>P</sub></span> (<span class="math-inline" dir="ltr"><span class="math-unit">km/s</span></span>)</label>
+                <input id="calc-vp" type="number" step="0.1" min="4.0" max="8.5" value="6.0" />
+              </div>
+              <div class="input-field">
+                <label for="calc-vs">سرعة الموجة الثانوية <span class="math-inline" dir="ltr"><var>v</var><sub>S</sub></span> (<span class="math-inline" dir="ltr"><span class="math-unit">km/s</span></span>)</label>
+                <input id="calc-vs" type="number" step="0.1" min="2.0" max="5.0" value="3.5" />
+              </div>
+              <div class="input-field">
+                <label for="calc-dt">فارق الزمن المسجل <span class="math-inline" dir="ltr">Δ<var>t</var> = <var>t</var><sub>S</sub> − <var>t</var><sub>P</sub></span> (<span class="math-inline" dir="ltr"><span class="math-unit">s</span></span>)</label>
+                <input id="calc-dt" type="number" step="0.5" min="0.5" max="300" value="12.0" />
+              </div>
+              <div class="input-field">
+                <label for="calc-depth-h">عمق البؤرة <span class="math-inline" dir="ltr"><var>h</var></span> (<span class="math-inline" dir="ltr"><span class="math-unit">km</span></span>)</label>
+                <input id="calc-depth-h" type="number" step="1" min="1" max="300" value="15.0" />
+              </div>
+            </div>
+
+            <div class="calc-results-row">
+              <div class="result-box">
+                <span class="result-title">المسافة البؤرية (<span class="math-inline" dir="ltr"><var>d</var><sub>hypo</sub></span>)</span>
+                <strong id="calc-out-hypo-d" class="result-number">100.80 كم</strong>
+              </div>
+              <div class="result-box">
+                <span class="result-title">المسافة السطحية عن المركز (<span class="math-inline" dir="ltr"><var>x</var></span>)</span>
+                <strong id="calc-out-surface-x" class="result-number">99.68 كم</strong>
+              </div>
+            </div>
+
+            <div id="calc-steps-distance" class="calc-steps-box" aria-live="polite">
+              <!-- يتم ملؤها تلقائياً بخطوات الحل الرياضية -->
+            </div>
+          </article>
+
+          <!-- الحاسبة 2: قانون ريشتر وغوتنبرغ-ريشتر للطاقة والعزم الزلزالي -->
+          <article class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-badge">القانون 3 و 4 و 5</span>
+              <h3>حاسبة سلم ريشتر (<span class="math-inline" dir="ltr"><var>M</var><sub>L</sub></span>)، طاقة غوتنبرغ-ريشتر (<span class="math-inline" dir="ltr"><var>E</var></span>)، ومقارنة زلزالين</h3>
+            </div>
+
+            <div class="math-formula-box" dir="ltr" role="math" aria-label="قانون ريشتر وغوتنبرغ ريشتر">
+              <span class="math-eq">
+                <var>M</var><sub>L</sub> = log<sub>10</sub>(<var>A</var>) + 1.66 · log<sub>10</sub>(<var>x</var>) − 2.0
+              </span>
+              <span class="math-sep" aria-hidden="true">|</span>
+              <span class="math-eq">
+                log<sub>10</sub>(<var>E</var>) = 4.8 + 1.5 · <var>M</var>
+              </span>
+            </div>
+
+            <div class="calc-inputs-grid">
+              <div class="input-field">
+                <label for="calc-amp">أقصى سعة مسجلة <span class="math-inline" dir="ltr"><var>A</var></span> (<span class="math-inline" dir="ltr"><span class="math-unit">μm</span></span> ميكرومتر)</label>
+                <input id="calc-amp" type="number" step="10" min="0.1" max="10000000" value="1000" />
+              </div>
+              <div class="input-field">
+                <label for="calc-dist-x">بعد المحطة <span class="math-inline" dir="ltr"><var>x</var></span> (<span class="math-inline" dir="ltr"><span class="math-unit">km</span></span>)</label>
+                <input id="calc-dist-x" type="number" step="5" min="1" max="2000" value="100" />
+              </div>
+              <div class="input-field">
+                <label for="calc-mag-compare-1">مقدار الزلزال الأول (<span class="math-inline" dir="ltr"><var>M</var><sub>1</sub></span>)</label>
+                <input id="calc-mag-compare-1" type="number" step="0.1" min="1.0" max="9.5" value="5.0" />
+              </div>
+              <div class="input-field">
+                <label for="calc-mag-compare-2">مقدار الزلزال الثاني (<span class="math-inline" dir="ltr"><var>M</var><sub>2</sub></span>)</label>
+                <input id="calc-mag-compare-2" type="number" step="0.1" min="1.0" max="9.5" value="7.0" />
+              </div>
+            </div>
+
+            <div class="calc-results-row calc-results-quad">
+              <div class="result-box">
+                <span class="result-title">المقدار المحلي (<span class="math-inline" dir="ltr"><var>M</var><sub>L</sub></span>)</span>
+                <strong id="calc-out-ml" class="result-number">4.32 درجة</strong>
+              </div>
+              <div class="result-box">
+                <span class="result-title">طاقة <span class="math-inline" dir="ltr"><var>M</var><sub>L</sub></span> المحررة (<span class="math-inline" dir="ltr"><var>E</var></span>)</span>
+                <strong id="calc-out-energy" class="result-number">1.91 × 10¹¹ جول</strong>
+              </div>
+              <div class="result-box">
+                <span class="result-title">تضاعف السعة (<span class="math-inline" dir="ltr"><var>A</var><sub>2</sub> / <var>A</var><sub>1</sub></span>)</span>
+                <strong id="calc-out-ratio-amp" class="result-number">100.00 مرة</strong>
+              </div>
+              <div class="result-box">
+                <span class="result-title">تضاعف الطاقة (<span class="math-inline" dir="ltr"><var>E</var><sub>2</sub> / <var>E</var><sub>1</sub></span>)</span>
+                <strong id="calc-out-ratio-energy" class="result-number">1000.00 مرة</strong>
+              </div>
+            </div>
+
+            <div id="calc-steps-energy" class="calc-steps-box" aria-live="polite">
+              <!-- يتم ملؤها تلقائياً بخطوات الحل الرياضية -->
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- القسم 3: مختبر التثليث الزلزالي لتحديد المركز السطحي -->
+      <section id="sec-triangulation" class="lab-section">
+        <div class="section-header">
+          <div>
+            <span class="section-kicker">الفصل العملي الثالث • التموقع الجغرافي للمركز السطحي</span>
+            <h2>مختبر التثليث الزلزالي (Epicenter Triangulation) بثلاث محطات رصد</h2>
+            <p>يتم تحديد موقع المركز السطحي للزلزال (<span class="math-inline" dir="ltr"><var>E</var></span>) هندسياً برسم ثلاث دوائر مراكزها محطات الرصد (<span class="math-inline" dir="ltr"><var>S</var><sub>1</sub>, <var>S</var><sub>2</sub>, <var>S</var><sub>3</sub></span>) وأنصاف أقطارها المسافات السطحية (<span class="math-inline" dir="ltr"><var>r</var><sub>1</sub>, <var>r</var><sub>2</sub>, <var>r</var><sub>3</sub></span>) المستنتجة من فارق الزمن <span class="math-inline" dir="ltr">Δ<var>t</var></span> في كل محطة.</p>
+          </div>
+        </div>
+
+        <div class="triangulation-layout">
+          <div class="triangulation-controls-card">
+            <h3>فارق الزمن المسجل في المحطات الثلاث</h3>
+            <p class="small-muted">عدل قيم <span class="math-inline" dir="ltr">Δ<var>t</var> = <var>t</var><sub>S</sub> − <var>t</var><sub>P</sub></span> لملاحظة تغير أنصاف أقطار الدوائر ونقطة تقاطعها (المركز السطحي <span class="math-inline" dir="ltr"><var>E</var></span>):</p>
+
+            <div class="input-field">
+              <label for="tri-dt-1">محطة الجزائر العاصمة (<span class="math-inline" dir="ltr"><var>S</var><sub>1</sub></span>) — <span class="math-inline" dir="ltr">Δ<var>t</var><sub>1</sub></span> (ثانية):</label>
+              <input id="tri-dt-1" type="number" step="0.5" min="2" max="45" value="10.0" />
+            </div>
+
+            <div class="input-field">
+              <label for="tri-dt-2">محطة وهران (<span class="math-inline" dir="ltr"><var>S</var><sub>2</sub></span>) — <span class="math-inline" dir="ltr">Δ<var>t</var><sub>2</sub></span> (ثانية):</label>
+              <input id="tri-dt-2" type="number" step="0.5" min="2" max="45" value="14.5" />
+            </div>
+
+            <div class="input-field">
+              <label for="tri-dt-3">محطة قسنطينة (<span class="math-inline" dir="ltr"><var>S</var><sub>3</sub></span>) — <span class="math-inline" dir="ltr">Δ<var>t</var><sub>3</sub></span> (ثانية):</label>
+              <input id="tri-dt-3" type="number" step="0.5" min="2" max="45" value="11.5" />
+            </div>
+
+            <div id="tri-out-coords" class="tri-coords-output" aria-live="polite">
+              <!-- نتائج التثليث الزلزالي -->
+            </div>
+          </div>
+
+          <div class="triangulation-map-card">
+            <div id="triangulation-svg-container" class="svg-responsive-box" aria-label="خريطة التثليث الزلزالي التفاعلية">
+              <!-- يتم حقن مخطط SVG التفاعلي هنا -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- القسم 4: التقويم التفاعلي الشامل -->
+      <section id="sec-quiz" class="lab-section">
+        <div class="section-header">
+          <div>
+            <span class="section-kicker">الفصل العملي الرابع • اختبر مكتسباتك القبلية والمنهجية</span>
+            <h2>التقويم التفاعلي الشامل لدرس الزلازل والقوانين الزلزالية</h2>
+            <p>أجب عن الأسئلة الثمانية التالية (مفاهيم جيولوجية، قراءة السيزموغرام، وحسابات القوانين) ثم اضغط على «تصحيح الإجابات» لعرض النتيجة والتعليل العلمي.</p>
+          </div>
+          <div class="quiz-actions-header">
+            <div id="quiz-score-badge" class="quiz-score-badge">النتيجة: لم يتم التصحيح بعد</div>
+            <button id="btn-quiz-check" type="button" class="btn btn-trigger">✅ تصحيح الإجابات وعرض التعليل</button>
+            <button id="btn-quiz-reset" type="button" class="btn btn-outline">🔄 إعادة المحاولة</button>
+          </div>
+        </div>
+
+        <div id="quiz-container" class="quiz-grid">
+          <!-- يتم بناء الأسئلة الـ 8 برمجياً من js/app.js -->
+        </div>
+      </section>
+    </main>
+
+    <!-- =========================================================================
+         كراس الدرس المصور القابل للطبع والتصدير إلى PDF (5 صفحات A4 قياسية)
+         ========================================================================= -->
+    <section id="printable-workbook" class="printable-workbook" aria-label="كراس الدرس المصور القابل للطبع PDF">
+
+      <!-- شريط إرشادي يظهر على الشاشة فقط ويختفي عند الطباعة -->
+      <div class="workbook-screen-banner no-print">
+        <div>
+          <strong>📘 كراس الدرس المصور الجاهز للطباعة (5 صفحات A4 قياسية):</strong>
+          <span>يحتوي هذا الكراس على شرح الدرس كاملاً، الرسومات التخطيطية، الجداول المقارنة، القوانين الرياضية، والتمارين المحلولة.</span>
+        </div>
+        <button type="button" class="btn btn-primary-print" onclick="window.dispatchEvent(new CustomEvent('request-print-pdf'))">
+          🖨️ طباعة الكراس / حفظ كملف PDF الآن
+        </button>
+      </div>
+
+      <!-- ==================== الصفحة 1 من الكراس ==================== -->
+      <article id="pdf-page-1" class="pdf-page">
+        <header class="pdf-page-header">
+          <div class="pdf-ministry-meta">
+            <span>الجمهورية الجزائرية الديمقراطية الشعبية • وزارة التربية الوطنية</span>
+            <span>المستوى: السنة الثالثة متوسط (3AM) — مادة علوم الطبيعة والحياة والفيزياء الجيولوجية</span>
+          </div>
+          <div class="pdf-title-banner">
+            <h1>الدرس الشامل: الزلازل، خصائصها، المسجل الزلزالي، والقوانين الزلزالية</h1>
+            <p>ملف تعليمي مدعوم بالمخططات الهندسية، الجداول المقارنة، القوانين الرياضية، والتمارين المحلولة</p>
+          </div>
+        </header>
+
+        <div class="pdf-section-block">
+          <h2>أولاً: مفهوم الزلزال والتجليات السطحية للهزة الأرضية</h2>
+          <div class="pdf-definition-box">
+            <strong>1. التعريف العلمي للزلزال (Séisme / Earthquake):</strong>
+            <p>الزلزال ظاهرة طبيعية جيولوجية تتجلى على سطح الأرض في شكل <strong>هزات أرضية سريعة ومتكررة</strong> تدوم بضع ثوانٍ إلى دقيقتين، تنتج عن <strong>انكسار مفاجئ للصخور في العمق (على مستوى الفالق)</strong> إثر تجاوز قوى الانضغاط أو التمدد لحدود مرونة الصخور، مما يحرر طاقة هائلة تنتشر في جميع الاتجاهات على هيئة <strong>أمواج زلزالية</strong>، وتتبع الهزة الرئيسية عادةً <strong>هزات ارتدادية (Répliques)</strong> أضعف منها.</p>
+          </div>
+
+          <div class="pdf-two-col">
+            <div class="pdf-card">
+              <h3>2. مظاهر وآثار الزلزال على السطح</h3>
+              <ul class="pdf-list">
+                <li><strong>تشوهات القشرة الأرضية:</strong> ظهور فوالق (كسور مع إزاحة)، شقوق أرضية، طيات، وارتفاع أو انخساف السواحل.</li>
+                <li><strong>خسائر مادية وعمرانية:</strong> انهيار كلي أو جزئي للمباني، الجسور، الطرقات، وشبكات الكهرباء والغاز.</li>
+                <li><strong>خسائر بشرية ونفسية:</strong> وفيات، جرحى، مفقودين تحت الأنقاض، وصدمات نفسية.</li>
+                <li><strong>موجات تسونامي (Tsunami):</strong> عند حدوث الزلزال في قاع البحر أو المحيط بفالق عمودي.</li>
+              </ul>
+            </div>
+
+            <div class="pdf-card">
+              <h3>3. أمثلة عن زلازل تاريخية في الجزائر</h3>
+              <table class="pdf-table">
+                <thead>
+                  <tr>
+                    <th>الزلزال (المنطقة)</th>
+                    <th>التاريخ</th>
+                    <th>المقدار (<span class="math-inline" dir="ltr"><var>M</var></span>)</th>
+                    <th>أبرز الآثار المسجلة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>الأصنام (الشلف)</strong></td>
+                    <td>10 أكتوبر 1980</td>
+                    <td>7.3 ريشتر</td>
+                    <td>ظهور فالق طوله 36 كم وإزاحة عمودية بـ 4.2 م وتدمير 80% من المدينة.</td>
+                  </tr>
+                  <tr>
+                    <td><strong>بومرداس - زموري</strong></td>
+                    <td>21 ماي 2003</td>
+                    <td>6.8 ريشتر</td>
+                    <td>بؤرة بحرية ضحلة (<span class="math-inline" dir="ltr"><var>h</var> ≈ 10 <span class="math-unit">km</span></span>)، تراجع ماء البحر وارتفاع الساحل بـ 50 سم.</td>
+                  </tr>
+                  <tr>
+                    <td><strong>ميلة / بجاية</strong></td>
+                    <td>2020 / 2021</td>
+                    <td>4.9 - 5.9</td>
+                    <td>تشققات أرضية وانزلاقات تربة وتضرر البنايات الهشة القريبة من المركز السطحي.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- المخطط رقم 1: التشريح الهندسي الكامل للزلزال -->
+        <div class="pdf-diagram-block">
+          <div class="diagram-caption-top">
+            <strong>المخطط التوضيحي (1):</strong> المقطع الجيولوجي التشريحي للزلزال — البؤرة (<span class="math-inline" dir="ltr"><var>F</var></span>)، المركز السطحي (<span class="math-inline" dir="ltr"><var>E</var></span>)، الفالق، العمق (<span class="math-inline" dir="ltr"><var>h</var></span>)، وانتشار الأمواج الزلزالية
+          </div>
+          <div id="svg-anatomy-diagram" class="pdf-svg-slot">
+            <!-- يتم توليد المخطط الشعاعي عالي الدقة بواسطة js/svg-diagrams.js -->
+          </div>
+        </div>
+
+        <div class="pdf-section-block">
+          <h2>ثانياً: الخصائص الهندسية والفيزيائية الكبرى للزلزال</h2>
+          <div class="pdf-four-grid">
+            <div class="pdf-mini-card">
+              <strong>1. البؤرة (<span class="math-inline" dir="ltr"><var>F</var></span> — Foyer / Hypocenter)</strong>
+              <p>منطقة في عمق القشرة الأرضية على عمق <span class="math-inline" dir="ltr"><var>h</var></span> ينشأ فيها الكسر الصخري (الفالق) وتنطلق منها الأمواج الزلزالية في جميع الاتجاهات.</p>
+            </div>
+            <div class="pdf-mini-card">
+              <strong>2. المركز السطحي (<span class="math-inline" dir="ltr"><var>E</var></span> — Épicentre)</strong>
+              <p>المنطقة السطحية الواقعة <strong>شاقولياً (عمودياً) فوق البؤرة مباشرة</strong>، وتصلها الأمواج الزلزالية أولاً فتسجل فيها أقصى شدة (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub></span>) وأكبر الخسائر.</p>
+            </div>
+            <div class="pdf-mini-card">
+              <strong>3. المقدار (<span class="math-inline" dir="ltr"><var>M</var></span> — Magnitude)</strong>
+              <p>كمية الطاقة الميكانيكية المحررة في البؤرة أثناء انكسار الصخور، يقاس على <strong>سلم ريشتر</strong> (بقيمة واحدة ثابتة للزلزال الواحد).</p>
+            </div>
+            <div class="pdf-mini-card">
+              <strong>4. الشدة (<span class="math-inline" dir="ltr"><var>I</var></span> — Intensité)</strong>
+              <p>حجم الخسائر والأضرار المسجلة على السطح ومدى شعور السكان بالهزة، تقاس على <strong>سلم ميركالي (MSK / EMS-98)</strong> من <span class="math-inline" dir="ltr">I</span> إلى <span class="math-inline" dir="ltr">XII</span> وتتناقص بالابتعاد عن <span class="math-inline" dir="ltr"><var>E</var></span>.</p>
+            </div>
+          </div>
+        </div>
+
+        <footer class="pdf-page-footer">
+          <span>كراس علوم الطبيعة والحياة والفيزياء الجيولوجية — السنة الثالثة متوسط</span>
+          <span>الصفحة 1 من 5</span>
+        </footer>
+      </article>
+
+      <!-- ==================== الصفحة 2 من الكراس ==================== -->
+      <article id="pdf-page-2" class="pdf-page">
+        <header class="pdf-page-header-compact">
+          <span>الدرس الشامل للزلازل والقوانين الزلزالية — السنة الثالثة متوسط</span>
+          <span>الفصل الثاني: المنحنيات متساوية الشدة، المقارنة بين ريشتر وميركالي، وتأثير عمق البؤرة</span>
+        </header>
+
+        <div class="pdf-section-block">
+          <h2>ثالثاً: المنحنيات متساوية الشدة (Courbes Isoséistes) وتحديد المركز السطحي</h2>
+          <p class="pdf-lead"><strong>تعريف المنحنيات متساوية الشدة:</strong> هي خطوط منحنية مغلقة ترسم على الخريطة وتربط بين جميع النقاط والمدن التي سجلت <strong>نفس الشدة الزلزالية (<span class="math-inline" dir="ltr"><var>I</var></span>)</strong> على سلم ميركالي/MSK. يمثل مركز الدائرة الداخلية ذات الشدة القصوى (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub></span>) <strong>المركز السطحي للزلزال (<span class="math-inline" dir="ltr"><var>E</var></span>)</strong>.</p>
+        </div>
+
+        <!-- المخطط رقم 2: المنحنيات متساوية الشدة ومقارنة عمق البؤرة -->
+        <div class="pdf-diagram-block">
+          <div class="diagram-caption-top">
+            <strong>المخطط التوضيحي (2):</strong> خريطة المنحنيات متساوية الشدة (يمين) ومقارنة تأثير البؤرة السطحية القريبة مقابل البؤرة العميقة (يسار)
+          </div>
+          <div id="svg-isoseismal-diagram" class="pdf-svg-slot">
+            <!-- يتم توليد المخطط الشعاعي بواسطة js/svg-diagrams.js -->
+          </div>
+        </div>
+
+        <div class="pdf-section-block">
+          <h2>رابعاً: جدول المقارنة المنهجي بين سلم ريشتر وسلم ميركالي (MSK / EMS-98)</h2>
+          <table class="pdf-table pdf-table-striped">
+            <thead>
+              <tr>
+                <th>وجه المقارنة</th>
+                <th>المقدار الزلزالي — سلم ريشتر (Richter <span class="math-inline" dir="ltr"><var>M</var><sub>L</sub></span>)</th>
+                <th>الشدة الزلزالية — سلم ميركالي المعدل (MSK / EMS-98)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>المفهوم العلمي</strong></td>
+                <td>يقيس <strong>كمية الطاقة المحررة في البؤرة (<span class="math-inline" dir="ltr"><var>F</var></span>)</strong> لحظة الكسر الصخري.</td>
+                <td>يقيس <strong>حجم الخسائر والأضرار السطحية</strong> ومدى إحساس الإنسان بالهزة.</td>
+              </tr>
+              <tr>
+                <td><strong>أداة القياس</strong></td>
+                <td>حساب رياضي لوغاريتمي انطلاقاً من سعة الموجات في <strong>المسجل الزلزالي (السيزموغراف)</strong>.</td>
+                <td>ملاحظة ميدانية للأضرار العمرانية والجيولوجية واستجواب السكان.</td>
+              </tr>
+              <tr>
+                <td><strong>التدريج والترقيم</strong></td>
+                <td>أعداد عشرية مفتوحة نظرياً (عملياً من <span class="math-inline" dir="ltr">1.0</span> إلى <span class="math-inline" dir="ltr">9.5</span> درجات).</td>
+                <td>مقسم إلى <strong>12 درجة بالحروف الرومانية</strong> من <span class="math-inline" dir="ltr">I</span> (غير محسوس) إلى <span class="math-inline" dir="ltr">XII</span> (كارثي شامل).</td>
+              </tr>
+              <tr>
+                <td><strong>ثبات القيمة</strong></td>
+                <td><strong>قيمة وحيدة ثابتة</strong> للزلزال الواحد مهما تغيرت محطة الرصد.</td>
+                <td><strong>قيمة متغيرة من منطقة لأخرى:</strong> تكون عظمى (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub></span>) في المركز السطحي وتتناقص كلما ابتعدنا عنه.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pdf-section-block">
+          <h2>خامساً: العلاقة بين عمق البؤرة (<span class="math-inline" dir="ltr"><var>h</var></span>) وشدة الخسائر على السطح</h2>
+          <div class="pdf-two-col">
+            <div class="pdf-card pdf-card-highlight">
+              <h3>حالة البؤرة القريبة من السطح (<span class="math-inline" dir="ltr"><var>h</var></span> صغير: مثلاً <span class="math-inline" dir="ltr">5 – 15 <span class="math-unit">km</span></span>)</h3>
+              <p>تقطع الأمواج الزلزالية مسافة قصيرة جداً قبل الوصول إلى المركز السطحي فلا تتخامد طاقتها، لذلك تكون <strong>الشدة في المركز السطحي (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub></span>) عظيمة ومدمرة جداً</strong>، لكن الأمواج تتلاشى سريعاً أفقياً فتكون المنطقة المتضررة <strong>ضيقة المساحة</strong>.</p>
+            </div>
+            <div class="pdf-card pdf-card-highlight">
+              <h3>حالة البؤرة العميقة (<span class="math-inline" dir="ltr"><var>h</var></span> كبير: مثلاً <span class="math-inline" dir="ltr">100 – 300 <span class="math-unit">km</span></span>)</h3>
+              <p>تقطع الأمواج الزلزالية مسافة طويلة داخل طبقات الأرض فتفقد جزءاً كبيراً من طاقتها بالتخامد، لذلك تكون <strong>الشدة في المركز السطحي أقل تدميراً</strong>، غير أن الأمواج تصل إلى السطح على <strong>مساحة جغرافية واسعة جداً</strong>.</p>
+            </div>
+          </div>
+        </div>
+
+        <footer class="pdf-page-footer">
+          <span>كراس علوم الطبيعة والحياة والفيزياء الجيولوجية — السنة الثالثة متوسط</span>
+          <span>الصفحة 2 من 5</span>
+        </footer>
+      </article>
+
+      <!-- ==================== الصفحة 3 من الكراس ==================== -->
+      <article id="pdf-page-3" class="pdf-page">
+        <header class="pdf-page-header-compact">
+          <span>الدرس الشامل للزلازل والقوانين الزلزالية — السنة الثالثة متوسط</span>
+          <span>الفصل الثالث: المسجل الزلزالي (السيزموغراف)، أنواع الأمواج (<span class="math-inline" dir="ltr"><var>P</var>, <var>S</var>, <var>L</var></span>)، وأنواع الفوالق</span>
+        </header>
+
+        <div class="pdf-section-block">
+          <h2>سادساً: المسجل الزلزالي (Séismographe) والتسجيل الزلزالي (Séismogramme)</h2>
+          <p class="pdf-lead"><strong>مبدأ عمل المسجل الزلزالي:</strong> يتكون من حامل مثبت في صخور القشرة الأرضية يتحرك مع اهتزاز الأرض، وثقل كبير معلق بنابض يبقى ساكناً بفعل <strong>القصور الذاتي (العطالة)</strong> مزود بقلم يخط الاهتزازات على أسطوانة دوارة (أو مستشعر كهرومغناطيسي رقمي)، محولاً الهزات الأرضية إلى منحنى بياني يسمى <strong>التسجيل الزلزالي (السيزموغرام)</strong>.</p>
+        </div>
+
+        <!-- المخطط رقم 3: المسجل الزلزالي، الموجات P/S/L، وأنواع الفوالق -->
+        <div class="pdf-diagram-block">
+          <div class="diagram-caption-top">
+            <strong>المخطط التوضيحي (3):</strong> بنية المسجل الزلزالي، قراءة السيزموغرام (<span class="math-inline" dir="ltr"><var>t</var><sub>0</sub>, <var>t</var><sub>P</sub>, <var>t</var><sub>S</sub>, Δ<var>t</var></span>)، حركة الجسيمات في الأمواج (<span class="math-inline" dir="ltr"><var>P</var>, <var>S</var>, <var>L</var></span>)، وأنواع الفوالق الثلاثة
+          </div>
+          <div id="svg-waves-seismogram-diagram" class="pdf-svg-slot">
+            <!-- يتم توليد المخطط الشعاعي بواسطة js/svg-diagrams.js -->
+          </div>
+        </div>
+
+        <div class="pdf-section-block">
+          <h2>سابعاً: مقارنة شاملة بين الموجات الزلزالية الثلاث (<span class="math-inline" dir="ltr"><var>P</var></span>، <span class="math-inline" dir="ltr"><var>S</var></span>، <span class="math-inline" dir="ltr"><var>L</var></span>)</h2>
+          <table class="pdf-table pdf-table-striped">
+            <thead>
+              <tr>
+                <th>نوع الموجة الزلزالية</th>
+                <th>طبيعة التشوه وحركة الجسيمات</th>
+                <th>السرعة المتوسطة في القشرة</th>
+                <th>أوساط الانتشار</th>
+                <th>ترتيب الوصول والتأثير</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>الموجات الأولية (<span class="math-inline" dir="ltr"><var>P</var></span> — Primaires)</strong></td>
+                <td><strong>طولية تضاغطية (تضاغط وتخلخل)</strong> في نفس جهة انتشار الموجة (مثل الصوت).</td>
+                <td>سريعة جداً (<span class="math-inline" dir="ltr"><var>v</var><sub>P</sub> ≈ 5.5 – 8.0 <span class="math-unit">km/s</span></span>)</td>
+                <td>الأوساط <strong>الصلبة والسائلة والغازية</strong>.</td>
+                <td>تصل <strong>أولاً</strong> إلى المحطة (<span class="math-inline" dir="ltr"><var>t</var><sub>P</sub></span>) وسعتها صغيرة نسبياً.</td>
+              </tr>
+              <tr>
+                <td><strong>الموجات الثانوية (<span class="math-inline" dir="ltr"><var>S</var></span> — Secondaires)</strong></td>
+                <td><strong>مستعرضة قصية</strong> تهتز فيها الجسيمات عمودياً على جهة انتشار الموجة.</td>
+                <td>متوسطة (<span class="math-inline" dir="ltr"><var>v</var><sub>S</sub> ≈ 3.0 – 4.5 <span class="math-unit">km/s</span></span>)</td>
+                <td>الأوساط <strong>الصلبة فقط</strong> (لا تخترق النواة الخارجية السائلة).</td>
+                <td>تصل <strong>ثانياً</strong> (<span class="math-inline" dir="ltr"><var>t</var><sub>S</sub></span>) وسعتها أكبر من <span class="math-inline" dir="ltr"><var>P</var></span>.</td>
+              </tr>
+              <tr>
+                <td><strong>الموجات السطحية (<span class="math-inline" dir="ltr"><var>L</var></span> — Longues / Love &amp; Rayleigh)</strong></td>
+                <td><strong>تموجية سطحية معقدة</strong> (إهليلجية وأفقية) تنتشر في الطبقات السطحية فقط.</td>
+                <td>بطيئة وثابتة (<span class="math-inline" dir="ltr"><var>v</var><sub>L</sub> ≈ 2.5 – 3.2 <span class="math-unit">km/s</span></span>)</td>
+                <td>الطبقة السطحية للقشرة الأرضية فقط.</td>
+                <td>تصل <strong>أخيراً</strong> لكنها ذات <strong>سعة كبيرة جداً وهي المسؤولة عن الدمار</strong>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pdf-section-block">
+          <h2>ثامناً: الفوالق الجيولوجية (Les Failles) — أصل الزلازل</h2>
+          <div class="pdf-three-grid">
+            <div class="pdf-mini-card">
+              <strong>1. الفالق العادي (Faille Normale)</strong>
+              <p>ينشأ عن <strong>قوى التمدد والتباعد (Extension)</strong>، حيث تنزلق الكتلة الصخرية العلوية (السقف) نحو الأسفل مقارنة بالكتلة السفلية، مما يؤدي إلى اتساع القشرة الأرضية.</p>
+            </div>
+            <div class="pdf-mini-card">
+              <strong>2. الفالق المعكوس (Faille Inverse)</strong>
+              <p>ينشأ عن <strong>قوى الانضغاط والتقارب (Compression)</strong> (مثل شمال الجزائر بين الصفيحة الإفريقية والأوراسية)، حيث تصعد الكتلة العلوية فوق السفلية مسببة تقصير القشرة وتشكل الجبال.</p>
+            </div>
+            <div class="pdf-mini-card">
+              <strong>3. الفالق الانزلاقي التحويلي (Décrochement)</strong>
+              <p>ينشأ عن <strong>قوى القص الأفقي (Cisaillement)</strong>، حيث تنزلق الكتلتان الصخريتان أفقياً بمحاذاة بعضهما دون إزاحة شاقولية كبيرة.</p>
+            </div>
+          </div>
+        </div>
+
+        <footer class="pdf-page-footer">
+          <span>كراس علوم الطبيعة والحياة والفيزياء الجيولوجية — السنة الثالثة متوسط</span>
+          <span>الصفحة 3 من 5</span>
+        </footer>
+      </article>
+
+      <!-- ==================== الصفحة 4 من الكراس ==================== -->
+      <article id="pdf-page-4" class="pdf-page">
+        <header class="pdf-page-header-compact">
+          <span>الدرس الشامل للزلازل والقوانين الزلزالية — السنة الثالثة متوسط</span>
+          <span>الفصل الرابع: موسوعة القوانين الرياضية الزلزالية وطريقة التثليث الزلزالي</span>
+        </header>
+
+        <div class="pdf-section-block">
+          <h2>تاسعاً: المرجع الشامل لجميع القوانين والعلاقات الرياضية الزلزالية</h2>
+          <p class="pdf-lead">فيما يلي كافة القوانين المعتمدة لحل المسائل الزلزالية مع شرح كل رمز ووحدته الدولية:</p>
+
+          <div class="laws-reference-grid">
+            <!-- القانون 1 -->
+            <div class="law-card">
+              <div class="law-card-head">1. قانون سرعة انتشار الموجات وفارق زمن الوصول (<span class="math-inline" dir="ltr">Δ<var>t</var></span>)</div>
+              <div class="math-formula-box" dir="ltr" role="math">
+                <span class="math-eq">
+                  <var>v</var><sub>P</sub> =
+                  <span class="math-frac">
+                    <span class="math-num"><var>d</var></span>
+                    <span class="math-den"><var>t</var><sub>P</sub> − <var>t</var><sub>0</sub></span>
+                  </span>
+                </span>
+                <span class="math-sep">,</span>
+                <span class="math-eq">
+                  <var>v</var><sub>S</sub> =
+                  <span class="math-frac">
+                    <span class="math-num"><var>d</var></span>
+                    <span class="math-den"><var>t</var><sub>S</sub> − <var>t</var><sub>0</sub></span>
+                  </span>
+                </span>
+                <span class="math-sep">&rArr;</span>
+                <span class="math-eq">
+                  Δ<var>t</var> = <var>t</var><sub>S</sub> − <var>t</var><sub>P</sub> = <var>d</var> ·
+                  <span class="math-frac">
+                    <span class="math-num"><var>v</var><sub>P</sub> − <var>v</var><sub>S</sub></span>
+                    <span class="math-den"><var>v</var><sub>P</sub> · <var>v</var><sub>S</sub></span>
+                  </span>
+                </span>
+              </div>
+              <p class="law-desc">حيث <span class="math-inline" dir="ltr"><var>t</var><sub>0</sub></span> لحظة حدوث الزلزال في البؤرة، <span class="math-inline" dir="ltr"><var>t</var><sub>P</sub></span> زمن وصول الموجة الأولية، <span class="math-inline" dir="ltr"><var>t</var><sub>S</sub></span> زمن وصول الموجة الثانوية، و <span class="math-inline" dir="ltr">Δ<var>t</var></span> فارق الزمن بالثواني (<span class="math-inline" dir="ltr"><span class="math-unit">s</span></span>).</p>
+            </div>
+
+            <!-- القانون 2 -->
+            <div class="law-card">
+              <div class="law-card-head">2. قانون حساب المسافة البؤرية (<span class="math-inline" dir="ltr"><var>d</var></span>) من فارق الزمن (معادلة أوموري)</div>
+              <div class="math-formula-box" dir="ltr" role="math">
+                <span class="math-eq">
+                  <var>d</var><sub>hypo</sub> = Δ<var>t</var> ×
+                  <span class="math-frac">
+                    <span class="math-num"><var>v</var><sub>P</sub> × <var>v</var><sub>S</sub></span>
+                    <span class="math-den"><var>v</var><sub>P</sub> − <var>v</var><sub>S</sub></span>
+                  </span>
+                </span>
+                <span class="math-sep">|</span>
+                <span class="math-eq">
+                  <var>d</var> ≈ 8.4 × Δ<var>t</var>
+                </span>
+                <span class="math-sep">~</span>
+                <span class="math-eq">
+                  <var>d</var> ≈ 8 × Δ<var>t</var>
+                </span>
+              </div>
+              <p class="law-desc">عندما تكون <span class="math-inline" dir="ltr"><var>v</var><sub>P</sub> = 6.0 <span class="math-unit">km/s</span></span> و <span class="math-inline" dir="ltr"><var>v</var><sub>S</sub> = 3.5 <span class="math-unit">km/s</span></span>، فإن المعامل الثابت هو <span class="math-inline" dir="ltr"><span class="math-frac"><span class="math-num">6.0 × 3.5</span><span class="math-den">6.0 − 3.5</span></span> = <span class="math-frac"><span class="math-num">21</span><span class="math-den">2.5</span></span> = 8.4 <span class="math-unit">km/s</span></span>.</p>
+            </div>
+
+            <!-- القانون 3 -->
+            <div class="law-card">
+              <div class="law-card-head">3. قانون العلاقة الهندسية بين العمق (<span class="math-inline" dir="ltr"><var>h</var></span>)، المسافة السطحية (<span class="math-inline" dir="ltr"><var>x</var></span>)، والشعاع الزلزالي (<span class="math-inline" dir="ltr"><var>d</var></span>)</div>
+              <div class="math-formula-box" dir="ltr" role="math">
+                <span class="math-eq"><var>d</var><sub>hypo</sub><sup>2</sup> = <var>x</var><sup>2</sup> + <var>h</var><sup>2</sup></span>
+                <span class="math-sep">&rArr;</span>
+                <span class="math-eq">
+                  <var>d</var><sub>hypo</sub> =
+                  <span class="math-sqrt"><span class="math-sqrt-sign">√</span><span class="math-radicand"><var>x</var><sup>2</sup> + <var>h</var><sup>2</sup></span></span>
+                </span>
+                <span class="math-sep">,</span>
+                <span class="math-eq">
+                  <var>x</var> =
+                  <span class="math-sqrt"><span class="math-sqrt-sign">√</span><span class="math-radicand"><var>d</var><sub>hypo</sub><sup>2</sup> − <var>h</var><sup>2</sup></span></span>
+                </span>
+                <span class="math-sep">,</span>
+                <span class="math-eq">
+                  <var>h</var> =
+                  <span class="math-sqrt"><span class="math-sqrt-sign">√</span><span class="math-radicand"><var>d</var><sub>hypo</sub><sup>2</sup> − <var>x</var><sup>2</sup></span></span>
+                </span>
+              </div>
+              <p class="law-desc">تطبيق مباشر لمبرهنة فيثاغورس في المثلث القائم <span class="math-inline" dir="ltr">(<var>F</var><var>E</var><var>S</var>)</span> حيث <span class="math-inline" dir="ltr"><var>E</var></span> المركز السطحي القائم شاقولياً فوق البؤرة <span class="math-inline" dir="ltr"><var>F</var></span>، و <span class="math-inline" dir="ltr"><var>S</var></span> محطة الرصد.</p>
+            </div>
+
+            <!-- القانون 4 -->
+            <div class="law-card">
+              <div class="law-card-head">4. قانون ريشتر للمقدار المحلي (<span class="math-inline" dir="ltr"><var>M</var><sub>L</sub></span>) ونسبة تضاعف السعة (<span class="math-inline" dir="ltr"><var>A</var></span>)</div>
+              <div class="math-formula-box" dir="ltr" role="math">
+                <span class="math-eq">
+                  <var>M</var><sub>L</sub> = log<sub>10</sub>(<var>A</var>) + 1.66 · log<sub>10</sub>(<var>x</var>) − 2.0
+                </span>
+                <span class="math-sep">|</span>
+                <span class="math-eq">
+                  <span class="math-frac">
+                    <span class="math-num"><var>A</var><sub>2</sub></span>
+                    <span class="math-den"><var>A</var><sub>1</sub></span>
+                  </span>
+                  = 10<sup>(<var>M</var><sub>2</sub> − <var>M</var><sub>1</sub>)</sup>
+                </span>
+              </div>
+              <p class="law-desc">حيث <span class="math-inline" dir="ltr"><var>A</var></span> أقصى سعة مسجلة على السيزموغرام بالميكرومتر (<span class="math-inline" dir="ltr"><span class="math-unit">μm</span></span>). زيادة درجة واحدة في المقدار (<span class="math-inline" dir="ltr">Δ<var>M</var> = 1</span>) تعني تضاعف سعة الهزة <span class="math-inline" dir="ltr">10</span> مرات.</p>
+            </div>
+
+            <!-- القانون 5 -->
+            <div class="law-card">
+              <div class="law-card-head">5. قانون غوتنبرغ-ريشتر للطاقة الزلزالية المحررة (<span class="math-inline" dir="ltr"><var>E</var></span>)</div>
+              <div class="math-formula-box" dir="ltr" role="math">
+                <span class="math-eq">
+                  log<sub>10</sub>(<var>E</var>) = 4.8 + 1.5 · <var>M</var>
+                </span>
+                <span class="math-sep">&rArr;</span>
+                <span class="math-eq">
+                  <var>E</var> = 10<sup>(4.8 + 1.5·<var>M</var>)</sup> <span class="math-unit">J</span>
+                </span>
+                <span class="math-sep">|</span>
+                <span class="math-eq">
+                  <span class="math-frac">
+                    <span class="math-num"><var>E</var><sub>2</sub></span>
+                    <span class="math-den"><var>E</var><sub>1</sub></span>
+                  </span>
+                  = 10<sup>1.5·(<var>M</var><sub>2</sub> − <var>M</var><sub>1</sub>)</sup> ≈ 31.62<sup>Δ<var>M</var></sup>
+                </span>
+              </div>
+              <p class="law-desc">كل زيادة بدرجة واحدة على سلم ريشتر تحرر طاقة أكبر بـ <strong><span class="math-inline" dir="ltr">31.6</span> مرة</strong>، وكل زيادة بدرجتين (<span class="math-inline" dir="ltr">Δ<var>M</var> = 2</span>) تحرر طاقة أكبر بـ <strong><span class="math-inline" dir="ltr">1000</span> مرة</strong>.</p>
+            </div>
+
+            <!-- القانون 6 -->
+            <div class="law-card">
+              <div class="law-card-head">6. قانون العزم الزلزالي (<span class="math-inline" dir="ltr"><var>M</var><sub>0</sub></span>) ومقدار العزم (<span class="math-inline" dir="ltr"><var>M</var><sub>w</sub></span>) وقانون هوك للمرونة</div>
+              <div class="math-formula-box" dir="ltr" role="math">
+                <span class="math-eq">
+                  <var>M</var><sub>0</sub> = <var>μ</var> · <var>S</var><sub>fault</sub> · <span class="math-overline">D</span> <span class="math-unit">(N·m)</span>
+                </span>
+                <span class="math-sep">|</span>
+                <span class="math-eq">
+                  <var>M</var><sub>w</sub> =
+                  <span class="math-frac"><span class="math-num">2</span><span class="math-den">3</span></span>
+                  · log<sub>10</sub>(<var>M</var><sub>0</sub>) − 6.07
+                </span>
+                <span class="math-sep">|</span>
+                <span class="math-eq">
+                  <var>σ</var> = <var>E</var><sub>Young</sub> · <var>ε</var>
+                </span>
+              </div>
+              <p class="law-desc">حيث <span class="math-inline" dir="ltr"><var>μ</var></span> معامل صلابة الصخور (<span class="math-inline" dir="ltr"><span class="math-unit">Pa</span></span>)، <span class="math-inline" dir="ltr"><var>S</var><sub>fault</sub></span> مساحة سطح الفالق المنكسر (<span class="math-inline" dir="ltr"><span class="math-unit">m<sup>2</sup></span></span>)، و <span class="math-inline" dir="ltr"><span class="math-overline">D</span></span> متوسط الإزاحة على طول الفالق (<span class="math-inline" dir="ltr"><span class="math-unit">m</span></span>).</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- المخطط رقم 4: التثليث الزلزالي لتحديد المركز السطحي -->
+        <div class="pdf-diagram-block">
+          <div class="diagram-caption-top">
+            <strong>المخطط التوضيحي (4):</strong> طريقة التثليث الزلزالي الهندسي لتحديد المركز السطحي (<span class="math-inline" dir="ltr"><var>E</var></span>) بتقاطع دوائر 3 محطات رصد (<span class="math-inline" dir="ltr"><var>S</var><sub>1</sub>, <var>S</var><sub>2</sub>, <var>S</var><sub>3</sub></span>)
+          </div>
+          <div id="svg-triangulation-print-diagram" class="pdf-svg-slot">
+            <!-- يتم توليد مخطط التثليث للطباعة بواسطة js/svg-diagrams.js -->
+          </div>
+        </div>
+
+        <footer class="pdf-page-footer">
+          <span>كراس علوم الطبيعة والحياة والفيزياء الجيولوجية — السنة الثالثة متوسط</span>
+          <span>الصفحة 4 من 5</span>
+        </footer>
+      </article>
+
+      <!-- ==================== الصفحة 5 من الكراس ==================== -->
+      <article id="pdf-page-5" class="pdf-page">
+        <header class="pdf-page-header-compact">
+          <span>الدرس الشامل للزلازل والقوانين الزلزالية — السنة الثالثة متوسط</span>
+          <span>الفصل الخامس: تمارين تطبيقية محلولة بالتفصيل، الوقاية من المخاطر الزلزالية، وبطاقة الحفظ</span>
+        </header>
+
+        <div class="pdf-section-block">
+          <h2>عاشراً: تمارين نموذجية محلولة بالتفصيل (منهاج السنة الثالثة متوسط)</h2>
+
+          <div class="solved-exercise">
+            <div class="exercise-header">التمرين المحلول الأول: استغلال السيزموغرام وحساب المسافة البؤرية والعمق وزمن الحدوث <span class="math-inline" dir="ltr"><var>t</var><sub>0</sub></span></div>
+            <p class="exercise-problem"><strong>نص التمرين:</strong> سجلت محطة رصد زلزالي تبعد مسافة سطحية <span class="math-inline" dir="ltr"><var>x</var> = 80 <span class="math-unit">km</span></span> عن المركز السطحي لزلزال وصول الموجة الأولية عند اللحظة <span class="math-inline" dir="ltr"><var>t</var><sub>P</sub> = 14<span class="math-unit">h</span> 20<span class="math-unit">min</span> 15<span class="math-unit">s</span></span>، ووصول الموجة الثانوية عند اللحظة <span class="math-inline" dir="ltr"><var>t</var><sub>S</sub> = 14<span class="math-unit">h</span> 20<span class="math-unit">min</span> 25<span class="math-unit">s</span></span>. علماً أن <span class="math-inline" dir="ltr"><var>v</var><sub>P</sub> = 6.0 <span class="math-unit">km/s</span></span> و <span class="math-inline" dir="ltr"><var>v</var><sub>S</sub> = 3.5 <span class="math-unit">km/s</span></span>: <br/>1) احسب فارق الزمن <span class="math-inline" dir="ltr">Δ<var>t</var></span>. &nbsp; 2) احسب المسافة البؤرية <span class="math-inline" dir="ltr"><var>d</var><sub>hypo</sub></span>. &nbsp; 3) استنتج عمق البؤرة <span class="math-inline" dir="ltr"><var>h</var></span>. &nbsp; 4) حدد لحظة حدوث الزلزال في البؤرة <span class="math-inline" dir="ltr"><var>t</var><sub>0</sub></span>.</p>
+            <div class="exercise-solution">
+              <ol>
+                <li>
+                  <strong>حساب فارق زمن الوصول (<span class="math-inline" dir="ltr">Δ<var>t</var></span>):</strong>
+                  <span class="math-inline" dir="ltr">Δ<var>t</var> = <var>t</var><sub>S</sub> − <var>t</var><sub>P</sub> = 25<span class="math-unit">s</span> − 15<span class="math-unit">s</span> = <strong>10 <span class="math-unit">s</span></strong></span>.
+                </li>
+                <li>
+                  <strong>حساب المسافة البؤرية (<span class="math-inline" dir="ltr"><var>d</var><sub>hypo</sub></span>):</strong>
+                  <span class="math-inline" dir="ltr">
+                    <var>d</var><sub>hypo</sub> = Δ<var>t</var> ×
+                    <span class="math-frac"><span class="math-num"><var>v</var><sub>P</sub> × <var>v</var><sub>S</sub></span><span class="math-den"><var>v</var><sub>P</sub> − <var>v</var><sub>S</sub></span></span>
+                    = 10 ×
+                    <span class="math-frac"><span class="math-num">6.0 × 3.5</span><span class="math-den">6.0 − 3.5</span></span>
+                    = 10 ×
+                    <span class="math-frac"><span class="math-num">21</span><span class="math-den">2.5</span></span>
+                    = 10 × 8.4 = <strong>84 <span class="math-unit">km</span></strong>
+                  </span>.
+                </li>
+                <li>
+                  <strong>حساب عمق البؤرة (<span class="math-inline" dir="ltr"><var>h</var></span>) بتطبيق مبرهنة فيثاغورس:</strong>
+                  <span class="math-inline" dir="ltr">
+                    <var>d</var><sub>hypo</sub><sup>2</sup> = <var>x</var><sup>2</sup> + <var>h</var><sup>2</sup> &rArr; <var>h</var> =
+                    <span class="math-sqrt"><span class="math-sqrt-sign">√</span><span class="math-radicand"><var>d</var><sub>hypo</sub><sup>2</sup> − <var>x</var><sup>2</sup></span></span>
+                    =
+                    <span class="math-sqrt"><span class="math-sqrt-sign">√</span><span class="math-radicand">84<sup>2</sup> − 80<sup>2</sup></span></span>
+                    =
+                    <span class="math-sqrt"><span class="math-sqrt-sign">√</span><span class="math-radicand">7056 − 6400</span></span>
+                    =
+                    <span class="math-sqrt"><span class="math-sqrt-sign">√</span><span class="math-radicand">656</span></span>
+                    ≈ <strong>25.61 <span class="math-unit">km</span></strong>
+                  </span>.
+                </li>
+                <li>
+                  <strong>تحديد زمن حدوث الزلزال في البؤرة (<span class="math-inline" dir="ltr"><var>t</var><sub>0</sub></span>):</strong>
+                  مدة انتشار الموجة <span class="math-inline" dir="ltr"><var>P</var></span> هي
+                  <span class="math-inline" dir="ltr">
+                    Δ<var>t</var><sub>P</sub> =
+                    <span class="math-frac"><span class="math-num"><var>d</var><sub>hypo</sub></span><span class="math-den"><var>v</var><sub>P</sub></span></span>
+                    =
+                    <span class="math-frac"><span class="math-num">84</span><span class="math-den">6.0</span></span>
+                    = 14 <span class="math-unit">s</span>
+                  </span>.
+                  ومنه:
+                  <span class="math-inline" dir="ltr"><var>t</var><sub>0</sub> = <var>t</var><sub>P</sub> − 14<span class="math-unit">s</span> = <strong>14<span class="math-unit">h</span> 20<span class="math-unit">min</span> 01<span class="math-unit">s</span></strong></span>.
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="solved-exercise">
+            <div class="exercise-header">التمرين المحلول الثاني: مقارنة زلزالين بحساب السعة والطاقة المحررة (قانون ريشتر وغوتنبرغ)</div>
+            <p class="exercise-problem"><strong>نص التمرين:</strong> وقع زلزالان في منطقتين مختلفتين على نفس العمق (<span class="math-inline" dir="ltr"><var>h</var> = 12 <span class="math-unit">km</span></span>): الزلزال الأول مقداره <span class="math-inline" dir="ltr"><var>M</var><sub>1</sub> = 5.0</span> درجات، والزلزال الثاني مقداره <span class="math-inline" dir="ltr"><var>M</var><sub>2</sub> = 7.0</span> درجات على سلم ريشتر. <br/>1) بكم مرة تتضاعف سعة الموجات الزلزالية في الزلزال الثاني مقارنة بالأول؟ &nbsp; 2) احسب الطاقة المحررة في كل زلزال بالجول ثم قارن بينهما.</p>
+            <div class="exercise-solution">
+              <ol>
+                <li>
+                  <strong>نسبة تضاعف السعة (<span class="math-inline" dir="ltr"><var>A</var><sub>2</sub> / <var>A</var><sub>1</sub></span>):</strong>
+                  <span class="math-inline" dir="ltr">
+                    <span class="math-frac"><span class="math-num"><var>A</var><sub>2</sub></span><span class="math-den"><var>A</var><sub>1</sub></span></span>
+                    = 10<sup>(<var>M</var><sub>2</sub> − <var>M</var><sub>1</sub>)</sup> = 10<sup>(7.0 − 5.0)</sup> = 10<sup>2</sup> = <strong>100</strong>
+                  </span> مرة.
+                </li>
+                <li><strong>حساب الطاقة المحررة (<span class="math-inline" dir="ltr"><var>E</var></span>):</strong>
+                  <ul>
+                    <li>للزلزال الأول (<span class="math-inline" dir="ltr"><var>M</var><sub>1</sub> = 5</span>): <span class="math-inline" dir="ltr"><var>E</var><sub>1</sub> = 10<sup>(4.8 + 1.5 × 5)</sup> = 10<sup>12.3</sup> ≈ <strong>1.995 × 10<sup>12</sup> <span class="math-unit">J</span></strong></span>.</li>
+                    <li>للزلزال الثاني (<span class="math-inline" dir="ltr"><var>M</var><sub>2</sub> = 7</span>): <span class="math-inline" dir="ltr"><var>E</var><sub>2</sub> = 10<sup>(4.8 + 1.5 × 7)</sup> = 10<sup>15.3</sup> ≈ <strong>1.995 × 10<sup>15</sup> <span class="math-unit">J</span></strong></span>.</li>
+                    <li><strong>نسبة الطاقة:</strong> <span class="math-inline" dir="ltr"><span class="math-frac"><span class="math-num"><var>E</var><sub>2</sub></span><span class="math-den"><var>E</var><sub>1</sub></span></span> = 10<sup>1.5 × (7 − 5)</sup> = 10<sup>3</sup> = <strong>1000</strong></span> مرة (الزلزال ذو المقدار 7 يحرر طاقة تعادل 1000 زلزال من مقدار 5).</li>
+                  </ul>
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="solved-exercise">
+            <div class="exercise-header">التمرين المحلول الثالث: تفسير اختلاف الخسائر رغم تساوي المقدار (تأثير عمق البؤرة ونوع المباني)</div>
+            <p class="exercise-problem"><strong>نص التمرين:</strong> سجل زلزالان <span class="math-inline" dir="ltr">(<var>A</var>)</span> و <span class="math-inline" dir="ltr">(<var>B</var>)</span> نفس المقدار على سلم ريشتر (<span class="math-inline" dir="ltr"><var>M</var> = 6.2</span>). خلف الزلزال <span class="math-inline" dir="ltr">(<var>A</var>)</span> دماراً كبيراً في المركز السطحي (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub> = IX</span>) بينما كانت خسائر الزلزال <span class="math-inline" dir="ltr">(<var>B</var>)</span> طفيفة (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub> = V</span>). قدم تفسيراً علمياً دقيقاً لهذا الاختلاف.</p>
+            <div class="exercise-solution">
+              <p><strong>التفسير العلمي:</strong> بما أن المقدار <span class="math-inline" dir="ltr"><var>M</var></span> متساوٍ، فإن الطاقة المحررة في البؤرتين متساوية. يعود الاختلاف في الشدة السطحية (<span class="math-inline" dir="ltr"><var>I</var><sub>0</sub></span>) إلى عاملين رئيسيين: <strong>(أ) عمق البؤرة (<span class="math-inline" dir="ltr"><var>h</var></span>):</strong> بؤرة الزلزال <span class="math-inline" dir="ltr">(<var>A</var>)</span> سطحية قريبة جداً من السطح فلم تتخامد الأمواج، بينما بؤرة الزلزال <span class="math-inline" dir="ltr">(<var>B</var>)</span> عميقة جداً ففقدت الأمواج معظم طاقتها قبل بلوغ السطح. <strong>(ب) طبيعة التربة وجودة البناء:</strong> مدى تطبيق معايير البناء المضاد للزلازل ومتانة الصخور السطحية.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pdf-section-block">
+          <h2>حادي عشر: السلوكات الوقائية والإجراءات العملية لمواجهة الخطر الزلزالي</h2>
+          <div class="pdf-three-grid">
+            <div class="pdf-mini-card pdf-card-safe-before">
+              <strong>1. قبل حدوث الزلزال (الوقاية والتحضير)</strong>
+              <ul class="pdf-list-compact">
+                <li>تشييد المباني وفق معايير البناء المضاد للزلازل (RPA) وعلى أرضيات صلبة بعيداً عن الفوالق.</li>
+                <li>تثبيت الأثاث الثقيل والخزائن في الجدران وتحضير حقيبة الطوارئ والإسعافات الأولية.</li>
+                <li>التدرب على مخطط الإخلاء ومواضع الاحتماء الآمنة في المدرسة والمنزل.</li>
+              </ul>
+            </div>
+            <div class="pdf-mini-card pdf-card-safe-during">
+              <strong>2. أثناء حدوث الزلزال (الحماية الفورية)</strong>
+              <ul class="pdf-list-compact">
+                <li>الهدوء التام وتطبيق قاعدة: <strong>انخفض، احتمِ، تمسّك</strong> تحت طاولة متينة أو قرب عمود حامل.</li>
+                <li>الابتعاد فوراً عن النوافذ الزجاجية، الشرفات، والخزائن غير المثبتة.</li>
+                <li>عدم استعمال المصاعد الكهربائية إطلاقاً وعدم التدافع في السلالم أثناء الهزة.</li>
+              </ul>
+            </div>
+            <div class="pdf-mini-card pdf-card-safe-after">
+              <strong>3. بعد انتهاء الهزة (الحذر والإسعاف)</strong>
+              <ul class="pdf-list-compact">
+                <li>قطع الغاز والكهرباء والماء لتفادي الحرائق والانفجارات.</li>
+                <li>مغادرة المبنى بهدوء نحو الساحات المفتوحة تحسباً <strong>للهزات الارتدادية</strong>.</li>
+                <li>إسعاف الجرحى والاستماع لتعليمات الحماية المدنية وعدم نشر الإشاعات.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="pdf-summary-Golden-box">
+          <strong>📌 الخلاصة الذهبية للحفظ (السنة الثالثة متوسط):</strong>
+          <span>الزلزال هزات أرضية سريعة ومتكررة ناتجة عن انكسار الصخور في <strong>البؤرة (<span class="math-inline" dir="ltr"><var>F</var></span>)</strong> على مستوى <strong>الفالق</strong> نتيجة قوى الانضغاط الجيولوجية، فتتحرر طاقة تقاس بـ <strong>المقدار (<span class="math-inline" dir="ltr"><var>M</var></span>) على سلم ريشتر</strong> وتنتشر كـ <strong>أمواج زلزالية (<span class="math-inline" dir="ltr"><var>P</var>, <var>S</var>, <var>L</var></span>)</strong> تسجل بـ <strong>السيزموغراف</strong>، وتبلغ أشد أضرارها (<strong>الشدة <span class="math-inline" dir="ltr"><var>I</var><sub>0</sub></span> على سلم ميركالي</strong>) في <strong>المركز السطحي (<span class="math-inline" dir="ltr"><var>E</var></span>)</strong> الواقع شاقولياً فوق البؤرة، وتزداد خطورتها كلما قل عمق البؤرة (<span class="math-inline" dir="ltr"><var>h</var></span>).</span>
+        </div>
+
+        <footer class="pdf-page-footer">
+          <span>كراس علوم الطبيعة والحياة والفيزياء الجيولوجية — السنة الثالثة متوسط • جاهز للطباعة بصيغة PDF</span>
+          <span>الصفحة 5 من 5</span>
+        </footer>
+      </article>
+    </section>
+  </div>
+
+  <!-- تحميل المحرك التفاعلي والموديولات العلمية -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,1356 @@
+/* ==========================================================================
+   css/styles.css — التنسيق التفاعلي والعلمي لدرس الزلازل والقوانين الزلزالية
+   السنة الثالثة متوسط (RTL Arabic)
+   ========================================================================== */
+
+:root {
+  --bg-page: #f1f5f9;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f8fafc;
+  --bg-dark-header: #0f172a;
+  --bg-navy-accent: #1e293b;
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+
+  --border-light: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  --color-p-wave: #0284c7;
+  --color-s-wave: #d97706;
+  --color-l-wave: #dc2626;
+  --color-epicenter: #e11d48;
+  --color-hypocenter: #7c3aed;
+  --color-success: #15803d;
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
+
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.09);
+  --shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.14);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --font-arabic: 'Segoe UI', 'Cairo', 'Tajawal', Tahoma, Arial, sans-serif;
+  --font-math: 'Cambria Math', 'Consolas', 'Courier New', monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-arabic);
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.65;
+  direction: rtl;
+  text-align: right;
+}
+
+/* شريط التنبيه الاسترجاعي عند الأعطال */
+.error-banner {
+  background: #fef2f2;
+  border-bottom: 2px solid #dc2626;
+  color: #7f1d1d;
+  padding: 0.75rem 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 2000;
+}
+
+.error-banner-content {
+  max-width: 1380px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.error-icon {
+  font-size: 1.35rem;
+}
+
+.error-text {
+  flex: 1;
+  font-size: 0.95rem;
+}
+
+/* شريط الترويسة العلوي */
+.app-header {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  padding: 0.9rem 1.5rem;
+  box-shadow: var(--shadow-md);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-bottom: 3px solid #38bdf8;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.brand-badge {
+  background: linear-gradient(135deg, #ef4444, #d97706);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
+}
+
+.brand-titles h1 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.brand-titles p {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.mode-switch-group {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.22rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+/* الأزرار العامة */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font-family: var(--font-arabic);
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-mode {
+  background: transparent;
+  color: #cbd5e1;
+  border: none;
+}
+
+.btn-mode.active {
+  background: #38bdf8;
+  color: #0f172a;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-primary-print {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
+}
+
+.btn-primary-print:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-1px);
+}
+
+.btn-trigger {
+  background: linear-gradient(135deg, #dc2626, #ea580c);
+  color: #ffffff;
+  padding: 0.58rem 1.15rem;
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.3);
+}
+
+.btn-trigger:hover {
+  background: linear-gradient(135deg, #b91c1c, #c2410c);
+}
+
+.btn-outline {
+  background: #ffffff;
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: #94a3b8;
+}
+
+.btn-danger-outline {
+  background: #ffffff;
+  color: #b91c1c;
+  border-color: #f87171;
+}
+
+/* شريط فصول الدرس */
+.chapter-nav {
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-light);
+  padding: 0.6rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  overflow-x: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-pill {
+  font-family: var(--font-arabic);
+  font-size: 0.86rem;
+  font-weight: 700;
+  padding: 0.42rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+
+.nav-pill:hover {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
+}
+
+.nav-pill.active {
+  background: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+}
+
+.nav-pill-pdf {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #6ee7b7;
+}
+
+/* تبديل وضع العرض (تفاعلي مقابل معاينة الكراس فقط) */
+body.mode-workbook #interactive-view {
+  display: none !important;
+}
+
+/* الحاوية التفاعلية الرئيسية */
+.interactive-view {
+  max-width: 1380px;
+  margin: 1.25rem auto 2rem;
+  padding: 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.lab-section {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-md);
+  padding: 1.35rem 1.5rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-bottom: 2px solid var(--bg-page);
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.section-kicker {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 0.18rem 0.65rem;
+  border-radius: 999px;
+  margin-bottom: 0.35rem;
+}
+
+.section-header h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.32rem;
+  color: var(--text-primary);
+}
+
+.section-header p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  max-width: 850px;
+}
+
+.sim-controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* شبكة محاكي الزلزال */
+.simulator-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .simulator-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.canvas-stage-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.canvas-card {
+  background: #0f172a;
+  border-radius: var(--radius-md);
+  border: 1px solid #334155;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.canvas-card-header {
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid #334155;
+}
+
+.canvas-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #f1f5f9;
+}
+
+.canvas-subtitle {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.wave-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-p {
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
+.dot-s {
+  background: #fbbf24;
+  box-shadow: 0 0 6px #fbbf24;
+}
+
+.dot-l {
+  background: #f87171;
+  box-shadow: 0 0 6px #f87171;
+}
+
+.canvas-wrapper {
+  width: 100%;
+  background: #090d16;
+  display: flex;
+  justify-content: center;
+}
+
+.canvas-wrapper canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* الشريط الجانبي للمحاكي */
+.sim-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.control-panel-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.1rem;
+}
+
+.control-panel-card h3 {
+  margin: 0 0 0.85rem;
+  font-size: 1.02rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 0.45rem;
+}
+
+.control-group {
+  margin-bottom: 0.95rem;
+}
+
+.control-group:last-child {
+  margin-bottom: 0;
+}
+
+.control-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.value-pill {
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 800;
+  font-size: 0.84rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: var(--radius-sm);
+  direction: ltr;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.range-hints {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.block-label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.form-select {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  font-family: var(--font-arabic);
+  font-size: 0.88rem;
+  font-weight: 600;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--text-primary);
+}
+
+/* بطاقات المؤشرات اللحظية */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.metric-card {
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.metric-card-danger {
+  border-right: 4px solid #dc2626;
+  background: #fef2f2;
+}
+
+.metric-card-warning {
+  border-right: 4px solid #d97706;
+  background: #fffbeb;
+}
+
+.metric-card-info {
+  border-right: 4px solid #0284c7;
+  background: #f0f9ff;
+}
+
+.metric-card-energy {
+  border-right: 4px solid #7c3aed;
+  background: #f5f3ff;
+}
+
+.metric-label {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.metric-value {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.pedagogical-callout {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-right: 4px solid #059669;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.84rem;
+  color: #064e3b;
+}
+
+.pedagogical-callout p {
+  margin: 0.25rem 0 0;
+}
+
+/* القسم 2: الحاسبات الرياضية الزلزالية */
+.calculators-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 1024px) {
+  .calculators-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.calc-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.calc-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.calc-badge {
+  background: var(--color-primary);
+  color: #ffffff;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.calc-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   نظام العرض الرياضي النظيف (Clean HTML Mathematical Typography & Formulas)
+   ========================================================================== */
+.math-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.14em;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-math);
+  font-weight: 700;
+  font-size: 0.94em;
+  color: #0f172a;
+  background: rgba(226, 232, 240, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 4px;
+  padding: 0.03rem 0.34rem;
+  margin: 0 0.08rem;
+  line-height: 1.35;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.canvas-card-header .math-inline {
+  background: rgba(56, 189, 248, 0.16);
+  color: #e0f2fe;
+  border-color: rgba(56, 189, 248, 0.38);
+}
+
+var {
+  font-family: 'Cambria Math', 'Times New Roman', Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+}
+
+sub,
+sup {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+  font-style: normal;
+}
+
+sup {
+  top: -0.42em;
+}
+
+sub {
+  bottom: -0.22em;
+}
+
+.math-unit {
+  font-family: var(--font-math);
+  font-style: normal;
+  font-weight: 600;
+  font-size: 0.92em;
+  opacity: 0.92;
+}
+
+.math-overline {
+  text-decoration: overline;
+  font-family: 'Cambria Math', 'Times New Roman', Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.math-formula-box {
+  background: #0f172a;
+  color: #38bdf8;
+  font-family: var(--font-math);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.65rem 0.95rem;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  direction: ltr;
+  unicode-bidi: isolate;
+  overflow-x: auto;
+  border: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  line-height: 1.45;
+}
+
+.math-eq {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  white-space: nowrap;
+}
+
+.math-sep {
+  color: #94a3b8;
+  font-weight: 800;
+  padding: 0 0.15rem;
+  user-select: none;
+}
+
+.math-frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  text-align: center;
+  margin: 0 0.2em;
+  line-height: 1.15;
+  font-size: 0.92em;
+}
+
+.math-frac > .math-num {
+  border-bottom: 1.5px solid currentColor;
+  padding: 0 0.28em 0.1em;
+  width: 100%;
+  display: block;
+}
+
+.math-frac > .math-den {
+  padding: 0.1em 0.28em 0;
+  width: 100%;
+  display: block;
+}
+
+.math-sqrt {
+  display: inline-flex;
+  align-items: stretch;
+  vertical-align: middle;
+  margin: 0 0.12em;
+}
+
+.math-sqrt > .math-sqrt-sign {
+  font-size: 1.15em;
+  line-height: 1;
+  padding-right: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  font-style: normal;
+}
+
+.math-sqrt > .math-radicand {
+  border-top: 1.5px solid currentColor;
+  padding: 0.06em 0.24em 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15em;
+}
+
+.math-step-label {
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-left: 0.25rem;
+}
+
+.calc-inputs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.input-field label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.input-field input {
+  padding: 0.48rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-math);
+  font-size: 0.95rem;
+  font-weight: 700;
+  direction: ltr;
+  text-align: left;
+  background: #ffffff;
+  color: var(--text-primary);
+}
+
+.input-field input:focus {
+  outline: 2px solid #38bdf8;
+  border-color: var(--color-primary);
+}
+
+.calc-results-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.calc-results-quad {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.result-box {
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-right: 4px solid var(--color-primary);
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.result-title {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.result-number {
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: #1e3a8a;
+  margin-top: 0.15rem;
+}
+
+.calc-steps-box {
+  background: #ffffff;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.95rem;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.calc-steps-box ul {
+  margin: 0.3rem 0 0;
+  padding-right: 1.2rem;
+}
+
+.calc-steps-box li {
+  margin-bottom: 0.25rem;
+}
+
+/* القسم 3: التثليث الزلزالي */
+.triangulation-layout {
+  display: grid;
+  grid-template-columns: minmax(290px, 1fr) minmax(0, 1.8fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .triangulation-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.triangulation-controls-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.triangulation-controls-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.small-muted {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.tri-coords-output {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-right: 4px solid #e11d48;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.triangulation-map-card {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.svg-responsive-box {
+  width: 100%;
+  overflow: hidden;
+}
+
+.svg-responsive-box svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* القسم 4: التقويم التفاعلي */
+.quiz-actions-header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.quiz-score-badge {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  font-weight: 800;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-sm);
+}
+
+.quiz-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 920px) {
+  .quiz-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.quiz-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.quiz-card.correct {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+
+.quiz-card.incorrect {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.quiz-question-title {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.quiz-option-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.quiz-option-label:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.quiz-explanation {
+  font-size: 0.82rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  border-right: 3px solid var(--color-primary);
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   تنسيق كراس الـ PDF المصور أثناء العرض على الشاشة (#printable-workbook)
+   ========================================================================== */
+.printable-workbook {
+  max-width: 980px;
+  margin: 0 auto 3rem;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.workbook-screen-banner {
+  background: linear-gradient(135deg, #065f46, #047857);
+  color: #ffffff;
+  padding: 1rem 1.35rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-md);
+}
+
+.pdf-page {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-shadow: var(--shadow-lg);
+  padding: 18mm 16mm 14mm;
+  position: relative;
+  color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.pdf-page-header {
+  border-bottom: 3px double #0f172a;
+  padding-bottom: 0.65rem;
+}
+
+.pdf-ministry-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.pdf-title-banner {
+  background: #f8fafc;
+  border: 2px solid #0f172a;
+  border-right: 6px solid #1d4ed8;
+  padding: 0.55rem 0.9rem;
+  border-radius: 4px;
+}
+
+.pdf-title-banner h1 {
+  margin: 0;
+  font-size: 1.22rem;
+  color: #0f172a;
+}
+
+.pdf-title-banner p {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.pdf-page-header-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #1e293b;
+  border-bottom: 2px solid #0f172a;
+  padding-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.pdf-section-block h2 {
+  margin: 0 0 0.45rem;
+  font-size: 1.02rem;
+  color: #1e3a8a;
+  background: #eff6ff;
+  border-right: 4px solid #1d4ed8;
+  padding: 0.28rem 0.65rem;
+}
+
+.pdf-definition-box {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-right: 5px solid #d97706;
+  padding: 0.6rem 0.85rem;
+  border-radius: 4px;
+  font-size: 0.86rem;
+  margin-bottom: 0.65rem;
+}
+
+.pdf-definition-box p {
+  margin: 0.25rem 0 0;
+}
+
+.pdf-lead {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #1e293b;
+}
+
+.pdf-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.pdf-three-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+}
+
+.pdf-four-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.55rem;
+}
+
+@media (max-width: 768px) {
+  .pdf-two-col,
+  .pdf-three-grid,
+  .pdf-four-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pdf-card,
+.pdf-mini-card {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.81rem;
+}
+
+.pdf-card h3,
+.pdf-mini-card strong {
+  display: block;
+  margin: 0 0 0.3rem;
+  font-size: 0.86rem;
+  color: #0f172a;
+}
+
+.pdf-mini-card p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.pdf-card-highlight {
+  background: #f0f9ff;
+  border-color: #7dd3fc;
+}
+
+.pdf-list,
+.pdf-list-compact {
+  margin: 0;
+  padding-right: 1.1rem;
+}
+
+.pdf-list li,
+.pdf-list-compact li {
+  margin-bottom: 0.22rem;
+}
+
+.pdf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.79rem;
+}
+
+.pdf-table th,
+.pdf-table td {
+  border: 1px solid #94a3b8;
+  padding: 0.38rem 0.55rem;
+  text-align: right;
+  vertical-align: top;
+}
+
+.pdf-table th {
+  background: #e2e8f0;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.pdf-table-striped tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.pdf-diagram-block {
+  border: 1.5px solid #334155;
+  border-radius: 4px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.diagram-caption-top {
+  background: #f1f5f9;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: #0f172a;
+}
+
+.pdf-svg-slot {
+  width: 100%;
+  padding: 0.35rem;
+  background: #ffffff;
+}
+
+.pdf-svg-slot svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* بطاقات القوانين في الصفحة 4 */
+.laws-reference-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.45rem;
+}
+
+.law-card {
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  padding: 0.5rem 0.65rem;
+  background: #f8fafc;
+}
+
+.law-card-head {
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: #1e3a8a;
+  margin-bottom: 0.3rem;
+}
+
+.law-card .math-formula-box {
+  font-size: 0.8rem;
+  padding: 0.38rem 0.5rem;
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.law-desc {
+  margin: 0.3rem 0 0;
+  font-size: 0.76rem;
+  color: #334155;
+}
+
+/* التمارين المحلولة في الصفحة 5 */
+.solved-exercise {
+  border: 1px solid #94a3b8;
+  border-right: 4px solid #0284c7;
+  border-radius: 4px;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.55rem;
+  background: #ffffff;
+  font-size: 0.8rem;
+}
+
+.exercise-header {
+  font-weight: 800;
+  color: #0369a1;
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.exercise-problem {
+  margin: 0 0 0.35rem;
+  color: #1e293b;
+}
+
+.exercise-solution {
+  background: #f8fafc;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 0.35rem;
+  color: #0f172a;
+}
+
+.exercise-solution ol,
+.exercise-solution ul {
+  margin: 0;
+  padding-right: 1.2rem;
+}
+
+.pdf-summary-Golden-box {
+  background: #fefce8;
+  border: 2px solid #eab308;
+  border-radius: 4px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.82rem;
+  color: #422006;
+}
+
+.pdf-page-footer {
+  border-top: 1px solid #94a3b8;
+  padding-top: 0.35rem;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  color: #475569;
+  font-weight: 700;
+}
