@@ -2,6 +2,36 @@
 
 All notable changes to **FlyMD** are documented in this file.
 
+## [2.1.0] - 2026-10-31
+
+### Added
+- **Per-Agent Reasoning Effort & Thinking Controls**:
+  - Introduced granular effort controls (`low`, `medium`, `high`) across pipeline steps, debate participants, and direct agent dispatch, allowing users to save tokens on routine tasks or leverage maximum reasoning capacity when tackling complex problems.
+  - Per-agent toggle for Thinking Mode (chain of thought), compatible with DeepSeek R1, Claude, and Gemini thinking models.
+  - Transparent `medium` fallback for models and providers that do not natively support custom effort tiers.
+  - Automatic error recovery: if a provider endpoint rejects unsupported reasoning parameters, FlyMD automatically strips the reasoning configuration and retries seamlessly without failing the step.
+- **Interactive Workspace Memory Reset Modal**:
+  - Comprehensive "Clear Workspace & Memory" interactive dialog with default-checked options allowing users to selectively clear:
+    - Active multi-agent debate sessions & historical transcripts.
+    - 12-section evidence reports and synthesis artifacts.
+    - Pipeline execution state and step run history.
+    - Cross-model cognitive handoffs, SHA-256 digests, and cached index envelopes.
+    - Automatically closes any workspace tabs related to cleared sessions.
+- **Interactive Project & Sub-Project Deletion Modal**:
+  - Safe, granular deletion dialog for projects and sub-projects with default-checked options to clean associated `.flymd` memory, cognitive caches, logs, and transcripts, with an optional toggle for deleting physical workspace files.
+
+### Fixed
+- **Multi-Agent Deliberation Lifecycle & Stalling Elimination (`commands.rs`, `discussionSlice.ts`, `DiscussionStudio.tsx`)**:
+  - Eliminated Phase 3 visual freezes where completed deliberations remained locked in `RUNNING` status on the main header while the left sidebar displayed `AWAITING REVIEW`.
+  - **Sequence-Guarded Store Synchronization (`activeSyncSequence`)**: Replaced uncoordinated parallel Tauri IPC promises with an atomic sequence guard that automatically discards out-of-order responses during intense model token streaming.
+  - **In-Memory Supervisor Retention Fix**: `spawn_supervised_discussion_run` now promptly evicts terminal sessions (`AwaitingReview`, `Completed`, `Failed`, `Cancelled`) from `active_map`, preventing memory leaks and stale state locks.
+  - **Reconciliation Heartbeat Guard**: Added an active 2.5-second heartbeat timer that continuously verifies backend settlement while `isRunning = true`, guaranteeing 100% UI alignment even if an IPC push event is delayed or dropped.
+- **Pipeline Premature Settlement & Deliverable Guard Hardening (`runner.rs`)**:
+  - Enforced strict requirement that code-modifying steps (`build`, `fix-bugs`) verify on-disk code modifications prior to task settlement.
+  - Strengthened SHA-256 delta digests to prevent false positives and stub generation.
+
+---
+
 ## [2.0.1] - 2026-10-30
 
 ### Fixed

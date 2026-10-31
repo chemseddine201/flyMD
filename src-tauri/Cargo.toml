@@ -1,6 +1,6 @@
 [package]
 name = "fly-md-tauri"
-version = "2.0.1"
+version = "2.1.0"
 description = "FlyMD v2 - Native Markdown Supervisor, Multi-Agent Studio & Epistemic Deliberation Hub"
 authors = ["FlyMD Team"]
 edition = "2021"

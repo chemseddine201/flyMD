@@ -1,65 +1,67 @@
-# FlyMD v2.0.1 — Execution Guards, Custom Actions Library, Extendable Pipeline & Engine Fixes 🪶
+# FlyMD v2.1.0 — Per-Agent Effort & Thinking Controls, Interactive Memory Cleanup, and Deliberation Lifecycle Hardening 🚀
 
-**FlyMD v2.0.1** is a stabilization and workflow-expansion release for FlyMD v2. It delivers essential execution safeguards during active runs, user-defined custom pipeline actions, incremental extendable workflow resumption, and fixes for code generation settlement and canvas tag parsing.
-
----
-
-## 🛠️ Bug Fixes & Stability Hardening
-
-### 1. HTML Canvas Parser Boundary Hardening (`runner.rs`)
-- Fixed regular expression parsing in `synthesize_logic_script_for_html` to require strict `<canvas[^>]*id="([^"]+)"` matching with tag boundary validation.
-- Prevents non-canvas DOM nodes (e.g., `<header id="appHeader">`) from being falsely parsed as canvas elements, which previously caused `TypeError: canvas_appHeader.getContext is not a function` in synthesized companion scripts.
-
-### 2. Workspace Companion Deliverable 0-Byte Overwrite Protection (`runner.rs`)
-- Hardened `ensure_companion_assets_exist` to inspect existing workspace files (`app.js`, `styles.css`) on disk.
-- If assets already exist with valid byte length (> 50 bytes), FlyMD preserves their implementation, never overwrites them with generic boilerplate stubs, and never falsely attributes them as newly touched files for unrelated tasks.
-
-### 3. Non-Buffering CLI Streaming & NDJSON Decoding (`runner.rs`)
-- Enhanced `agy.exe` process invocation with `--output-format stream-json` and a live NDJSON line reader loop.
-- Thought traces and live model streaming tokens now bypass process buffer delays and stream directly to the FlyMD UI in real time.
-
-### 4. Code-Task Settlement Detector Guard (`runner.rs`)
-- Upgraded the multi-condition settlement detector so code-generating steps (`build` and `fix-bugs`) cannot terminate prematurely on markdown reports alone before at least one substantive code deliverable (`.js`, `.ts`, `.html`, `.css`, `.py`, `.rs`) has been modified on disk.
-
-### 5. Cryptographic Workspace Modification Verification (`runner.rs`)
-- Embedded FIPS 180-4 SHA-256 pre-execution and post-execution workspace digests in `fix-bugs`. If zero code files were modified on disk, the system surfaces a clear diagnostic rather than reporting false completion.
+**FlyMD v2.1.0** is a major stable release introducing granular per-agent reasoning effort and thinking mode controls, interactive workspace memory reset and project deletion dialogs with configurable checkboxes, and extensive lifecycle hardening for multi-agent deliberations and autonomous pipelines.
 
 ---
 
-## 🆕 New Features & Workflow Improvements
+## 🆕 Major New Features
 
-### 1. Active Execution Guards (`AgentChatTimeline`)
-- While an agent task or deliberation round is actively running, dangerous concurrent actions (`Paste External Output`, `Relay ->`, and the bottom Chat Composer) are automatically disabled with contextual status hints.
-- Eliminates split-brain races, corrupted handoff packets, and accidental task interruptions.
+### 1. Granular Per-Agent Reasoning Effort & Thinking Controls
+- **Flexible Effort Selectors (`low`, `medium`, `high`)**:
+  - Control reasoning token budgets across pipeline steps, deliberation participants, and direct agent dispatches.
+  - Optimize token expenditure: use `low` effort for formatting and mechanical translation, `medium` for routine code generation, and `high` for deep architectural refactoring or security auditing.
+- **Thinking Mode (Chain-of-Thought) Toggle**:
+  - Enable or disable full thinking visibility on supported reasoning models (DeepSeek R1, Claude 3.7 Sonnet, Gemini 2.0 Flash Thinking).
+- **Safe Fallback & Automatic Error Recovery**:
+  - Automatically defaults to `medium` when interacting with models or providers that lack custom reasoning effort parameters.
+  - If a provider endpoint rejects unsupported reasoning parameters, FlyMD automatically strips the reasoning configuration and retries seamlessly without failing the step.
 
-### 2. User-Defined Custom Pipeline Actions Library (`CustomPipelineActionsModal`)
-- Built an interactive modal dialog allowing developers to create, customize, duplicate, and persist reusable pipeline actions (e.g., `report`, `benchmark`, `security-audit`, `migrate`, `deploy`).
-- Each custom action supports:
-  - Custom title and action slug.
-  - Dedicated icon keys (`FileText`, `CheckCircle2`, `Zap`, `Sparkles`, `ShieldCheck`, `Terminal`, `Search`, etc.).
-  - Configurable Epistemic Policies:
-    - **Fast Inherit** (`DirectInherit`): High-speed collaborative execution.
-    - **Delta Verify** (`DeltaVerify`): Verification against verified disk digests.
-    - **Blind Independent Audit** (`BlindIndependentAudit`): Upstream prose withheld, raw code inspection only.
-    - **Ground Truth Rebuild** (`GroundTruthRebuild`): Full independent verification from disk.
-  - System prompt overrides and default model temperature.
+### 2. Interactive Workspace Memory Reset Modal
+- **Fine-Grained Reset Dialog**:
+  - Provides an intuitive modal with default-checked checkboxes allowing users to selectively clear:
+    - Active multi-agent debate sessions & historical transcripts.
+    - 12-section evidence reports and synthesis markdown deliverables.
+    - Pipeline execution state and step run history.
+    - Cross-model cognitive handoffs, SHA-256 digests, and cached index envelopes.
+- **Automated Tab Lifecycle Management**:
+  - Automatically identifies and closes workspace editor tabs associated with cleared discussions and reports.
 
-### 3. Incremental Extendable Pipeline Execution (`AgentStudioSidebar` & `AgentsControlCenter`)
-- **Completed Step Lock**: Finished pipeline steps display an emerald `✓ DONE` badge and are protected against accidental modifications or deletion.
-- **StickyNote Error Directives**: Click any step to open a popover and attach targeted error logs, bug reports, or guidance notes (`step_note`) without modifying the original prompt.
-- **Smart Incremental Run**: Clicking "Run Pending Steps" begins from the first unfinished step without restarting already-settled steps from zero.
-- **Non-Destructive Step Addition**: New actions added to a pipeline append gracefully without resetting previous outputs.
+### 3. Interactive Project & Sub-Project Deletion Modal
+- **Granular Deletion Controls**:
+  - Dedicated interactive modal for deleting projects and nested sub-projects.
+  - Default-checked checkboxes for removing associated `.flymd` memory, cognitive caches, logs, and transcripts, with an optional toggle for deleting physical workspace files.
 
 ---
 
-## 📦 Downloads & Assets (Latest Release)
+## 🛠️ Deliberation & Pipeline Lifecycle Hardening
+
+### 1. Multi-Agent Deliberation Lifecycle & Stalling Elimination
+- **Phase 3 Stalling Root-Cause Fix**:
+  - Resolved visual desynchronization where deliberations settled on disk but remained locked in `RUNNING` status on the main header.
+- **Sequence-Guarded Store Synchronization (`activeSyncSequence`)**:
+  - Replaced uncoordinated parallel IPC calls with an atomic sequence guard that automatically discards out-of-order promise resolutions during intense model token streaming.
+- **In-Memory Supervisor Eviction**:
+  - `spawn_supervised_discussion_run` now promptly evicts terminal sessions (`AwaitingReview`, `Completed`, `Failed`, `Cancelled`) from `active_map`, preventing memory leaks and stale state locks.
+- **Reconciliation Heartbeat Guard**:
+  - Added an active 2.5-second heartbeat timer in `DiscussionStudio.tsx` to verify backend metadata while running, ensuring 100% UI alignment even if an IPC push event is delayed or dropped.
+
+### 2. Pipeline Execution Guards & Companion Asset Protection
+- **Settlement Detector Code-File Guard**:
+  - Requires substantive code file modifications on disk before settling code-generating steps (`build` and `fix-bugs`), preventing tasks from terminating prematurely on markdown reports alone.
+- **Companion Asset Overwrite Protection**:
+  - Existing code files (`app.js`, `styles.css`) are preserved and never overwritten with generic stubs.
+- **Cryptographic Workspace Verification**:
+  - Embedded FIPS 180-4 SHA-256 pre-execution and post-execution workspace digests in `fix-bugs` to verify genuine alterations on disk.
+
+---
+
+## 📦 Downloads & Assets (v2.1.0 Stable)
 
 | File | Description | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`FlyMD Setup 2.0.1.exe`** | Windows NSIS Standalone Installer | **67.42 MB** | `d02ecfd02b978c10c9ed2332f05408c84f50f67ddcc4a531b3a192930b39f194` |
-| **`FlyMD 2.0.1.exe`** | Windows Complete Portable Package | **67.10 MB** | `d772c8bcee599e28d678356f5e585776626fd78395b4cb3e04ee40476460f2e9` |
-| **`FlyMD_2.0.1_x64-portable.exe`** | Ultra-Lightweight Tauri v2 Native Binary | **14.78 MB** | `a2e75d0b2300a6445a9dacd5f520e1edaf6602ad91a8ced2a6ed3a5a7358f975` |
-| **`SHA256SUMS.txt`** | Checksum verification file | < 1 KB | — |
+| **`FlyMD_2.1.0_x64-portable.exe`** | Ultra-Lightweight Tauri v2 Native Binary | **14.90 MB** | `1b60a7e8f2aeb00cd01a64b2bc056f10c32b7d121b5b97cf0532cd86b83a462f` |
+| **`FlyMD_2.1.0_x64-portable-latest.exe`** | Latest Portable Release Shortcut | **14.90 MB** | `1b60a7e8f2aeb00cd01a64b2bc056f10c32b7d121b5b97cf0532cd86b83a462f` |
+| **`SHA256SUMS.txt`** | Checksum verification file | < 1 KB | `1b60a7e8f2aeb00cd01a64b2bc056f10c32b7d121b5b97cf0532cd86b83a462f` |
 
 ---
 

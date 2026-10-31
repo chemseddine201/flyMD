@@ -1,4 +1,4 @@
-# FlyMD v2.0 🪶
+# FlyMD v2.1 🪶
 
 [English](#-english) • [العربية](#-العربية)
 
@@ -8,10 +8,10 @@
 
 > **Ultra-lightweight Tauri v2 + Rust Markdown Supervisor, Native Multi-Agent Studio, Evidence-Graded Debate Engine & Role-Aware Epistemic Cache Handoff Hub.**
 
-[![Version: 2.0.1](https://img.shields.io/badge/Version-2.0.1-purple.svg)](CHANGELOG.md)
+[![Version: 2.1.0](https://img.shields.io/badge/Version-2.1.0-purple.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Framework: Tauri v2](https://img.shields.io/badge/Runtime-Tauri_v2_(Rust)-orange.svg)](https://tauri.app)
-[![Multi-Agent Studio](https://img.shields.io/badge/Multi--Agent-Studio_%26_Debate_Hub-6366f1.svg)](#-whats-new-in-flymd-v200)
+[![Multi-Agent Studio](https://img.shields.io/badge/Multi--Agent-Studio_%26_Debate_Hub-6366f1.svg)](#-whats-new-in-flymd-v210)
 [![RAM Usage: ~35 MB](https://img.shields.io/badge/Memory_Footprint-~35_MB_RAM-brightgreen.svg)](#-performance--footprint)
 
 ---
@@ -22,11 +22,37 @@ Modern AI-assisted engineering relies on multiple coding agents and models (Clau
 1. **IDE Tab Fatigue & Unsupervised Artifacts**: Agents continuously generate Markdown plans, RFCs, walkthroughs, and multi-file code deliverables across nested directories. Reading and tracking them inside your primary code editor fragments focus.
 2. **High-Cost, Disconnected Multi-Agent Workflows**: Running multiple models sequentially or in debates normally forces every agent to re-scan the entire codebase from scratch (burning 65%+ redundant tokens) while blindly trusting upstream prose self-summaries ("everything works!") that let bugs slip past reviewers.
 
-### The FlyMD v2.0 Solution
-**FlyMD v2.0** combines a **zero-distraction side-screen workspace supervisor & Markdown studio** with a **native Rust Multi-Agent Deliberation & Pipeline Orchestrator**:
+### The FlyMD v2.1 Solution
+**FlyMD v2.1** combines a **zero-distraction side-screen workspace supervisor & Markdown studio** with a **native Rust Multi-Agent Deliberation & Pipeline Orchestrator**:
 - **Supervise Any Workspace Live**: Watch `.md` documentation by default — or opt-in to supervise full codebases (`.ts`, `.rs`, `.py`, `.html`, `.css`, `.js`, `.json`, etc.) via the configurable **Extensions Picker**.
 - **Orchestrate Heterogeneous Agents**: Run structured multi-round **Evidence-Graded Debates** and sequential **Plan → Build → Review → Fix Pipelines** across CLI agents, Ollama local models, and cloud APIs inside a native 3-pane studio.
 - **Move Comprehension, Prevent Bias**: Share prefix-pinned KV caches and SHA-256 verified **Cognitive Handoff Packets** across models to slash latency and API cost, while enforcing **Blind Independent Audits** on `Critic` / `Review` roles so verification agents inspect raw code diffs and form independent conclusions first.
+
+---
+
+## 🚀 What's New in FlyMD v2.1.0 (Stable)
+
+### 1. Per-Agent Reasoning Effort & Thinking Controls
+- **Granular Effort Levels**: Choose `low`, `medium`, or `high` reasoning effort per pipeline step, per debate participant, and direct agent dispatch. Save tokens on simple generation tasks or deploy high-intensity reasoning for complex architecture and debugging.
+- **Thinking Mode Toggle**: Dedicated switch to enable or disable chain-of-thought (thinking) tokens across supported reasoning models (DeepSeek R1, Claude 3.7 Sonnet, Gemini 2.0 Flash Thinking).
+- **Safe Fallback & Auto-Recovery**: Models or providers lacking custom reasoning effort gracefully default to `medium`. If an API endpoint returns an unsupported parameter error, FlyMD automatically strips the parameter and retries seamlessly without user intervention or workflow failure.
+
+### 2. Interactive Workspace Memory Reset & File Tabs Management
+- **Full Control Memory Reset Dialog**: Comprehensive modal dialog with default-checked options allowing users to selectively clear:
+  - Active multi-agent debate sessions & transcripts.
+  - 12-section evidence reports and synthesis markdown files.
+  - Pipeline execution state and step run history.
+  - Cross-model cognitive handoffs, SHA-256 digests, and cached index envelopes.
+- **Smart Tab Cleanup**: Automatically identifies and closes workspace editor tabs associated with cleared discussions and reports.
+
+### 3. Interactive Project & Sub-Project Deletion Modal
+- **Granular Deletion Modals**: Safely delete projects or sub-projects with default-checked options to purge associated `.flymd` memory, cognitive caches, logs, and transcripts, with an optional toggle for deleting physical workspace files.
+
+### 4. Multi-Agent Deliberation Lifecycle Safeguards
+- **Sequence-Guarded Store Synchronization (`activeSyncSequence`)**: Eliminates race conditions and UI freezes (such as staying stuck on `RUNNING` in Phase 3 while backend is complete) by discarding out-of-order IPC responses during rapid token streaming.
+- **In-Memory Supervisor Eviction**: The Rust supervisor (`commands.rs`) promptly releases terminal sessions (`AwaitingReview`, `Completed`, `Failed`, `Cancelled`) from memory, preventing memory leaks and stale state locks.
+- **Reconciliation Heartbeat Guard**: Active 2.5s heartbeat timer in `DiscussionStudio.tsx` ensures the UI is 100% synchronized with on-disk state even if push events are lagged or dropped.
+- **Settlement Detector & Deliverable Verification Hardening**: Code generation tasks (`build`, `fix-bugs`) verify on-disk code modifications prior to task settlement, preventing 0-byte overwrites and stub deliverables.
 
 ---
 
@@ -175,6 +201,32 @@ Compiled release artifacts:
 - **مراقبة حية قابلة للتخصيص**: مراقبة ملفات `.md` افتراضياً بدون تشويش، مع منتقي امتدادات مرن يسمح بمراقبة ملفات الكود الكاملة (`.html`, `.css`, `.js`, `.ts`, `.rs`, `.py`, `.php` وغيرها).
 - **تناغم كامل بين الوكلاء المحليين والسحابيين**: إدارة جلسات المناظرات الهندسية متعددة الجولات وخطوط التنفيذ التلقائية أو اليدوية (`Plan → Build → Review → Fix`) عبر واجهة احترافية ثلاثية الألواح.
 - **نقل الفهم المعرفي ومنع الانحياز التأكيدي**: مشاركة ذاكرة الـ KV Cache وحزم الفهم الموثقة ببصمات `SHA-256` بين النماذج المختلفة لتقليل التكلفة وتسريع الاستجابة، مع فرض **المراجعة المستقلة العمياء (Blind Independent Audit)** على وكلاء التدقيق والمراجعة لقراءة الكود الفعلي واستنتاج خلاصتهم بأنفسهم.
+
+---
+
+## 🚀 الجديد في الإصدار FlyMD v2.1.0 (النسخة المستقرة)
+
+### 1. التحكم الدقيق في جهد التفكير ووضع التفكير العميق (Reasoning Effort & Thinking Controls)
+- **مستويات الجهد المخصصة**: اختيار مستوى الجهد (`low`, `medium`, `high`) لكل خطوة في خط العمل، ولكل مشارك في المناظرة، وعند إرسال التوجيهات المباشرة، مما يتيح توفير التوكنز في المهام البسيطة أو استدعاء كامل طاقة التفكير في المهام المعقدة.
+- **تبديل وضع التفكير (Thinking Mode)**: زر مخصص لتفعيل أو تعطيل سلاسل الأفكار التفكيرية للنماذج الداعمة (مثل DeepSeek R1 وClaude 3.7 Sonnet وGemini 2.0 Flash Thinking).
+- **الرجوع الآمن والتعافي التلقائي**: النماذج التي لا تدعم معلمات الجهد تعود تلقائياً وبأمان إلى الخيار المتوسط `medium`. وإذا رفض المزود أي معلمة تفكير، يتعامل النظام تلقائياً مع الخطأ ويعيد المحاولة بسلاسة بدون توقف خط العمل.
+
+### 2. نافذة تفاعلية شاملة لمسح الذاكرة وإدارة التبويبات المفتوحة
+- **مسح ذكي بخيارات متعددة**: نافذة تفاعلية تتيح للمستخدم تحديد ما يرغب في تنظيفه بخيارات مفعلة افتراضياً:
+  - جلسات وسجلات المناظرات الجارية والتاريخية.
+  - تقارير الأدلة النهائية المكونة من 12 قسماً.
+  - سجل وحالات تنفيذ خط العمل (Pipeline).
+  - حزم التسليم المعرفي (Cognitive Handoff) وبصمات SHA-256 وذاكرة الفهارس.
+- **إغلاق تلقائي للتبويبات المرتبطة**: يتعرف النظام تلقائياً على تبويبات المحرر المفتوحة التابعة للجلسات والتقارير الممسوحة ويغلقها فوراً للحفاظ على ترتيب مساحة العمل.
+
+### 3. نافذة تفاعلية لحذف المشاريع والمشاريع الفرعية
+- نافذة حذف آمنة مزودة بخيارات محددة مسبقاً لتنظيف ذاكرة `.flymd` المخصصة للمشروع، وسجلات التتبع، والملفات المؤقتة، مع خيار إضافي لحذف الملفات المادية من القرص.
+
+### 4. حماية وتثبيت دورة حياة المناظرات المتعددة
+- **مزامنة الحالة المتسلسلة والمحمية (`activeSyncSequence`)**: القضاء التام على مشكلة تجمد الواجهة في المرحلة الثالثة أثناء التدفق الكثيف لتوكنز التفكير، وتجاهل أي استجابات قديمة تصل بترتيب غير متزامن.
+- **تنظيف المشرف في الذاكرة**: إخلاء فوري للجلسات المكتملة أو الملغاة أو الفاشلة من جدول الذاكرة المشترك في Rust.
+- **مراقب نبضات ذاتي الإصلاح (Reconciliation Heartbeat)**: مؤقت فحص دوري كل 2.5 ثانية يضمن التطابق التام 100% بين الواجهة والقرص حتى لو تأخرت أو فُقدت أحداث الـ IPC.
+- **التحقق المشفر من تعديل الملفات البرمجية**: منع التوقف المبكر وضمان تعديل ملفات الكود الحقيقية قبل اعتبار خطوات البناء والإصلاح مكتملة.
 
 ---
 
