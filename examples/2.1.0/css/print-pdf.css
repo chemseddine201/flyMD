@@ -1,0 +1,132 @@
+/* ==========================================================================
+   css/print-pdf.css — قواعد الطباعة وتصدير PDF القياسية (A4 Portrait)
+   تضمن عدم انقسام المخططات أو القوانين أو الجداول عبر الصفحات
+   ========================================================================== */
+
+@page {
+  size: A4 portrait;
+  margin: 10mm 12mm;
+}
+
+@media print {
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10.5pt !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* إخفاء جميع عناصر الواجهة التفاعلية والأزرار أثناء الطباعة */
+  .no-print,
+  #app-header,
+  #chapter-nav,
+  #interactive-view,
+  #error-banner,
+  .workbook-screen-banner {
+    display: none !important;
+  }
+
+  /* إظهار كراس الدرس المصور بكامل عرض الصفحة A4 */
+  #printable-workbook,
+  .printable-workbook {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .pdf-page {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 4mm 2mm !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .pdf-page:last-of-type {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  /* منع انقسام المخططات والقوانين والتمارين المحلولة والجداول */
+  .pdf-diagram-block,
+  .pdf-svg-slot,
+  .law-card,
+  .solved-exercise,
+  .pdf-table,
+  .pdf-card,
+  .pdf-mini-card,
+  .pdf-definition-box,
+  .pdf-summary-Golden-box {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .pdf-two-col {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 4mm !important;
+  }
+
+  .pdf-three-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 3.5mm !important;
+  }
+
+  .pdf-four-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 3mm !important;
+  }
+
+  .laws-reference-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 3mm !important;
+  }
+
+  .pdf-svg-slot svg {
+    max-height: 76mm !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* تنسيق المعادلات والرموز الرياضية في وضع الطباعة A4 عالية التباين */
+  .math-inline {
+    background: #f8fafc !important;
+    color: #000000 !important;
+    border: 1px solid #94a3b8 !important;
+    padding: 0.01rem 0.24rem !important;
+    font-size: 0.92em !important;
+  }
+
+  .law-card .math-formula-box,
+  .math-formula-box {
+    background: #f8fafc !important;
+    color: #000000 !important;
+    border: 1px solid #475569 !important;
+  }
+
+  .math-sep {
+    color: #334155 !important;
+  }
+}
