@@ -1,7 +1,9 @@
 //! Agent execution runner: handles CLI subprocess streaming, markdown synthesis, and workspace sync.
 
 use super::process_manager::ProcessTreeManager;
-use super::types::{now_ms, AgentStreamEvent, AgentTaskRecord, AgentToolAction};
+use super::types::{
+    now_ms, AgentErrorDiagnostic, AgentStreamEvent, AgentTaskRecord, AgentToolAction,
+};
 use crate::store::SharedStore;
 use std::fs;
 use std::io::{BufRead, BufReader};
@@ -305,20 +307,134 @@ pub fn intent_instructions(intent: &str, custom_prompt: Option<&str>) -> String 
         }
     }
     let base = match intent {
-        "build" => "Read the attached Markdown plan carefully. Implement all required code changes step-by-step in the workspace. When finished, write a completion summary report.",
-        "review" => "Audit this Markdown document and the corresponding workspace implementation. Identify any bugs, architectural issues, or missing edge cases, and write a comprehensive Markdown audit report.",
-        "fix-bugs" => "Diagnose the issue or bug described in this Markdown file. Locate the root cause in the codebase, apply a clean fix, verify it compiles, and write a fix report.",
-        "refine-plan" => "Refine and expand this Markdown specification. Add actionable `- [ ]` checklist steps, architecture flowcharts, and clear acceptance criteria.",
-        "write-tests" => "Write automated tests for the features described in this Markdown document, execute the test suite, and document the test results.",
-        "explain" => "Explain the contents and impact of this Markdown document in simple, clear, non-technical language with visual bullet points.",
-        _ => "Execute the instructions in this Markdown document.",
+        "build" => "ROLE: CODE IMPLEMENTER (`build`). Read the attached Markdown implementation plan carefully. Create and implement all required application code files (HTML, CSS, JS, TS, etc.) step-by-step on disk in the workspace. When finished, output a concise completion summary report.",
+        "review" => "ROLE: QA AUDITOR (`review`). Audit the Markdown specification and the corresponding workspace code implementation in read-only mode. Identify any bugs, architectural issues, broken DOM bindings, or missing edge cases, and write a comprehensive Markdown audit report. Do NOT overwrite application source code files.",
+        "fix-bugs" => "ROLE: BUG REMEDIATION ENGINEER (`fix-bugs`). Diagnose the issue or bug described in this directive and Markdown specification. Locate the exact root cause in the workspace code files, apply a clean fix directly to disk, verify integrity, and write a concise fix report.",
+        "refine-plan" => "ROLE: LEAD ARCHITECT & PLANNER (`refine-plan`). Refine and expand this specification into a comprehensive, detailed Markdown implementation plan (`.md` file) saved directly in the workspace. Include system architecture flowcharts, exact file/module breakdown, DOM IDs & component contracts, mathematical/domain formulas, unchecked `- [ ]` implementation checklist steps, and clear acceptance criteria. STRICT PROHIBITION: Do NOT create, write, or modify any application code files (`.html`, `.css`, `.js`, `.ts`, `.py`, `.rs`) during this planning step—code implementation is strictly reserved for the subsequent `build` step.",
+        "write-tests" => "ROLE: TEST ENGINEER (`write-tests`). Write automated tests for the features described in this Markdown specification, execute the test suite, and document the test results.",
+        "explain" => "ROLE: TECHNICAL COMMUNICATOR (`explain`). Explain the contents, architecture, and impact of this Markdown document and workspace in clear, structured language with visual bullet points. Do NOT modify application code files.",
+        _ => "Execute the instructions in this Markdown document according to your assigned role.",
     };
     if let Some(cp) = custom_prompt {
         if !cp.trim().is_empty() {
-            return format!("{}\n\nAdditional User Instructions: {}", base, cp.trim());
+            return format!("{}\n\nPipeline Step Context: {}", base, cp.trim());
         }
     }
     base.to_string()
+}
+
+/// Resolves the canonical target `.md` filename in the workspace for a `refine-plan` step.
+pub fn resolve_plan_markdown_filename(file_name: &str) -> String {
+    let trimmed = file_name.trim();
+    if trimmed.to_lowercase().ends_with(".md")
+        && !trimmed.starts_with("Entire Project")
+        && !trimmed.starts_with("Untitled")
+        && !trimmed.contains('/')
+        && !trimmed.contains('\\')
+    {
+        trimmed.to_string()
+    } else {
+        "IMPLEMENTATION_PLAN.md".to_string()
+    }
+}
+
+/// Builds a strictly role-isolated CLI `-p` prompt based on `intent`.
+pub fn build_cli_prompt_for_intent(
+    intent: &str,
+    file_name: &str,
+    custom_directive: &str,
+    handoff_file_path: &str,
+    exec_dir: &str,
+    epistemic_cli_clause: &str,
+) -> String {
+    match intent {
+        "refine-plan" => {
+            let target_plan_file = resolve_plan_markdown_filename(file_name);
+            let target_plan_path = Path::new(exec_dir).join(&target_plan_file);
+            format!(
+                "PLANNING & ARCHITECTURE SPECIFICATION MODE ONLY (Intent: `refine-plan`).\n\
+                 Step Context: \"{}\"\n\
+                 Read the project specification written in UTF-8 at \"{}\" in workspace \"{}\".\n\
+                 Your SOLE deliverable in this step is to author and write a comprehensive, detailed Markdown implementation plan in UTF-8 directly to \"{}\".\n\
+                 The Markdown implementation plan MUST contain:\n\
+                 1. Executive Summary & Domain/Pedagogical Objectives\n\
+                 2. Architectural Blueprint & Mermaid Diagrams (`flowchart TD`, `stateDiagram-v2`)\n\
+                 3. Exact File Structure & Module Contracts (exact filenames to be built in the next step, DOM element IDs, CSS architecture, state machine reducers, formulas, and error-boundary guards)\n\
+                 4. Actionable Step-by-Step Implementation Checklist using UNCHECKED `- [ ]` items (leave all items unchecked `- [ ]` so the subsequent Build step implements them)\n\
+                 5. Explicit Acceptance Criteria & Verification Gates.\n\
+                 STRICT ROLE BOUNDARY PROHIBITION: DO NOT create, write, or modify any application source code files (.html, .css, .js, .ts, .jsx, .tsx, .py, .rs, .php) during this Planning step! Creating code files is strictly reserved for the subsequent Build step. Write ONLY the `.md` implementation plan file (`{}`). Do NOT ask for confirmation.",
+                custom_directive,
+                handoff_file_path,
+                exec_dir,
+                target_plan_path.to_string_lossy(),
+                target_plan_file
+            )
+        }
+        "review" => format!(
+            "READ-ONLY QA AUDIT & ARCHITECTURAL REVIEW MODE (Intent: `review`).\n\
+             Step Context: \"{}\"\n\
+             Inspect the workspace files in \"{}\" against the specification written in UTF-8 at \"{}\". {}\n\
+             Identify any bugs, missing requirements, incomplete files, broken DOM bindings, or edge-case vulnerabilities, and output a comprehensive Markdown audit report.\n\
+             STRICT ROLE BOUNDARY: Do NOT overwrite or delete working application code files during this Review step. Do NOT ask for confirmation.",
+            custom_directive,
+            exec_dir,
+            handoff_file_path,
+            epistemic_cli_clause
+        ),
+        "explain" => format!(
+            "READ-ONLY EXPLANATION & DOCUMENTATION MODE (Intent: `explain`).\n\
+             Step Context: \"{}\"\n\
+             Read the specification at \"{}\" and inspect workspace \"{}\".\n\
+             Output a clear, well-structured Markdown explanation. Do NOT modify application code files.",
+            custom_directive,
+            handoff_file_path,
+            exec_dir
+        ),
+        "fix-bugs" => format!(
+            "CRITICAL BUG FIX & REMEDIATION MODE (Intent: `fix-bugs`).\n\
+             Target Bug / Directive: \"{}\"\n\
+             Execute the fix specification written in UTF-8 at \"{}\" directly in workspace \"{}\". {}\n\
+             Inspect the suspect files on disk (app.js, index.html, styles.css, etc.), diagnose the exact root cause, and write the corrected code directly to the files in \"{}\". Do NOT ask for confirmation. Apply the fix immediately.",
+            custom_directive,
+            handoff_file_path,
+            exec_dir,
+            epistemic_cli_clause,
+            exec_dir
+        ),
+        "write-tests" => format!(
+            "AUTOMATED TEST ENGINEERING MODE (Intent: `write-tests`).\n\
+             Step Context: \"{}\"\n\
+             Execute the test specification written in UTF-8 at \"{}\" in workspace \"{}\". {}\n\
+             Create and run the required test files in \"{}\" and output a comprehensive Markdown test verification report. Do NOT ask for confirmation.",
+            custom_directive,
+            handoff_file_path,
+            exec_dir,
+            epistemic_cli_clause,
+            exec_dir
+        ),
+        _ => {
+            // "build" and "custom"
+            let directive_prefix = if !custom_directive.is_empty() {
+                format!("Step Directive: \"{}\"\n", custom_directive)
+            } else {
+                String::new()
+            };
+            format!(
+                "CODE IMPLEMENTATION & BUILD MODE (Intent: `{}`).\n\
+                 {}Execute the implementation plan and task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". {}\n\
+                 Create, write, or modify all required application code files inside \"{}\" strictly following the implementation plan in the workspace.\n\
+                 INCREMENTAL FILE-BY-FILE EXECUTION: Write each deliverable file in a separate, sequential tool call (1. write index.html first, 2. write styles.css second, 3. write app.js third) so each file is immediately flushed to disk as a verified checkpoint. Do NOT buffer all files into a single monolithic turn.\n\
+                 SPEED & TOKEN GUARD: Do NOT waste time or tokens running Bash backup scripts, Python scripts, headless browsers (Playwright/Chrome/Edge/CDP), or benchmark harnesses in %TEMP% during `build`, and do NOT read unrelated legacy files if overwriting with a fresh application. Write the target files directly using Write/Edit tools and exit immediately once all files are written.\n\
+                 CRITICAL REQUIREMENT: For any interactive web application, UI, simulation, or tool, you MUST write the FULL, WORKING, UNTRUNCATED CODE files directly to disk in the workspace: index.html, styles.css, AND app.js (plus any modules specified in the plan). If index.html references app.js via <script src=\"app.js\">, you MUST create and write app.js completely to disk with all interactivity, calculations, and event handlers. Do NOT leave app.js missing or empty, and do NOT stop after writing only HTML or CSS. Execute all file writes immediately without asking for user confirmation.",
+                intent,
+                directive_prefix,
+                handoff_file_path,
+                exec_dir,
+                epistemic_cli_clause,
+                exec_dir
+            )
+        }
+    }
 }
 
 pub fn spawn_agent_execution(
@@ -462,32 +578,38 @@ pub fn spawn_agent_execution(
             };
 
             let custom_err_directive = record
-                .custom_prompt
+                .step_note
                 .as_deref()
-                .or(record.step_note.as_deref())
+                .filter(|s| !s.trim().is_empty())
+                .or(record.custom_prompt.as_deref())
                 .unwrap_or("")
                 .trim();
 
-            let prompt_arg = if record.intent == "fix-bugs" || !custom_err_directive.is_empty() {
-                format!(
-                    "CRITICAL BUG FIX / TARGET DIRECTIVE: \"{}\"\nExecute the fix specification written in UTF-8 at \"{}\" directly in workspace \"{}\". {}\nInspect the suspect files on disk (app.js, index.html, styles.css, etc.), diagnose the exact root cause, and write the corrected code directly to the files in \"{}\". Do NOT ask for confirmation. Apply the fix immediately.",
-                    custom_err_directive,
-                    handoff_file.to_string_lossy(),
-                    exec_dir,
-                    epistemic_cli_clause,
-                    exec_dir
-                )
-            } else {
-                format!(
-                    "Execute the task specification written in UTF-8 at \"{}\" directly in workspace \"{}\". {} Create, write, or modify all required code/HTML/CSS/JS/Markdown files inside \"{}\". CRITICAL REQUIREMENT: For any interactive web application, UI, simulation, or tool, you MUST write the FULL, WORKING, UNTRUNCATED CODE files directly to disk in the workspace: index.html, styles.css, AND app.js. If index.html references app.js via <script src=\"app.js\">, you MUST create and write app.js completely to disk with all interactivity, calculations, and event handlers. Do NOT leave app.js missing or empty, and do NOT stop after writing only HTML or CSS. Execute all file writes immediately without asking for user confirmation.",
-                    handoff_file.to_string_lossy(),
-                    exec_dir,
-                    epistemic_cli_clause,
-                    exec_dir
-                )
-            };
+            let prompt_arg = build_cli_prompt_for_intent(
+                &record.intent,
+                &record.file_name,
+                custom_err_directive,
+                &handoff_file.to_string_lossy(),
+                &exec_dir,
+                epistemic_cli_clause,
+            );
 
+            let resume_sid = record.cli_session_id.clone().filter(|s| !s.trim().is_empty());
             let bin_lower = bin.to_lowercase();
+            let raw_effort = record.effort_level.as_deref().unwrap_or("medium").to_lowercase();
+            let effort_val = match raw_effort.as_str() {
+                "low" | "medium" | "high" | "xhigh" | "max" => raw_effort.as_str(),
+                _ => "medium",
+            };
+            let thinking_on = record.thinking_enabled.unwrap_or(true);
+
+            emit_log(format!(
+                "[Reasoning Config] Agent: {} | Effort: {} | Thinking: {}",
+                agent_name,
+                effort_val,
+                if thinking_on { "ON" } else { "OFF" }
+            ));
+
             let mut cmd = if bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat") {
                 let mut c = Command::new("cmd.exe");
                 if agent_id == "opencode" {
@@ -506,17 +628,34 @@ pub fn spawn_agent_execution(
                         "--output-format",
                         "stream-json",
                     ]);
-                } else if agent_id == "claude-code" && warm_cli_continue {
+                    if thinking_on {
+                        c.args(["--effort", effort_val]);
+                    } else {
+                        c.args(["--effort", "low"]);
+                    }
+                } else if agent_id == "claude-code" {
+                    c.args(["/C", &bin]);
+                    if let Some(ref sid) = resume_sid {
+                        c.args(["--resume", sid]);
+                    } else if warm_cli_continue {
+                        c.arg("-c");
+                    }
                     c.args([
-                        "/C",
-                        &bin,
-                        "-c",
                         "-p",
                         &prompt_arg,
+                        "--output-format",
+                        "stream-json",
+                        "--verbose",
+                        "--include-partial-messages",
                         "--dangerously-skip-permissions",
                         "--add-dir",
                         &exec_dir,
                     ]);
+                    if thinking_on {
+                        c.args(["--effort", effort_val]);
+                    } else {
+                        c.args(["--effort", "low", "--settings", "{\"alwaysThinkingEnabled\":false}"]);
+                    }
                 } else {
                     c.args([
                         "/C",
@@ -533,16 +672,27 @@ pub fn spawn_agent_execution(
                 match agent_id.as_str() {
                     "claude-code" => {
                         let mut c = Command::new(&bin);
-                        if warm_cli_continue {
+                        if let Some(ref sid) = resume_sid {
+                            c.args(["--resume", sid]);
+                        } else if warm_cli_continue {
                             c.arg("-c");
                         }
                         c.args([
                             "-p",
                             &prompt_arg,
+                            "--output-format",
+                            "stream-json",
+                            "--verbose",
+                            "--include-partial-messages",
                             "--dangerously-skip-permissions",
                             "--add-dir",
                             &exec_dir,
                         ]);
+                        if thinking_on {
+                            c.args(["--effort", effort_val]);
+                        } else {
+                            c.args(["--effort", "low", "--settings", "{\"alwaysThinkingEnabled\":false}"]);
+                        }
                         c
                     }
                     "antigravity" => {
@@ -558,6 +708,11 @@ pub fn spawn_agent_execution(
                             "--output-format",
                             "stream-json",
                         ]);
+                        if thinking_on {
+                            c.args(["--effort", effort_val]);
+                        } else {
+                            c.args(["--effort", "low"]);
+                        }
                         c
                     }
                     "opencode" => {
@@ -647,6 +802,169 @@ pub fn spawn_agent_execution(
                 let mut elapsed_sec: u64 = 0;
                 let mut was_stalled = false;
                 let mut current_pct: u8;
+                let mut captured_session_id: Option<String> = record.cli_session_id.clone();
+                let mut stderr_lines: Vec<String> = Vec::new();
+                let mut captured_cli_error: Option<String> = None;
+                let mut last_known_activity: String = format!(
+                    "Spawned {} subprocess (PID: {}) in `{}`",
+                    agent_name, child_pid, exec_dir
+                );
+                let mut stall_timeout_msg: Option<String> = None;
+
+                let process_stdout_line = |line: &str,
+                                           collected_md: &mut String,
+                                           captured_session_id: &mut Option<String>,
+                                           captured_cli_error: &mut Option<String>,
+                                           last_known_activity: &mut String|
+                 -> (String, Option<(String, Option<String>)>) {
+                    if line.trim_start().starts_with('{') {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                            // Capture CLI session_id (e.g. Claude Code / Antigravity) for native `--resume`
+                            if let Some(sid) = val
+                                .get("session_id")
+                                .or_else(|| val.get("sessionId"))
+                                .and_then(|v| v.as_str())
+                            {
+                                if !sid.trim().is_empty() && captured_session_id.is_none() {
+                                    *captured_session_id = Some(sid.trim().to_string());
+                                }
+                            }
+
+                            // 1. Antigravity stream-json format
+                            if let Some(delta) = val.pointer("/step_update/text_delta").and_then(|v| v.as_str()) {
+                                collected_md.push_str(delta);
+                                return (String::new(), None);
+                            } else if let Some(resp) = val.pointer("/result/response").and_then(|v| v.as_str()) {
+                                if !resp.trim().is_empty() {
+                                    *collected_md = resp.to_string();
+                                }
+                                *last_known_activity = format!("Completed CLI response ({} bytes)", resp.len());
+                                return (format!("[CLI Engine Result] Completed ({} bytes)", resp.len()), None);
+                            } else if let Some(ev) = val.get("event").and_then(|v| v.as_str()) {
+                                // Only if `event` is a string (Antigravity format)
+                                *last_known_activity = format!("CLI Event: {}", ev);
+                                return (format!("[CLI Engine] Event: {}", ev), None);
+                            }
+
+                            // 2. Claude Code stream-json format (`type`: `system` | `stream_event` | `assistant` | `user` | `result` | `error`)
+                            if let Some(msg_type) = val.get("type").and_then(|v| v.as_str()) {
+                                match msg_type {
+                                    "system" => {
+                                        let subtype = val.get("subtype").and_then(|v| v.as_str()).unwrap_or("init");
+                                        let model = val.get("model").and_then(|v| v.as_str()).unwrap_or("");
+                                        let info = if !model.is_empty() {
+                                            format!("[CLI Session Init] Model: `{}` ({})", model, subtype)
+                                        } else {
+                                            format!("[CLI Session] {}", subtype)
+                                        };
+                                        *last_known_activity = info.clone();
+                                        return (info, None);
+                                    }
+                                    "stream_event" => {
+                                        if let Some(ev_obj) = val.get("event") {
+                                            let ev_type = ev_obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                            if ev_type == "content_block_start" {
+                                                if let Some(cb) = ev_obj.get("content_block") {
+                                                    if cb.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
+                                                        let tool_name = cb
+                                                            .get("name")
+                                                            .and_then(|v| v.as_str())
+                                                            .unwrap_or("Tool");
+                                                        let act = format!("Streaming tool call: `{}`", tool_name);
+                                                        *last_known_activity = act.clone();
+                                                        return (format!("[CLI Tool Start] {}", act), Some((tool_name.to_string(), None)));
+                                                    }
+                                                }
+                                            } else if ev_type == "content_block_delta" {
+                                                if let Some(delta_obj) = ev_obj.get("delta") {
+                                                    let d_type = delta_obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                                    if d_type == "text_delta" {
+                                                        if let Some(txt) = delta_obj.get("text").and_then(|v| v.as_str()) {
+                                                            collected_md.push_str(txt);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        return (String::new(), None);
+                                    }
+                                    "assistant" => {
+                                        if let Some(content_arr) = val.pointer("/message/content").and_then(|v| v.as_array()) {
+                                            for block in content_arr {
+                                                let b_type = block.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                                if b_type == "tool_use" {
+                                                    let tool_name = block.get("name").and_then(|v| v.as_str()).unwrap_or("Tool");
+                                                    let target_file = block
+                                                        .pointer("/input/file_path")
+                                                        .or_else(|| block.pointer("/input/path"))
+                                                        .or_else(|| block.pointer("/input/pattern"))
+                                                        .or_else(|| block.pointer("/input/command"))
+                                                        .and_then(|v| v.as_str())
+                                                        .map(|s| s.to_string());
+                                                    let summary = if let Some(ref tf) = target_file {
+                                                        format!("Tool `{}` -> `{}`", tool_name, tf)
+                                                    } else {
+                                                        format!("Tool `{}`", tool_name)
+                                                    };
+                                                    *last_known_activity = summary.clone();
+                                                    return (format!("[CLI Tool] {}", summary), Some((tool_name.to_string(), target_file)));
+                                                } else if b_type == "text" {
+                                                    if let Some(txt) = block.get("text").and_then(|v| v.as_str()) {
+                                                        if collected_md.trim().is_empty() && !txt.trim().is_empty() {
+                                                            *collected_md = txt.to_string();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        return (String::new(), None);
+                                    }
+                                    "result" => {
+                                        let is_err = val.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
+                                        let res_text = val.get("result").and_then(|v| v.as_str()).unwrap_or("");
+                                        if is_err {
+                                            let err_msg = if !res_text.trim().is_empty() {
+                                                res_text.trim().to_string()
+                                            } else if let Some(errs) = val.get("errors").and_then(|v| v.as_array()) {
+                                                errs.iter()
+                                                    .filter_map(|e| e.as_str())
+                                                    .collect::<Vec<_>>()
+                                                    .join("; ")
+                                            } else {
+                                                "CLI reported an execution error in result payload.".to_string()
+                                            };
+                                            *captured_cli_error = Some(err_msg.clone());
+                                            *last_known_activity = format!("CLI Error: {}", err_msg);
+                                            return (format!("[CLI Error] {}", err_msg), None);
+                                        } else {
+                                            if !res_text.trim().is_empty() {
+                                                *collected_md = res_text.to_string();
+                                            }
+                                            *last_known_activity = format!("Completed CLI session ({} bytes)", res_text.len());
+                                            return (format!("[CLI Engine Result] Completed ({} bytes)", res_text.len()), None);
+                                        }
+                                    }
+                                    "error" => {
+                                        let err_msg = val
+                                            .pointer("/error/message")
+                                            .or_else(|| val.get("message"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("Unexpected CLI error event")
+                                            .to_string();
+                                        *captured_cli_error = Some(err_msg.clone());
+                                        *last_known_activity = format!("CLI Exception: {}", err_msg);
+                                        return (format!("[CLI Exception] {}", err_msg), None);
+                                    }
+                                    _ => return (String::new(), None),
+                                }
+                            }
+                            return (String::new(), None);
+                        }
+                    }
+                    collected_md.push_str(line);
+                    collected_md.push('\n');
+                    (line.to_string(), None)
+                };
 
                 loop {
                     if cancel_flag.load(Ordering::Relaxed) {
@@ -659,85 +977,122 @@ pub fn spawn_agent_execution(
                         Ok((is_stdout, line)) => {
                             last_stdout_activity = std::time::Instant::now();
                             if is_stdout {
-                                let (display_line, delta_text) = if line.trim_start().starts_with('{') {
-                                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
-                                        if let Some(delta) = val.pointer("/step_update/text_delta").and_then(|v| v.as_str()) {
-                                            (String::new(), Some(delta.to_string()))
-                                        } else if let Some(resp) = val.pointer("/result/response").and_then(|v| v.as_str()) {
-                                            (format!("[CLI Engine Result] Completed ({} bytes)", resp.len()), if collected_md.is_empty() { Some(resp.to_string()) } else { None })
-                                        } else if let Some(ev) = val.get("event").and_then(|v| v.as_str()) {
-                                            (format!("[CLI Engine] Event: {}", ev), None)
-                                        } else {
-                                            (String::new(), None)
-                                        }
-                                    } else {
-                                        (line.clone(), Some(line.clone()))
-                                    }
-                                } else {
-                                    (line.clone(), Some(line.clone()))
-                                };
-
-                                if let Some(txt) = delta_text {
-                                    collected_md.push_str(&txt);
-                                    if !txt.ends_with('\n') {
-                                        collected_md.push('\n');
-                                    }
-                                }
+                                let (display_line, tool_info) = process_stdout_line(
+                                    &line,
+                                    &mut collected_md,
+                                    &mut captured_session_id,
+                                    &mut captured_cli_error,
+                                    &mut last_known_activity,
+                                );
                                 let snap = collected_md.clone();
+                                let sid_snap = captured_session_id.clone();
                                 update_task(&|t| {
                                     t.progress_stage = Some("executing".to_string());
                                     t.progress_percent = (t.progress_percent.max(75) + 1).min(96);
+                                    if sid_snap.is_some() {
+                                        t.cli_session_id = sid_snap.clone();
+                                    }
                                     if !snap.is_empty() {
                                         t.response_markdown = Some(snap.clone());
                                     }
                                     if !display_line.is_empty() {
                                         t.logs.push(display_line.clone());
                                     }
-                                });
-                            } else {
-                                if !line.trim().is_empty() {
-                                    emit_log(format!("[CLI Stderr] {}", line));
-                                    let err_line = format!("[stderr] {}", line);
-                                    let is_quota = line.contains("429") || line.contains("quota reached") || line.contains("RESOURCE_EXHAUSTED");
-                                    update_task(&|t| {
-                                        t.logs.push(err_line.clone());
-                                        if is_quota {
-                                            t.logs.push("[Notice] CLI provider quota reached (429). Falling back to in-app intelligent synthesis & workspace code sync...".to_string());
+                                    if let Some((ref t_name, ref t_target)) = tool_info {
+                                        let kind = if t_name.eq_ignore_ascii_case("write")
+                                            || t_name.eq_ignore_ascii_case("edit")
+                                            || t_name.eq_ignore_ascii_case("multiedit")
+                                        {
+                                            "write"
+                                        } else if t_name.eq_ignore_ascii_case("read")
+                                            || t_name.eq_ignore_ascii_case("glob")
+                                            || t_name.eq_ignore_ascii_case("grep")
+                                        {
+                                            "read"
+                                        } else {
+                                            "cli"
+                                        };
+                                        let label = if let Some(ref tf) = t_target {
+                                            format!("{}: `{}`", t_name, tf.split(['/', '\\']).next_back().unwrap_or(tf))
+                                        } else {
+                                            format!("Tool: {}", t_name)
+                                        };
+                                        if !t.tool_actions.iter().any(|a| a.label == label) {
+                                            t.tool_actions.push(AgentToolAction::new(
+                                                format!("tool-live-{}", now_ms()),
+                                                kind.to_string(),
+                                                label.clone(),
+                                                t_target.clone(),
+                                                "done".to_string(),
+                                                now_ms(),
+                                            ));
+                                            if t.thinking_trace.len() < 24 {
+                                                t.thinking_trace.push(format!("Executed {}", label));
+                                            }
                                         }
-                                    });
+                                    }
+                                });
+                            } else if !line.trim().is_empty() {
+                                emit_log(format!("[CLI Stderr] {}", line));
+                                let trimmed_err = line.trim().to_string();
+                                if stderr_lines.len() < 40 {
+                                    stderr_lines.push(trimmed_err.clone());
                                 }
+                                let err_line = format!("[stderr] {}", line);
+                                let is_quota = line.contains("429")
+                                    || line.contains("quota reached")
+                                    || line.contains("RESOURCE_EXHAUSTED")
+                                    || line.to_lowercase().contains("rate limit");
+                                if is_quota && captured_cli_error.is_none() {
+                                    captured_cli_error = Some(trimmed_err);
+                                }
+                                update_task(&|t| {
+                                    t.logs.push(err_line.clone());
+                                    if is_quota {
+                                        t.logs.push("[Notice] CLI provider quota reached (429).".to_string());
+                                    }
+                                });
                             }
                         }
                         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                            match child.try_wait() {
-                                Ok(Some(_status)) => {
-                                    // Grace drain window up to 1.5s to ensure complete stdout capture
-                                    let drain_deadline = std::time::Instant::now() + Duration::from_millis(1500);
-                                    while std::time::Instant::now() < drain_deadline {
-                                        match rx.recv_timeout(Duration::from_millis(150)) {
-                                            Ok((is_stdout, line)) => {
-                                                if is_stdout {
-                                                    collected_md.push_str(&line);
-                                                    collected_md.push('\n');
-                                                } else if !line.trim().is_empty() {
-                                                    let err_line = format!("[stderr] {}", line);
-                                                    update_task(&|t| {
-                                                        t.logs.push(err_line.clone());
-                                                    });
+                            if let Ok(Some(_status)) = child.try_wait() {
+                                // Grace drain window up to 1.5s to ensure complete stdout capture
+                                let drain_deadline = std::time::Instant::now() + Duration::from_millis(1500);
+                                while std::time::Instant::now() < drain_deadline {
+                                    match rx.recv_timeout(Duration::from_millis(150)) {
+                                        Ok((is_stdout, line)) => {
+                                            if is_stdout {
+                                                let _ = process_stdout_line(
+                                                    &line,
+                                                    &mut collected_md,
+                                                    &mut captured_session_id,
+                                                    &mut captured_cli_error,
+                                                    &mut last_known_activity,
+                                                );
+                                            } else if !line.trim().is_empty() {
+                                                if stderr_lines.len() < 40 {
+                                                    stderr_lines.push(line.trim().to_string());
                                                 }
+                                                let err_line = format!("[stderr] {}", line);
+                                                update_task(&|t| {
+                                                    t.logs.push(err_line.clone());
+                                                });
                                             }
-                                            Err(_) => break,
                                         }
+                                        Err(_) => break,
                                     }
-                                    let snap = collected_md.clone();
-                                    update_task(&|t| {
-                                        if !snap.is_empty() {
-                                            t.response_markdown = Some(snap.clone());
-                                        }
-                                    });
-                                    break;
                                 }
-                                _ => {}
+                                let snap = collected_md.clone();
+                                let sid_snap = captured_session_id.clone();
+                                update_task(&|t| {
+                                    if sid_snap.is_some() {
+                                        t.cli_session_id = sid_snap.clone();
+                                    }
+                                    if !snap.is_empty() {
+                                        t.response_markdown = Some(snap.clone());
+                                    }
+                                });
+                                break;
                             }
 
                             if last_heartbeat.elapsed() >= Duration::from_secs(2) {
@@ -755,26 +1110,42 @@ pub fn spawn_agent_execution(
                                     (96 + (((elapsed_sec - 140) * 2) / 60) as u8).min(98)
                                 };
 
-                                let status_text = match elapsed_sec {
-                                    0..=8 => format!("Analyzing project contract & decomposing deliverables ({}s)...", elapsed_sec),
-                                    9..=25 => format!("Reasoning engine synthesizing specifications & logic ({}s)...", elapsed_sec),
-                                    26..=60 => format!("Deep multi-file generation: writing HTML, CSS & JavaScript modules ({}s)...", elapsed_sec),
-                                    61..=120 => format!("Verifying component dependencies, AST & interactive simulation states ({}s)...", elapsed_sec),
-                                    _ => {
-                                        let mins = elapsed_sec / 60;
-                                        let secs = elapsed_sec % 60;
-                                        format!("Finalizing companion assets, code settling & invariant audits ({}m {}s)...", mins, secs)
+                                let status_text = if record.intent == "refine-plan" {
+                                    match elapsed_sec {
+                                        0..=10 => format!("Analyzing project requirements & domain constraints ({}s)...", elapsed_sec),
+                                        11..=35 => format!("Synthesizing architectural blueprint, Mermaid diagrams & component contracts ({}s)...", elapsed_sec),
+                                        _ => format!("Authoring detailed Markdown implementation plan & checklist specifications ({}s)...", elapsed_sec),
+                                    }
+                                } else if record.intent == "review" || record.intent == "explain" {
+                                    format!("Auditing workspace files & compiling verification report ({}s)...", elapsed_sec)
+                                } else {
+                                    match elapsed_sec {
+                                        0..=8 => format!("Analyzing implementation plan & decomposing deliverables ({}s)...", elapsed_sec),
+                                        9..=25 => format!("Reasoning engine synthesizing specifications & logic ({}s)...", elapsed_sec),
+                                        26..=60 => format!("Deep multi-file generation: writing HTML, CSS & JavaScript modules ({}s)...", elapsed_sec),
+                                        61..=120 => format!("Verifying component dependencies, AST & interactive simulation states ({}s)...", elapsed_sec),
+                                        _ => {
+                                            let mins = elapsed_sec / 60;
+                                            let secs = elapsed_sec % 60;
+                                            format!("Finalizing companion assets, code settling & invariant audits ({}m {}s)...", mins, secs)
+                                        }
                                     }
                                 };
 
                                 let task_started_at = record.started_at.unwrap_or(record.created_at);
                                 emit_log(format!("[CLI Heartbeat {}s] {}", elapsed_sec, status_text));
 
-                                // Periodic live detection of files written to workspace
-                                let live_files = scan_workspace_modified_files(&exec_dir, task_started_at);
+                                // Periodic live detection of files written to workspace (role-filtered)
+                                let mut live_files = scan_workspace_modified_files(&exec_dir, task_started_at);
+                                if record.intent == "refine-plan" {
+                                    live_files.retain(|f| f.to_lowercase().ends_with(".md"));
+                                }
                                 if live_files.len() > seen_created_files.len() || live_files != seen_created_files {
                                     seen_created_files = live_files.clone();
                                     last_fs_change = std::time::Instant::now();
+                                    if let Some(newest) = live_files.last() {
+                                        last_known_activity = format!("Wrote workspace file `{}`", newest);
+                                    }
                                 }
 
                                 update_task(&|t| {
@@ -816,15 +1187,16 @@ pub fn spawn_agent_execution(
                                     was_stalled = true;
                                     let timeout_msg = if is_hang {
                                         format!(
-                                            "[Hang Watchdog] No output or workspace file activity for {}s (threshold: {}s). Pausing execution.",
-                                            min_activity_idle, hang_watchdog_sec
+                                            "[Hang Watchdog] No stream or workspace file activity for {}s (threshold: {}s) after `{}`. Pausing execution so you can Resume from Breakpoint or Revert & Retry.",
+                                            min_activity_idle, hang_watchdog_sec, last_known_activity
                                         )
                                     } else {
                                         format!(
-                                            "[Safety Ceiling] Task execution window reached maximum limit ({}s elapsed). Concluding execution.",
-                                            elapsed_sec
+                                            "[Safety Ceiling] Task execution window reached maximum limit ({}s elapsed) during `{}`. Concluding execution.",
+                                            elapsed_sec, last_known_activity
                                         )
                                     };
+                                    stall_timeout_msg = Some(timeout_msg.clone());
                                     emit_log(timeout_msg.clone());
                                     update_task(&|t| {
                                         t.progress_percent = 98;
@@ -844,20 +1216,21 @@ pub fn spawn_agent_execution(
                 }
 
                 let exit_status = child.wait().ok();
+                let exit_code = exit_status.and_then(|s| s.code());
                 process_manager.unregister_task_process(&task_id);
 
                 let task_started_at = record.started_at.unwrap_or(record.created_at);
                 let mut created_files = scan_workspace_modified_files(&exec_dir, task_started_at);
 
-                // Safe Stateless Retry: if `-c` (`warm_cli_continue`) exited non-zero without output, retry stateless `-p`
+                // Safe Stateless Retry: if `-c` or `--resume` exited non-zero without output, retry stateless `-p`
                 let exited_err = exit_status.map(|s| !s.success()).unwrap_or(true);
-                if warm_cli_continue
+                if (warm_cli_continue || resume_sid.is_some())
                     && exited_err
                     && collected_md.trim().is_empty()
                     && created_files.is_empty()
                     && !cancel_flag.load(Ordering::Relaxed)
                 {
-                    emit_log("[CLI Cache Fallback] Warm session unavailable; retrying stateless `-p` with cognitive cache envelope...".to_string());
+                    emit_log("[CLI Cache Fallback] Warm/resume session unavailable; retrying stateless `-p` with cognitive cache envelope...".to_string());
                     let mut fallback_cmd = if bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat") {
                         let mut c = Command::new("cmd.exe");
                         c.args([
@@ -898,9 +1271,98 @@ pub fn spawn_agent_execution(
                         created_files = scan_workspace_modified_files(&exec_dir, task_started_at);
                     }
                 }
-                for cf in extract_and_write_code_blocks(&exec_dir, &record.file_name, &collected_md) {
-                    if !created_files.contains(&cf) {
-                        created_files.push(cf);
+
+                if record.intent == "refine-plan" {
+                    // Hard Role Boundary Guard for `refine-plan`:
+                    // Remove any newly created source code files (.html, .css, .js, .ts, etc.) that did not exist before this planning step.
+                    for cf in &created_files {
+                        let lower = cf.to_lowercase();
+                        let is_code_file = lower.ends_with(".html")
+                            || lower.ends_with(".htm")
+                            || lower.ends_with(".css")
+                            || lower.ends_with(".js")
+                            || lower.ends_with(".mjs")
+                            || lower.ends_with(".cjs")
+                            || lower.ends_with(".ts")
+                            || lower.ends_with(".jsx")
+                            || lower.ends_with(".tsx")
+                            || lower.ends_with(".py")
+                            || lower.ends_with(".rs")
+                            || lower.ends_with(".php");
+                        if is_code_file && !pre_digests.contains_key(cf) {
+                            let premature_path = Path::new(&exec_dir).join(cf);
+                            if fs::remove_file(&premature_path).is_ok() {
+                                emit_log(format!(
+                                    "[Role Boundary Guard] Removed premature code file `{}` created during `refine-plan` step; code creation is strictly reserved for the `build` step.",
+                                    cf
+                                ));
+                            }
+                        }
+                    }
+                    created_files.retain(|f| f.to_lowercase().ends_with(".md"));
+
+                    // Guarantee that the detailed `.md` implementation plan is saved to the workspace root
+                    let target_plan_file = resolve_plan_markdown_filename(&record.file_name);
+                    let target_plan_path = Path::new(&exec_dir).join(&target_plan_file);
+
+                    // Check if any .md file was actually modified on disk during this step
+                    let mut md_plan_on_disk: Option<(String, String)> = None;
+                    for cf in &created_files {
+                        let p = Path::new(&exec_dir).join(cf);
+                        if let Ok(disk_md) = fs::read_to_string(&p) {
+                            if disk_md.trim().len() >= 150 {
+                                // Ensure checklist items in the plan are unchecked `- [ ]` ready for the Build step
+                                let normalized_md = disk_md
+                                    .replace("- [x] ", "- [ ] ")
+                                    .replace("- [X] ", "- [ ] ")
+                                    .replace("* [x] ", "* [ ] ")
+                                    .replace("* [X] ", "* [ ] ");
+                                if normalized_md != disk_md {
+                                    let _ = fs::write(&p, normalized_md.as_bytes());
+                                }
+                                md_plan_on_disk = Some((cf.clone(), normalized_md));
+                                break;
+                            }
+                        }
+                    }
+
+                    if let Some((_md_name, disk_md_content)) = md_plan_on_disk {
+                        // Ensure `collected_md` also holds the full implementation plan so downstream steps receive the complete plan
+                        if collected_md.trim().len() < disk_md_content.trim().len() {
+                            collected_md = disk_md_content;
+                        }
+                    } else if collected_md.trim().len() >= 100 {
+                        // Agent emitted the implementation plan to stdout; persist it to `target_plan_path` on disk
+                        let parsed_clean = crate::projects::cache::parse_handoff_blocks_from_markdown(
+                            &collected_md,
+                            &agent_id,
+                            &record.intent,
+                        )
+                        .clean_markdown;
+                        let normalized_plan = parsed_clean
+                            .replace("- [x] ", "- [ ] ")
+                            .replace("- [X] ", "- [ ] ")
+                            .replace("* [x] ", "* [ ] ")
+                            .replace("* [X] ", "* [ ] ");
+                        if fs::write(&target_plan_path, normalized_plan.as_bytes()).is_ok() {
+                            emit_log(format!(
+                                "[Plan Deliverable Sync] Saved detailed Markdown implementation plan to `{}` ({} bytes)",
+                                target_plan_file,
+                                normalized_plan.len()
+                            ));
+                            if !created_files.contains(&target_plan_file) {
+                                created_files.push(target_plan_file);
+                            }
+                        }
+                    }
+                } else if matches!(
+                    record.intent.as_str(),
+                    "build" | "fix-bugs" | "write-tests" | "custom"
+                ) {
+                    for cf in extract_and_write_code_blocks(&exec_dir, &record.file_name, &collected_md) {
+                        if !created_files.contains(&cf) {
+                            created_files.push(cf);
+                        }
                     }
                 }
 
@@ -955,6 +1417,101 @@ pub fn spawn_agent_execution(
                     "completed"
                 };
 
+                // Build structured AgentErrorDiagnostic when task did not complete cleanly
+                let error_diagnostic: Option<AgentErrorDiagnostic> = if final_status != "completed" {
+                    let combined_err_text = format!(
+                        "{} {}",
+                        captured_cli_error.as_deref().unwrap_or(""),
+                        stderr_lines.join(" ")
+                    )
+                    .to_lowercase();
+
+                    let (category, title, exception_message) = if was_stalled {
+                        (
+                            "timeout_hang".to_string(),
+                            "Execution Timed Out / Stalled (Watchdog)".to_string(),
+                            stall_timeout_msg.clone().unwrap_or_else(|| {
+                                format!(
+                                    "No stream output or workspace file activity detected within watchdog threshold during `{}`.",
+                                    last_known_activity
+                                )
+                            }),
+                        )
+                    } else if combined_err_text.contains("429")
+                        || combined_err_text.contains("quota")
+                        || combined_err_text.contains("resource_exhausted")
+                        || combined_err_text.contains("rate limit")
+                        || combined_err_text.contains("overloaded")
+                    {
+                        (
+                            "api_quota_rate_limit".to_string(),
+                            "AI Provider Quota or Rate Limit Reached (429)".to_string(),
+                            captured_cli_error
+                                .clone()
+                                .or_else(|| stderr_lines.last().cloned())
+                                .unwrap_or_else(|| "Provider rate limit or quota exhausted during execution.".to_string()),
+                        )
+                    } else if combined_err_text.contains("401")
+                        || combined_err_text.contains("403")
+                        || combined_err_text.contains("unauthorized")
+                        || combined_err_text.contains("authentication")
+                        || combined_err_text.contains("not logged in")
+                    {
+                        (
+                            "auth_permission_error".to_string(),
+                            "Authentication or Session Permission Error".to_string(),
+                            captured_cli_error
+                                .clone()
+                                .or_else(|| stderr_lines.last().cloned())
+                                .unwrap_or_else(|| "Agent CLI reported an authentication or permission error.".to_string()),
+                        )
+                    } else if exited_err && (captured_cli_error.is_some() || !stderr_lines.is_empty()) {
+                        let code_label = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "non-zero".to_string());
+                        (
+                            "process_exit_error".to_string(),
+                            format!("CLI Subprocess Exited with Error (Code {})", code_label),
+                            captured_cli_error
+                                .clone()
+                                .or_else(|| stderr_lines.last().cloned())
+                                .unwrap_or_else(|| format!("Subprocess exited with code {}.", code_label)),
+                        )
+                    } else {
+                        (
+                            "verification_gap".to_string(),
+                            "Deliverable Verification Gaps Detected".to_string(),
+                            v_report.summary.clone(),
+                        )
+                    };
+
+                    let mut trace = stderr_lines.clone();
+                    if let Some(ref cli_e) = captured_cli_error {
+                        if !trace.iter().any(|l| l.contains(cli_e)) {
+                            trace.insert(0, format!("[CLI Exception] {}", cli_e));
+                        }
+                    }
+                    if let Some(ref st_msg) = stall_timeout_msg {
+                        trace.push(st_msg.clone());
+                    }
+                    for gap in &v_report.gaps {
+                        trace.push(format!("[Verification Gap] {}", gap));
+                    }
+
+                    Some(AgentErrorDiagnostic {
+                        category,
+                        title,
+                        exception_message,
+                        stderr_trace: trace,
+                        exit_code,
+                        last_known_activity: Some(last_known_activity.clone()),
+                        cli_session_id: captured_session_id.clone(),
+                        modified_files: effective_files_to_report.clone(),
+                        can_resume_from_breakpoint: true,
+                        timestamp: now_ms(),
+                    })
+                } else {
+                    None
+                };
+
                 let raw_report_body = if !collected_md.trim().is_empty() {
                     collected_md.clone()
                 } else {
@@ -982,10 +1539,24 @@ pub fn spawn_agent_execution(
                 fs::write(&report_file, &clean_report_body).ok();
                 let duration_ms = (now_ms() - task_started_at).max(0) as u64;
 
+                let diag_clone = error_diagnostic.clone();
+                let mod_files_clone = effective_files_to_report.clone();
+                let sid_final = captured_session_id.clone();
+
                 update_task(&|t| {
                     t.response_markdown = Some(clean_report_body.clone());
                     t.verification_report = Some(v_report.clone());
-                    if was_stalled {
+                    t.modified_files = mod_files_clone.clone();
+                    if sid_final.is_some() {
+                        t.cli_session_id = sid_final.clone();
+                    }
+                    if let Some(ref d) = diag_clone {
+                        t.error_diagnostic = Some(d.clone());
+                        t.outcome_reason = Some(d.exception_message.clone());
+                        if final_status != "completed" {
+                            t.error = Some(format!("{}: {}", d.title, d.exception_message));
+                        }
+                    } else if was_stalled {
                         t.outcome_reason = Some("Task stalled due to inactivity watchdog or safety ceiling.".to_string());
                     } else if !v_report.passed {
                         t.outcome_reason = Some(v_report.summary.clone());
@@ -1029,6 +1600,18 @@ pub fn spawn_agent_execution(
             t.logs.push(err_msg.clone());
             t.thinking_trace.push(err_msg.clone());
             t.outcome_reason = Some(err_msg.clone());
+            t.error_diagnostic = Some(AgentErrorDiagnostic {
+                category: "process_exit_error".to_string(),
+                title: "Agent CLI Binary Not Found".to_string(),
+                exception_message: err_msg.clone(),
+                stderr_trace: vec![err_msg.clone()],
+                exit_code: None,
+                last_known_activity: Some("Binary discovery check".to_string()),
+                cli_session_id: None,
+                modified_files: Vec::new(),
+                can_resume_from_breakpoint: true,
+                timestamp: now_ms(),
+            });
         });
         finalize_task(&store, &app, &task_id, "failed", Some(err_msg));
         }));
@@ -1041,12 +1624,31 @@ pub fn spawn_agent_execution(
             } else {
                 "Unexpected runtime panic inside agent worker thread".to_string()
             };
+            let panic_msg = format!("Recovered safely from internal execution panic: {}", reason);
+            {
+                let mut tasks = panic_store.get_agent_tasks();
+                if let Some(t) = tasks.iter_mut().find(|t| t.id == panic_task_id) {
+                    t.error_diagnostic = Some(AgentErrorDiagnostic {
+                        category: "runtime_panic".to_string(),
+                        title: "Internal Worker Runtime Exception".to_string(),
+                        exception_message: panic_msg.clone(),
+                        stderr_trace: vec![panic_msg.clone()],
+                        exit_code: None,
+                        last_known_activity: Some("Worker thread execution".to_string()),
+                        cli_session_id: t.cli_session_id.clone(),
+                        modified_files: t.modified_files.clone(),
+                        can_resume_from_breakpoint: true,
+                        timestamp: now_ms(),
+                    });
+                }
+                panic_store.save_agent_tasks(tasks);
+            }
             finalize_task(
                 &panic_store,
                 &panic_app,
                 &panic_task_id,
                 "failed",
-                Some(format!("Recovered safely from internal execution panic: {}", reason)),
+                Some(panic_msg),
             );
         }
     });
@@ -1260,6 +1862,52 @@ console.log("Interactive Physics Ready");
         assert_eq!(pkt.last_cli_agent_id.as_deref(), Some("claude-code"));
         assert!(!pkt.independent_resumes.is_empty());
         assert!(!pkt.peer_messages.is_empty());
+
+        fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_role_isolation_between_refine_plan_and_build() {
+        let plan_prompt = build_cli_prompt_for_intent(
+            "refine-plan",
+            "Project_Dedicated_Pipeline_Contract.md",
+            "Pipeline [Project Dedicated Pipeline] — Step 1/2 (Plan)",
+            "C:\\ws\\.flymd\\handoffs\\task-1.md",
+            "C:\\ws",
+            "",
+        );
+        assert!(plan_prompt.contains("PLANNING & ARCHITECTURE SPECIFICATION MODE ONLY"));
+        assert!(plan_prompt.contains("STRICT ROLE BOUNDARY PROHIBITION: DO NOT create, write, or modify any application source code files"));
+        assert!(!plan_prompt.contains("CRITICAL BUG FIX"));
+
+        let build_prompt = build_cli_prompt_for_intent(
+            "build",
+            "Project_Dedicated_Pipeline_Contract.md",
+            "Pipeline [Project Dedicated Pipeline] — Step 2/2 (Build)",
+            "C:\\ws\\.flymd\\handoffs\\task-2.md",
+            "C:\\ws",
+            "",
+        );
+        assert!(build_prompt.contains("CODE IMPLEMENTATION & BUILD MODE"));
+        assert!(build_prompt.contains("write the FULL, WORKING, UNTRUNCATED CODE files"));
+
+        let temp_dir = std::env::temp_dir().join(format!("flymd_test_plan_verify_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Empty workspace fails `refine-plan` verification
+        let rep_empty = crate::agents::verify::verify_deliverables(&temp_dir, &[], "refine-plan", "");
+        assert!(!rep_empty.passed);
+
+        // Substantive .md plan file passes `refine-plan` verification
+        let plan_content = "# Implementation Plan\n\n## Architecture\n- Module A\n- Module B\n\n## Checklist\n- [ ] Build index.html\n- [ ] Build styles.css\n- [ ] Build app.js with full simulation logic and state reducer.\n";
+        fs::write(temp_dir.join("Project_Dedicated_Pipeline_Contract.md"), plan_content.as_bytes()).unwrap();
+        let rep_ok = crate::agents::verify::verify_deliverables(
+            &temp_dir,
+            &["Project_Dedicated_Pipeline_Contract.md".to_string()],
+            "refine-plan",
+            "",
+        );
+        assert!(rep_ok.passed);
 
         fs::remove_dir_all(&temp_dir).ok();
     }

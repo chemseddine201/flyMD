@@ -258,6 +258,8 @@ pub struct AvailableProviderInfo {
     pub default_model: String,
     #[serde(rename = "supportsThinking")]
     pub supports_thinking: bool,
+    #[serde(rename = "supportsEffort", default)]
+    pub supports_effort: bool,
 }
 
 /// Composite lookup key (`provider_id::model_id`) so multiple participants sharing a provider
@@ -440,6 +442,7 @@ pub fn cmd_get_available_providers(
             description: "Zero API cost local analyzer that evaluates architecture and generates multi-step reasoning.".to_string(),
             default_model: "domain-reasoner-v1".to_string(),
             supports_thinking: true,
+            supports_effort: false,
         },
         AvailableProviderInfo {
             id: "ollama".to_string(),
@@ -453,6 +456,7 @@ pub fn cmd_get_available_providers(
                 "qwen2.5:3b".to_string()
             },
             supports_thinking: true,
+            supports_effort: false,
         },
         AvailableProviderInfo {
             id: "deepseek".to_string(),
@@ -462,6 +466,7 @@ pub fn cmd_get_available_providers(
             description: "Native reasoning engine with chain-of-thought tokens.".to_string(),
             default_model: "deepseek-reasoner".to_string(),
             supports_thinking: true,
+            supports_effort: false,
         },
         AvailableProviderInfo {
             id: "http-llm".to_string(),
@@ -475,6 +480,7 @@ pub fn cmd_get_available_providers(
                 "gpt-4o".to_string()
             },
             supports_thinking: true,
+            supports_effort: false,
         },
         AvailableProviderInfo {
             id: "claude-code".to_string(),
@@ -484,6 +490,7 @@ pub fn cmd_get_available_providers(
             description: "Anthropic Claude Code CLI in plan/read-only mode.".to_string(),
             default_model: "claude-3-7-sonnet".to_string(),
             supports_thinking: true,
+            supports_effort: true,
         },
         AvailableProviderInfo {
             id: "gemini-antigravity".to_string(),
@@ -493,6 +500,7 @@ pub fn cmd_get_available_providers(
             description: "Google Antigravity CLI sandbox runner.".to_string(),
             default_model: "gemini-2.5-pro".to_string(),
             supports_thinking: true,
+            supports_effort: true,
         },
     ]
 }
@@ -962,6 +970,7 @@ mod tests {
                 custom_action: None,
                 custom_query: None,
                 thinking_enabled: true,
+                effort_level: Some("medium".to_string()),
             }],
             active_skill_uris: Vec::new(),
             step_mode: false,

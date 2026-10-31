@@ -28,8 +28,10 @@ import {
   StickyNote,
   Sliders,
   Lock,
+  Brain,
 } from 'lucide-react';
 import {
+  AgentEffortLevel,
   AgentId,
   AgentPipelinePreset,
   AgentPipelineStep,
@@ -92,6 +94,11 @@ interface AgentStudioSidebarProps {
   customActions?: CustomPipelineAction[];
   onOpenCustomActionsModal?: () => void;
   onClearStepDoneStatus?: (pipelineId: string) => void;
+  onRecoverPipelineStep?: (
+    pipeline: AgentPipelinePreset,
+    stepIdx: number,
+    linkedTask?: AgentTaskRecord
+  ) => void;
 }
 
 const INTENT_SHORT_LABELS: Record<AgentTaskIntent, string> = {
@@ -143,6 +150,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   customActions = [],
   onOpenCustomActionsModal,
   onClearStepDoneStatus,
+  onRecoverPipelineStep,
 }) => {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [contextMenuTarget, setContextMenuTarget] =
@@ -197,16 +205,51 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   // Pipeline in-progress modification reset confirmation
   const [resetConfirmAction, setResetConfirmAction] = useState<(() => void) | null>(null);
 
+  const primaryPipeline = pipelines[0] || BUILTIN_AGENT_PIPELINES[0];
+
+  // Live Task-to-Step Reconciliation: ensures workflow indicators never disappear while a backend task is running
+  const liveRunningTaskForPipeline = agentTasks.find(
+    (t) =>
+      t.status === 'running' &&
+      (t.pipelineId === primaryPipeline?.id ||
+        primaryPipeline?.steps.some((s) => s.completedTaskId === t.id))
+  );
+
+  const effectiveRunningStepIdx = (() => {
+    if (runningPipelineId === primaryPipeline?.id && runningPipelineStepIdx >= 0) {
+      return runningPipelineStepIdx;
+    }
+    if (!primaryPipeline) return -1;
+    const byStepStatus = primaryPipeline.steps.findIndex((s) => s.status === 'running');
+    if (byStepStatus !== -1) return byStepStatus;
+    if (liveRunningTaskForPipeline) {
+      const byTaskId = primaryPipeline.steps.findIndex(
+        (s) => s.completedTaskId === liveRunningTaskForPipeline.id
+      );
+      if (byTaskId !== -1) return byTaskId;
+      const byIntent = primaryPipeline.steps.findIndex(
+        (s) => s.intent === liveRunningTaskForPipeline.intent && s.status !== 'completed'
+      );
+      if (byIntent !== -1) return byIntent;
+    }
+    return -1;
+  })();
+
+  const isPipelineActivelyRunning =
+    Boolean(runningPipelineId) ||
+    effectiveRunningStepIdx !== -1 ||
+    Boolean(liveRunningTaskForPipeline);
+
   const confirmOrExecuteModification = (action: () => void) => {
-    if (runningPipelineId) {
+    if (isPipelineActivelyRunning) {
       setResetConfirmAction(() => action);
     } else {
       action();
     }
   };
 
-  const primaryPipeline = pipelines[0] || BUILTIN_AGENT_PIPELINES[0];
-  const isEditingLocked = !!runningPipelineId && workflowExecutionMode === 'auto';
+  // Lock structural edits whenever a step is actively running (in both Auto and Manual modes)
+  const isEditingLocked = isPipelineActivelyRunning && !waitingForStepApproval;
 
   return (
     <aside
@@ -446,30 +489,45 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 visibleAgents.find((a) => a.id === effectiveAgentId) ||
                 allAgents.find((a) => a.id === effectiveAgentId);
 
-              const isStepCompleted = step.status === 'completed';
-              const isStepIncomplete = step.status === 'incomplete';
-              const isStepFailed = step.status === 'failed';
+              const linkedTask = step.completedTaskId
+                ? agentTasks.find((t) => t.id === step.completedTaskId)
+                : effectiveRunningStepIdx === idx && liveRunningTaskForPipeline
+                ? liveRunningTaskForPipeline
+                : undefined;
+
               const isRunningThisStep =
-                !!runningPipelineId && runningPipelineStepIdx === idx;
+                effectiveRunningStepIdx === idx ||
+                step.status === 'running' ||
+                linkedTask?.status === 'running';
+              const isStepCompleted =
+                !isRunningThisStep &&
+                (step.status === 'completed' || linkedTask?.status === 'completed');
+              const isStepIncomplete =
+                !isRunningThisStep &&
+                (step.status === 'incomplete' || linkedTask?.status === 'incomplete');
+              const isStepFailed =
+                !isRunningThisStep &&
+                (step.status === 'failed' || linkedTask?.status === 'failed');
               const isFinishedThisStep =
                 isStepCompleted ||
-                (!!runningPipelineId &&
-                  runningPipelineStepIdx !== undefined &&
-                  runningPipelineStepIdx > idx);
+                (!isStepIncomplete &&
+                  !isStepFailed &&
+                  isPipelineActivelyRunning &&
+                  effectiveRunningStepIdx > idx);
               const isWaitingThisStep =
                 !!waitingForStepApproval &&
                 waitingForStepApproval.nextStepIdx === idx;
               const isUpcomingStep =
-                !!runningPipelineId &&
-                runningPipelineStepIdx !== undefined &&
-                runningPipelineStepIdx < idx &&
+                isPipelineActivelyRunning &&
+                effectiveRunningStepIdx >= 0 &&
+                effectiveRunningStepIdx < idx &&
                 !isWaitingThisStep;
 
-              // Completed steps are locked so their configuration cannot be damaged
+              // Completed and actively running steps are locked so their configuration cannot be damaged
               const isStepDisabled =
                 isEditingLocked ||
                 isStepCompleted ||
-                (!!runningPipelineId && isRunningThisStep);
+                isRunningThisStep;
 
               const stepCustomAction = step.customActionId
                 ? availableCustomActions.find((a) => a.id === step.customActionId)
@@ -484,26 +542,30 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     <Wrench size={12} className="text-indigo-400 shrink-0" />
                   );
 
+              const targetTaskIdToSelect = step.completedTaskId || linkedTask?.id;
+
               return (
                 <div key={`${primaryPipeline.id}-${step.stepId || idx}`}>
                   <div
                     onClick={() => {
-                      if ((isStepCompleted || isStepIncomplete || isStepFailed) && step.completedTaskId) {
-                        onSelectTask(step.completedTaskId);
+                      if (targetTaskIdToSelect) {
+                        onSelectTask(targetTaskIdToSelect);
                       }
                     }}
                     title={
-                      isStepIncomplete
+                      isRunningThisStep
+                        ? 'Step actively running! Click to inspect live progress in studio.'
+                        : isStepIncomplete
                         ? 'Step incomplete: verification gaps detected. Click to view report.'
                         : isStepFailed
                         ? 'Step failed. Click to view logs.'
-                        : isStepCompleted && step.completedTaskId
+                        : isStepCompleted && targetTaskIdToSelect
                         ? 'Step completed! Click to view deliverable and logs in studio'
                         : undefined
                     }
                     className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all duration-200 ${
                       isRunningThisStep
-                        ? 'bg-sky-950/90 border-2 border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.45)] animate-pulse'
+                        ? 'bg-sky-950/90 border-2 border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.45)] animate-pulse cursor-pointer'
                         : isWaitingThisStep
                         ? 'bg-amber-950/70 border border-amber-500/80 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
                         : isStepIncomplete
@@ -537,7 +599,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       ) : (
                         <span
                           className={
-                            runningPipelineId
+                            isPipelineActivelyRunning
                               ? 'text-slate-600 font-mono'
                               : 'text-indigo-400 font-mono font-bold'
                           }
@@ -661,16 +723,102 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       </select>
                     </div>
 
-                    {/* Status Badges */}
+                    {/* Step Effort Level & Thinking Controls */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <select
+                        value={step.effortLevel || 'medium'}
+                        disabled={isStepDisabled}
+                        onChange={(e) => {
+                          const newEffort = e.target.value as AgentEffortLevel;
+                          confirmOrExecuteModification(() => {
+                            onUpdatePipelineStep(primaryPipeline.id, idx, {
+                              effortLevel: newEffort,
+                            });
+                          });
+                        }}
+                        title={
+                          stepAgent?.supportsEffort === false
+                            ? `Effort Level: ${step.effortLevel || 'medium'} (Agent uses balanced medium fallback)`
+                            : `Reasoning Effort: ${step.effortLevel || 'medium'}`
+                        }
+                        className="bg-slate-900/90 text-indigo-300 font-bold text-[10px] rounded px-1 py-0.5 border border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer disabled:cursor-not-allowed shrink-0"
+                      >
+                        <option value="low" className="bg-slate-900 text-slate-200">Low</option>
+                        <option value="medium" className="bg-slate-900 text-slate-200">Med</option>
+                        <option value="high" className="bg-slate-900 text-slate-200">High</option>
+                        <option value="xhigh" className="bg-slate-900 text-slate-200">XHigh</option>
+                        <option value="max" className="bg-slate-900 text-slate-200">Max</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        disabled={isStepDisabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const currentVal = step.thinkingEnabled ?? true;
+                          confirmOrExecuteModification(() => {
+                            onUpdatePipelineStep(primaryPipeline.id, idx, {
+                              thinkingEnabled: !currentVal,
+                            });
+                          });
+                        }}
+                        title={
+                          (step.thinkingEnabled ?? true)
+                            ? 'Thinking Mode: ON (Click to disable thinking and save tokens)'
+                            : 'Thinking Mode: OFF (Fast direct execution without CoT deliberation)'
+                        }
+                        className={`p-1 rounded transition-colors shrink-0 ${
+                          (step.thinkingEnabled ?? true)
+                            ? 'text-indigo-400 bg-indigo-950/60 border border-indigo-500/40 hover:bg-indigo-900/50'
+                            : 'text-slate-600 bg-slate-950/40 border border-slate-800 hover:text-slate-400'
+                        }`}
+                      >
+                        <Brain size={11} className={(step.thinkingEnabled ?? true) ? 'drop-shadow-[0_0_4px_rgba(129,140,248,0.7)]' : ''} />
+                      </button>
+                    </div>
+
+                    {/* Status Badges & Inline Resume/Retry Trigger */}
                     {isStepIncomplete && (
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/50 shrink-0">
-                        INCOMPLETE
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/50 shrink-0">
+                          INCOMPLETE
+                        </span>
+                        {onRecoverPipelineStep && !isPipelineActivelyRunning && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRecoverPipelineStep(primaryPipeline, idx, linkedTask);
+                            }}
+                            title="Resume from last breakpoint or revert modified files & retry this step"
+                            className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-0.5 shadow-xs transition-colors cursor-pointer"
+                          >
+                            <RotateCcw size={8} />
+                            <span>RESUME</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                     {isStepFailed && (
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/50 shrink-0">
-                        FAILED
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/50 shrink-0">
+                          FAILED
+                        </span>
+                        {onRecoverPipelineStep && !isPipelineActivelyRunning && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRecoverPipelineStep(primaryPipeline, idx, linkedTask);
+                            }}
+                            title="Resume from last breakpoint or revert modified files & retry this step"
+                            className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-rose-500 hover:bg-rose-400 text-white flex items-center gap-0.5 shadow-xs transition-colors cursor-pointer"
+                          >
+                            <RotateCcw size={8} />
+                            <span>RETRY</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                     {!isStepIncomplete && !isStepFailed && isFinishedThisStep && (
                       <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
@@ -680,6 +828,9 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     {isRunningThisStep && (
                       <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-sky-500 text-slate-950 shadow-xs animate-pulse shrink-0">
                         RUNNING
+                        {linkedTask?.progressPercent
+                          ? ` ${linkedTask.progressPercent}%`
+                          : ''}
                       </span>
                     )}
                     {isWaitingThisStep && (
@@ -689,7 +840,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     )}
 
                     {/* Step Note Button (Only for pending steps) */}
-                    {!isStepCompleted && (
+                    {!isStepCompleted && !isRunningThisStep && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -720,7 +871,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     )}
 
                     {/* Remove Step Button (Only for pending steps) */}
-                    {!isStepCompleted && primaryPipeline.steps.length > 1 && (
+                    {!isStepCompleted && !isRunningThisStep && primaryPipeline.steps.length > 1 && (
                       <button
                         type="button"
                         disabled={isStepDisabled}
@@ -829,38 +980,72 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
 
           {/* Smart Incremental Workflow Run Button */}
           {(() => {
-            const completedCount = primaryPipeline.steps.filter(
-              (s) => s.status === 'completed'
-            ).length;
+            const completedCount = primaryPipeline.steps.filter((s, sIdx) => {
+              const lt = s.completedTaskId
+                ? agentTasks.find((t) => t.id === s.completedTaskId)
+                : undefined;
+              return (
+                s.status === 'completed' ||
+                lt?.status === 'completed' ||
+                (isPipelineActivelyRunning && effectiveRunningStepIdx > sIdx)
+              );
+            }).length;
             const allDone =
+              !isPipelineActivelyRunning &&
               primaryPipeline.steps.length > 0 &&
               completedCount === primaryPipeline.steps.length;
-            const firstPendingIdx = primaryPipeline.steps.findIndex(
-              (s) => s.status !== 'completed'
-            );
+            const firstPendingIdx = primaryPipeline.steps.findIndex((s) => {
+              const lt = s.completedTaskId
+                ? agentTasks.find((t) => t.id === s.completedTaskId)
+                : undefined;
+              return s.status !== 'completed' && lt?.status !== 'completed';
+            });
+            const firstPendingStep =
+              firstPendingIdx >= 0 ? primaryPipeline.steps[firstPendingIdx] : undefined;
+            const firstPendingTask = firstPendingStep?.completedTaskId
+              ? agentTasks.find((t) => t.id === firstPendingStep.completedTaskId)
+              : undefined;
+            const isFirstPendingInterrupted =
+              firstPendingStep?.status === 'incomplete' ||
+              firstPendingStep?.status === 'failed' ||
+              firstPendingTask?.status === 'incomplete' ||
+              firstPendingTask?.status === 'failed';
             const pendingCount = primaryPipeline.steps.length - completedCount;
 
             return (
               <div className="mt-2.5 space-y-1.5">
                 <button
                   type="button"
-                  disabled={!!runningPipelineId}
-                  onClick={() => onRunPipelineInStudio(primaryPipeline)}
+                  disabled={isPipelineActivelyRunning}
+                  onClick={() => {
+                    if (isFirstPendingInterrupted && onRecoverPipelineStep && firstPendingIdx >= 0) {
+                      onRecoverPipelineStep(
+                        primaryPipeline,
+                        firstPendingIdx,
+                        firstPendingTask
+                      );
+                    } else {
+                      onRunPipelineInStudio(primaryPipeline);
+                    }
+                  }}
                   className={`w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl font-bold text-xs shadow-md transition-all ${
-                    runningPipelineId
+                    isPipelineActivelyRunning
                       ? 'bg-indigo-600/60 text-indigo-200 cursor-not-allowed border border-indigo-400/30'
                       : allDone
                       ? 'bg-slate-800 text-emerald-300 border border-emerald-500/40 cursor-default'
+                      : isFirstPendingInterrupted
+                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 cursor-pointer'
                       : completedCount > 0
                       ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20 cursor-pointer'
                       : 'bg-indigo-500 hover:bg-indigo-400 text-slate-950 shadow-indigo-500/15 cursor-pointer'
                   }`}
                 >
-                  {runningPipelineId ? (
+                  {isPipelineActivelyRunning ? (
                     <>
                       <Loader2 size={12} className="animate-spin text-indigo-300" />
                       <span>
-                        Running Step {(runningPipelineStepIdx ?? 0) + 1} of{' '}
+                        Running Step{' '}
+                        {Math.max(0, effectiveRunningStepIdx) + 1} of{' '}
                         {primaryPipeline.steps.length}...
                       </span>
                     </>
@@ -868,6 +1053,14 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     <>
                       <CheckCircle2 size={13} className="text-emerald-400" />
                       <span>All {primaryPipeline.steps.length} Steps Finished</span>
+                    </>
+                  ) : isFirstPendingInterrupted ? (
+                    <>
+                      <RotateCcw size={12} />
+                      <span>
+                        Resume / Retry Step {firstPendingIdx + 1} (
+                        {pendingCount} Step{pendingCount > 1 ? 's' : ''} Remaining)
+                      </span>
                     </>
                   ) : completedCount > 0 ? (
                     <>
@@ -892,7 +1085,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 </button>
 
                 {/* Prominent "+ Extend Workflow" Button when all finished */}
-                {allDone && !runningPipelineId && (
+                {allDone && !isPipelineActivelyRunning && (
                   <button
                     type="button"
                     onClick={() => onAddPipelineStep(primaryPipeline.id)}
@@ -917,10 +1110,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
           {agentTasks.some((t) => t.status !== 'running') && (
             <button
               type="button"
-              disabled={!!runningPipelineId}
+              disabled={isPipelineActivelyRunning}
               onClick={onClearFinished}
               className={`text-[10px] flex items-center gap-1 transition-colors ${
-                runningPipelineId
+                isPipelineActivelyRunning
                   ? 'text-slate-600 cursor-not-allowed opacity-40'
                   : 'text-slate-400 hover:text-rose-300'
               }`}

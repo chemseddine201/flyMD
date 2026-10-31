@@ -512,18 +512,76 @@ impl AgentOrchestrator {
             );
 
         // Token-0 Priority Decision:
-        // If this is a bug fix or has specific custom directives / error traces,
-        // pin the Mission Directives at Token 0 so the agent immediately sees what must be fixed
-        // instead of burying it under a large completed spec.
+        // If this is a bug fix or has a specific user step_note / error trace,
+        // pin the Bug Report / Directive at Token 0. For all other pipeline steps,
+        // pin the Role-Specific Mission Header at Token 0 so the agent strictly obeys its step role.
         let is_targeted_directive = req.intent == "fix-bugs"
-            || req.custom_prompt.as_ref().map(|p| !p.trim().is_empty()).unwrap_or(false)
+            || req.resume_from_breakpoint
             || req.step_note.as_ref().map(|p| !p.trim().is_empty()).unwrap_or(false);
+
+        let resolved_resume_session_id = if req.resume_from_breakpoint {
+            req.resume_session_id.clone().or_else(|| {
+                req.previous_failed_task_id.as_ref().and_then(|prev_id| {
+                    existing_tasks
+                        .iter()
+                        .find(|t| &t.id == prev_id && t.target_agent_id == req.target_agent_id)
+                        .and_then(|t| t.cli_session_id.clone())
+                })
+            })
+        } else {
+            None
+        };
+
+        let breakpoint_audit_section = if req.resume_from_breakpoint {
+            let live_digest = crate::projects::cache::scan_workspace_digest(ws_path, 64);
+            let existing_list: Vec<String> = live_digest
+                .values()
+                .map(|d| format!("- `{}` ({} lines, {} bytes, SHA-256: `{}`)", d.rel_path, d.lines, d.bytes, &d.sha256[..12.min(d.sha256.len())]))
+                .collect();
+            let existing_keys: Vec<String> = live_digest.keys().cloned().collect();
+            let v_check = crate::agents::verify::verify_deliverables(
+                ws_path,
+                &existing_keys,
+                &req.intent,
+                &body_to_process,
+            );
+            let gaps_md = if v_check.gaps.is_empty() {
+                "- Complete any remaining unbuilt files or unfinished modules specified in the contract.".to_string()
+            } else {
+                v_check.gaps.iter().map(|g| format!("- {}", g)).collect::<Vec<_>>().join("\n")
+            };
+            format!(
+                "## BREAKPOINT RESUME DIRECTIVE (CONTINUING FROM LAST BREAKPOINT)\n\n\
+                 - **Recovery Mode**: `CONTINUE_FROM_BREAKPOINT` (User elected to preserve existing workspace files and continue from the interruption point)\n\
+                 - **CRITICAL INSTRUCTION**: Do NOT delete or rewrite from scratch files that are already complete and valid on disk. Inspect any partially written files, keep completed work intact, and immediately finish the remaining/missing deliverables listed below.\n\n\
+                 ### Existing Workspace Files Currently on Disk:\n{}\n\n\
+                 ### Remaining Deliverables & Verification Gaps to Complete Now:\n{}\n\n---\n\n",
+                if existing_list.is_empty() {
+                    "- *(No deliverable files flushed to disk before interruption — start writing the required files immediately)*".to_string()
+                } else {
+                    existing_list.join("\n")
+                },
+                gaps_md
+            )
+        } else {
+            String::new()
+        };
+
+        let role_header_title = match req.intent.as_str() {
+            "refine-plan" => "ACTIVE PIPELINE ROLE: PLANNING & ARCHITECTURE SPECIFICATION ONLY (DO NOT WRITE CODE FILES)",
+            "build" => "ACTIVE PIPELINE ROLE: CODE IMPLEMENTATION & DELIVERABLE BUILDER",
+            "review" => "ACTIVE PIPELINE ROLE: READ-ONLY QA AUDIT & ARCHITECTURAL REVIEW",
+            "fix-bugs" => "PRIORITY MISSION DIRECTIVES & TARGET BUG REPORT",
+            "write-tests" => "ACTIVE PIPELINE ROLE: AUTOMATED TEST ENGINEERING & VERIFICATION",
+            "explain" => "ACTIVE PIPELINE ROLE: READ-ONLY EXPLANATION & DOCUMENTATION",
+            _ => "ACTIVE AGENT MISSION DIRECTIVES",
+        };
 
         let mut handoff_content = String::new();
 
         if is_targeted_directive {
             handoff_content.push_str(&format!(
-                "# PRIORITY MISSION DIRECTIVES & TARGET BUG REPORT\n\n\
+                "# {}\n\n\
                  - **Target Agent**: `{}`\n\
                  - **Source Agent**: `{}`\n\
                  - **Intent Mode**: `{}`\n\
@@ -531,6 +589,7 @@ impl AgentOrchestrator {
                  - **Workspace Path**: `{}`\n\n\
                  ### Mission Directives & Instructions to Execute:\n{}\n\n\
                  ---\n\n",
+                role_header_title,
                 req.target_agent_id,
                 req.source_agent_id.as_deref().unwrap_or("User"),
                 req.intent,
@@ -538,6 +597,9 @@ impl AgentOrchestrator {
                 effective_ws,
                 instructions
             ));
+            if !breakpoint_audit_section.is_empty() {
+                handoff_content.push_str(&breakpoint_audit_section);
+            }
             handoff_content.push_str(&epistemic_section);
             handoff_content.push_str("\n---\n\n");
             handoff_content.push_str(&format!(
@@ -546,6 +608,26 @@ impl AgentOrchestrator {
                 body_to_process.trim()
             ));
         } else {
+            handoff_content.push_str(&format!(
+                "# {}\n\n\
+                 - **Target Agent**: `{}`\n\
+                 - **Source Agent**: `{}`\n\
+                 - **Intent Mode**: `{}`\n\
+                 - **Epistemic Mode**: `{}`\n\
+                 - **Workspace Path**: `{}`\n\n\
+                 ### Strict Role Boundary & Instructions:\n{}\n\n\
+                 ---\n\n",
+                role_header_title,
+                req.target_agent_id,
+                req.source_agent_id.as_deref().unwrap_or("User"),
+                req.intent,
+                epistemic_decision.mode.as_label(),
+                effective_ws,
+                instructions
+            ));
+            if !breakpoint_audit_section.is_empty() {
+                handoff_content.push_str(&breakpoint_audit_section);
+            }
             handoff_content.push_str(&format!(
                 "# FlyMD Immutable Project Specification & Contract (`{}`)\n\n{}\n\n---\n\n",
                 req.file_name,
@@ -672,6 +754,11 @@ impl AgentOrchestrator {
             verification_report: None,
             outcome_reason: None,
             attempt_count: req.attempt_count,
+            error_diagnostic: None,
+            cli_session_id: resolved_resume_session_id,
+            modified_files: Vec::new(),
+            effort_level: req.effort_level.clone().or_else(|| Some("medium".to_string())),
+            thinking_enabled: req.thinking_enabled.or(Some(true)),
         };
 
         let memory_entry = format!(

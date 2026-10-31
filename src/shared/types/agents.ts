@@ -8,6 +8,16 @@ export type BuiltinAgentId =
 
 export type AgentId = BuiltinAgentId | string;
 
+export type AgentEffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export const AGENT_EFFORT_LEVELS: { id: AgentEffortLevel; label: string; desc: string }[] = [
+  { id: 'low', label: 'Low', desc: 'Fastest response, minimal reasoning tokens' },
+  { id: 'medium', label: 'Medium', desc: 'Balanced reasoning (Recommended default)' },
+  { id: 'high', label: 'High', desc: 'Deep architectural verification & thorough reasoning' },
+  { id: 'xhigh', label: 'X-High', desc: 'Exhaustive verification for complex systems' },
+  { id: 'max', label: 'Max', desc: 'Maximum frontier thinking effort ceiling' },
+];
+
 export type AgentAuthStatus =
   | 'connected'
   | 'web-connected'
@@ -108,6 +118,8 @@ export interface AgentProfile {
   artifactWatchPaths: string[];
   enabled: boolean;
   isCustom?: boolean;
+  supportsEffort?: boolean;
+  supportsThinking?: boolean;
 }
 
 export interface AgentCredentialConfig {
@@ -126,6 +138,8 @@ export interface AgentCredentialConfig {
   customWebUrl?: string;
   customLoginCommand?: string;
   disabled?: boolean;
+  defaultEffortLevel?: AgentEffortLevel;
+  defaultThinkingEnabled?: boolean;
 }
 
 export type AgentCredentialsMap = Record<string, AgentCredentialConfig>;
@@ -165,6 +179,12 @@ export interface AgentTaskRequest {
   epistemicPolicy?: CustomActionEpistemicPolicy | string;
   customActionLabel?: string;
   stepNote?: string;
+  attemptCount?: number;
+  resumeSessionId?: string;
+  resumeFromBreakpoint?: boolean;
+  previousFailedTaskId?: string;
+  effortLevel?: AgentEffortLevel;
+  thinkingEnabled?: boolean;
 }
 
 
@@ -180,6 +200,28 @@ export interface VerificationReport {
   gaps: string[];
   checks: VerificationCheck[];
   summary: string;
+}
+
+export type AgentErrorCategory =
+  | 'watchdog_timeout'
+  | 'cli_exit_error'
+  | 'verification_gap'
+  | 'binary_missing'
+  | 'panic_or_exception'
+  | 'cancelled'
+  | string;
+
+export interface AgentErrorDiagnostic {
+  category: AgentErrorCategory;
+  title: string;
+  exceptionMessage: string;
+  stderrTrace: string[];
+  exitCode?: number;
+  lastKnownActivity?: string;
+  cliSessionId?: string;
+  modifiedFiles: string[];
+  canResumeFromBreakpoint: boolean;
+  timestamp: number;
 }
 
 export interface AgentTaskRecord {
@@ -216,6 +258,11 @@ export interface AgentTaskRecord {
   verificationReport?: VerificationReport;
   outcomeReason?: string;
   attemptCount?: number;
+  errorDiagnostic?: AgentErrorDiagnostic;
+  cliSessionId?: string;
+  modifiedFiles?: string[];
+  effortLevel?: AgentEffortLevel;
+  thinkingEnabled?: boolean;
 }
 
 export interface AgentCheckpoint {
@@ -228,6 +275,8 @@ export interface AgentCheckpoint {
   gitRef?: string;
   backupDir?: string;
   restored: boolean;
+  preExistingFiles?: string[];
+  revertedFiles?: string[];
 }
 
 export interface AgentStreamEvent {
@@ -248,6 +297,8 @@ export interface AgentPipelineStep {
   status?: PipelineStepExecutionStatus;
   completedTaskId?: string;
   completedAt?: number;
+  effortLevel?: AgentEffortLevel;
+  thinkingEnabled?: boolean;
 }
 
 export interface AgentPipelinePreset {

@@ -3,6 +3,7 @@ import {
   AgentProfile,
   AgentCredentialConfig,
   AgentCredentialsMap,
+  AgentEffortLevel,
 } from '../../../../shared/types';
 import {
   X,
@@ -820,6 +821,51 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                         placeholder="Not needed for Browser Free Tier"
                         className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono"
                       />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-slate-400 text-[11px] block mb-1">
+                        Default Reasoning Effort Level
+                      </label>
+                      <select
+                        value={currentCred.defaultEffortLevel || 'medium'}
+                        onChange={(e) =>
+                          updateCredField({
+                            defaultEffortLevel: e.target.value as AgentEffortLevel,
+                          })
+                        }
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sky-300 font-bold"
+                      >
+                        <option value="low">Low (Fast • Minimal Tokens)</option>
+                        <option value="medium">Medium (Default • Balanced)</option>
+                        <option value="high">High (Deep Verification)</option>
+                        <option value="xhigh">X-High (Exhaustive Architecture)</option>
+                        <option value="max">Max (Maximum Effort)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-slate-400 text-[11px] block mb-1">
+                        Default Thinking Mode (CoT)
+                      </label>
+                      <select
+                        value={
+                          currentCred.defaultThinkingEnabled === false
+                            ? 'disabled'
+                            : 'enabled'
+                        }
+                        onChange={(e) =>
+                          updateCredField({
+                            defaultThinkingEnabled: e.target.value === 'enabled',
+                          })
+                        }
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-indigo-300 font-bold"
+                      >
+                        <option value="enabled">Enabled (Thinking ON)</option>
+                        <option value="disabled">Disabled (Direct Output • Saves Tokens)</option>
+                      </select>
                     </div>
                   </div>
 

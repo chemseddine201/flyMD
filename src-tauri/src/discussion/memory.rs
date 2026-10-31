@@ -652,6 +652,7 @@ mod tests {
             custom_action: None,
             custom_query: None,
             thinking_enabled: true,
+            effort_level: Some("medium".to_string()),
         };
         let p_critic = DiscussionParticipant {
             agent_id: "critic-1".to_string(),
@@ -666,6 +667,7 @@ mod tests {
             custom_action: None,
             custom_query: None,
             thinking_enabled: true,
+            effort_level: Some("medium".to_string()),
         };
 
         let dec1 = evaluate_debate_epistemic_policy(&p_arch.role, 1, &temp_ws, None, &[]);

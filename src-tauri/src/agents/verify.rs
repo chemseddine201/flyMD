@@ -65,8 +65,59 @@ pub fn verify_deliverables(
         },
     });
 
-    // Check 2: Code deliverables requirement for build/fix-bugs
-    if intent == "build" || intent == "fix-bugs" {
+    // Check 2: Role-specific deliverable requirement
+    if intent == "refine-plan" {
+        let mut plan_md_found = false;
+        let mut plan_md_details = String::new();
+        for f in modified_files {
+            if f.to_lowercase().ends_with(".md") {
+                let p = workspace_dir.join(f);
+                let sz = p.metadata().map(|m| m.len()).unwrap_or(0);
+                if sz >= 150 {
+                    plan_md_found = true;
+                    plan_md_details = format!("Detailed Markdown implementation plan `{}` ({} bytes) verified on disk.", f, sz);
+                    break;
+                }
+            }
+        }
+        if !plan_md_found {
+            // Also check if a standard plan/contract .md exists on disk with substantive content
+            if let Ok(entries) = fs::read_dir(workspace_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        if fname.to_lowercase().ends_with(".md") && !fname.starts_with('.') {
+                            let sz = path.metadata().map(|m| m.len()).unwrap_or(0);
+                            if sz >= 200 {
+                                plan_md_found = true;
+                                plan_md_details = format!("Markdown implementation plan `{}` ({} bytes) present in workspace.", fname, sz);
+                                if !checked_files.contains(&fname) {
+                                    checked_files.push(fname);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !plan_md_found {
+            let msg = "Intent `refine-plan` requires a detailed Markdown implementation plan (`.md` file) in the workspace, but none was produced.".to_string();
+            gaps.push(msg.clone());
+            checks.push(VerificationCheck {
+                name: "Markdown Implementation Plan (.md)".to_string(),
+                passed: false,
+                details: msg,
+            });
+        } else {
+            checks.push(VerificationCheck {
+                name: "Markdown Implementation Plan (.md)".to_string(),
+                passed: true,
+                details: plan_md_details,
+            });
+        }
+    } else if intent == "build" || intent == "fix-bugs" {
         let has_code = modified_files.iter().any(|f| {
             let l = f.to_lowercase();
             l.ends_with(".js")

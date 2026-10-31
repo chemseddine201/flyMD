@@ -542,6 +542,7 @@ impl DiscussionOrchestrator {
             action_name: action_name.clone(),
             action_query: Some(trimmed_query.clone()),
             thinking_enabled: participant.thinking_enabled,
+            effort_level: participant.effort_level.clone(),
         };
 
         let stream_sink: Option<Box<dyn StreamSink>> = self.event_listener.as_ref().map(|l| {
@@ -1068,6 +1069,7 @@ impl DiscussionOrchestrator {
             action_name: action_name.clone(),
             action_query: action_query.clone(),
             thinking_enabled: participant.thinking_enabled,
+            effort_level: participant.effort_level.clone(),
         };
 
         // Prepare streaming sink if listener attached
@@ -1207,6 +1209,7 @@ mod tests {
                     custom_action: None,
                     custom_query: None,
                     thinking_enabled: true,
+                    effort_level: Some("medium".to_string()),
                 },
                 DiscussionParticipant {
                     agent_id: "agent-critic".to_string(),
@@ -1222,6 +1225,7 @@ mod tests {
                     custom_action: None,
                     custom_query: None,
                     thinking_enabled: true,
+                    effort_level: Some("medium".to_string()),
                 },
                 DiscussionParticipant {
                     agent_id: "agent-implementer".to_string(),
@@ -1236,6 +1240,7 @@ mod tests {
                     custom_action: None,
                     custom_query: None,
                     thinking_enabled: true,
+                    effort_level: Some("medium".to_string()),
                 },
             ],
             active_skill_uris: Vec::new(),

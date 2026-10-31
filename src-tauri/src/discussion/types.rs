@@ -157,6 +157,13 @@ pub struct DiscussionParticipant {
     /// Ask the model to reason step-by-step before answering.
     #[serde(rename = "thinkingEnabled", default = "default_true")]
     pub thinking_enabled: bool,
+    /// Effort level for this agent (low, medium, high, xhigh, max). Defaults to medium.
+    #[serde(rename = "effortLevel", default = "default_medium_effort")]
+    pub effort_level: Option<String>,
+}
+
+fn default_medium_effort() -> Option<String> {
+    Some("medium".to_string())
 }
 
 fn default_true() -> bool {

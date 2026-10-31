@@ -19,10 +19,11 @@ import {
   Globe,
   Terminal,
   Plus,
+  Brain,
 } from 'lucide-react';
 import { usePreviewStore } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
-import { AgentId, AgentTaskIntent } from '../../../../shared/types';
+import { AgentId, AgentTaskIntent, AgentEffortLevel } from '../../../../shared/types';
 
 export const AgentDispatchModal: React.FC = () => {
   const dispatchDraft = usePreviewStore((s) => s.dispatchDraft);
@@ -46,6 +47,8 @@ export const AgentDispatchModal: React.FC = () => {
   const [selectedTasks, setSelectedTasks] = useState<Record<number, boolean>>({});
   const [filterSelectedOnly, setFilterSelectedOnly] = useState(false);
   const [executionMode, setExecutionMode] = useState<'in-app' | 'web'>('in-app');
+  const [effortLevel, setEffortLevel] = useState<AgentEffortLevel>('medium');
+  const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
 
   const checklistItems = useMemo(() => {
@@ -167,6 +170,8 @@ export const AgentDispatchModal: React.FC = () => {
         pipelineId: dispatchDraft.pipelineId,
         nextAgentInChain: nextAgentInChain ? nextAgentInChain : undefined,
         nextIntentInChain: nextAgentInChain ? nextIntentInChain : undefined,
+        effortLevel,
+        thinkingEnabled,
       });
 
       const [updatedTasks, updatedCheckpoints] = await Promise.all([
@@ -430,7 +435,57 @@ export const AgentDispatchModal: React.FC = () => {
             </div>
           )}
 
-          {/* Step 4: Safety & Multi-Agent Protection Switches */}
+          {/* Step 4: Reasoning Effort & Thinking Control */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                Reasoning Effort Level
+              </label>
+              <select
+                value={effortLevel}
+                onChange={(e) =>
+                  setEffortLevel(e.target.value as AgentEffortLevel)
+                }
+                className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sky-300 font-bold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
+                title="Tokens and reasoning depth allocated for this task"
+              >
+                <option value="low">Low (Fastest • Minimal Tokens)</option>
+                <option value="medium">Medium (Balanced • Default)</option>
+                <option value="high">High (Deep Verification)</option>
+                <option value="xhigh">X-High (Exhaustive Architecture)</option>
+                <option value="max">Max (Maximum Effort)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                Extended Thinking Mode (CoT)
+              </label>
+              <button
+                type="button"
+                onClick={() => setThinkingEnabled((prev) => !prev)}
+                className={`w-full px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                  thinkingEnabled
+                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-xs'
+                    : 'bg-slate-900 border-slate-700 text-slate-400 line-through'
+                }`}
+              >
+                <Brain
+                  size={14}
+                  className={
+                    thinkingEnabled ? 'text-indigo-400' : 'text-slate-500'
+                  }
+                />
+                <span>
+                  {thinkingEnabled
+                    ? 'Thinking Enabled (ON)'
+                    : 'Thinking Disabled (OFF)'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Step 5: Safety & Multi-Agent Protection Switches */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <button
               type="button"

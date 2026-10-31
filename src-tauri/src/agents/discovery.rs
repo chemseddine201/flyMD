@@ -321,6 +321,9 @@ pub fn discover_agent_profiles(
 
         let is_disabled = user_cred.map(|c| c.disabled).unwrap_or(false);
 
+        let supports_effort = id == "claude-code" || id == "antigravity";
+        let supports_thinking = id == "claude-code" || id == "antigravity";
+
         profiles.push(AgentProfile {
             id: id.to_string(),
             name: name.to_string(),
@@ -344,6 +347,8 @@ pub fn discover_agent_profiles(
             artifact_watch_paths: watch_paths.iter().map(|s| s.to_string()).collect(),
             enabled: !is_disabled,
             is_custom: false,
+            supports_effort: Some(supports_effort),
+            supports_thinking: Some(supports_thinking),
         });
     }
 
@@ -435,6 +440,8 @@ pub fn discover_agent_profiles(
             artifact_watch_paths: Vec::new(),
             enabled: !cred.disabled,
             is_custom: true,
+            supports_effort: Some(false),
+            supports_thinking: Some(false),
         });
     }
 

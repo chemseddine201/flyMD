@@ -58,6 +58,7 @@ import {
   DiscussionMessage,
   AgentCustomAction,
   AvailableProviderInfo,
+  AgentEffortLevel,
 } from '../../../../../shared/types';
 import { markdownService } from '../../../services/MarkdownService';
 
@@ -488,6 +489,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const [targetedAgentId, setTargetedAgentId] = useState<string>('');
   const [targetedActionName, setTargetedActionName] = useState<string>('Targeted Inquiry');
   const [targetedActionQuery, setTargetedActionQuery] = useState<string>('');
+  const [targetedEffortLevel, setTargetedEffortLevel] = useState<AgentEffortLevel>('medium');
+  const [targetedThinkingEnabled, setTargetedThinkingEnabled] = useState<boolean>(true);
   const [isDispatchingTargeted, setIsDispatchingTargeted] = useState<boolean>(false);
 
   // Modals & confirmation dialogs
@@ -518,6 +521,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const [turnTimeoutInput, setTurnTimeoutInput] = useState<string>('120');
   const [newDebateMode, setNewDebateMode] = useState<'preset' | 'actions' | 'custom'>('preset');
   const [presetEngine, setPresetEngine] = useState<string>('mock');
+  const [presetEffortLevel, setPresetEffortLevel] = useState<AgentEffortLevel>('medium');
+  const [presetThinkingEnabled, setPresetThinkingEnabled] = useState<boolean>(true);
   const [enableStepModeInNew, setEnableStepModeInNew] = useState(false);
   const [customParticipants, setCustomParticipants] = useState<DiscussionParticipant[]>(
     () => (loadSavedPresets().find((p) => p.id === 'architecture') || loadSavedPresets()[0]).participants
@@ -943,14 +948,16 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
             ...p,
             providerId: 'mock',
             modelId: p.modelId || 'adaptive-domain-simulator',
-            thinkingEnabled: true,
+            thinkingEnabled: presetThinkingEnabled,
+            effortLevel: presetEffortLevel,
           };
         }
         return {
           ...p,
           providerId: targetProvider,
           modelId: matched?.model || p.modelId,
-          thinkingEnabled: true,
+          thinkingEnabled: presetThinkingEnabled,
+          effortLevel: presetEffortLevel,
         };
       });
     }
@@ -967,6 +974,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         p.customQuery?.trim() ||
         'Analyze the topic for strategic soundness, feasibility, evidence quality, and potential risks.',
       contextBudgetTokens: p.contextBudgetTokens || 16000,
+      effortLevel: p.effortLevel || presetEffortLevel || 'medium',
+      thinkingEnabled: p.thinkingEnabled ?? presetThinkingEnabled ?? true,
     }));
 
     const config: DiscussionConfig = {
@@ -2121,6 +2130,35 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                               <option value="Alternative Solution Inquiry" className="bg-slate-900 text-slate-200">Alternative Solution Inquiry</option>
                             </select>
                           </div>
+
+                          <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-purple-500/30 text-xs">
+                            <span className="text-purple-400 font-semibold text-[11px]">Effort:</span>
+                            <select
+                              value={targetedEffortLevel}
+                              onChange={(e) => setTargetedEffortLevel(e.target.value as AgentEffortLevel)}
+                              className="bg-transparent border-0 text-sky-300 font-bold focus:outline-none cursor-pointer text-xs"
+                            >
+                              <option value="low" className="bg-slate-900">Low Effort</option>
+                              <option value="medium" className="bg-slate-900">Med Effort</option>
+                              <option value="high" className="bg-slate-900">High Effort</option>
+                              <option value="xhigh" className="bg-slate-900">X-High Effort</option>
+                              <option value="max" className="bg-slate-900">Max Effort</option>
+                            </select>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setTargetedThinkingEnabled((prev) => !prev)}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold transition cursor-pointer ${
+                              targetedThinkingEnabled
+                                ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300'
+                                : 'bg-slate-950 border-purple-500/30 text-slate-400 line-through'
+                            }`}
+                            title={targetedThinkingEnabled ? 'Thinking: ON' : 'Thinking: OFF'}
+                          >
+                            <Brain size={12} className={targetedThinkingEnabled ? 'text-indigo-400' : 'text-slate-500'} />
+                            <span>{targetedThinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}</span>
+                          </button>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -2356,20 +2394,64 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                           </div>
                         </div>
                       </div>
-                      <select
-                        value={presetEngine}
-                        onChange={(e) => setPresetEngine(e.target.value)}
-                        className="w-full sm:w-auto min-w-0 sm:max-w-[420px] shrink-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium truncate shadow-inner cursor-pointer"
-                      >
-                        <option value="mock">⚡ Built-in Adaptive Domain Simulator (Fast)</option>
-                        {availableProviders
-                          .filter((ap) => ap.id !== 'mock')
-                          .map((p) => (
-                            <option key={p.id} value={p.id} disabled={!p.available}>
-                              {p.name} {p.available ? `(${p.model})` : '(Not Detected)'}
-                            </option>
-                          ))}
-                      </select>
+                      <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                        <select
+                          value={presetEngine}
+                          onChange={(e) => setPresetEngine(e.target.value)}
+                          className="w-full sm:w-auto min-w-0 sm:max-w-[320px] shrink-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium truncate shadow-inner cursor-pointer"
+                        >
+                          <option value="mock">⚡ Built-in Adaptive Domain Simulator (Fast)</option>
+                          {availableProviders
+                            .filter((ap) => ap.id !== 'mock')
+                            .map((p) => (
+                              <option key={p.id} value={p.id} disabled={!p.available}>
+                                {p.name} {p.available ? `(${p.model})` : '(Not Detected)'}
+                              </option>
+                            ))}
+                        </select>
+
+                        {/* Preset Shared Effort Dropdown */}
+                        <select
+                          value={presetEffortLevel}
+                          onChange={(e) =>
+                            setPresetEffortLevel(e.target.value as AgentEffortLevel)
+                          }
+                          className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-sky-300 text-xs font-bold focus:outline-none focus:border-sky-500 cursor-pointer shadow-inner"
+                          title="Shared reasoning effort level across all preset participants"
+                        >
+                          <option value="low">Low Effort</option>
+                          <option value="medium">Med Effort (Default)</option>
+                          <option value="high">High Effort</option>
+                          <option value="xhigh">X-High Effort</option>
+                          <option value="max">Max Effort</option>
+                        </select>
+
+                        {/* Preset Thinking Mode Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => setPresetThinkingEnabled((prev) => !prev)}
+                          className={`px-2.5 py-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-inner ${
+                            presetThinkingEnabled
+                              ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300'
+                              : 'bg-slate-950 border-slate-800 text-slate-400 line-through'
+                          }`}
+                          title={
+                            presetThinkingEnabled
+                              ? 'Thinking Mode: ON (Click to disable and save tokens)'
+                              : 'Thinking Mode: OFF (Click to enable)'
+                          }
+                        >
+                          <Brain
+                            size={12}
+                            className={
+                              presetThinkingEnabled
+                                ? 'text-indigo-400'
+                                : 'text-slate-500'
+                            }
+                          />
+                          <span>{presetThinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -2839,6 +2921,23 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                                     {ac.name} — {ac.description}
                                   </option>
                                 ))}
+                              </select>
+
+                              <select
+                                value={p.effortLevel || 'medium'}
+                                onChange={(e) =>
+                                  handleUpdateParticipant(idx, {
+                                    effortLevel: e.target.value as AgentEffortLevel,
+                                  })
+                                }
+                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[11px] text-sky-300 font-bold focus:outline-none cursor-pointer"
+                                title="Effort level for this participant"
+                              >
+                                <option value="low">Low Effort</option>
+                                <option value="medium">Med Effort</option>
+                                <option value="high">High Effort</option>
+                                <option value="xhigh">X-High Effort</option>
+                                <option value="max">Max Effort</option>
                               </select>
 
                               <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer shrink-0">

@@ -1,3 +1,5 @@
+import type { AgentEffortLevel } from './agents';
+
 export type DiscussionStatus =
   | 'created'
   | 'running'
@@ -29,6 +31,7 @@ export interface AvailableProviderInfo {
   available: boolean;
   model: string;
   supportsThinking: boolean;
+  supportsEffort?: boolean;
   description: string;
 }
 
@@ -51,6 +54,7 @@ export interface DiscussionParticipant {
   customAction?: AgentCustomAction;
   customQuery?: string;
   thinkingEnabled?: boolean;
+  effortLevel?: AgentEffortLevel;
 }
 
 export type DiscussionMessageKind =

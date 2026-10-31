@@ -7,10 +7,11 @@ import {
   GitBranch,
   FileText,
   Sparkles,
+  Brain,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
-import { AgentId, AgentTaskIntent } from '../../../../shared/types';
+import { AgentId, AgentTaskIntent, AgentEffortLevel } from '../../../../shared/types';
 
 export const CouncilModal: React.FC = () => {
   const showCouncilModal = usePreviewStore((s) => s.showCouncilModal);
@@ -31,6 +32,8 @@ export const CouncilModal: React.FC = () => {
   const [intent, setIntent] = useState<AgentTaskIntent>('review');
   const [customPrompt, setCustomPrompt] = useState('');
   const [safeParallelMode, setSafeParallelMode] = useState(true);
+  const [effortLevel, setEffortLevel] = useState<AgentEffortLevel>('medium');
+  const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
   const [broadcasting, setBroadcasting] = useState(false);
 
   if (!showCouncilModal) return null;
@@ -67,6 +70,8 @@ export const CouncilModal: React.FC = () => {
           createSafetyCheckpoint: true,
           safeParallelMode,
           attachSharedMemory: true,
+          effortLevel,
+          thinkingEnabled,
         });
       }
       const [tasks, checkpoints] = await Promise.all([
@@ -214,6 +219,56 @@ export const CouncilModal: React.FC = () => {
               placeholder="Optional instructions for all selected agents..."
               className="mt-2.5 w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
             />
+          </div>
+
+          {/* Effort & Thinking Control */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                Reasoning Effort Level
+              </label>
+              <select
+                value={effortLevel}
+                onChange={(e) =>
+                  setEffortLevel(e.target.value as AgentEffortLevel)
+                }
+                className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-500 cursor-pointer"
+                title="Reasoning effort level applied to all council agents"
+              >
+                <option value="low">Low (Fastest • Minimal Tokens)</option>
+                <option value="medium">Medium (Balanced • Default)</option>
+                <option value="high">High (Deep Verification)</option>
+                <option value="xhigh">X-High (Exhaustive Architecture)</option>
+                <option value="max">Max (Maximum Effort)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                Thinking Mode (CoT)
+              </label>
+              <button
+                type="button"
+                onClick={() => setThinkingEnabled((prev) => !prev)}
+                className={`w-full px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                  thinkingEnabled
+                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-xs'
+                    : 'bg-slate-900 border-slate-700 text-slate-400 line-through'
+                }`}
+              >
+                <Brain
+                  size={14}
+                  className={
+                    thinkingEnabled ? 'text-indigo-400' : 'text-slate-500'
+                  }
+                />
+                <span>
+                  {thinkingEnabled
+                    ? 'Thinking Enabled (ON)'
+                    : 'Thinking Disabled (OFF)'}
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* Safe Parallel Mode Info */}

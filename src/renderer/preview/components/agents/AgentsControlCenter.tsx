@@ -19,6 +19,13 @@ import {
   Rocket,
   RotateCcw,
   CheckCircle2,
+  AlertCircle,
+  Play,
+  Copy,
+  ChevronDown,
+  ChevronRight,
+  ShieldCheck,
+  Clock,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import {
@@ -33,6 +40,7 @@ import {
   AgentTaskIntent,
   AgentTaskRecord,
   CustomPipelineAction,
+  AgentEffortLevel,
 } from '../../../../shared/types';
 import { AgentStudioSidebar } from './studio/AgentStudioSidebar';
 import { AgentChatTimeline } from './studio/AgentChatTimeline';
@@ -42,6 +50,25 @@ import { ProjectTreeNavigator } from './projects/ProjectTreeNavigator';
 import { ProjectObservabilityHUD } from './projects/ProjectObservabilityHUD';
 import { ProjectSynthesisReportViewer } from './projects/ProjectSynthesisReportViewer';
 import { CustomPipelineActionsModal } from './studio/CustomPipelineActionsModal';
+
+export interface RecoveryModalDecision {
+  action: 'continue_from_breakpoint' | 'revert_and_retry' | 'pause';
+  overrideAgentId?: AgentId;
+  overrideEffortLevel?: AgentEffortLevel;
+  overrideThinkingEnabled?: boolean;
+  extraDirective?: string;
+}
+
+// Module-level pipeline runtime controller so viewMode / tab switches never orphan an active pipeline run
+const globalPipelineRuntime: {
+  cancelled: boolean;
+  proceedResolver: (() => void) | null;
+  recoveryResolver: ((decision: RecoveryModalDecision) => void) | null;
+} = {
+  cancelled: false,
+  proceedResolver: null,
+  recoveryResolver: null,
+};
 
 interface AgentsControlCenterProps {
   folderPath?: string;
@@ -74,6 +101,24 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
   const folderFiles = usePreviewStore((s) => s.folderFiles);
   const setFolderFiles = usePreviewStore((s) => s.setFolderFiles);
 
+  // Persistent Workflow & Pipeline Execution State from Global Store (survives viewMode switches)
+  const pipelines = usePreviewStore((s) => s.pipelines);
+  const setPipelines = usePreviewStore((s) => s.setPipelines);
+  const runningPipelineId = usePreviewStore((s) => s.runningPipelineId);
+  const setRunningPipelineId = usePreviewStore((s) => s.setRunningPipelineId);
+  const runningPipelineStepIdx = usePreviewStore((s) => s.runningPipelineStepIdx);
+  const setRunningPipelineStepIdx = usePreviewStore(
+    (s) => s.setRunningPipelineStepIdx
+  );
+  const waitingForStepApproval = usePreviewStore((s) => s.waitingForStepApproval);
+  const setWaitingForStepApproval = usePreviewStore(
+    (s) => s.setWaitingForStepApproval
+  );
+  const assignedReportDoc = usePreviewStore((s) => s.assignedReportDoc);
+  const setAssignedReportDoc = usePreviewStore((s) => s.setAssignedReportDoc);
+  const lifecycleStage = usePreviewStore((s) => s.agentLifecycleStage);
+  const setLifecycleStage = usePreviewStore((s) => s.setAgentLifecycleStage);
+
   // Only show agents enabled by the user in all studio selectors
   const enabledProfiles = agentProfiles.filter((a) => a.enabled);
   const visibleAgents =
@@ -96,7 +141,6 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
   const [clearCompletedSessions, setClearCompletedSessions] = useState(true);
   const [clearingCache, setClearingCache] = useState(false);
   const [cacheNotification, setCacheNotification] = useState<string | null>(null);
-  const [lifecycleStage, setLifecycleStage] = useState<'debate' | 'report' | 'pipeline'>('pipeline');
   const [showProjectTree, setShowProjectTree] = useState<boolean>(true);
   const [showObservabilityHUD, setShowObservabilityHUD] = useState<boolean>(false);
   const [workspaceFocusMode, setWorkspaceFocusMode] = useState<'workspace' | 'file'>('workspace');
@@ -111,10 +155,14 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
   const appendProjectMemory = usePreviewStore((s) => s.appendProjectMemory);
   const injectGuidance = usePreviewStore((s) => s.injectGuidance);
 
-  // Track automated multi-step repeater runs
-  const [runningPipelineId, setRunningPipelineId] = useState<string | null>(null);
-  const [runningPipelineStepIdx, setRunningPipelineStepIdx] = useState<number>(-1);
-  const isPipelineCancelledRef = useRef<boolean>(false);
+  const isPipelineCancelledRef = {
+    get current() {
+      return globalPipelineRuntime.cancelled;
+    },
+    set current(val: boolean) {
+      globalPipelineRuntime.cancelled = val;
+    },
+  };
 
   // Workflow Execution Mode: 'auto' (uninterrupted relay) vs. 'manual' (step approval required)
   const [workflowExecutionMode, setWorkflowExecutionMode] = useState<'auto' | 'manual'>(() => {
@@ -132,16 +180,14 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
     } catch {}
   };
 
-  const [waitingForStepApproval, setWaitingForStepApproval] = useState<{
-    completedStepIdx: number;
-    nextStepIdx: number;
-    nextAgentName: string;
-    nextIntent: string;
-    completedTaskId: string;
-    filesCreatedCount: number;
-  } | null>(null);
-
-  const proceedNextStepResolverRef = useRef<(() => void) | null>(null);
+  const proceedNextStepResolverRef = {
+    get current() {
+      return globalPipelineRuntime.proceedResolver;
+    },
+    set current(val: (() => void) | null) {
+      globalPipelineRuntime.proceedResolver = val;
+    },
+  };
 
   const handleProceedNextWorkflowStep = () => {
     if (proceedNextStepResolverRef.current) {
@@ -150,6 +196,35 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
       resolve();
     }
   };
+
+  // Live Reconciliation: Ensure `runningPipelineId`, `runningPipelineStepIdx`, and `step.status`
+  // stay synchronized with live `agentTasks` across remounts or background updates.
+  useEffect(() => {
+    const primary = pipelines[0];
+    if (!primary) return;
+
+    const runningTaskForPipeline = agentTasks.find(
+      (t) => t.status === 'running' && t.pipelineId === primary.id
+    );
+
+    if (runningTaskForPipeline && !runningPipelineId) {
+      // Find matching step index by completedTaskId or intent
+      let matchIdx = primary.steps.findIndex(
+        (s) => s.completedTaskId === runningTaskForPipeline.id
+      );
+      if (matchIdx === -1) {
+        matchIdx = primary.steps.findIndex(
+          (s) =>
+            s.status === 'running' ||
+            (s.intent === runningTaskForPipeline.intent && s.status !== 'completed')
+        );
+      }
+      setRunningPipelineId(primary.id);
+      if (matchIdx !== -1) {
+        setRunningPipelineStepIdx(matchIdx);
+      }
+    }
+  }, [agentTasks, pipelines, runningPipelineId, setRunningPipelineId, setRunningPipelineStepIdx]);
 
   // Ensure selectedAgentId stays within enabled visibleAgents
   useEffect(() => {
@@ -160,17 +235,6 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
       setSelectedAgentId(visibleAgents[0].id);
     }
   }, [visibleAgents, selectedAgentId]);
-
-  const [pipelines, setPipelines] = useState<AgentPipelinePreset[]>(() => {
-    try {
-      const saved = localStorage.getItem('flymd:custom-pipelines');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return BUILTIN_AGENT_PIPELINES;
-  });
 
   // User-Defined Custom Pipeline Actions Library
   const [customActions, setCustomActions] = useState<CustomPipelineAction[]>(() => {
@@ -288,13 +352,6 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
     }
   }, [resolvedWorkspace, loadProjects]);
 
-  const [assignedReportDoc, setAssignedReportDoc] = useState<{
-    pipelineId: string;
-    pipelineName: string;
-    reportMarkdown: string;
-    assignedAt: string;
-  } | null>(null);
-
   const [completedPipelineSummary, setCompletedPipelineSummary] = useState<{
     pipelineName: string;
     stepsCount: number;
@@ -302,12 +359,74 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
     lastTaskOutput?: string;
   } | null>(null);
 
+  // Interactive Pipeline & Task Error Recovery Modal State
+  const [pendingRecoveryPrompt, setPendingRecoveryPrompt] = useState<{
+    failedTask: AgentTaskRecord;
+    pipeline?: AgentPipelinePreset;
+    stepIdx?: number;
+    stepLabel?: string;
+    isLivePipelinePause: boolean;
+  } | null>(null);
+  const [recoveryAgentId, setRecoveryAgentId] = useState<AgentId>('');
+  const [recoveryEffortLevel, setRecoveryEffortLevel] = useState<AgentEffortLevel>('medium');
+  const [recoveryThinkingEnabled, setRecoveryThinkingEnabled] = useState<boolean>(true);
+  const [recoveryExtraDirective, setRecoveryExtraDirective] = useState<string>('');
+  const [recoveryCopiedLog, setRecoveryCopiedLog] = useState<boolean>(false);
+  const [recoveryShowStderr, setRecoveryShowStderr] = useState<boolean>(false);
+
+  const cancelActivePipelineRun = async (targetPipelineId?: string) => {
+    const storeState = usePreviewStore.getState();
+    const activePipeId = targetPipelineId || storeState.runningPipelineId;
+    isPipelineCancelledRef.current = true;
+    storeState.setRunningPipelineId(null);
+    storeState.setRunningPipelineStepIdx(-1);
+    storeState.setWaitingForStepApproval(null);
+    setPendingRecoveryPrompt(null);
+    if (proceedNextStepResolverRef.current) {
+      const r = proceedNextStepResolverRef.current;
+      proceedNextStepResolverRef.current = null;
+      r();
+    }
+    if (globalPipelineRuntime.recoveryResolver) {
+      const rr = globalPipelineRuntime.recoveryResolver;
+      globalPipelineRuntime.recoveryResolver = null;
+      rr({ action: 'pause' });
+    }
+    if (activePipeId) {
+      storeState.setPipelines((prev) =>
+        prev.map((p) =>
+          p.id !== activePipeId
+            ? p
+            : {
+                ...p,
+                steps: p.steps.map((s) =>
+                  s.status === 'running' ? { ...s, status: 'pending' as const } : s
+                ),
+              }
+        )
+      );
+      const runningTasks = storeState.agentTasks.filter(
+        (t) => t.status === 'running' && t.pipelineId === activePipeId
+      );
+      for (const rt of runningTasks) {
+        try {
+          await window.electronAPI.cancelAgentTask(rt.id);
+        } catch {}
+      }
+      if (runningTasks.length > 0) {
+        try {
+          const updated = await window.electronAPI.getAgentTasks();
+          storeState.setAgentTasks(updated);
+        } catch {}
+      }
+    }
+  };
+
   const handleLaunchDedicatedPipeline = async (
     preset: AgentPipelinePreset,
     reportMarkdown: string
   ) => {
     setPipelines((prev) => [preset, ...prev.filter((p) => p.id !== preset.id)]);
-    persistPipelines([preset, ...pipelines.filter((p) => p.id !== preset.id)]);
     setAssignedReportDoc({
       pipelineId: preset.id,
       pipelineName: preset.name,
@@ -414,52 +533,35 @@ ${projDesc}
 `;
   }, [activeReportMarkdown, activeProject]);
 
-  const persistPipelines = (next: AgentPipelinePreset[]) => {
-    try {
-      localStorage.setItem('flymd:custom-pipelines', JSON.stringify(next));
-    } catch {}
-  };
-
   const handleUpdatePipelineStep = (
     pipelineId: string,
     stepIdx: number,
     updates: Partial<AgentPipelineStep>
   ) => {
-    if (runningPipelineId === pipelineId) {
-      isPipelineCancelledRef.current = true;
-      setRunningPipelineId(null);
-      setRunningPipelineStepIdx(-1);
-      setWaitingForStepApproval(null);
-      if (proceedNextStepResolverRef.current) {
-        proceedNextStepResolverRef.current();
-      }
+    // Updating a step note on a pending step does not cancel the pipeline
+    const isOnlyNoteUpdate =
+      Object.keys(updates).length === 1 && 'stepNote' in updates;
+    if (runningPipelineId === pipelineId && !isOnlyNoteUpdate) {
+      cancelActivePipelineRun(pipelineId);
     }
-    setPipelines((prev) => {
-      const next = prev.map((p) => {
+    setPipelines((prev) =>
+      prev.map((p) => {
         if (p.id !== pipelineId) return p;
         const steps = p.steps.map((s, idx) =>
           idx === stepIdx ? { ...s, ...updates } : s
         );
         return { ...p, steps };
-      });
-      persistPipelines(next);
-      return next;
-    });
+      })
+    );
   };
 
   const handleAddPipelineStep = (pipelineId: string) => {
     if (runningPipelineId === pipelineId) {
-      isPipelineCancelledRef.current = true;
-      setRunningPipelineId(null);
-      setRunningPipelineStepIdx(-1);
-      setWaitingForStepApproval(null);
-      if (proceedNextStepResolverRef.current) {
-        proceedNextStepResolverRef.current();
-      }
+      cancelActivePipelineRun(pipelineId);
     }
     const defaultAgent = visibleAgents[0]?.id || 'antigravity';
-    setPipelines((prev) => {
-      const next = prev.map((p) => {
+    setPipelines((prev) =>
+      prev.map((p) => {
         if (p.id !== pipelineId) return p;
         const nextIntent: AgentTaskIntent =
           p.steps.length === 0
@@ -484,15 +586,13 @@ ${projDesc}
           ...p,
           steps: [...p.steps, newStep],
         };
-      });
-      persistPipelines(next);
-      return next;
-    });
+      })
+    );
   };
 
   const handleClearStepDoneStatus = (pipelineId: string) => {
-    setPipelines((prev) => {
-      const next = prev.map((p) => {
+    setPipelines((prev) =>
+      prev.map((p) => {
         if (p.id !== pipelineId) return p;
         const steps = p.steps.map((s) => ({
           ...s,
@@ -501,43 +601,27 @@ ${projDesc}
           completedAt: undefined,
         }));
         return { ...p, steps };
-      });
-      persistPipelines(next);
-      return next;
-    });
+      })
+    );
   };
 
   const handleRemovePipelineStep = (pipelineId: string, stepIdx: number) => {
     if (runningPipelineId === pipelineId) {
-      isPipelineCancelledRef.current = true;
-      setRunningPipelineId(null);
-      setRunningPipelineStepIdx(-1);
-      setWaitingForStepApproval(null);
-      if (proceedNextStepResolverRef.current) {
-        proceedNextStepResolverRef.current();
-      }
+      cancelActivePipelineRun(pipelineId);
     }
-    setPipelines((prev) => {
-      const next = prev.map((p) => {
+    setPipelines((prev) =>
+      prev.map((p) => {
         if (p.id !== pipelineId) return p;
         if (p.steps.length <= 1) return p;
         const steps = p.steps.filter((_, idx) => idx !== stepIdx);
         return { ...p, steps };
-      });
-      persistPipelines(next);
-      return next;
-    });
+      })
+    );
   };
 
   const handleResetPipelines = () => {
     if (runningPipelineId) {
-      isPipelineCancelledRef.current = true;
-      setRunningPipelineId(null);
-      setRunningPipelineStepIdx(-1);
-      setWaitingForStepApproval(null);
-      if (proceedNextStepResolverRef.current) {
-        proceedNextStepResolverRef.current();
-      }
+      cancelActivePipelineRun(runningPipelineId);
     }
     const fallbackAgent = visibleAgents[0]?.id || 'antigravity';
     const secondAgent = visibleAgents[1]?.id || fallbackAgent;
@@ -643,6 +727,12 @@ ${projDesc}
       epistemicPolicy?: 'collaborative' | 'independent-audit';
       customActionLabel?: string;
       stepNote?: string;
+      attemptCount?: number;
+      resumeSessionId?: string;
+      resumeFromBreakpoint?: boolean;
+      previousFailedTaskId?: string;
+      effortLevel?: AgentEffortLevel;
+      thinkingEnabled?: boolean;
     }
   ): Promise<AgentTaskRecord | null> => {
     setSubmitting(true);
@@ -667,6 +757,12 @@ ${projDesc}
         epistemicPolicy: overrides?.epistemicPolicy,
         customActionLabel: overrides?.customActionLabel,
         stepNote: overrides?.stepNote,
+        attemptCount: overrides?.attemptCount,
+        resumeSessionId: overrides?.resumeSessionId,
+        resumeFromBreakpoint: overrides?.resumeFromBreakpoint,
+        previousFailedTaskId: overrides?.previousFailedTaskId,
+        effortLevel: overrides?.effortLevel ?? 'medium',
+        thinkingEnabled: overrides?.thinkingEnabled ?? true,
       });
 
       const [tasks, checkpoints] = await Promise.all([
@@ -738,14 +834,15 @@ ${projDesc}
     });
   };
 
-  // Compresses upstream prose into high-signal checklists & directives while keeping the original contract intact,
+  // Passes the full detailed Markdown implementation plan when transitioning from `refine-plan` to `build`,
   // and withholds subjective upstream prose on adversarial verification steps (`review` / `fix-bugs`) to prevent confirmation bias.
   const composeEpistemicStepPayload = (
     originalContract: string,
     upstreamOutput: string | undefined,
     targetIntent: AgentTaskIntent,
     isFirstStep: boolean,
-    upstreamAgentId?: string
+    upstreamAgentId?: string,
+    upstreamIntent?: AgentTaskIntent
   ): string => {
     const cleanContract = (originalContract || '').trim();
     const cleanUpstream = (upstreamOutput || '').trim();
@@ -760,8 +857,17 @@ ${projDesc}
       return cleanContract || cleanUpstream;
     }
 
-    // Collaborative Inheritance (`build`, `write-tests`, `explain`, `refine-plan`):
-    // Extract compact actionable delta (checklists, @Role directives, key headings/invariants) instead of re-sending full essays.
+    // Plan -> Build Handoff: When upstream step was `refine-plan` or target step is `build`,
+    // pass the FULL detailed Markdown implementation plan without truncation so the Builder
+    // has every architectural specification, file breakdown, DOM ID, formula, and checklist item.
+    if (upstreamIntent === 'refine-plan' || targetIntent === 'build') {
+      if (!cleanContract || cleanUpstream.length >= cleanContract.length * 0.7) {
+        return cleanUpstream;
+      }
+      return `${cleanUpstream}\n\n---\n\n## Original Reference Contract\n${cleanContract}`;
+    }
+
+    // Collaborative Inheritance (`write-tests`, `explain`, etc.):
     const highSignalLines = cleanUpstream
       .split(/\r?\n/)
       .map((l) => l.trim())
@@ -776,12 +882,12 @@ ${projDesc}
           l.includes('Contract') ||
           l.includes('<independent_resume>')
       )
-      .slice(0, 28);
+      .slice(0, 40);
 
     const compactDelta =
       highSignalLines.length >= 3
         ? highSignalLines.join('\n')
-        : cleanUpstream.slice(0, 1800);
+        : cleanUpstream.slice(0, 3200);
 
     if (!cleanContract) {
       return compactDelta;
@@ -792,19 +898,32 @@ ${projDesc}
     })\n${compactDelta}`;
   };
 
-  const handleRunPipelineInStudio = async (pipeline: AgentPipelinePreset) => {
-    if (!pipeline.steps.length || runningPipelineId) return;
+  const handleRunPipelineInStudio = async (
+    pipeline: AgentPipelinePreset,
+    initialRecovery?: {
+      stepIdx: number;
+      mode: 'continue_from_breakpoint' | 'revert_and_retry';
+      failedTask: AgentTaskRecord;
+      overrideAgentId?: AgentId;
+      overrideEffortLevel?: AgentEffortLevel;
+      overrideThinkingEnabled?: boolean;
+      extraDirective?: string;
+    }
+  ) => {
+    const store = usePreviewStore.getState();
+    if (!pipeline.steps.length || store.runningPipelineId) return;
 
     // Find the first step that is not yet completed (Incremental Extension)
-    const firstPendingIdx = pipeline.steps.findIndex(
-      (s) => s.status !== 'completed'
-    );
+    const firstPendingIdx =
+      initialRecovery?.stepIdx !== undefined && initialRecovery.stepIdx >= 0
+        ? initialRecovery.stepIdx
+        : pipeline.steps.findIndex((s) => s.status !== 'completed');
     if (firstPendingIdx === -1) {
       // All steps already completed
       return;
     }
 
-    setRunningPipelineId(pipeline.id);
+    store.setRunningPipelineId(pipeline.id);
     isPipelineCancelledRef.current = false;
 
     try {
@@ -823,202 +942,436 @@ ${projDesc}
       for (let idx = firstPendingIdx; idx < pipeline.steps.length; idx++) {
         if (isPipelineCancelledRef.current) break;
 
-        const currentStep = pipeline.steps[idx];
-        const nextStep = pipeline.steps[idx + 1];
-
-        setRunningPipelineStepIdx(idx);
-        setSelectedAgentId(currentStep.agentId);
-        setSelectedIntent(currentStep.intent);
-
-        // Mark current step as running in pipeline state
-        setPipelines((prev) => {
-          const next = prev.map((p) => {
-            if (p.id !== pipeline.id) return p;
-            const steps = p.steps.map((s, sIdx) =>
-              sIdx === idx ? { ...s, status: 'running' as const } : s
-            );
-            return { ...p, steps };
-          });
-          persistPipelines(next);
-          return next;
-        });
-
-        const isFirstStep = idx === 0;
-        const assignedReport =
-          assignedReportDoc?.pipelineId === pipeline.id || assignedReportDoc
-            ? assignedReportDoc
+        let activeRecoveryForStep =
+          initialRecovery && initialRecovery.stepIdx === idx
+            ? {
+                mode: initialRecovery.mode,
+                failedTask: initialRecovery.failedTask,
+                overrideAgentId: initialRecovery.overrideAgentId,
+                overrideEffortLevel: initialRecovery.overrideEffortLevel,
+                overrideThinkingEnabled: initialRecovery.overrideThinkingEnabled,
+                extraDirective: initialRecovery.extraDirective,
+              }
             : null;
 
-        const initialDocContent =
-          assignedReport?.reportMarkdown || activeTab?.content || '';
-        const initialDocName = assignedReport
-          ? `${assignedReport.pipelineName.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')}_Contract.md`
-          : (activeTab?.fileName || 'Contract.md');
+        let stepSucceeded = false;
 
-        const stepContextTag = assignedReport
-          ? ` | Contract: "${assignedReport.pipelineName}"`
-          : '';
-
-        const customAct = currentStep.customActionId
-          ? customActions.find((a) => a.id === currentStep.customActionId) ||
-            STARTER_CUSTOM_PIPELINE_ACTIONS.find(
-              (a) => a.id === currentStep.customActionId
-            )
-          : null;
-
-        let promptText = `Pipeline [${pipeline.name}] — Step ${idx + 1}/${
-          pipeline.steps.length
-        } (${currentStep.label})${
-          previousTask ? ` relayed from @${previousTask.targetAgentId}` : ''
-        }${stepContextTag}`;
-
-        if (customAct?.promptTemplate) {
-          promptText = `${promptText}\n\n[Action Directive]: ${customAct.promptTemplate}`;
-        }
-        // Check if current step previously failed deliverable verification
-        const prevAttemptTaskId = currentStep.completedTaskId;
-        if (prevAttemptTaskId) {
-          const priorTask = usePreviewStore.getState().agentTasks.find((t) => t.id === prevAttemptTaskId);
-          if (priorTask?.verificationReport && !priorTask.verificationReport.passed && priorTask.verificationReport.gaps.length > 0) {
-            const gapLines = priorTask.verificationReport.gaps.map((g) => `- ${g}`).join('\n');
-            promptText = `[REQUIRED FIXES FROM PREVIOUS VERIFICATION]:\nThe previous run left the deliverable incomplete with the following missing items/stubs:\n${gapLines}\nYou MUST create and write real, working code for these files in the workspace.\n\n${promptText}`;
+        while (!isPipelineCancelledRef.current) {
+          // If user requested "Revert Modified Files & Retry", restore the safety checkpoint first
+          if (
+            activeRecoveryForStep?.mode === 'revert_and_retry' &&
+            activeRecoveryForStep.failedTask?.checkpointId
+          ) {
+            await handleRestoreCheckpoint(
+              activeRecoveryForStep.failedTask.checkpointId
+            );
           }
-        }
 
-        if (currentStep.stepNote) {
-          promptText = `[STEP ${idx + 1} DIRECTIVE / ERROR REPORT]:\n${currentStep.stepNote}\n\n${promptText}`;
-        }
+          // If user switched agent, effort level, or thinking mode in the recovery modal, persist on the step
+          if (
+            activeRecoveryForStep?.overrideAgentId ||
+            activeRecoveryForStep?.overrideEffortLevel ||
+            activeRecoveryForStep?.overrideThinkingEnabled !== undefined
+          ) {
+            const newAg = activeRecoveryForStep?.overrideAgentId;
+            const newEffort = activeRecoveryForStep?.overrideEffortLevel;
+            const newThinking = activeRecoveryForStep?.overrideThinkingEnabled;
+            usePreviewStore.getState().setPipelines((prev) =>
+              prev.map((p) => {
+                if (p.id !== pipeline.id) return p;
+                const steps = p.steps.map((s, sIdx) =>
+                  sIdx === idx
+                    ? {
+                        ...s,
+                        ...(newAg ? { agentId: newAg } : {}),
+                        ...(newEffort ? { effortLevel: newEffort } : {}),
+                        ...(newThinking !== undefined
+                          ? { thinkingEnabled: newThinking }
+                          : {}),
+                      }
+                    : s
+                );
+                return { ...p, steps };
+              })
+            );
+          }
 
-        const effectivePolicy =
-          customAct?.epistemicPolicy ||
-          (currentStep.intent === 'review' || currentStep.intent === 'fix-bugs'
-            ? 'independent-audit'
-            : 'collaborative');
+          const latestPipelines = usePreviewStore.getState().pipelines;
+          const livePipeline =
+            latestPipelines.find((p) => p.id === pipeline.id) || pipeline;
+          const currentStep = livePipeline.steps[idx] || pipeline.steps[idx];
+          const nextStep =
+            livePipeline.steps[idx + 1] || pipeline.steps[idx + 1];
 
-        const stepMarkdownContent = composeEpistemicStepPayload(
-          initialDocContent,
-          previousTask?.responseMarkdown,
-          currentStep.intent,
-          isFirstStep,
-          previousTask?.targetAgentId
-        );
+          const effectiveStepAgentId =
+            activeRecoveryForStep?.overrideAgentId || currentStep.agentId;
 
-        const dispatchedTask = await handleSendInAppChatTask(promptText, {
-          agentId: currentStep.agentId,
-          intent: currentStep.intent,
-          filePath: isFirstStep
-            ? (activeTab?.filePath || previousTask?.filePath)
-            : (previousTask?.outputReportPath || previousTask?.filePath || activeTab?.filePath),
-          fileName: isFirstStep
-            ? initialDocName
-            : (previousTask?.fileName || initialDocName),
-          markdownContent: stepMarkdownContent,
-          sourceAgentId: previousTask?.targetAgentId,
-          pipelineId: pipeline.id,
-          nextAgentInChain: nextStep?.agentId,
-          nextIntentInChain: nextStep?.intent,
-          epistemicPolicy: effectivePolicy,
-          customActionLabel: customAct?.name,
-          stepNote: currentStep.stepNote,
-        });
+          usePreviewStore.getState().setRunningPipelineStepIdx(idx);
+          setSelectedAgentId(effectiveStepAgentId);
+          setSelectedIntent(currentStep.intent);
 
-        if (!dispatchedTask?.id) {
-          console.error(`Pipeline step ${idx + 1} failed to dispatch.`);
-          setPipelines((prev) => {
-            const next = prev.map((p) => {
+          // Mark current step as running in global store (persisted immediately)
+          usePreviewStore.getState().setPipelines((prev) =>
+            prev.map((p) => {
               if (p.id !== pipeline.id) return p;
               const steps = p.steps.map((s, sIdx) =>
-                sIdx === idx ? { ...s, status: 'failed' as const } : s
+                sIdx === idx ? { ...s, status: 'running' as const } : s
               );
               return { ...p, steps };
-            });
-            persistPipelines(next);
-            return next;
-          });
-          break;
-        }
-
-        try {
-          localStorage.setItem(
-            'flymd:active-pipeline-run',
-            JSON.stringify({
-              pipelineId: pipeline.id,
-              pipelineName: pipeline.name,
-              stepIdx: idx,
-              totalSteps: pipeline.steps.length,
-              currentTaskId: dispatchedTask.id,
             })
           );
-        } catch {}
 
-        // Reliably await task completion before executing the next step (no premature timeout)
-        const completed = await waitForTaskFinished(dispatchedTask.id);
-        if (
-          !completed ||
-          completed.status !== 'completed' ||
-          isPipelineCancelledRef.current
-        ) {
-          const terminalStatus = completed?.status === 'incomplete'
-            ? 'incomplete'
-            : completed?.status === 'failed'
-            ? 'failed'
-            : 'pending';
+          const isFirstStep = idx === 0;
+          const currentAssignedReport =
+            usePreviewStore.getState().assignedReportDoc || assignedReportDoc;
+          const assignedReport =
+            currentAssignedReport?.pipelineId === pipeline.id ||
+            currentAssignedReport
+              ? currentAssignedReport
+              : null;
 
-          setPipelines((prev) => {
-            const next = prev.map((p) => {
+          const initialDocContent =
+            assignedReport?.reportMarkdown || activeTab?.content || '';
+          const initialDocName = assignedReport
+            ? `${assignedReport.pipelineName.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')}_Contract.md`
+            : activeTab?.fileName || 'IMPLEMENTATION_PLAN.md';
+
+          const stepContextTag = assignedReport
+            ? ` | Contract: "${assignedReport.pipelineName}"`
+            : '';
+
+          const customAct = currentStep.customActionId
+            ? customActions.find((a) => a.id === currentStep.customActionId) ||
+              STARTER_CUSTOM_PIPELINE_ACTIONS.find(
+                (a) => a.id === currentStep.customActionId
+              )
+            : null;
+
+          let promptText = `Pipeline [${pipeline.name}] — Step ${idx + 1}/${
+            pipeline.steps.length
+          } (${currentStep.label})${
+            previousTask ? ` relayed from @${previousTask.targetAgentId}` : ''
+          }${stepContextTag}`;
+
+          if (customAct?.promptTemplate) {
+            promptText = `${promptText}\n\n[Action Directive]: ${customAct.promptTemplate}`;
+          }
+
+          // Check if current step previously failed deliverable verification
+          const priorTask =
+            activeRecoveryForStep?.failedTask ||
+            (currentStep.completedTaskId
+              ? usePreviewStore
+                  .getState()
+                  .agentTasks.find((t) => t.id === currentStep.completedTaskId)
+              : undefined);
+
+          if (
+            priorTask?.verificationReport &&
+            !priorTask.verificationReport.passed &&
+            priorTask.verificationReport.gaps.length > 0
+          ) {
+            const gapLines = priorTask.verificationReport.gaps
+              .map((g) => `- ${g}`)
+              .join('\n');
+            promptText = `[REQUIRED FIXES FROM PREVIOUS VERIFICATION]:\nThe previous run left the deliverable incomplete with the following missing items/stubs:\n${gapLines}\nYou MUST create and write real, working code for these files in the workspace.\n\n${promptText}`;
+          }
+
+          if (activeRecoveryForStep?.mode === 'continue_from_breakpoint') {
+            promptText = `[BREAKPOINT CONTINUATION MODE]: Continue from the last breakpoint where the previous run stopped. Keep all valid files already written in the workspace, complete any unfinished or missing files, and verify all deliverables.\n\n${promptText}`;
+          } else if (activeRecoveryForStep?.mode === 'revert_and_retry') {
+            promptText = `[CLEAN RETRY AFTER CHECKPOINT ROLLBACK]: Modified files from the interrupted run were reverted to the pre-task safety checkpoint. Execute this step cleanly and write each deliverable file incrementally.\n\n${promptText}`;
+          }
+
+          const combinedStepNote = [
+            currentStep.stepNote,
+            activeRecoveryForStep?.extraDirective,
+          ]
+            .filter(Boolean)
+            .join('\n');
+
+          if (combinedStepNote) {
+            promptText = `[STEP ${idx + 1} DIRECTIVE / ERROR REPORT]:\n${combinedStepNote}\n\n${promptText}`;
+          }
+
+          const effectivePolicy =
+            customAct?.epistemicPolicy ||
+            (currentStep.intent === 'review' ||
+            currentStep.intent === 'fix-bugs'
+              ? 'independent-audit'
+              : 'collaborative');
+
+          // If previous step was `refine-plan` (or created a `.md` plan file on disk), read the full `.md` implementation plan from disk
+          let upstreamPlanMarkdown = previousTask?.responseMarkdown;
+          let resolvedPlanFilePath = previousTask?.filePath;
+          let resolvedPlanFileName = previousTask?.fileName || initialDocName;
+
+          if (!isFirstStep && previousTask && resolvedWorkspace) {
+            const sep = resolvedWorkspace.includes('\\') ? '\\' : '/';
+            const checkedMdFile =
+              previousTask.verificationReport?.checkedFiles?.find((f) =>
+                f.toLowerCase().endsWith('.md')
+              );
+            const candidateMdNames = [
+              checkedMdFile,
+              previousTask.fileName?.toLowerCase().endsWith('.md')
+                ? previousTask.fileName
+                : undefined,
+              initialDocName,
+              'IMPLEMENTATION_PLAN.md',
+            ].filter(Boolean) as string[];
+
+            for (const mdName of candidateMdNames) {
+              const candidatePath =
+                mdName.includes('/') || mdName.includes('\\')
+                  ? mdName
+                  : `${resolvedWorkspace}${sep}${mdName}`;
+              try {
+                const diskRes = await window.electronAPI.readFile(candidatePath);
+                if (
+                  diskRes &&
+                  typeof diskRes.content === 'string' &&
+                  diskRes.content.trim().length >= 150
+                ) {
+                  upstreamPlanMarkdown = diskRes.content;
+                  resolvedPlanFilePath = diskRes.path || candidatePath;
+                  resolvedPlanFileName =
+                    diskRes.name ||
+                    mdName.split(/[\\/]/).pop() ||
+                    initialDocName;
+                  break;
+                }
+              } catch {}
+            }
+          }
+
+          const stepMarkdownContent = composeEpistemicStepPayload(
+            initialDocContent,
+            upstreamPlanMarkdown,
+            currentStep.intent,
+            isFirstStep,
+            previousTask?.targetAgentId,
+            previousTask?.intent as AgentTaskIntent | undefined
+          );
+
+          const isBreakpointResume =
+            activeRecoveryForStep?.mode === 'continue_from_breakpoint';
+          const nextAttemptCount = priorTask
+            ? (priorTask.attemptCount || 0) + 1
+            : 0;
+
+          const dispatchedTask = await handleSendInAppChatTask(promptText, {
+            agentId: effectiveStepAgentId,
+            intent: currentStep.intent,
+            effortLevel:
+              activeRecoveryForStep?.overrideEffortLevel ||
+              currentStep.effortLevel ||
+              'medium',
+            thinkingEnabled:
+              activeRecoveryForStep?.overrideThinkingEnabled ??
+              currentStep.thinkingEnabled ??
+              true,
+            filePath: isFirstStep
+              ? activeTab?.filePath || previousTask?.filePath
+              : resolvedPlanFilePath ||
+                previousTask?.outputReportPath ||
+                activeTab?.filePath,
+            fileName: isFirstStep ? initialDocName : resolvedPlanFileName,
+            markdownContent: stepMarkdownContent,
+            sourceAgentId: previousTask?.targetAgentId,
+            pipelineId: pipeline.id,
+            nextAgentInChain: nextStep?.agentId,
+            nextIntentInChain: nextStep?.intent,
+            epistemicPolicy: effectivePolicy,
+            customActionLabel: customAct?.name,
+            stepNote: combinedStepNote || undefined,
+            attemptCount: nextAttemptCount,
+            resumeFromBreakpoint: isBreakpointResume,
+            previousFailedTaskId: priorTask?.id,
+            resumeSessionId: isBreakpointResume
+              ? priorTask?.cliSessionId ||
+                priorTask?.errorDiagnostic?.cliSessionId
+              : undefined,
+          });
+
+          if (!dispatchedTask?.id) {
+            console.error(`Pipeline step ${idx + 1} failed to dispatch.`);
+            usePreviewStore.getState().setPipelines((prev) =>
+              prev.map((p) => {
+                if (p.id !== pipeline.id) return p;
+                const steps = p.steps.map((s, sIdx) =>
+                  sIdx === idx ? { ...s, status: 'failed' as const } : s
+                );
+                return { ...p, steps };
+              })
+            );
+            break;
+          }
+
+          // Immediately bind `completedTaskId: dispatchedTask.id` while `status: 'running'`
+          usePreviewStore.getState().setPipelines((prev) =>
+            prev.map((p) => {
+              if (p.id !== pipeline.id) return p;
+              const steps = p.steps.map((s, sIdx) =>
+                sIdx === idx
+                  ? {
+                      ...s,
+                      status: 'running' as const,
+                      completedTaskId: dispatchedTask.id,
+                    }
+                  : s
+              );
+              return { ...p, steps };
+            })
+          );
+
+          try {
+            localStorage.setItem(
+              'flymd:active-pipeline-run',
+              JSON.stringify({
+                pipelineId: pipeline.id,
+                pipelineName: pipeline.name,
+                stepIdx: idx,
+                totalSteps: pipeline.steps.length,
+                currentTaskId: dispatchedTask.id,
+              })
+            );
+          } catch {}
+
+          // Reliably await task completion before executing the next step
+          const completed = await waitForTaskFinished(dispatchedTask.id);
+          if (isPipelineCancelledRef.current || !completed) {
+            break;
+          }
+
+          if (completed.status === 'completed') {
+            // Mark this step permanently completed in global store
+            usePreviewStore.getState().setPipelines((prev) =>
+              prev.map((p) => {
+                if (p.id !== pipeline.id) return p;
+                const steps = p.steps.map((s, sIdx) =>
+                  sIdx === idx
+                    ? {
+                        ...s,
+                        status: 'completed' as const,
+                        completedTaskId: completed.id,
+                        completedAt: Date.now(),
+                      }
+                    : s
+                );
+                return { ...p, steps };
+              })
+            );
+            previousTask = completed;
+            stepSucceeded = true;
+            break;
+          }
+
+          // Task ended with 'incomplete' or 'failed' (or 'cancelled')
+          const terminalStatus =
+            completed.status === 'incomplete'
+              ? 'incomplete'
+              : completed.status === 'failed'
+              ? 'failed'
+              : 'pending';
+
+          usePreviewStore.getState().setPipelines((prev) =>
+            prev.map((p) => {
               if (p.id !== pipeline.id) return p;
               const steps = p.steps.map((s, sIdx) =>
                 sIdx === idx
                   ? {
                       ...s,
                       status: terminalStatus as any,
-                      completedTaskId: completed?.id || dispatchedTask.id,
+                      completedTaskId: completed.id,
                     }
                   : s
               );
               return { ...p, steps };
-            });
-            persistPipelines(next);
-            return next;
+            })
+          );
+
+          if (completed.status === 'cancelled') {
+            break;
+          }
+
+          // Interactive Error Recovery Prompt: Ask the user whether to Continue from Last Breakpoint
+          // (keeping modified files) OR Revert Modified Files & Retry Cleanly!
+          setRecoveryAgentId(effectiveStepAgentId);
+          setRecoveryEffortLevel(
+            (completed.effortLevel as AgentEffortLevel) ||
+              currentStep.effortLevel ||
+              'medium'
+          );
+          setRecoveryThinkingEnabled(
+            completed.thinkingEnabled ?? currentStep.thinkingEnabled ?? true
+          );
+          setRecoveryExtraDirective('');
+          setPendingRecoveryPrompt({
+            failedTask: completed,
+            pipeline: livePipeline,
+            stepIdx: idx,
+            stepLabel: currentStep.label,
+            isLivePipelinePause: true,
           });
+
+          const userDecision = await new Promise<RecoveryModalDecision>(
+            (resolve) => {
+              globalPipelineRuntime.recoveryResolver = resolve;
+            }
+          );
+
+          setPendingRecoveryPrompt(null);
+          globalPipelineRuntime.recoveryResolver = null;
+
+          if (
+            isPipelineCancelledRef.current ||
+            userDecision.action === 'pause'
+          ) {
+            break;
+          }
+
+          activeRecoveryForStep = {
+            mode: userDecision.action,
+            failedTask: completed,
+            overrideAgentId: userDecision.overrideAgentId,
+            overrideEffortLevel: userDecision.overrideEffortLevel,
+            overrideThinkingEnabled: userDecision.overrideThinkingEnabled,
+            extraDirective: userDecision.extraDirective,
+          };
+        }
+
+        if (!stepSucceeded || isPipelineCancelledRef.current) {
           break;
         }
 
-        // Mark this step permanently completed
-        setPipelines((prev) => {
-          const next = prev.map((p) => {
-            if (p.id !== pipeline.id) return p;
-            const steps = p.steps.map((s, sIdx) =>
-              sIdx === idx
-                ? {
-                    ...s,
-                    status: 'completed' as const,
-                    completedTaskId: completed.id,
-                    completedAt: Date.now(),
-                  }
-                : s
-            );
-            return { ...p, steps };
-          });
-          persistPipelines(next);
-          return next;
-        });
-
-        previousTask = completed;
+        const latestPipelinesAfterStep = usePreviewStore.getState().pipelines;
+        const livePipeAfter =
+          latestPipelinesAfterStep.find((p) => p.id === pipeline.id) ||
+          pipeline;
+        const nextStepAfter =
+          livePipeAfter.steps[idx + 1] || pipeline.steps[idx + 1];
 
         // If there is a next step and Manual mode is active, pause and request user approval
-        if (idx + 1 < pipeline.steps.length && workflowExecutionMode === 'manual') {
-          const nextAgent = agentProfiles.find((a) => a.id === nextStep?.agentId);
-          const touchedFiles = (completed.toolActions || []).filter(
+        if (
+          idx + 1 < pipeline.steps.length &&
+          workflowExecutionMode === 'manual' &&
+          previousTask
+        ) {
+          const currentProfiles = usePreviewStore.getState().agentProfiles;
+          const nextAgent = currentProfiles.find(
+            (a) => a.id === nextStepAfter?.agentId
+          );
+          const touchedFiles = (previousTask.toolActions || []).filter(
             (a) => a.kind === 'write' || a.label.toLowerCase().includes('file')
           ).length;
 
-          setWaitingForStepApproval({
+          usePreviewStore.getState().setWaitingForStepApproval({
             completedStepIdx: idx,
             nextStepIdx: idx + 1,
-            nextAgentName: nextAgent?.name || nextStep?.agentId || 'Agent',
-            nextIntent: nextStep?.intent || 'next step',
-            completedTaskId: completed.id,
+            nextAgentName: nextAgent?.name || nextStepAfter?.agentId || 'Agent',
+            nextIntent: nextStepAfter?.intent || 'next step',
+            completedTaskId: previousTask.id,
             filesCreatedCount: touchedFiles,
           });
 
@@ -1026,12 +1379,20 @@ ${projDesc}
             proceedNextStepResolverRef.current = resolve;
           });
 
-          setWaitingForStepApproval(null);
+          usePreviewStore.getState().setWaitingForStepApproval(null);
           if (isPipelineCancelledRef.current) break;
         }
       }
 
-      if (!isPipelineCancelledRef.current && pipeline.steps.length > 0 && previousTask) {
+      const finalPipe =
+        usePreviewStore
+          .getState()
+          .pipelines.find((p) => p.id === pipeline.id) || pipeline;
+      const allCompleted =
+        finalPipe.steps.length > 0 &&
+        finalPipe.steps.every((s) => s.status === 'completed');
+
+      if (!isPipelineCancelledRef.current && allCompleted && previousTask) {
         setCompletedPipelineSummary({
           pipelineName: pipeline.name,
           stepsCount: pipeline.steps.length,
@@ -1042,9 +1403,9 @@ ${projDesc}
         });
       }
     } finally {
-      setRunningPipelineId(null);
-      setRunningPipelineStepIdx(-1);
-      setWaitingForStepApproval(null);
+      usePreviewStore.getState().setRunningPipelineId(null);
+      usePreviewStore.getState().setRunningPipelineStepIdx(-1);
+      usePreviewStore.getState().setWaitingForStepApproval(null);
       proceedNextStepResolverRef.current = null;
       try {
         localStorage.removeItem('flymd:active-pipeline-run');
@@ -1052,11 +1413,215 @@ ${projDesc}
     }
   };
 
+  // Executes standalone or pipeline task recovery (Continue from Last Breakpoint vs Revert Modified Files & Retry)
+  const executeRecoveryDecision = async (
+    failedTask: AgentTaskRecord,
+    mode: 'continue_from_breakpoint' | 'revert_and_retry',
+    pipeline?: AgentPipelinePreset,
+    stepIdx?: number,
+    overrideAgentId?: AgentId,
+    extraDirective?: string,
+    overrideEffortLevel?: AgentEffortLevel,
+    overrideThinkingEnabled?: boolean
+  ) => {
+    // 1. If a live pipeline run is paused awaiting globalPipelineRuntime.recoveryResolver, resolve it directly!
+    if (globalPipelineRuntime.recoveryResolver) {
+      const resolve = globalPipelineRuntime.recoveryResolver;
+      globalPipelineRuntime.recoveryResolver = null;
+      setPendingRecoveryPrompt(null);
+      resolve({
+        action: mode,
+        overrideAgentId,
+        overrideEffortLevel,
+        overrideThinkingEnabled,
+        extraDirective,
+      });
+      return;
+    }
+
+    setPendingRecoveryPrompt(null);
+
+    // 2. Check if this task belongs to a pipeline step
+    const storePipelines = usePreviewStore.getState().pipelines;
+    const matchedPipeline =
+      pipeline ||
+      storePipelines.find(
+        (p) =>
+          p.id === failedTask.pipelineId ||
+          p.steps.some((s) => s.completedTaskId === failedTask.id)
+      );
+    let matchedStepIdx =
+      stepIdx !== undefined && stepIdx >= 0
+        ? stepIdx
+        : matchedPipeline
+        ? matchedPipeline.steps.findIndex(
+            (s) => s.completedTaskId === failedTask.id
+          )
+        : -1;
+    if (matchedPipeline && matchedStepIdx === -1) {
+      matchedStepIdx = matchedPipeline.steps.findIndex(
+        (s) =>
+          (s.status === 'incomplete' || s.status === 'failed') &&
+          s.intent === failedTask.intent
+      );
+    }
+
+    if (matchedPipeline && matchedStepIdx >= 0) {
+      await handleRunPipelineInStudio(matchedPipeline, {
+        stepIdx: matchedStepIdx,
+        mode,
+        failedTask,
+        overrideAgentId,
+        overrideEffortLevel,
+        overrideThinkingEnabled,
+        extraDirective,
+      });
+      return;
+    }
+
+    // 3. Standalone task recovery (outside a pipeline)
+    if (mode === 'revert_and_retry' && failedTask.checkpointId) {
+      await handleRestoreCheckpoint(failedTask.checkpointId);
+    }
+
+    const targetAg = overrideAgentId || failedTask.targetAgentId;
+    setSelectedAgentId(targetAg);
+    setSelectedIntent(failedTask.intent);
+
+    const basePrompt =
+      failedTask.customPrompt ||
+      `Execute ${failedTask.intent} on ${failedTask.fileName}`;
+    const recoveryPrefix =
+      mode === 'continue_from_breakpoint'
+        ? `[BREAKPOINT CONTINUATION MODE]: Continue from the last breakpoint where the previous task stopped. Keep all valid files already written in the workspace, complete any unfinished or missing files, and verify all deliverables.`
+        : `[CLEAN RETRY AFTER CHECKPOINT ROLLBACK]: Modified files from the interrupted run were reverted to the pre-task safety checkpoint. Execute this task cleanly and write each deliverable file incrementally.`;
+
+    const fullPrompt = [
+      recoveryPrefix,
+      extraDirective ? `[RECOVERY DIRECTIVE]: ${extraDirective}` : '',
+      basePrompt,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    await handleSendInAppChatTask(fullPrompt, {
+      agentId: targetAg,
+      intent: failedTask.intent,
+      filePath: failedTask.filePath,
+      fileName: failedTask.fileName,
+      attemptCount: (failedTask.attemptCount || 0) + 1,
+      resumeFromBreakpoint: mode === 'continue_from_breakpoint',
+      previousFailedTaskId: failedTask.id,
+      effortLevel:
+        overrideEffortLevel ||
+        (failedTask.effortLevel as AgentEffortLevel) ||
+        'medium',
+      thinkingEnabled:
+        overrideThinkingEnabled ?? failedTask.thinkingEnabled ?? true,
+      resumeSessionId:
+        mode === 'continue_from_breakpoint'
+          ? failedTask.cliSessionId ||
+            failedTask.errorDiagnostic?.cliSessionId
+          : undefined,
+    });
+  };
+
+  const handleRecoverTask = async (
+    task: AgentTaskRecord,
+    mode: 'continue_from_breakpoint' | 'revert_and_retry' | 'ask'
+  ) => {
+    setSelectedTaskId(task.id);
+    const storePipelines = usePreviewStore.getState().pipelines;
+    const matchedPipeline = storePipelines.find(
+      (p) =>
+        p.id === task.pipelineId ||
+        p.steps.some((s) => s.completedTaskId === task.id)
+    );
+    const matchedStepIdx = matchedPipeline
+      ? matchedPipeline.steps.findIndex((s) => s.completedTaskId === task.id)
+      : -1;
+
+    if (mode === 'ask') {
+      setRecoveryAgentId(task.targetAgentId);
+      setRecoveryEffortLevel((task.effortLevel as AgentEffortLevel) || 'medium');
+      setRecoveryThinkingEnabled(task.thinkingEnabled ?? true);
+      setRecoveryExtraDirective('');
+      setPendingRecoveryPrompt({
+        failedTask: task,
+        pipeline: matchedPipeline,
+        stepIdx: matchedStepIdx >= 0 ? matchedStepIdx : undefined,
+        stepLabel:
+          matchedStepIdx >= 0
+            ? matchedPipeline?.steps[matchedStepIdx]?.label
+            : undefined,
+        isLivePipelinePause: Boolean(globalPipelineRuntime.recoveryResolver),
+      });
+      return;
+    }
+
+    await executeRecoveryDecision(
+      task,
+      mode,
+      matchedPipeline,
+      matchedStepIdx >= 0 ? matchedStepIdx : undefined,
+      undefined,
+      undefined,
+      (task.effortLevel as AgentEffortLevel) || 'medium',
+      task.thinkingEnabled ?? true
+    );
+  };
+
+  const handleRecoverPipelineStep = (
+    pipeline: AgentPipelinePreset,
+    stepIdx: number,
+    linkedTask?: AgentTaskRecord
+  ) => {
+    const step = pipeline.steps[stepIdx];
+    const targetTask =
+      linkedTask ||
+      (step?.completedTaskId
+        ? agentTasks.find((t) => t.id === step.completedTaskId)
+        : undefined) ||
+      agentTasks.find(
+        (t) =>
+          (t.pipelineId === pipeline.id || t.intent === step?.intent) &&
+          (t.status === 'incomplete' || t.status === 'failed')
+      ) ||
+      selectedTask;
+
+    if (!targetTask) {
+      // No prior task record found — simply run the pipeline from this step
+      handleRunPipelineInStudio(pipeline);
+      return;
+    }
+
+    setSelectedTaskId(targetTask.id);
+    setRecoveryAgentId(step?.agentId || targetTask.targetAgentId);
+    setRecoveryEffortLevel(
+      (targetTask.effortLevel as AgentEffortLevel) ||
+        step?.effortLevel ||
+        'medium'
+    );
+    setRecoveryThinkingEnabled(
+      targetTask.thinkingEnabled ?? step?.thinkingEnabled ?? true
+    );
+    setRecoveryExtraDirective(step?.stepNote || '');
+    setPendingRecoveryPrompt({
+      failedTask: targetTask,
+      pipeline,
+      stepIdx,
+      stepLabel: step?.label || `Step ${stepIdx + 1}`,
+      isLivePipelinePause: Boolean(globalPipelineRuntime.recoveryResolver),
+    });
+  };
+
   const handleRelayToNextAgent = async (
     task: AgentTaskRecord,
     nextAgentId: AgentId,
     nextIntent: AgentTaskIntent,
-    customActionId?: string
+    customActionId?: string,
+    effortLevel?: AgentEffortLevel,
+    thinkingEnabled?: boolean
   ) => {
     setSelectedAgentId(nextAgentId);
     setSelectedIntent(nextIntent);
@@ -1072,7 +1637,8 @@ ${projDesc}
       task.responseMarkdown,
       nextIntent,
       false,
-      task.targetAgentId
+      task.targetAgentId,
+      task.intent as AgentTaskIntent | undefined
     );
 
     let prompt = `Relayed from @${task.targetAgentId} (${task.intent}) → Continue with ${
@@ -1091,6 +1657,8 @@ ${projDesc}
       sourceAgentId: task.targetAgentId,
       epistemicPolicy: customAct?.epistemicPolicy,
       customActionLabel: customAct?.name,
+      effortLevel: effortLevel || 'medium',
+      thinkingEnabled: thinkingEnabled ?? true,
     });
   };
 
@@ -1564,13 +2132,7 @@ ${projDesc}
               onResetPipelines={handleResetPipelines}
               onRunPipelineInStudio={handleRunPipelineInStudio}
               onCancelPipeline={() => {
-                isPipelineCancelledRef.current = true;
-                setRunningPipelineId(null);
-                setRunningPipelineStepIdx(-1);
-                setWaitingForStepApproval(null);
-                if (proceedNextStepResolverRef.current) {
-                  proceedNextStepResolverRef.current();
-                }
+                cancelActivePipelineRun(runningPipelineId || pipelines[0]?.id);
               }}
               runningPipelineId={runningPipelineId}
               runningPipelineStepIdx={runningPipelineStepIdx}
@@ -1593,6 +2155,7 @@ ${projDesc}
               customActions={customActions}
               onOpenCustomActionsModal={() => setShowCustomActionsModal(true)}
               onClearStepDoneStatus={handleClearStepDoneStatus}
+              onRecoverPipelineStep={handleRecoverPipelineStep}
             />
 
             {/* Center Pane: Interactive Multi-Agent Chat & Streaming Timeline */}
@@ -1685,7 +2248,13 @@ ${projDesc}
                 watchedFiles={cleanWorkspaceFiles}
                 selectedSourceFile={selectedSourceFile}
                 onSelectSourceFile={(path) => setSelectedSourceFile(path)}
-                onSendChatTask={async (text, attachedImages, customActionId) => {
+                onSendChatTask={async (
+                  text,
+                  attachedImages,
+                  customActionId,
+                  effortLevel,
+                  thinkingEnabled
+                ) => {
                   let promptToSend = text;
                   if (attachedImages && attachedImages.length > 0) {
                     const imagesMarkdown = attachedImages
@@ -1707,15 +2276,32 @@ ${projDesc}
                   await handleSendInAppChatTask(promptToSend, {
                     epistemicPolicy: customAct?.epistemicPolicy,
                     customActionLabel: customAct?.name,
+                    effortLevel,
+                    thinkingEnabled,
                   });
                 }}
                 onOpenReportInTab={handleOpenReportInTab}
                 onApplyToActiveTab={handleApplyToActiveTab}
-                onRelayToNextAgent={(task, nextAgentId, nextIntent, customActionId) =>
-                  handleRelayToNextAgent(task, nextAgentId, nextIntent, customActionId)
+                onRelayToNextAgent={(
+                  task,
+                  nextAgentId,
+                  nextIntent,
+                  customActionId,
+                  effortLevel,
+                  thinkingEnabled
+                ) =>
+                  handleRelayToNextAgent(
+                    task,
+                    nextAgentId,
+                    nextIntent,
+                    customActionId,
+                    effortLevel,
+                    thinkingEnabled
+                  )
                 }
                 onPasteExternalReply={handlePasteExternalReply}
                 onCancelTask={handleCancelTask}
+                onRecoverTask={handleRecoverTask}
                 submitting={submitting}
                 runningPipelineId={runningPipelineId}
                 workflowExecutionMode={workflowExecutionMode}
@@ -1751,6 +2337,7 @@ ${projDesc}
               onClearTaskLogs={handleClearTaskLogs}
               onDeleteTask={handleDeleteTask}
               onCancelTask={handleCancelTask}
+              onRecoverTask={handleRecoverTask}
               activeMarkdownContent={activeTab?.content || ''}
               watchedFiles={cleanWorkspaceFiles}
               onRunSingleChecklistItem={(itemText) =>
@@ -1915,6 +2502,434 @@ ${projDesc}
           </div>
         </div>
       )}
+
+      {/* Interactive Pipeline & Task Error Recovery Modal (Continue from Breakpoint vs Revert Modified Files & Retry) */}
+      {pendingRecoveryPrompt && (() => {
+        const ft = pendingRecoveryPrompt.failedTask;
+        const diag = ft.errorDiagnostic;
+        const cp = ft.checkpointId
+          ? agentCheckpoints.find((c) => c.id === ft.checkpointId)
+          : undefined;
+        const fallbackStderr = (ft.logs || []).filter(
+          (l) =>
+            l.includes('[stderr]') ||
+            l.includes('[Hang Watchdog]') ||
+            l.includes('[Process Error]') ||
+            l.includes('[CLI Error]') ||
+            l.includes('[Verification Gate]') ||
+            l.toLowerCase().includes('error') ||
+            l.toLowerCase().includes('exception')
+        );
+        const stderrLines =
+          diag?.stderrTrace && diag.stderrTrace.length > 0
+            ? diag.stderrTrace
+            : fallbackStderr;
+        const exceptionMsg =
+          diag?.exceptionMessage ||
+          ft.error ||
+          ft.outcomeReason ||
+          fallbackStderr[fallbackStderr.length - 1] ||
+          'Unexpected interruption or missing deliverables detected.';
+        const lastActivity =
+          diag?.lastKnownActivity ||
+          (ft.toolActions && ft.toolActions.length > 0
+            ? ft.toolActions[ft.toolActions.length - 1].label
+            : ft.thinkingTrace && ft.thinkingTrace.length > 0
+            ? ft.thinkingTrace[ft.thinkingTrace.length - 1]
+            : undefined);
+
+        const modFilesSet = new Set<string>();
+        for (const mf of [
+          ...(ft.modifiedFiles || []),
+          ...(diag?.modifiedFiles || []),
+          ...(ft.verificationReport?.checkedFiles || []),
+        ]) {
+          const clean = mf.trim().replace(/\\/g, '/').split('/').pop();
+          if (clean && !clean.startsWith('.')) modFilesSet.add(clean);
+        }
+        for (const act of ft.toolActions || []) {
+          if (act.targetPath) {
+            const clean = act.targetPath
+              .replace(/\\/g, '/')
+              .split('/')
+              .pop();
+            if (clean && !clean.startsWith('.')) modFilesSet.add(clean);
+          }
+        }
+        const modifiedFileNames = Array.from(modFilesSet);
+
+        const handleDismissOrPause = () => {
+          if (globalPipelineRuntime.recoveryResolver) {
+            const resolve = globalPipelineRuntime.recoveryResolver;
+            globalPipelineRuntime.recoveryResolver = null;
+            setPendingRecoveryPrompt(null);
+            resolve({ action: 'pause' });
+          } else {
+            setPendingRecoveryPrompt(null);
+          }
+        };
+
+        const handleCopyModalErrorLog = async () => {
+          const report = [
+            `=== FlyMD Pipeline & Task Error Diagnostic ===`,
+            `Task ID: ${ft.id}`,
+            pendingRecoveryPrompt.pipeline
+              ? `Pipeline: ${pendingRecoveryPrompt.pipeline.name} — Step ${(pendingRecoveryPrompt.stepIdx ?? 0) + 1} (${pendingRecoveryPrompt.stepLabel || ft.intent})`
+              : `Standalone Task: ${ft.fileName}`,
+            `Agent: ${ft.targetAgentId} (${ft.intent})`,
+            `Status: ${ft.status.toUpperCase()}`,
+            `Category: ${diag?.category || 'execution_interrupted'}`,
+            diag?.exitCode !== undefined ? `Exit Code: ${diag.exitCode}` : '',
+            ft.cliSessionId || diag?.cliSessionId
+              ? `CLI Session ID: ${ft.cliSessionId || diag?.cliSessionId}`
+              : '',
+            `Title: ${diag?.title || 'Task Execution Interrupted'}`,
+            `Exception Message: ${exceptionMsg}`,
+            lastActivity ? `Last Breakpoint: ${lastActivity}` : '',
+            modifiedFileNames.length > 0
+              ? `Modified Files (${modifiedFileNames.length}): ${modifiedFileNames.join(', ')}`
+              : 'Modified Files: None',
+            stderrLines.length > 0
+              ? `\n--- Exception / Stderr Trace ---\n${stderrLines.join('\n')}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n');
+          try {
+            await navigator.clipboard.writeText(report);
+            setRecoveryCopiedLog(true);
+            setTimeout(() => setRecoveryCopiedLog(false), 2000);
+          } catch {}
+        };
+
+        return (
+          <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in select-none">
+            <div className="w-full max-w-2xl rounded-2xl border border-amber-500/50 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-950/80">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-extrabold text-white truncate">
+                      {pendingRecoveryPrompt.pipeline
+                        ? `Pipeline Step ${(pendingRecoveryPrompt.stepIdx ?? 0) + 1} Interrupted — Resume or Revert & Retry`
+                        : `Task Interrupted — Resume or Revert & Retry`}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      {diag?.title ||
+                        `Choose whether to continue from the last breakpoint or revert modified files and retry cleanly.`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCopyModalErrorLog}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-bold transition-colors"
+                    title="Copy clean exception & error diagnostic log"
+                  >
+                    {recoveryCopiedLog ? (
+                      <>
+                        <Check size={12} className="text-emerald-400" />
+                        <span className="text-emerald-300">Copied Log</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={12} />
+                        <span>Copy Error Log</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDismissOrPause}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                    title="Pause pipeline here and inspect workspace"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-5 space-y-4 overflow-y-auto text-xs">
+                {/* 1. Clean Exception & Error Diagnostic Block */}
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/25 p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
+                      <AlertCircle size={13} className="text-rose-400" />
+                      Clean Exception &amp; Error Diagnostic
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 rounded bg-slate-950/90 border border-slate-700 text-[10px] font-mono font-bold uppercase text-amber-300">
+                        {diag?.category || ft.status}
+                      </span>
+                      {diag?.exitCode !== undefined && diag?.exitCode !== null && (
+                        <span className="px-2 py-0.5 rounded bg-rose-950 border border-rose-500/50 text-[10px] font-mono font-bold text-rose-300">
+                          Exit Code: {diag.exitCode}
+                        </span>
+                      )}
+                      {(ft.cliSessionId || diag?.cliSessionId) && (
+                        <span className="px-2 py-0.5 rounded bg-sky-950 border border-sky-500/40 text-[10px] font-mono text-sky-300">
+                          Session Ready
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-slate-950/95 border border-slate-800 p-2.5 font-mono text-[11px] text-rose-200 leading-relaxed select-text">
+                    {exceptionMsg}
+                  </div>
+
+                  {lastActivity && (
+                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-slate-950/70 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
+                      <Clock size={12} className="text-sky-400 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <span className="font-bold text-sky-300">
+                          Last Active Breakpoint:{' '}
+                        </span>
+                        <span className="font-mono text-slate-200 break-words">
+                          {lastActivity}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {stderrLines.length > 0 && (
+                    <div className="rounded-lg border border-slate-800 bg-slate-950/90 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setRecoveryShowStderr((prev) => !prev)}
+                        className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold text-slate-300 hover:text-white bg-slate-900/80 transition-colors"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {recoveryShowStderr ? (
+                            <ChevronDown size={12} />
+                          ) : (
+                            <ChevronRight size={12} />
+                          )}
+                          <span>
+                            Exception &amp; Stderr Trace ({stderrLines.length}{' '}
+                            lines)
+                          </span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          {recoveryShowStderr ? 'Hide trace' : 'Show trace'}
+                        </span>
+                      </button>
+                      {recoveryShowStderr && (
+                        <div className="p-2.5 max-h-40 overflow-y-auto font-mono text-[10px] text-rose-300/90 space-y-1 select-text border-t border-slate-800">
+                          {stderrLines.map((line, i) => (
+                            <div key={i} className="leading-relaxed break-words">
+                              {line}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Modified Files & Safety Checkpoint Status */}
+                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                      <ShieldCheck size={13} className="text-emerald-400" />
+                      Workspace Files Modified by Current Failed Task (
+                      {modifiedFileNames.length})
+                    </span>
+                    {cp && !cp.restored ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold">
+                        Safety Checkpoint Ready ({cp.id})
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                        Workspace Snapshot Active
+                      </span>
+                    )}
+                  </div>
+
+                  {modifiedFileNames.length === 0 ? (
+                    <div className="text-[11px] text-slate-400 italic">
+                      No workspace code deliverables were written to disk before this task paused. Both options below are safe to run immediately.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {modifiedFileNames.map((fname) => (
+                          <span
+                            key={fname}
+                            className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700 font-mono text-[11px] text-sky-300"
+                          >
+                            {fname}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        • Choose{' '}
+                        <strong className="text-emerald-300">
+                          Continue from Last Breakpoint
+                        </strong>{' '}
+                        to keep these {modifiedFileNames.length} file(s) and finish
+                        the remaining implementation from where the agent stopped.
+                        <br />• Choose{' '}
+                        <strong className="text-amber-300">
+                          Revert Modified Files &amp; Retry
+                        </strong>{' '}
+                        to roll back modified files and remove partial files using
+                        the pre-task safety checkpoint before re-running cleanly.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Optional Agent Switcher, Effort & Thinking Calibration & Recovery Note */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Target Agent:
+                    </label>
+                    <select
+                      value={recoveryAgentId || ft.targetAgentId}
+                      onChange={(e) =>
+                        setRecoveryAgentId(e.target.value as AgentId)
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-semibold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
+                    >
+                      {visibleAgents.map((ag) => (
+                        <option key={ag.id} value={ag.id} className="bg-slate-900">
+                          @{ag.name}{' '}
+                          {ag.id === ft.targetAgentId ? '(Current)' : '(Switch)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Reasoning Effort:
+                    </label>
+                    <select
+                      value={recoveryEffortLevel}
+                      onChange={(e) =>
+                        setRecoveryEffortLevel(e.target.value as AgentEffortLevel)
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sky-300 font-bold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
+                      title="Adjust effort level (e.g. switch to Low/Medium to avoid timeouts)"
+                    >
+                      <option value="low" className="bg-slate-900">Low (Fast)</option>
+                      <option value="medium" className="bg-slate-900">Medium (Default)</option>
+                      <option value="high" className="bg-slate-900">High</option>
+                      <option value="xhigh" className="bg-slate-900">X-High</option>
+                      <option value="max" className="bg-slate-900">Max</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Thinking Mode:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryThinkingEnabled((prev) => !prev)}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        recoveryThinkingEnabled
+                          ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-xs'
+                          : 'bg-slate-950 border-slate-700 text-slate-400 line-through'
+                      }`}
+                      title={
+                        recoveryThinkingEnabled
+                          ? 'Thinking Mode: ON (Extended reasoning active)'
+                          : 'Thinking Mode: OFF (Fast direct generation, no token burn)'
+                      }
+                    >
+                      <Brain
+                        size={12}
+                        className={
+                          recoveryThinkingEnabled
+                            ? 'text-indigo-400'
+                            : 'text-slate-500'
+                        }
+                      />
+                      <span>{recoveryThinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Optional Directive / Hint:
+                    </label>
+                    <input
+                      type="text"
+                      value={recoveryExtraDirective}
+                      onChange={(e) => setRecoveryExtraDirective(e.target.value)}
+                      placeholder="e.g. Write incrementally..."
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer: Explicit User Decision Buttons */}
+              <div className="px-5 py-3.5 border-t border-slate-800 bg-slate-950/90 flex items-center justify-between gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleDismissOrPause}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Pause Pipeline &amp; Inspect
+                </button>
+
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      executeRecoveryDecision(
+                        ft,
+                        'revert_and_retry',
+                        pendingRecoveryPrompt.pipeline,
+                        pendingRecoveryPrompt.stepIdx,
+                        recoveryAgentId || ft.targetAgentId,
+                        recoveryExtraDirective.trim() || undefined,
+                        recoveryEffortLevel,
+                        recoveryThinkingEnabled
+                      )
+                    }
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-bold text-xs transition-all cursor-pointer"
+                    title="Restore pre-task safety checkpoint (reverting modified files and deleting newly created partial files) and retry cleanly"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Revert Modified Files &amp; Retry</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      executeRecoveryDecision(
+                        ft,
+                        'continue_from_breakpoint',
+                        pendingRecoveryPrompt.pipeline,
+                        pendingRecoveryPrompt.stepIdx,
+                        recoveryAgentId || ft.targetAgentId,
+                        recoveryExtraDirective.trim() || undefined,
+                        recoveryEffortLevel,
+                        recoveryThinkingEnabled
+                      )
+                    }
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
+                    title="Keep modified files on disk and resume execution from the last breakpoint"
+                  >
+                    <Play size={13} fill="currentColor" />
+                    <span>Continue from Last Breakpoint (Keep Files)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* User-Defined Custom Pipeline Actions Library Modal */}
       <CustomPipelineActionsModal

@@ -63,6 +63,10 @@ pub struct AgentCredentialConfig {
     pub custom_login_command: Option<String>,
     #[serde(rename = "disabled", default)]
     pub disabled: bool,
+    #[serde(rename = "defaultEffortLevel")]
+    pub default_effort_level: Option<String>,
+    #[serde(rename = "defaultThinkingEnabled")]
+    pub default_thinking_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -168,6 +172,10 @@ pub struct AgentProfile {
     pub enabled: bool,
     #[serde(rename = "isCustom", default)]
     pub is_custom: bool,
+    #[serde(rename = "supportsEffort", default)]
+    pub supports_effort: Option<bool>,
+    #[serde(rename = "supportsThinking", default)]
+    pub supports_thinking: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -217,6 +225,37 @@ pub struct AgentTaskRequest {
     pub outcome_reason: Option<String>,
     #[serde(rename = "attemptCount", default)]
     pub attempt_count: u32,
+    #[serde(rename = "resumeSessionId", default)]
+    pub resume_session_id: Option<String>,
+    #[serde(rename = "resumeFromBreakpoint", default)]
+    pub resume_from_breakpoint: bool,
+    #[serde(rename = "previousFailedTaskId", default)]
+    pub previous_failed_task_id: Option<String>,
+    #[serde(rename = "effortLevel", default)]
+    pub effort_level: Option<String>,
+    #[serde(rename = "thinkingEnabled", default)]
+    pub thinking_enabled: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct AgentErrorDiagnostic {
+    pub category: String,
+    pub title: String,
+    #[serde(rename = "exceptionMessage")]
+    pub exception_message: String,
+    #[serde(rename = "stderrTrace", default)]
+    pub stderr_trace: Vec<String>,
+    #[serde(rename = "exitCode", default)]
+    pub exit_code: Option<i32>,
+    #[serde(rename = "lastKnownActivity", default)]
+    pub last_known_activity: Option<String>,
+    #[serde(rename = "cliSessionId", default)]
+    pub cli_session_id: Option<String>,
+    #[serde(rename = "modifiedFiles", default)]
+    pub modified_files: Vec<String>,
+    #[serde(rename = "canResumeFromBreakpoint", default)]
+    pub can_resume_from_breakpoint: bool,
+    pub timestamp: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -283,6 +322,16 @@ pub struct AgentTaskRecord {
     pub outcome_reason: Option<String>,
     #[serde(rename = "attemptCount", default)]
     pub attempt_count: u32,
+    #[serde(rename = "errorDiagnostic", default)]
+    pub error_diagnostic: Option<AgentErrorDiagnostic>,
+    #[serde(rename = "cliSessionId", default)]
+    pub cli_session_id: Option<String>,
+    #[serde(rename = "modifiedFiles", default)]
+    pub modified_files: Vec<String>,
+    #[serde(rename = "effortLevel", default)]
+    pub effort_level: Option<String>,
+    #[serde(rename = "thinkingEnabled", default)]
+    pub thinking_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -303,6 +352,10 @@ pub struct AgentCheckpoint {
     pub backup_dir: Option<String>,
     #[serde(default)]
     pub restored: bool,
+    #[serde(rename = "preExistingFiles", default)]
+    pub pre_existing_files: Vec<String>,
+    #[serde(rename = "revertedFiles", default)]
+    pub reverted_files: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

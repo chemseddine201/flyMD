@@ -41,6 +41,7 @@ pub struct TurnRequest {
     pub action_name: Option<String>,
     pub action_query: Option<String>,
     pub thinking_enabled: bool,
+    pub effort_level: Option<String>,
 }
 
 /// Builds provider-specific JSON `messages` array preserving immutable prefix frames at Token 0.
@@ -305,22 +306,50 @@ impl CliProvider {
         }
     }
 
-    /// Generates strict read-only command-line flags (TC-03).
-    pub fn build_cli_args(&self, prompt: &str) -> Vec<String> {
+    /// Generates strict read-only command-line flags (TC-03) with user-selected effort & thinking control.
+    pub fn build_cli_args(&self, prompt: &str, effort_level: Option<&str>, thinking_enabled: bool) -> Vec<String> {
+        let raw_effort = effort_level.unwrap_or("medium").to_lowercase();
+        let eff = match raw_effort.as_str() {
+            "low" | "medium" | "high" | "xhigh" | "max" => raw_effort.as_str(),
+            _ => "medium",
+        };
+
         match self.cli_type {
-            CliType::ClaudeCode => vec![
-                "-p".to_string(),
-                prompt.to_string(),
-                "--tools".to_string(),
-                "".to_string(),
-            ],
-            CliType::AntigravityGemini => vec![
-                "-p".to_string(),
-                prompt.to_string(),
-                "--mode".to_string(),
-                "plan".to_string(),
-                "--sandbox".to_string(),
-            ],
+            CliType::ClaudeCode => {
+                let mut args = vec![
+                    "-p".to_string(),
+                    prompt.to_string(),
+                    "--tools".to_string(),
+                    "".to_string(),
+                ];
+                if thinking_enabled {
+                    args.push("--effort".to_string());
+                    args.push(eff.to_string());
+                } else {
+                    args.push("--effort".to_string());
+                    args.push("low".to_string());
+                    args.push("--settings".to_string());
+                    args.push("{\"alwaysThinkingEnabled\":false}".to_string());
+                }
+                args
+            }
+            CliType::AntigravityGemini => {
+                let mut args = vec![
+                    "-p".to_string(),
+                    prompt.to_string(),
+                    "--mode".to_string(),
+                    "plan".to_string(),
+                    "--sandbox".to_string(),
+                ];
+                if thinking_enabled {
+                    args.push("--effort".to_string());
+                    args.push(eff.to_string());
+                } else {
+                    args.push("--effort".to_string());
+                    args.push("low".to_string());
+                }
+                args
+            }
         }
     }
 }
@@ -377,7 +406,7 @@ impl DiscussionProvider for CliProvider {
                 .join("\n\n---\n\n")
         };
 
-        let args = self.build_cli_args(&full_prompt);
+        let args = self.build_cli_args(&full_prompt, request.effort_level.as_deref(), request.thinking_enabled);
         let start = std::time::Instant::now();
 
         // Ensure sandbox dir exists
@@ -1140,6 +1169,7 @@ mod tests {
             action_name: None,
             action_query: None,
             thinking_enabled: true,
+            effort_level: Some("medium".to_string()),
         };
 
         let sink = Box::new(CollectingSink {
@@ -1173,6 +1203,7 @@ mod tests {
             action_name: None,
             action_query: None,
             thinking_enabled: false,
+            effort_level: Some("medium".to_string()),
         };
 
         let err = provider
@@ -1210,18 +1241,30 @@ mod tests {
             PathBuf::from("claude.exe"),
             PathBuf::from("sandbox"),
         );
-        let claude_args = claude_adapter.build_cli_args("Debate topic");
-        assert_eq!(claude_args, vec!["-p", "Debate topic", "--tools", ""]);
+        let claude_args_high = claude_adapter.build_cli_args("Debate topic", Some("high"), true);
+        assert_eq!(claude_args_high, vec!["-p", "Debate topic", "--tools", "", "--effort", "high"]);
+
+        let claude_args_no_think = claude_adapter.build_cli_args("Debate topic", Some("high"), false);
+        assert_eq!(
+            claude_args_no_think,
+            vec!["-p", "Debate topic", "--tools", "", "--effort", "low", "--settings", "{\"alwaysThinkingEnabled\":false}"]
+        );
 
         let gemini_adapter = CliProvider::new(
             CliType::AntigravityGemini,
             PathBuf::from("agy.exe"),
             PathBuf::from("sandbox"),
         );
-        let gemini_args = gemini_adapter.build_cli_args("Debate topic");
+        let gemini_args_med = gemini_adapter.build_cli_args("Debate topic", Some("medium"), true);
         assert_eq!(
-            gemini_args,
-            vec!["-p", "Debate topic", "--mode", "plan", "--sandbox"]
+            gemini_args_med,
+            vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--effort", "medium"]
+        );
+
+        let gemini_args_no_think = gemini_adapter.build_cli_args("Debate topic", Some("medium"), false);
+        assert_eq!(
+            gemini_args_no_think,
+            vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--effort", "low"]
         );
     }
 
@@ -1320,6 +1363,7 @@ mod tests {
             action_name: None,
             action_query: None,
             thinking_enabled: true,
+            effort_level: Some("medium".to_string()),
         };
 
         let openai_msgs = build_http_messages_json(&req, "https://api.deepseek.com", false);
