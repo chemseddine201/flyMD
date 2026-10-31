@@ -38,16 +38,23 @@ Enable users to inject custom skills into agent deliberations and pipelines by p
 
 ---
 
-## 📌 Initiative 3: Process Monitor & Active Process Control Center
+## 📌 Initiative 3: Process Monitor, Active Process Control Center & Token Quota Guards
 
 ### Core Objective
-Provide full visibility into all spawned child processes, background workers, and CLI sessions with interactive controls to inspect, throttle, or terminate them safely.
+Provide full visibility into all spawned child processes, background workers, and CLI sessions with interactive controls to inspect, throttle, or terminate them safely, combined with real-time per-process token telemetry and configurable token quota circuit-breakers.
 
 ### Key Capabilities
 1. **Process Inspection Table**:
    - Live list of active processes: PID, command line invoked, parent session ID, CPU %, RAM footprint, and running duration.
    - Real-time stdout/stderr log stream viewer with live tailing.
-2. **Process Lifecycle Controls**:
+2. **Real-Time Token Consumption Telemetry**:
+   - Live per-process and per-step token counter: Prompt Tokens, Completion Tokens, Reasoning/Thinking Tokens, and Total Tokens.
+   - Per-task cost estimation based on model provider pricing tables.
+3. **Configurable Token Quota Guards & Circuit-Breaker**:
+   - **Per-Task & Per-Session Budgets**: Set hard or soft token caps per pipeline step or debate session.
+   - **Pre-Breach Warning Thresholds**: Visual alert at 80% quota consumption.
+   - **Safe Circuit-Breaker**: Automatically pause the process when the quota limit is reached to prevent runaway loops and unexpected API expenditures, with a human-in-the-loop modal to extend budget or gracefully settle.
+4. **Process Lifecycle Controls**:
    - **Terminate PID Tree**: Target Windows child-process trees cleanly using PID scoping to eliminate orphan tasks without touching main application processes.
    - **Pause/Resume Signal Handling**: Temporarily freeze processes during human-in-the-loop inspection.
    - **Lock & Stale Worker Cleanup**: Surface and clear stale `.session.lock` or orphan background tasks with one click.
@@ -78,3 +85,4 @@ Replace generic output filenames (e.g., `plan.md`, `report.md`) with context-awa
 | **Step 2** | **Context-Aware Smart Plan Naming** | Immediate Organization & File Safety | Very Low |
 | **Step 3** | **Custom Skills Injection & Directory Linking** | Extensibility & Customization | Low |
 | **Step 4** | **Process Monitor & Control Center** | Complete Transparency & System Control | Medium |
+
