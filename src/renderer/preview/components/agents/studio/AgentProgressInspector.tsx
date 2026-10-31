@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
   Loader2,
   Circle,
   ShieldCheck,
@@ -652,9 +654,11 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
               {/* Status Outcome */}
               {selectedTask && (
                 <div
-                  className={`rounded-xl p-2.5 border text-[11px] flex items-center gap-2 ${
+                  className={`rounded-xl p-2.5 border text-[11px] flex flex-col gap-1.5 ${
                     selectedTask.status === 'completed'
                       ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                      : selectedTask.status === 'incomplete'
+                      ? 'bg-amber-950/30 border-amber-500/50 text-amber-300'
                       : selectedTask.status === 'running'
                       ? 'bg-sky-950/20 border-sky-500/30 text-sky-300'
                       : selectedTask.status === 'failed'
@@ -662,20 +666,52 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                       : 'bg-slate-900 border-slate-800 text-slate-400'
                   }`}
                 >
-                  {selectedTask.status === 'running' ? (
-                    <Loader2 size={13} className="animate-spin shrink-0" />
-                  ) : selectedTask.status === 'completed' ? (
-                    <CheckCircle2 size={13} className="shrink-0" />
-                  ) : null}
-                  <span>
-                    {selectedTask.status === 'completed'
-                      ? 'Task completed successfully. Workspace changes verified.'
-                      : selectedTask.status === 'running'
-                      ? 'Agent actively processing instructions...'
-                      : selectedTask.status === 'failed'
-                      ? `Task encountered an error: ${selectedTask.error || 'Execution halted.'}`
-                      : `Task status: ${selectedTask.status}`}
-                  </span>
+                  <div className="flex items-center gap-2 font-semibold">
+                    {selectedTask.status === 'running' ? (
+                      <Loader2 size={13} className="animate-spin shrink-0 text-sky-400" />
+                    ) : selectedTask.status === 'completed' ? (
+                      <CheckCircle2 size={13} className="shrink-0 text-emerald-400" />
+                    ) : selectedTask.status === 'incomplete' ? (
+                      <AlertTriangle size={13} className="shrink-0 text-amber-400" />
+                    ) : null}
+                    <span>
+                      {selectedTask.status === 'completed'
+                        ? 'Task completed. Deliverables verified on disk.'
+                        : selectedTask.status === 'incomplete'
+                        ? 'Deliverable Incomplete: Verification gaps detected'
+                        : selectedTask.status === 'running'
+                        ? 'Agent actively processing instructions...'
+                        : selectedTask.status === 'failed'
+                        ? `Task encountered an error: ${selectedTask.error || 'Execution halted.'}`
+                        : `Task status: ${selectedTask.status}`}
+                    </span>
+                  </div>
+
+                  {selectedTask.status === 'incomplete' && selectedTask.outcomeReason && (
+                    <div className="text-[10px] text-amber-200/80 font-mono">
+                      Reason: {selectedTask.outcomeReason}
+                    </div>
+                  )}
+
+                  {selectedTask.verificationReport && selectedTask.verificationReport.gaps && selectedTask.verificationReport.gaps.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-amber-500/20">
+                      <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                        Missing Deliverables / Stubs:
+                      </span>
+                      <ul className="text-[10px] space-y-0.5 text-amber-200 list-disc list-inside">
+                        {selectedTask.verificationReport.gaps.map((gap, gIdx) => (
+                          <li key={gIdx} className="leading-tight">{gap}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {selectedTask.verificationReport && selectedTask.verificationReport.passed && (
+                    <div className="text-[10px] text-emerald-400/90 font-mono flex items-center gap-1">
+                      <CheckCircle2 size={11} />
+                      <span>{selectedTask.verificationReport.checkedFiles.length} deliverable files verified</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

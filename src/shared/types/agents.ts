@@ -61,6 +61,7 @@ export type AgentTaskStatus =
   | 'awaiting-confirmation'
   | 'running'
   | 'completed'
+  | 'incomplete'
   | 'failed'
   | 'cancelled'
   | 'undone';
@@ -140,6 +141,7 @@ export type PipelineStepExecutionStatus =
   | 'pending'
   | 'running'
   | 'completed'
+  | 'incomplete'
   | 'failed';
 
 export interface AgentTaskRequest {
@@ -163,6 +165,21 @@ export interface AgentTaskRequest {
   epistemicPolicy?: CustomActionEpistemicPolicy | string;
   customActionLabel?: string;
   stepNote?: string;
+}
+
+
+export interface VerificationCheck {
+  name: string;
+  passed: boolean;
+  details: string;
+}
+
+export interface VerificationReport {
+  passed: boolean;
+  checkedFiles: string[];
+  gaps: string[];
+  checks: VerificationCheck[];
+  summary: string;
 }
 
 export interface AgentTaskRecord {
@@ -196,6 +213,9 @@ export interface AgentTaskRecord {
   toolActions?: AgentToolAction[];
   customActionId?: string;
   stepNote?: string;
+  verificationReport?: VerificationReport;
+  outcomeReason?: string;
+  attemptCount?: number;
 }
 
 export interface AgentCheckpoint {

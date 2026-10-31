@@ -211,6 +211,12 @@ pub struct AgentTaskRequest {
     pub custom_action_label: Option<String>,
     #[serde(rename = "stepNote", default)]
     pub step_note: Option<String>,
+    #[serde(rename = "verificationReport", default)]
+    pub verification_report: Option<crate::agents::verify::VerificationReport>,
+    #[serde(rename = "outcomeReason", default)]
+    pub outcome_reason: Option<String>,
+    #[serde(rename = "attemptCount", default)]
+    pub attempt_count: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -271,6 +277,12 @@ pub struct AgentTaskRecord {
     pub custom_action_id: Option<String>,
     #[serde(rename = "stepNote", default)]
     pub step_note: Option<String>,
+    #[serde(rename = "verificationReport", default)]
+    pub verification_report: Option<crate::agents::verify::VerificationReport>,
+    #[serde(rename = "outcomeReason", default)]
+    pub outcome_reason: Option<String>,
+    #[serde(rename = "attemptCount", default)]
+    pub attempt_count: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

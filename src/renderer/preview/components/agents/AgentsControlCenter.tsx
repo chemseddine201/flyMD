@@ -696,6 +696,7 @@ ${projDesc}
         if (
           found &&
           (found.status === 'completed' ||
+            found.status === 'incomplete' ||
             found.status === 'cancelled' ||
             found.status === 'failed')
         ) {
@@ -723,6 +724,7 @@ ${projDesc}
           if (
             found &&
             (found.status === 'completed' ||
+              found.status === 'incomplete' ||
               found.status === 'cancelled' ||
               found.status === 'failed')
           ) {
@@ -873,6 +875,16 @@ ${projDesc}
         if (customAct?.promptTemplate) {
           promptText = `${promptText}\n\n[Action Directive]: ${customAct.promptTemplate}`;
         }
+        // Check if current step previously failed deliverable verification
+        const prevAttemptTaskId = currentStep.completedTaskId;
+        if (prevAttemptTaskId) {
+          const priorTask = usePreviewStore.getState().agentTasks.find((t) => t.id === prevAttemptTaskId);
+          if (priorTask?.verificationReport && !priorTask.verificationReport.passed && priorTask.verificationReport.gaps.length > 0) {
+            const gapLines = priorTask.verificationReport.gaps.map((g) => `- ${g}`).join('\n');
+            promptText = `[REQUIRED FIXES FROM PREVIOUS VERIFICATION]:\nThe previous run left the deliverable incomplete with the following missing items/stubs:\n${gapLines}\nYou MUST create and write real, working code for these files in the workspace.\n\n${promptText}`;
+          }
+        }
+
         if (currentStep.stepNote) {
           promptText = `[STEP ${idx + 1} DIRECTIVE / ERROR REPORT]:\n${currentStep.stepNote}\n\n${promptText}`;
         }
@@ -946,6 +958,12 @@ ${projDesc}
           completed.status !== 'completed' ||
           isPipelineCancelledRef.current
         ) {
+          const terminalStatus = completed?.status === 'incomplete'
+            ? 'incomplete'
+            : completed?.status === 'failed'
+            ? 'failed'
+            : 'pending';
+
           setPipelines((prev) => {
             const next = prev.map((p) => {
               if (p.id !== pipeline.id) return p;
@@ -953,9 +971,8 @@ ${projDesc}
                 sIdx === idx
                   ? {
                       ...s,
-                      status: (completed?.status === 'failed'
-                        ? 'failed'
-                        : 'pending') as any,
+                      status: terminalStatus as any,
+                      completedTaskId: completed?.id || dispatchedTask.id,
                     }
                   : s
               );

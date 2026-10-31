@@ -273,385 +273,6 @@ pub fn scan_workspace_modified_files(workspace_dir: &str, since_epoch_ms: i64) -
     files
 }
 
-/// Inspects any HTML files in the workspace to check if companion scripts/stylesheets referenced in the HTML exist on disk.
-fn check_missing_html_companions(workspace_dir: &str, current_files: &[String]) -> bool {
-    let ws = Path::new(workspace_dir);
-    let mut html_files = Vec::new();
-    for f in current_files {
-        if f.ends_with(".html") {
-            html_files.push(ws.join(f));
-        }
-    }
-    let index_html = ws.join("index.html");
-    if index_html.exists() && !html_files.contains(&index_html) {
-        html_files.push(index_html);
-    }
-
-    for html_path in html_files {
-        if let Ok(content) = fs::read_to_string(&html_path) {
-            for part in content.split("<script") {
-                if let Some(src_part) = part.split("src=").nth(1) {
-                    let quote_char = src_part.chars().next().unwrap_or(' ');
-                    if quote_char == '"' || quote_char == '\'' {
-                        let path_val: String = src_part.chars().skip(1).take_while(|&c| c != quote_char).collect();
-                        if !path_val.is_empty() && !path_val.starts_with("http") && !path_val.starts_with("//") {
-                            let companion = ws.join(&path_val);
-                            if !companion.exists() || companion.metadata().map(|m| m.len()).unwrap_or(0) == 0 {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-            for part in content.split("<link") {
-                if part.contains("stylesheet") {
-                    if let Some(href_part) = part.split("href=").nth(1) {
-                        let quote_char = href_part.chars().next().unwrap_or(' ');
-                        if quote_char == '"' || quote_char == '\'' {
-                            let path_val: String = href_part.chars().skip(1).take_while(|&c| c != quote_char).collect();
-                            if !path_val.is_empty() && !path_val.starts_with("http") && !path_val.starts_with("//") {
-                                let companion = ws.join(&path_val);
-                                if !companion.exists() || companion.metadata().map(|m| m.len()).unwrap_or(0) == 0 {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Synthesizes a complete, production-ready, interactive JavaScript module matching elements found in index.html.
-fn synthesize_logic_script_for_html(html: &str, script_name: &str) -> String {
-    let mut btn_ids = Vec::new();
-    let mut canvas_ids = Vec::new();
-    let has_selftest = html.contains("runSelfTestBtn") || html.contains("selftest");
-
-    // Skip chunk 0 (everything before the first <button) and only inspect the opening tag
-    for part in html.split("<button").skip(1) {
-        let tag_open = part.split('>').next().unwrap_or("");
-        if let Some(id_part) = tag_open.split("id=").nth(1) {
-            let q = id_part.chars().next().unwrap_or(' ');
-            if q == '"' || q == '\'' {
-                let id: String = id_part.chars().skip(1).take_while(|&c| c != q).collect();
-                if !id.is_empty() && !btn_ids.contains(&id) {
-                    btn_ids.push(id);
-                }
-            }
-        }
-    }
-    // Skip chunk 0 (everything before the first <canvas) and only inspect the opening tag
-    // This prevents matching non-canvas parent elements (e.g. <header id="appHeader">) as a canvas!
-    for part in html.split("<canvas").skip(1) {
-        let tag_open = part.split('>').next().unwrap_or("");
-        if let Some(id_part) = tag_open.split("id=").nth(1) {
-            let q = id_part.chars().next().unwrap_or(' ');
-            if q == '"' || q == '\'' {
-                let id: String = id_part.chars().skip(1).take_while(|&c| c != q).collect();
-                if !id.is_empty() && !canvas_ids.contains(&id) {
-                    canvas_ids.push(id);
-                }
-            }
-        }
-    }
-
-    let mut js = String::new();
-    js.push_str("/**\n * FlyMD Automated Companion Logic Engine\n");
-    js.push_str(&format!(" * File: {}\n", script_name));
-    js.push_str(" * Production-Grade Interactive Controller & Verification Suite\n */\n\n");
-    js.push_str("(function () {\n  'use strict';\n\n");
-    js.push_str("  // Core State Machine\n");
-    js.push_str("  const state = {\n    activeTab: 'timeline',\n    simRunning: true,\n    fps: 60,\n    verificationPassed: true\n  };\n\n");
-
-    js.push_str("  // Navigation Handlers\n");
-    js.push_str("  document.querySelectorAll('.nav-link, nav a').forEach(link => {\n");
-    js.push_str("    link.addEventListener('click', (e) => {\n");
-    js.push_str("      document.querySelectorAll('.nav-link, nav a').forEach(l => l.classList.remove('active'));\n");
-    js.push_str("      link.classList.add('active');\n");
-    js.push_str("    });\n  });\n\n");
-
-    if !canvas_ids.is_empty() {
-        js.push_str("  // Interactive Canvas & Simulation Engines\n");
-        for cid in &canvas_ids {
-            let safe_id = cid.replace('-', "_");
-            js.push_str(&format!(
-                "  const canvas_{0} = document.getElementById('{1}');\n  if (canvas_{0}) {{\n    const ctx = canvas_{0}.getContext('2d');\n    let t = 0;\n    function render_{0}() {{\n      if (ctx) {{\n        const w = canvas_{0}.width = canvas_{0}.clientWidth || 300;\n        const h = canvas_{0}.height = canvas_{0}.clientHeight || 200;\n        ctx.clearRect(0, 0, w, h);\n        ctx.fillStyle = '#0f172a';\n        ctx.fillRect(0, 0, w, h);\n        ctx.strokeStyle = '#38bdf8';\n        ctx.lineWidth = 2;\n        ctx.beginPath();\n        ctx.arc(w / 2, h / 2, Math.min(w, h) / 4 + Math.sin(t) * 10, 0, Math.PI * 2);\n        ctx.stroke();\n        t += 0.03;\n      }}\n      requestAnimationFrame(render_{0});\n    }}\n    render_{0}();\n  }}\n\n",
-                safe_id, cid
-            ));
-        }
-    }
-
-    if has_selftest {
-        js.push_str("  // Automated Verification Suite (AC-01 to AC-04)\n");
-        js.push_str("  function runVerificationSuite() {\n");
-        js.push_str("    const list = document.getElementById('selftestList');\n");
-        js.push_str("    if (!list) return;\n");
-        js.push_str("    list.innerHTML = '';\n");
-        js.push_str("    const checks = [\n");
-        js.push_str("      { id: 'AC-01', desc: 'Mathematical & Physical Invariant Rigor', pass: true },\n");
-        js.push_str("      { id: 'AC-02', desc: 'Deterministic State Machine Invariants', pass: true },\n");
-        js.push_str("      { id: 'AC-03', desc: 'Interactive Canvas Simulation 60 FPS Loop', pass: true },\n");
-        js.push_str("      { id: 'AC-04', desc: 'Defensive Input Guards & Safe Local Storage', pass: true }\n");
-        js.push_str("    ];\n");
-        js.push_str("    checks.forEach(c => {\n");
-        js.push_str("      const item = document.createElement('div');\n");
-        js.push_str("      item.className = 'selftest-item passed';\n");
-        js.push_str("      item.style.padding = '8px 12px';\n");
-        js.push_str("      item.style.marginBottom = '6px';\n");
-        js.push_str("      item.style.background = '#064e3b';\n");
-        js.push_str("      item.style.borderRadius = '6px';\n");
-        js.push_str("      item.style.color = '#34d399';\n");
-        js.push_str("      item.innerHTML = `<strong>✔ [${c.id}]</strong> ${c.desc}: <em>Verified Invariant PASS</em>`;\n");
-        js.push_str("      list.appendChild(item);\n");
-        js.push_str("    });\n");
-        js.push_str("  }\n\n");
-        js.push_str("  const testBtn = document.getElementById('runSelfTestBtn');\n");
-        js.push_str("  if (testBtn) {\n    testBtn.addEventListener('click', runVerificationSuite);\n    setTimeout(runVerificationSuite, 200);\n  }\n\n");
-    }
-
-    js.push_str("  // Generic Interactive Elements Binding\n");
-    for bid in &btn_ids {
-        if bid != "runSelfTestBtn" {
-            let safe_id = bid.replace('-', "_");
-            js.push_str(&format!(
-                "  const el_{0} = document.getElementById('{1}');\n  if (el_{0}) {{\n    el_{0}.addEventListener('click', () => {{\n      console.log('Action triggered: {1}');\n    }});\n  }}\n",
-                safe_id, bid
-            ));
-        }
-    }
-
-    js.push_str("  console.log('[FlyMD] Application logic script initialized successfully.');\n");
-    js.push_str("})();\n");
-    js
-}
-
-/// Synthesizes a modern, responsive stylesheet if styles.css is missing.
-fn synthesize_styles_for_html(_html: &str) -> String {
-    let mut css = String::new();
-    css.push_str("/* FlyMD Automated Modern Companion Stylesheet */\n");
-    css.push_str(":root {\n");
-    css.push_str("  --bg-primary: #0f172a;\n");
-    css.push_str("  --bg-surface: #1e293b;\n");
-    css.push_str("  --text-main: #f8fafc;\n");
-    css.push_str("  --text-muted: #94a3b8;\n");
-    css.push_str("  --accent-color: #38bdf8;\n");
-    css.push_str("  --border-color: #334155;\n");
-    css.push_str("  --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;\n");
-    css.push_str("}\n\n");
-    css.push_str("* { box-sizing: border-box; margin: 0; padding: 0; }\n");
-    css.push_str("body {\n");
-    css.push_str("  background: var(--bg-primary);\n");
-    css.push_str("  color: var(--text-main);\n");
-    css.push_str("  font-family: var(--font-family);\n");
-    css.push_str("  line-height: 1.6;\n");
-    css.push_str("  padding: 1.5rem;\n");
-    css.push_str("}\n\n");
-    css.push_str(".container { max-width: 1200px; margin: 0 auto; }\n");
-    css.push_str("header { margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }\n");
-    css.push_str("button { background: var(--accent-color); color: #0f172a; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }\n");
-    css.push_str("button:hover { opacity: 0.9; }\n");
-    css.push_str("canvas { background: #020617; border-radius: 8px; border: 1px solid var(--border-color); display: block; margin: 1rem 0; }\n");
-    css
-}
-
-/// Guarantees that any companion script or CSS file referenced in workspace HTML exists on disk.
-/// If missing, attempts extraction from markdown or generates a complete, self-testing, fully-functional logic script.
-pub fn ensure_companion_assets_exist(
-    workspace_dir: &str,
-    created_files: &mut Vec<String>,
-    markdown: &str,
-) {
-    let ws = Path::new(workspace_dir);
-    let index_path = ws.join("index.html");
-    if !index_path.exists() {
-        return;
-    }
-
-    let html_content = match fs::read_to_string(&index_path) {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-
-    let mut referenced_scripts = Vec::new();
-    for part in html_content.split("<script").skip(1) {
-        let tag_open = part.split('>').next().unwrap_or("");
-        if let Some(src_part) = tag_open.split("src=").nth(1) {
-            let quote_char = src_part.chars().next().unwrap_or(' ');
-            if quote_char == '"' || quote_char == '\'' {
-                let path_val: String = src_part.chars().skip(1).take_while(|&c| c != quote_char).collect();
-                if !path_val.is_empty() && !path_val.starts_with("http") && !path_val.starts_with("//") {
-                    referenced_scripts.push(path_val);
-                }
-            }
-        }
-    }
-
-    let mut referenced_styles = Vec::new();
-    for part in html_content.split("<link").skip(1) {
-        let tag_open = part.split('>').next().unwrap_or("");
-        if tag_open.contains("stylesheet") {
-            if let Some(href_part) = tag_open.split("href=").nth(1) {
-                let quote_char = href_part.chars().next().unwrap_or(' ');
-                if quote_char == '"' || quote_char == '\'' {
-                    let path_val: String = href_part.chars().skip(1).take_while(|&c| c != quote_char).collect();
-                    if !path_val.is_empty() && !path_val.starts_with("http") && !path_val.starts_with("//") {
-                        referenced_styles.push(path_val);
-                    }
-                }
-            }
-        }
-    }
-
-    for script_name in referenced_scripts {
-        let script_dest = ws.join(&script_name);
-        let exists_and_valid = script_dest.exists() && script_dest.metadata().map(|m| m.len() > 100).unwrap_or(false);
-        if exists_and_valid {
-            // Already exists on disk: do not synthesize and do not claim that THIS task created it
-            continue;
-        }
-
-        let mut extracted_code: Option<String> = None;
-        let lines: Vec<&str> = markdown.lines().collect();
-        let mut idx = 0;
-        while idx < lines.len() {
-            let l = lines[idx].trim();
-            if l.starts_with("```") {
-                let (lang, f_name) = parse_fence_tag(l);
-                if lang == "js" || lang == "javascript" || lang == "ts" || f_name.as_deref() == Some(&script_name) {
-                    let mut code = String::new();
-                    idx += 1;
-                    while idx < lines.len() && !lines[idx].trim().starts_with("```") {
-                        code.push_str(lines[idx]);
-                        code.push('\n');
-                        idx += 1;
-                    }
-                    if code.trim().len() > 100 {
-                        extracted_code = Some(code);
-                        break;
-                    }
-                }
-            }
-            idx += 1;
-        }
-
-        if let Some(code) = extracted_code {
-            if fs::write(&script_dest, code.as_bytes()).is_ok() {
-                if !created_files.contains(&script_name) {
-                    created_files.push(script_name);
-                }
-                continue;
-            }
-        }
-
-        let synthesized_js = synthesize_logic_script_for_html(&html_content, &script_name);
-        if fs::write(&script_dest, synthesized_js.as_bytes()).is_ok() {
-            if !created_files.contains(&script_name) {
-                created_files.push(script_name);
-            }
-        }
-    }
-
-    for style_name in referenced_styles {
-        let style_dest = ws.join(&style_name);
-        let exists_and_valid = style_dest.exists() && style_dest.metadata().map(|m| m.len() > 50).unwrap_or(false);
-        if exists_and_valid {
-            // Already exists on disk: do not synthesize and do not claim that THIS task created it
-            continue;
-        }
-
-        let synthesized_css = synthesize_styles_for_html(&html_content);
-        if fs::write(&style_dest, synthesized_css.as_bytes()).is_ok() {
-            if !created_files.contains(&style_name) {
-                created_files.push(style_name);
-            }
-        }
-    }
-}
-
-/// Guarantees that baseline interactive web deliverables (index.html, styles.css, app.js) are written to disk
-/// if a code-generating task (build or fix-bugs) completes without files.
-pub fn synthesize_baseline_web_deliverables(
-    workspace_dir: &str,
-    file_name: &str,
-    markdown: &str,
-    created_files: &mut Vec<String>,
-) {
-    let ws = Path::new(workspace_dir);
-    let index_path = ws.join("index.html");
-    if index_path.exists() && index_path.metadata().map(|m| m.len() > 100).unwrap_or(false) {
-        ensure_companion_assets_exist(workspace_dir, created_files, markdown);
-        return;
-    }
-
-    let (headings, tasks) = extract_markdown_headings_and_tasks(markdown);
-    let title = headings.first().cloned().unwrap_or_else(|| {
-        file_name.trim_end_matches(".md").replace('_', " ")
-    });
-
-    let is_arabic = markdown.contains("الفيزياء") || markdown.contains("المواصفات") || markdown.contains("الذرة") || markdown.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c));
-    let dir_attr = if is_arabic { "dir=\"rtl\" lang=\"ar\"" } else { "lang=\"en\"" };
-
-    let mut html = String::new();
-    html.push_str("<!DOCTYPE html>\n");
-    html.push_str(&format!("<html {}>\n<head>\n", dir_attr));
-    html.push_str("  <meta charset=\"UTF-8\" />\n");
-    html.push_str("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n");
-    html.push_str(&format!("  <title>{}</title>\n", title));
-    html.push_str("  <link rel=\"stylesheet\" href=\"styles.css\" />\n");
-    html.push_str("</head>\n<body>\n");
-    html.push_str("  <header class=\"site-header\">\n");
-    html.push_str(&format!("    <h1 class=\"brand-title\">{}</h1>\n", title));
-    html.push_str("    <div class=\"status-pill\" id=\"simStatusPill\"><span class=\"status-dot\"></span><span id=\"simStatusText\">Active Engine (60 FPS)</span></div>\n");
-    html.push_str("  </header>\n  <main class=\"container\">\n");
-
-    html.push_str("    <section class=\"hero-banner\">\n");
-    html.push_str(&format!("      <h2>{}</h2>\n", if is_arabic { "الملخص والمواصفات المعمارية" } else { "Executive Summary & Architecture" }));
-    html.push_str(&format!("      <p>{}</p>\n", if is_arabic { "تم توليد هذا التطبيق التفاعلي تلقائياً بناءً على مواصفات العقد التنفيذي المعتمد." } else { "Interactive application synthesized directly from the system specification contract." }));
-    html.push_str("    </section>\n");
-
-    if !tasks.is_empty() {
-        html.push_str("    <section class=\"tasks-section\" style=\"margin-top: 1rem;\">\n");
-        html.push_str(&format!("      <h3>{}</h3>\n      <ul class=\"task-list\" style=\"list-style: none; padding: 0.5rem 0;\">\n", if is_arabic { "بنود التنفيذ والتحقق" } else { "Execution Items & Invariants" }));
-        for t in tasks.iter().take(8) {
-            html.push_str(&format!("        <li style=\"padding: 4px 0;\"><label><input type=\"checkbox\" checked disabled /> {}</label></li>\n", t));
-        }
-        html.push_str("      </ul>\n    </section>\n");
-    }
-
-    html.push_str("    <section class=\"lab-section\" style=\"margin-top: 1.5rem;\">\n");
-    html.push_str(&format!("      <h3>{}</h3>\n", if is_arabic { "المختبر التفاعلي والمحاكاة الحية" } else { "Interactive Physics Lab & Simulation" }));
-    html.push_str("      <div class=\"canvas-wrapper\" style=\"margin-top: 0.75rem;\">\n");
-    html.push_str("        <canvas id=\"mainSimulationCanvas\"></canvas>\n");
-    html.push_str("      </div>\n");
-    html.push_str("      <div class=\"btn-group\" style=\"margin-top: 1rem; display: flex; gap: 0.5rem;\">\n");
-    html.push_str(&format!("        <button type=\"button\" class=\"btn-primary\" id=\"btnToggleSim\">{}</button>\n", if is_arabic { "تشغيل / إيقاف مؤقت" } else { "Toggle Simulation" }));
-    html.push_str(&format!("        <button type=\"button\" class=\"btn-secondary\" id=\"btnResetSim\">{}</button>\n", if is_arabic { "إعادة ضبط المعاملات" } else { "Reset Parameters" }));
-    html.push_str("      </div>\n");
-    html.push_str("    </section>\n");
-
-    html.push_str("    <section class=\"verification-suite\" style=\"margin-top: 1.5rem;\">\n");
-    html.push_str(&format!("      <h3>{}</h3>\n", if is_arabic { "وحدة التحقق والفحص الذاتي المباشر" } else { "Automated Invariant Verification Suite" }));
-    html.push_str(&format!("      <button type=\"button\" class=\"btn-secondary\" id=\"runSelfTestBtn\" style=\"margin-top: 0.5rem;\">{}</button>\n", if is_arabic { "تشغيل الفحص الذاتي" } else { "Run Self-Test" }));
-    html.push_str("      <div class=\"selftest-list\" id=\"selftestList\" style=\"margin-top: 0.75rem;\"></div>\n");
-    html.push_str("    </section>\n");
-
-    html.push_str("  </main>\n");
-    html.push_str("  <script src=\"app.js\"></script>\n");
-    html.push_str("</body>\n</html>\n");
-
-    if fs::write(&index_path, html.as_bytes()).is_ok() {
-        if !created_files.contains(&"index.html".to_string()) {
-            created_files.push("index.html".to_string());
-        }
-    }
-
-    ensure_companion_assets_exist(workspace_dir, created_files, markdown);
-}
-
-
 pub fn extract_markdown_headings_and_tasks(content: &str) -> (Vec<String>, Vec<String>) {
     let mut headings = Vec::new();
     let mut tasks = Vec::new();
@@ -700,256 +321,6 @@ pub fn intent_instructions(intent: &str, custom_prompt: Option<&str>) -> String 
     base.to_string()
 }
 
-pub fn synthesize_intelligent_agent_markdown(
-    agent_name: &str,
-    agent_id: &str,
-    intent: &str,
-    file_name: &str,
-    source_markdown: &str,
-    custom_prompt: Option<&str>,
-    handoff_path: &Path,
-) -> (Vec<String>, Vec<String>) {
-    let (headings, tasks) = extract_markdown_headings_and_tasks(source_markdown);
-    let line_count = source_markdown.lines().count();
-    let word_count = source_markdown.split_whitespace().count();
-
-    let sec_summary = if headings.is_empty() {
-        format!(
-            "`{}` ({} lines, {} words)",
-            file_name, line_count, word_count
-        )
-    } else {
-        format!(
-            "`{}` — Sections: {}",
-            file_name,
-            headings
-                .iter()
-                .take(5)
-                .map(|h| format!("**{}**", h))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    };
-
-    let thinking_steps = vec![
-        format!(
-            "Loaded `{}` ({} lines, {} words) and verified workspace handoff context.",
-            file_name, line_count, word_count
-        ),
-        format!(
-            "Detected {} structured section(s) and {} actionable item(s) for `{}` mode.",
-            headings.len(),
-            tasks.len(),
-            intent.to_uppercase()
-        ),
-        format!(
-            "Synchronized native IDE workflow bridge for {} (`{}`).",
-            agent_name,
-            handoff_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-        ),
-        format!(
-            "Synthesizing structured {} output with actionable checklist & verification steps.",
-            intent
-        ),
-    ];
-
-    let mut chunks = Vec::new();
-    let title_line = match intent {
-        "refine-plan" => format!(
-            "## {} — Architecture & Plan Refinement Report (`{}`)\n\n",
-            agent_name, file_name
-        ),
-        "build" => format!(
-            "## {} — Implementation & Execution Report (`{}`)\n\n",
-            agent_name, file_name
-        ),
-        "review" => format!(
-            "## {} — Architecture & Security Review Report (`{}`)\n\n",
-            agent_name, file_name
-        ),
-        "fix-bugs" => format!(
-            "## {} — Bug Diagnosis & Patch Report (`{}`)\n\n",
-            agent_name, file_name
-        ),
-        "write-tests" => format!(
-            "## {} — Automated Test Suite & Coverage Plan (`{}`)\n\n",
-            agent_name, file_name
-        ),
-        "explain" => format!(
-            "## {} — Architecture Explanation & Plain-English Overview (`{}`)\n\n",
-            agent_name, file_name
-        ),
-        _ => format!(
-            "## {} — Workspace Agent Report (`{}`)\n\n",
-            agent_name, file_name
-        ),
-    };
-    chunks.push(title_line);
-    chunks.push(format!("> **Analyzed Document:** {}\n\n", sec_summary));
-
-    if let Some(cp) = custom_prompt {
-        if !cp.trim().is_empty() {
-            chunks.push(format!(
-                "### Custom Prompt Addressed\n> *\"{}\"* — Incorporated directly into the analysis below.\n\n",
-                cp.trim()
-            ));
-        }
-    }
-
-    match intent {
-        "refine-plan" => {
-            chunks.push("### 1. Architectural Breakdown & Refined Scope\n".to_string());
-            if headings.is_empty() {
-                chunks.push(
-                    "- **Core Module Design**: Establish clean boundaries between state, UI views, and background services.\n\
-                     - **Safety & Validation**: Ensure every state transition is idempotent and recoverable.\n"
-                        .to_string(),
-                );
-            } else {
-                let mut s = String::new();
-                for (i, h) in headings.iter().take(6).enumerate() {
-                    s.push_str(&format!(
-                        "- **Phase {}. {}**: Modularize contracts, validate inputs, and keep zero tight coupling.\n",
-                        i + 1,
-                        h
-                    ));
-                }
-                chunks.push(s);
-            }
-
-            chunks.push(
-                "\n### 2. Actionable Execution Checklist (Ready for Build Agent)\n".to_string(),
-            );
-            if tasks.is_empty() {
-                chunks.push(
-                    "- [ ] Define data models & TypeScript/Rust interfaces for the feature\n\
-                     - [ ] Implement core business logic and state store handlers\n\
-                     - [ ] Connect UI components with live progress feedback\n\
-                     - [ ] Verify build compilation and edge-case error handling\n"
-                        .to_string(),
-                );
-            } else {
-                let mut s = String::new();
-                for t in tasks.iter().take(8) {
-                    s.push_str(&format!("- [ ] {}\n", t));
-                }
-                s.push_str(
-                    "- [ ] Run end-to-end verification and update shared `.flymd/MEMORY.md`\n",
-                );
-                chunks.push(s);
-            }
-        }
-        "review" => {
-            chunks.push(format!(
-                "\n<independent_resume>\nIndependent audit of `{}` raw workspace assets completed against specification invariants before evaluating upstream claims.\n</independent_resume>\n",
-                file_name
-            ));
-            chunks.push(
-                "\n### 1. Architecture & Code Quality Audit\n\
-                 | Check Category | Status | Findings & Recommendation |\n\
-                 | :--- | :--- | :--- |\n\
-                 | **Structure & Modularity** | ✅ Passed | Clean separation of concerns across modules. |\n\
-                 | **Edge-Case Safety** | ⚠️ Advisory | Guard async cancellation & empty-input states explicitly. |\n\
-                 | **State Consistency** | ✅ Passed | Checkpoints and shared memory ledger stay synchronized. |\n"
-                    .to_string(),
-            );
-
-            chunks.push("\n### 2. Verified Items & Recommended Improvements\n".to_string());
-            if tasks.is_empty() {
-                chunks.push(
-                    "- [x] Audited specification structure and data flow\n\
-                     - [x] Verified non-destructive rollback safety\n\
-                     - [ ] Add unit assertions for error boundary recovery\n"
-                        .to_string(),
-                );
-            } else {
-                let mut s = String::new();
-                for t in tasks.iter().take(8) {
-                    s.push_str(&format!("- [x] Verified: {}\n", t));
-                }
-                chunks.push(s);
-            }
-        }
-        "explain" => {
-            chunks.push("\n### Plain-English Summary\n".to_string());
-            if !headings.is_empty() {
-                let mut s =
-                    String::from("This document organizes the workflow into clear stages:\n");
-                for h in headings.iter().take(6) {
-                    s.push_str(&format!("- **{}**: Defines the key goal and expected outcome for this part of the system.\n", h));
-                }
-                chunks.push(s);
-            } else {
-                chunks.push(format!(
-                    "This document (`{}`) defines the instructions and tasks for your project in a structured format.\n",
-                    file_name
-                ));
-            }
-            if !tasks.is_empty() {
-                let mut s = String::from("\n### Key Action Items\n");
-                for t in tasks.iter().take(6) {
-                    s.push_str(&format!("- {}\n", t));
-                }
-                chunks.push(s);
-            }
-        }
-        "build" => {
-            chunks.push("\n### 1. Implementation & Execution Specification\n".to_string());
-            if tasks.is_empty() {
-                chunks.push(format!(
-                    "- [x] Parsed specification `{}` and decomposed into execution plan\n\
-                     - [x] Verified system invariants and decoupled dependencies\n\
-                     - [x] Workspace execution package synchronized\n",
-                    file_name
-                ));
-            } else {
-                let mut s = String::new();
-                for t in tasks.iter().take(10) {
-                    s.push_str(&format!("- [x] Completed: {}\n", t));
-                }
-                chunks.push(s);
-            }
-
-            chunks.push(format!(
-                "\n### 2. Native IDE & CLI Bridge Status\n\
-                 - **Handoff File**: `{}`\n\
-                 - **Next Step**: Inspect workspace files or trigger the Review Relay agent to audit implementation quality.\n",
-                handoff_path.to_string_lossy()
-            ));
-        }
-        _ => {
-            chunks.push("\n### 1. Execution & Workspace Synchronization\n".to_string());
-            if tasks.is_empty() {
-                chunks.push(format!(
-                    "- [x] Parsed specification `{}` and prepared workspace execution package\n\
-                     - [x] Synchronized native `{}` workflow rules in project directory\n\
-                     - [x] Generated structured output artifact ready for review or relay\n",
-                    file_name, agent_id
-                ));
-            } else {
-                let mut s = String::new();
-                for t in tasks.iter().take(10) {
-                    s.push_str(&format!("- [x] Completed: {}\n", t));
-                }
-                chunks.push(s);
-            }
-
-            chunks.push(format!(
-                "\n### 2. Native IDE & CLI Bridge Status\n\
-                 - **Handoff File**: `{}`\n\
-                 - **Next Step**: You can open this report as a tab, apply changes to your active document, or click **Relay to Next Agent** below to continue the chain.\n",
-                handoff_path.to_string_lossy()
-            ));
-        }
-    }
-
-    (thinking_steps, chunks)
-}
-
-/// Spawns an agent execution thread (either streaming from a local CLI or in-app intelligence).
 pub fn spawn_agent_execution(
     store: SharedStore,
     app: AppHandle,
@@ -1274,6 +645,7 @@ pub fn spawn_agent_execution(
                 let mut last_fs_change = std::time::Instant::now();
                 let mut seen_created_files: Vec<String> = Vec::new();
                 let mut elapsed_sec: u64 = 0;
+                let mut was_stalled = false;
                 let mut current_pct: u8;
 
                 loop {
@@ -1428,81 +800,37 @@ pub fn spawn_agent_execution(
 
                                 let stdout_idle_sec = last_stdout_activity.elapsed().as_secs();
                                 let fs_idle_sec = last_fs_change.elapsed().as_secs();
+                                let min_activity_idle = stdout_idle_sec.min(fs_idle_sec);
 
-                                let is_code_task = record.intent == "build" || record.intent == "fix-bugs";
-                                let code_files_touched = seen_created_files.iter().any(|f| {
-                                    let low = f.to_ascii_lowercase();
-                                    low.ends_with(".js") || low.ends_with(".ts") || low.ends_with(".html") || low.ends_with(".css") || low.ends_with(".py") || low.ends_with(".rs")
-                                });
-
-                                // Settlement Detector Condition 1: Deliverables touched
-                                // For code-generating tasks, touching a `.md` file does NOT settle the execution!
-                                if !seen_created_files.is_empty() {
-                                    let has_pending_companion = check_missing_html_companions(&exec_dir, &seen_created_files);
-                                    let companion_ready = !has_pending_companion || elapsed_sec >= 120;
-                                    let allow_settle = if is_code_task {
-                                        code_files_touched && companion_ready
-                                    } else {
-                                        companion_ready
-                                    };
-
-                                    if allow_settle && fs_idle_sec >= 25 && stdout_idle_sec >= 20 && elapsed_sec >= 35 {
-                                        let settle_msg = format!(
-                                            "[Settlement Detector] Workspace deliverables settled ({} file(s) touched: {}). Activity idle for {}s (fs: {}s). Concluding execution.",
-                                            seen_created_files.len(),
-                                            seen_created_files.join(", "),
-                                            stdout_idle_sec,
-                                            fs_idle_sec
-                                        );
-                                        emit_log(settle_msg.clone());
-                                        update_task(&|t| {
-                                            t.progress_percent = 98;
-                                            t.logs.push(settle_msg.clone());
-                                            t.thinking_trace.push(settle_msg.clone());
-                                        });
-                                        process_manager.terminate_task_tree(&task_id);
-                                        break;
-                                    }
-                                }
-
-                                // Settlement Detector Condition 2: Markdown report deliverable received
-                                let allow_md_settle = if is_code_task {
-                                    code_files_touched && !collected_md.trim().is_empty() && stdout_idle_sec >= 20 && elapsed_sec >= 30
-                                } else {
-                                    !collected_md.trim().is_empty() && stdout_idle_sec >= 20 && elapsed_sec >= 30
+                                let max_timeout_sec: u64 = match record.intent.as_str() {
+                                    "refine-plan" => 1200,
+                                    "build" | "fix-bugs" => 2700,
+                                    _ => 1800,
                                 };
+                                let hang_watchdog_sec: u64 = 900; // 15 min of complete silence
 
-                                if allow_md_settle {
-                                    let settle_msg = format!(
-                                        "[Settlement Detector] Markdown report deliverable received ({} bytes). Stdout idle for {}s. Concluding execution.",
-                                        collected_md.len(),
-                                        stdout_idle_sec
-                                    );
-                                    emit_log(settle_msg.clone());
-                                    update_task(&|t| {
-                                        t.progress_percent = 98;
-                                        t.logs.push(settle_msg.clone());
-                                        t.thinking_trace.push(settle_msg.clone());
-                                    });
-                                    process_manager.terminate_task_tree(&task_id);
-                                    break;
-                                }
+                                let is_hang = min_activity_idle >= hang_watchdog_sec;
+                                let is_ceiling = elapsed_sec >= max_timeout_sec;
 
-                                // Settlement Detector Condition 3: Safety Max-Timeout Ceiling
-                                // Permits adequate reasoning time (up to 360s) for heavy code generation tasks
-                                let max_timeout_sec = if is_code_task { 360 } else { 210 };
-                                let max_idle_sec = if is_code_task { 240 } else { 120 };
-
-                                if elapsed_sec >= max_timeout_sec || (seen_created_files.is_empty() && stdout_idle_sec >= max_idle_sec && elapsed_sec >= max_idle_sec) {
-                                    let timeout_msg = format!(
-                                        "[Execution Timeout Guard] Task execution window reached safety limit ({}s elapsed, stdout idle {}s). Concluding task gracefully.",
-                                        elapsed_sec, stdout_idle_sec
-                                    );
+                                if is_hang || is_ceiling {
+                                    was_stalled = true;
+                                    let timeout_msg = if is_hang {
+                                        format!(
+                                            "[Hang Watchdog] No output or workspace file activity for {}s (threshold: {}s). Pausing execution.",
+                                            min_activity_idle, hang_watchdog_sec
+                                        )
+                                    } else {
+                                        format!(
+                                            "[Safety Ceiling] Task execution window reached maximum limit ({}s elapsed). Concluding execution.",
+                                            elapsed_sec
+                                        )
+                                    };
                                     emit_log(timeout_msg.clone());
                                     update_task(&|t| {
                                         t.progress_percent = 98;
                                         t.logs.push(timeout_msg.clone());
                                         t.thinking_trace.push(timeout_msg.clone());
+                                        t.outcome_reason = Some(timeout_msg.clone());
                                     });
                                     process_manager.terminate_task_tree(&task_id);
                                     break;
@@ -1576,14 +904,6 @@ pub fn spawn_agent_execution(
                     }
                 }
 
-                // Guaranteed Workspace Deliverable Settlement: ensures complete HTML, CSS & JS are always written to disk
-                let is_code_intent = record.intent == "build" || record.intent == "fix-bugs";
-                if is_code_intent {
-                    synthesize_baseline_web_deliverables(&exec_dir, &record.file_name, &source_markdown, &mut created_files);
-                } else {
-                    ensure_companion_assets_exist(&exec_dir, &mut created_files, &collected_md);
-                }
-
                 let post_digests = crate::projects::cache::scan_workspace_digest(Path::new(&exec_dir), 64);
                 let mut actually_modified_files: Vec<String> = Vec::new();
                 for cf in &created_files {
@@ -1599,22 +919,10 @@ pub fn spawn_agent_execution(
                     }
                 }
 
-                if record.intent == "fix-bugs" && actually_modified_files.is_empty() && collected_md.trim().is_empty() {
-                    emit_log("[Fix Bugs Verification] WARNING: Zero workspace code files were modified and no patch was generated by the agent.".to_string());
-                    finalize_task(
-                        &store,
-                        &app,
-                        &task_id,
-                        "failed",
-                        Some("The agent did not make any file changes or fix the reported bug in the workspace.".to_string()),
-                    );
-                    return;
-                }
-
                 let effective_files_to_report = if !actually_modified_files.is_empty() {
-                    actually_modified_files
+                    actually_modified_files.clone()
                 } else {
-                    created_files
+                    created_files.clone()
                 };
 
                 for cf in &effective_files_to_report {
@@ -1632,189 +940,97 @@ pub fn spawn_agent_execution(
                     });
                 }
 
-                if !collected_md.trim().is_empty() || !effective_files_to_report.is_empty() {
-                    let raw_report_body = if !collected_md.trim().is_empty() {
-                        collected_md.clone()
-                    } else {
-                        format!(
-                            "## {} — Execution Summary (`{}`)\n\nAgent execution completed successfully in `{}`.\n\n### Workspace Files Touched & Created:\n{}\n",
-                            agent_name,
-                            record.file_name,
-                            exec_dir,
-                            effective_files_to_report.iter().map(|f| format!("- `{}`", f)).collect::<Vec<_>>().join("\n")
-                        )
-                    };
-                    let clean_report_body = persist_task_cognitive_handoff(
-                        &exec_dir,
-                        &agent_id,
-                        &record.intent,
-                        record.pipeline_id.as_deref(),
-                        &source_markdown,
-                        &raw_report_body,
-                        Some(&agent_id),
-                        &effective_files_to_report,
-                    );
-                    fs::write(&report_file, &clean_report_body).ok();
-                    let duration_ms = (now_ms() - task_started_at).max(0) as u64;
-                    update_task(&|t| {
-                        t.response_markdown = Some(clean_report_body.clone());
-                        for tool in t.tool_actions.iter_mut() {
-                            tool.status = "done".to_string();
-                            if tool.kind == "cli" && tool.duration_ms.is_none() {
-                                tool.duration_ms = Some(duration_ms);
-                                if !clean_report_body.trim().is_empty() {
-                                    tool.output = Some(clean_report_body.lines().take(20).collect::<Vec<_>>().join("\n"));
-                                }
+                // Deterministic Deliverable Verification Audit
+                let v_report = crate::agents::verify::verify_deliverables(
+                    Path::new(&exec_dir),
+                    &effective_files_to_report,
+                    &record.intent,
+                    &source_markdown,
+                );
+                emit_log(format!("[Deliverable Verifier] {}", v_report.summary));
+
+                let final_status = if was_stalled || !v_report.passed {
+                    "incomplete"
+                } else {
+                    "completed"
+                };
+
+                let raw_report_body = if !collected_md.trim().is_empty() {
+                    collected_md.clone()
+                } else {
+                    format!(
+                        "## {} — Execution Summary (`{}`)\n\nAgent execution finished with status: **{}** in `{}`.\n\n### Workspace Files Touched:\n{}\n\n### Verification Summary:\n{}\n",
+                        agent_name,
+                        record.file_name,
+                        final_status,
+                        exec_dir,
+                        effective_files_to_report.iter().map(|f| format!("- `{}`", f)).collect::<Vec<_>>().join("\n"),
+                        v_report.summary
+                    )
+                };
+
+                let clean_report_body = persist_task_cognitive_handoff(
+                    &exec_dir,
+                    &agent_id,
+                    &record.intent,
+                    record.pipeline_id.as_deref(),
+                    &source_markdown,
+                    &raw_report_body,
+                    Some(&agent_id),
+                    &effective_files_to_report,
+                );
+                fs::write(&report_file, &clean_report_body).ok();
+                let duration_ms = (now_ms() - task_started_at).max(0) as u64;
+
+                update_task(&|t| {
+                    t.response_markdown = Some(clean_report_body.clone());
+                    t.verification_report = Some(v_report.clone());
+                    if was_stalled {
+                        t.outcome_reason = Some("Task stalled due to inactivity watchdog or safety ceiling.".to_string());
+                    } else if !v_report.passed {
+                        t.outcome_reason = Some(v_report.summary.clone());
+                    }
+                    for tool in t.tool_actions.iter_mut() {
+                        tool.status = "done".to_string();
+                        if tool.kind == "cli" && tool.duration_ms.is_none() {
+                            tool.duration_ms = Some(duration_ms);
+                            if !clean_report_body.trim().is_empty() {
+                                tool.output = Some(clean_report_body.lines().take(20).collect::<Vec<_>>().join("\n"));
                             }
                         }
-                        t.tool_actions.push(AgentToolAction::new(
-                            format!("tool-write-{}", now_ms()),
-                            "write".to_string(),
-                            format!(
-                                "Saved Markdown Report `{}`",
-                                report_file
-                                    .file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                            ),
-                            Some(report_file.to_string_lossy().to_string()),
-                            "done".to_string(),
-                            now_ms(),
-                        ));
-                    });
-                    finalize_task(&store, &app, &task_id, "completed", None);
-                    return;
-                }
-            }
-        }
+                    }
+                    t.tool_actions.push(AgentToolAction::new(
+                        format!("tool-write-{}", now_ms()),
+                        "write".to_string(),
+                        format!(
+                            "Saved Markdown Report `{}`",
+                            report_file
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                        ),
+                        Some(report_file.to_string_lossy().to_string()),
+                        "done".to_string(),
+                        now_ms(),
+                    ));
+                });
 
-        // Stage 3 & 4: In-App Intelligent Agent Execution & Live Markdown Streaming
-        let (thinking_steps, md_chunks) = synthesize_intelligent_agent_markdown(
-            &agent_name,
-            &agent_id,
-            &record.intent,
-            &record.file_name,
-            &source_markdown,
-            record.custom_prompt.as_deref(),
-            &handoff_file,
-        );
-
-        update_task(&|t| {
-            t.progress_stage = Some("reasoning".to_string());
-            t.progress_percent = 50;
-        });
-
-        for step in thinking_steps {
-            if cancel_flag.load(Ordering::Relaxed) {
-                finalize_task(&store, &app, &task_id, "cancelled", None);
+                finalize_task(&store, &app, &task_id, final_status, None);
                 return;
             }
-            std::thread::sleep(Duration::from_millis(240));
-            emit_log(format!("[{} Thinking] {}", agent_name, step));
-            let step_clone = step.clone();
-            update_task(&|t| {
-                t.thinking_trace.push(step_clone.clone());
-                t.logs.push(format!("[Reasoning Step] {}", step_clone));
-                t.progress_percent = (t.progress_percent + 8).min(75);
-            });
         }
 
-        update_task(&|t| {
-            t.progress_stage = Some("executing".to_string());
-            t.progress_percent = 78;
-            t.tool_actions.push(AgentToolAction::new(
-                format!("tool-write-{}", now_ms()),
-                "write".to_string(),
-                format!(
-                    "Synthesizing & Writing Report `{}`",
-                    report_file
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                ),
-                Some(report_file.to_string_lossy().to_string()),
-                "running".to_string(),
-                now_ms(),
-            ));
-        });
-
-        let mut accumulated_md = String::new();
-        let total_chunks = md_chunks.len().max(1);
-        for (idx, chunk) in md_chunks.into_iter().enumerate() {
-            if cancel_flag.load(Ordering::Relaxed) {
-                finalize_task(&store, &app, &task_id, "cancelled", None);
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(220));
-            accumulated_md.push_str(&chunk);
-            let current_md = accumulated_md.clone();
-            let pct = 78 + (((idx + 1) * 18) / total_chunks) as u8;
-            update_task(&|t| {
-                t.response_markdown = Some(current_md.clone());
-                t.progress_percent = pct.min(96);
-                if t.checklist_total > 0 {
-                    let done = (((idx + 1) * t.checklist_total) / total_chunks).max(1);
-                    t.checklist_completed = done.min(t.checklist_total);
-                }
-            });
-        }
-
-        let mut created_files = extract_and_write_code_blocks(&exec_dir, &record.file_name, &accumulated_md);
-        let is_code_intent = record.intent == "build" || record.intent == "fix-bugs";
-        if is_code_intent {
-            synthesize_baseline_web_deliverables(&exec_dir, &record.file_name, &source_markdown, &mut created_files);
-        } else {
-            ensure_companion_assets_exist(&exec_dir, &mut created_files, &accumulated_md);
-        }
-        for cf in &created_files {
-            emit_log(format!("[FlyMD Workspace Sync] Created file: `{}`", cf));
-            let cf_clone = cf.clone();
-            update_task(&|t| {
-                t.tool_actions.push(AgentToolAction::new(
-                    format!("tool-code-{}", now_ms()),
-                    "write".to_string(),
-                    format!("Created Workspace File `{}`", cf_clone),
-                    Some(format!("{}\\{}", exec_dir, cf_clone)),
-                    "done".to_string(),
-                    now_ms(),
-                ));
-            });
-        }
-
-        let clean_accumulated = persist_task_cognitive_handoff(
-            &exec_dir,
-            &agent_id,
-            &record.intent,
-            record.pipeline_id.as_deref(),
-            &source_markdown,
-            &accumulated_md,
-            None,
-            &created_files,
+        let err_msg = format!(
+            "No executable agent CLI binary detected for `{}` ({}) and no direct provider available. Task could not be executed.",
+            agent_name, agent_id
         );
-        fs::write(&report_file, &clean_accumulated).ok();
-
+        emit_log(format!("[Agent Error] {}", err_msg));
         update_task(&|t| {
-            t.response_markdown = Some(clean_accumulated.clone());
-            for tool in t.tool_actions.iter_mut() {
-                tool.status = "done".to_string();
-            }
-            t.tool_actions.push(AgentToolAction::new(
-                format!("tool-verify-{}", now_ms()),
-                "verify".to_string(),
-                "Verified Markdown Report & Updated Cognitive Cache".to_string(),
-                Some(report_file.to_string_lossy().to_string()),
-                "done".to_string(),
-                now_ms(),
-            ));
+            t.logs.push(err_msg.clone());
+            t.thinking_trace.push(err_msg.clone());
+            t.outcome_reason = Some(err_msg.clone());
         });
-
-        emit_log(format!(
-            "[{} Completed] Output report saved to {}",
-            agent_name,
-            report_file.to_string_lossy()
-        ));
-
-        finalize_task(&store, &app, &task_id, "completed", None);
+        finalize_task(&store, &app, &task_id, "failed", Some(err_msg));
         }));
 
         if let Err(panic_payload) = run_result {
@@ -1984,40 +1200,33 @@ console.log("Interactive Physics Ready");
     }
 
     #[test]
-    fn test_ensure_companion_assets_exist_synthesizes_missing_js() {
-        let temp_dir = std::env::temp_dir().join(format!("flymd_test_companion_{}", now_ms()));
+    fn test_verify_deliverables_detects_missing_companions_and_stubs() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_test_verify_{}", now_ms()));
         fs::create_dir_all(&temp_dir).unwrap();
 
-        // Write only index.html which references app.js and styles.css
-        let html = r#"
-<!DOCTYPE html>
-<html>
-<head>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <button id="runSelfTestBtn">Verify</button>
-  <div id="selftestList"></div>
-  <script src="app.js"></script>
-</body>
-</html>
-"#;
+        let html = r#"<!DOCTYPE html><html><head></head><body><button id="runBtn">Run</button><script src="app.js"></script></body></html>"#;
         fs::write(temp_dir.join("index.html"), html.as_bytes()).unwrap();
 
-        let mut created_files = vec!["index.html".to_string()];
-        ensure_companion_assets_exist(temp_dir.to_str().unwrap(), &mut created_files, "");
+        let report = crate::agents::verify::verify_deliverables(
+            &temp_dir,
+            &["index.html".to_string()],
+            "build",
+            "",
+        );
+        assert!(!report.passed);
+        assert!(report.gaps.iter().any(|g| g.contains("app.js")));
 
-        assert!(created_files.contains(&"app.js".to_string()));
-        assert!(created_files.contains(&"styles.css".to_string()));
+        let stub_js = r#"/** FlyMD Automated Companion Logic Engine */ (function() { console.log('Action triggered: runBtn'); })();"#;
+        fs::write(temp_dir.join("app.js"), stub_js.as_bytes()).unwrap();
 
-        let app_js = temp_dir.join("app.js");
-        assert!(app_js.exists());
-        let js_content = fs::read_to_string(&app_js).unwrap();
-        assert!(js_content.contains("runSelfTestBtn"));
-        assert!(js_content.contains("selftestList"));
-
-        let styles_css = temp_dir.join("styles.css");
-        assert!(styles_css.exists());
+        let report2 = crate::agents::verify::verify_deliverables(
+            &temp_dir,
+            &["index.html".to_string(), "app.js".to_string()],
+            "build",
+            "",
+        );
+        assert!(!report2.passed);
+        assert!(report2.gaps.iter().any(|g| g.contains("placeholder") || g.contains("stub")));
 
         fs::remove_dir_all(&temp_dir).ok();
     }

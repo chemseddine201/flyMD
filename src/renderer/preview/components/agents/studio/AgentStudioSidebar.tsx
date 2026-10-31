@@ -22,6 +22,8 @@ import {
   BookOpen,
   Wrench,
   ShieldAlert,
+  AlertTriangle,
+  AlertCircle,
   Sparkles,
   StickyNote,
   Sliders,
@@ -445,6 +447,8 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 allAgents.find((a) => a.id === effectiveAgentId);
 
               const isStepCompleted = step.status === 'completed';
+              const isStepIncomplete = step.status === 'incomplete';
+              const isStepFailed = step.status === 'failed';
               const isRunningThisStep =
                 !!runningPipelineId && runningPipelineStepIdx === idx;
               const isFinishedThisStep =
@@ -484,12 +488,16 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 <div key={`${primaryPipeline.id}-${step.stepId || idx}`}>
                   <div
                     onClick={() => {
-                      if (isStepCompleted && step.completedTaskId) {
+                      if ((isStepCompleted || isStepIncomplete || isStepFailed) && step.completedTaskId) {
                         onSelectTask(step.completedTaskId);
                       }
                     }}
                     title={
-                      isStepCompleted && step.completedTaskId
+                      isStepIncomplete
+                        ? 'Step incomplete: verification gaps detected. Click to view report.'
+                        : isStepFailed
+                        ? 'Step failed. Click to view logs.'
+                        : isStepCompleted && step.completedTaskId
                         ? 'Step completed! Click to view deliverable and logs in studio'
                         : undefined
                     }
@@ -498,6 +506,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                         ? 'bg-sky-950/90 border-2 border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.45)] animate-pulse'
                         : isWaitingThisStep
                         ? 'bg-amber-950/70 border border-amber-500/80 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                        : isStepIncomplete
+                        ? 'bg-amber-950/60 border border-amber-500/80 text-amber-200 shadow-xs cursor-pointer hover:border-amber-400'
+                        : isStepFailed
+                        ? 'bg-rose-950/60 border border-rose-500/80 text-rose-200 shadow-xs cursor-pointer hover:border-rose-400'
                         : isFinishedThisStep
                         ? 'bg-emerald-950/60 border border-emerald-500/60 text-emerald-200 shadow-xs cursor-pointer hover:border-emerald-400/90'
                         : isUpcomingStep
@@ -506,7 +518,14 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     }`}
                   >
                     <span className="text-[10px] font-extrabold shrink-0 w-4 flex items-center justify-center">
-                      {isFinishedThisStep ? (
+                      {isStepIncomplete ? (
+                        <AlertTriangle
+                          size={13}
+                          className="text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]"
+                        />
+                      ) : isStepFailed ? (
+                        <AlertCircle size={13} className="text-rose-400" />
+                      ) : isFinishedThisStep ? (
                         <CheckCircle2
                           size={13}
                           className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]"
@@ -643,7 +662,17 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     </div>
 
                     {/* Status Badges */}
-                    {isFinishedThisStep && (
+                    {isStepIncomplete && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/50 shrink-0">
+                        INCOMPLETE
+                      </span>
+                    )}
+                    {isStepFailed && (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/50 shrink-0">
+                        FAILED
+                      </span>
+                    )}
+                    {!isStepIncomplete && !isStepFailed && isFinishedThisStep && (
                       <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
                         DONE
                       </span>

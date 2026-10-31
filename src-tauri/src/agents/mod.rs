@@ -13,6 +13,7 @@ pub mod discovery;
 pub mod process_manager;
 pub mod runner;
 pub mod types;
+pub mod verify;
 
 pub use checkpoint::*;
 pub use commands::*;
@@ -20,6 +21,7 @@ pub use discovery::*;
 pub use process_manager::*;
 pub use runner::*;
 pub use types::*;
+pub use verify::*;
 
 use crate::store::SharedStore;
 use std::collections::HashMap;
@@ -667,6 +669,9 @@ impl AgentOrchestrator {
             )],
             custom_action_id: req.custom_action_label.clone(),
             step_note: req.step_note.clone(),
+            verification_report: None,
+            outcome_reason: None,
+            attempt_count: req.attempt_count,
         };
 
         let memory_entry = format!(
