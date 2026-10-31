@@ -81,43 +81,81 @@ fn spawn_supervised_discussion_run(
         })
         .await;
 
-        if let Err(join_err) = join_res {
-            let reason = if join_err.is_panic() {
-                let p = join_err.into_panic();
-                extract_panic_payload_message(p.as_ref())
-            } else {
-                join_err.to_string()
-            };
-
-            eprintln!(
-                "[DiscussionSupervisor] Recovered safely from background task failure in '{}': {}",
-                session_id, reason
-            );
-
-            // Clean stale lock & persist recoverable Failed status on disk
-            let lock_path = session_dir.join(".session.lock");
-            let _ = fs::remove_file(&lock_path);
-
-            if let Ok(mut meta) = load_metadata(&session_dir) {
-                meta.status = DiscussionStatus::Failed;
-                meta.error_message = Some(format!(
-                    "Recovered safely from internal execution error: {}",
-                    reason
-                ));
-                meta.updated_at = now_ms();
-                let _ = save_metadata(&session_dir, &meta);
+        match join_res {
+            Ok(Ok(final_status)) => {
+                // If the discussion reached a terminal state (not Paused and not Running),
+                // remove it from active_map to release memory and allow clean disk reconciliation.
+                if final_status != DiscussionStatus::Running && final_status != DiscussionStatus::Paused {
+                    let mut active = active_map.lock().await;
+                    active.remove(&session_id);
+                }
+                let status_evt = DiscussionEvent::StatusChanged {
+                    session_id,
+                    new_status: final_status,
+                };
+                app.emit("discussion:event", &status_evt).ok();
             }
-
-            {
-                let mut active = active_map.lock().await;
-                active.remove(&session_id);
+            Ok(Err(run_err)) => {
+                eprintln!(
+                    "[DiscussionSupervisor] Discussion '{}' returned error: {}",
+                    session_id, run_err
+                );
+                let lock_path = session_dir.join(".session.lock");
+                let _ = fs::remove_file(&lock_path);
+                if let Ok(mut meta) = load_metadata(&session_dir) {
+                    meta.status = DiscussionStatus::Failed;
+                    meta.error_message = Some(run_err);
+                    meta.updated_at = now_ms();
+                    let _ = save_metadata(&session_dir, &meta);
+                }
+                {
+                    let mut active = active_map.lock().await;
+                    active.remove(&session_id);
+                }
+                let fail_evt = DiscussionEvent::StatusChanged {
+                    session_id,
+                    new_status: DiscussionStatus::Failed,
+                };
+                app.emit("discussion:event", &fail_evt).ok();
             }
+            Err(join_err) => {
+                let reason = if join_err.is_panic() {
+                    let p = join_err.into_panic();
+                    extract_panic_payload_message(p.as_ref())
+                } else {
+                    join_err.to_string()
+                };
 
-            let fail_evt = DiscussionEvent::StatusChanged {
-                session_id,
-                new_status: DiscussionStatus::Failed,
-            };
-            app.emit("discussion:event", &fail_evt).ok();
+                eprintln!(
+                    "[DiscussionSupervisor] Recovered safely from background task failure in '{}': {}",
+                    session_id, reason
+                );
+
+                // Clean stale lock & persist recoverable Failed status on disk
+                let lock_path = session_dir.join(".session.lock");
+                let _ = fs::remove_file(&lock_path);
+
+                if let Ok(mut meta) = load_metadata(&session_dir) {
+                    meta.status = DiscussionStatus::Failed;
+                    meta.error_message = Some(format!(
+                        "Recovered safely from internal execution error: {}",
+                        reason
+                    ));
+                    meta.updated_at = now_ms();
+                    let _ = save_metadata(&session_dir, &meta);
+                }
+
+                {
+                    let mut active = active_map.lock().await;
+                    active.remove(&session_id);
+                }
+
+                let fail_evt = DiscussionEvent::StatusChanged {
+                    session_id,
+                    new_status: DiscussionStatus::Failed,
+                };
+                app.emit("discussion:event", &fail_evt).ok();
+            }
         }
     });
 }

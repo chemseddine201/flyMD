@@ -37,6 +37,52 @@ export interface DiscussionSlice {
   loadReport: (workspacePath: string, sessionId: string, version?: number) => Promise<void>;
 }
 
+let activeSyncSequence = 0;
+
+async function syncDiscussionFromBackend(
+  set: any,
+  get: any,
+  workspace: string,
+  sessionId: string,
+  triggerStatus?: string
+) {
+  const currentSeq = ++activeSyncSequence;
+  if (!window.electronAPI) return;
+
+  try {
+    const meta = await window.electronAPI.getDiscussionMetadata(workspace, sessionId);
+    if (currentSeq !== activeSyncSequence) return; // Ignore outdated responses
+
+    const transcript = await window.electronAPI.getDiscussionTranscript(workspace, sessionId);
+    if (currentSeq !== activeSyncSequence) return; // Ignore outdated responses
+
+    const list = await window.electronAPI.listDiscussions(workspace);
+    if (currentSeq !== activeSyncSequence) return; // Ignore outdated responses
+
+    const effectiveStatus = triggerStatus || meta?.status;
+    const isRunning = effectiveStatus === 'running';
+
+    set((state: any) => ({
+      activeDiscussionMeta: meta || state.activeDiscussionMeta,
+      activeTranscript: transcript || state.activeTranscript,
+      discussions: list || state.discussions,
+      isDiscussionRunning: isRunning,
+      streamingChunks: !isRunning ? {} : state.streamingChunks,
+      streamingThinking: !isRunning ? {} : state.streamingThinking,
+    }));
+
+    if (
+      meta &&
+      (effectiveStatus === 'awaiting_review' || effectiveStatus === 'completed') &&
+      meta.latestReportVersion > 0
+    ) {
+      get().loadReport(workspace, sessionId, meta.latestReportVersion);
+    }
+  } catch (err) {
+    console.warn('[DiscussionSlice] Failed to sync discussion state:', err);
+  }
+}
+
 export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) => ({
   discussions: [],
   activeSessionId: null,
@@ -257,7 +303,10 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
       return;
     }
 
-    const workspace = (window as any)._flymd_last_workspace;
+    const workspace =
+      (window as any)._flymd_last_workspace ||
+      (get() as any).folderPath ||
+      '.';
     const sessionId = payload.session_id || activeSessionId;
 
     switch (event.type) {
@@ -273,20 +322,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         }));
 
         if (workspace && sessionId && window.electronAPI) {
-          window.electronAPI.getDiscussionMetadata(workspace, sessionId).then((meta) => {
-            if (meta) {
-              set({ activeDiscussionMeta: meta });
-              if ((newStatus === 'awaiting_review' || newStatus === 'completed') && meta.latestReportVersion > 0) {
-                get().loadReport(workspace, sessionId, meta.latestReportVersion);
-              }
-            }
-          }).catch(console.error);
-          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
-            if (transcript) set({ activeTranscript: transcript });
-          }).catch(console.error);
-          window.electronAPI.listDiscussions(workspace).then((list) => {
-            if (list) set({ discussions: list });
-          }).catch(console.error);
+          syncDiscussionFromBackend(set, get, workspace, sessionId, newStatus);
         }
         break;
       }
@@ -312,20 +348,13 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
             : null,
         }));
         if (workspace && sessionId && window.electronAPI) {
-          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
-            if (transcript) set({ activeTranscript: transcript });
-          }).catch(console.error);
-          window.electronAPI.getDiscussionMetadata(workspace, sessionId).then((meta) => {
-            if (meta) set({ activeDiscussionMeta: meta });
-          }).catch(console.error);
+          syncDiscussionFromBackend(set, get, workspace, sessionId, 'paused');
         }
         break;
       }
       case 'GuidanceInjected': {
         if (workspace && sessionId && window.electronAPI) {
-          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
-            if (transcript) set({ activeTranscript: transcript });
-          }).catch(console.error);
+          syncDiscussionFromBackend(set, get, workspace, sessionId);
         }
         break;
       }
@@ -360,31 +389,15 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
           return { streamingChunks: nextChunks, streamingThinking: nextThinking };
         });
 
-        // Immediately refresh official transcript & metadata from durable backend
+        // Sequence-guarded sync from backend
         if (workspace && sessionId && window.electronAPI) {
-          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
-            if (transcript) set({ activeTranscript: transcript });
-          }).catch(console.error);
-          window.electronAPI.getDiscussionMetadata(workspace, sessionId).then((meta) => {
-            if (meta) set({ activeDiscussionMeta: meta });
-          }).catch(console.error);
-          window.electronAPI.listDiscussions(workspace).then((list) => {
-            if (list) set({ discussions: list });
-          }).catch(console.error);
+          syncDiscussionFromBackend(set, get, workspace, sessionId);
         }
         break;
       }
       case 'RoundCompleted': {
         if (workspace && sessionId && window.electronAPI) {
-          window.electronAPI.getDiscussionMetadata(workspace, sessionId).then((meta) => {
-            if (meta) set({ activeDiscussionMeta: meta });
-          }).catch(console.error);
-          window.electronAPI.getDiscussionTranscript(workspace, sessionId).then((transcript) => {
-            if (transcript) set({ activeTranscript: transcript });
-          }).catch(console.error);
-          window.electronAPI.listDiscussions(workspace).then((list) => {
-            if (list) set({ discussions: list });
-          }).catch(console.error);
+          syncDiscussionFromBackend(set, get, workspace, sessionId);
         }
         break;
       }

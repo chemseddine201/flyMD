@@ -570,6 +570,27 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     };
   }, [handleDiscussionEvent]);
 
+  // Reconciliation Heartbeat Guard:
+  // If isRunning is true, verify every 2.5s with backend metadata to guard against dropped IPC push events
+  useEffect(() => {
+    if (!isRunning || !activeSessionId || !resolvedWorkspace) return;
+
+    const timer = setInterval(async () => {
+      try {
+        if (!window.electronAPI?.getDiscussionMetadata) return;
+        const meta = await window.electronAPI.getDiscussionMetadata(resolvedWorkspace, activeSessionId);
+        if (meta && meta.status !== 'running') {
+          console.log(`[DiscussionStudio] Heartbeat reconciled settled discussion '${activeSessionId}' (status: ${meta.status})`);
+          await selectDiscussion(resolvedWorkspace, activeSessionId);
+        }
+      } catch (err) {
+        console.warn('[DiscussionStudio] Heartbeat check failed:', err);
+      }
+    }, 2500);
+
+    return () => clearInterval(timer);
+  }, [isRunning, activeSessionId, resolvedWorkspace, selectDiscussion]);
+
   // When active session changes or finishes, auto-load report if available
   useEffect(() => {
     if (activeMeta?.latestReportVersion && activeMeta.latestReportVersion > 0 && !activeReportMarkdown && resolvedWorkspace && activeSessionId) {
