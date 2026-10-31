@@ -205,8 +205,8 @@ const electronAPI = {
     ipcRenderer.invoke('file:delete-path', targetPath),
   openExternalPath: (targetPath: string): Promise<boolean> =>
     ipcRenderer.invoke('file:open-external-path', targetPath),
-  clearWorkspaceCache: (workspacePath: string, clearMemory: boolean): Promise<string> =>
-    ipcRenderer.invoke('agent:clear-workspace-cache', workspacePath, clearMemory),
+  clearWorkspaceCache: (workspacePath: string, clearMemory: boolean, clearTempCache?: boolean): Promise<string> =>
+    ipcRenderer.invoke('agent:clear-workspace-cache', workspacePath, clearMemory, clearTempCache),
   // Multi-Agent Discussion System
   startDiscussion: (config: DiscussionConfig): Promise<DiscussionMetadata> =>
     ipcRenderer.invoke('discussion:start', config),

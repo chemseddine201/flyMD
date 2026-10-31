@@ -94,6 +94,9 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
   const openDispatchModal = usePreviewStore((s) => s.openDispatchModal);
   const activeTab = usePreviewStore(selectActiveTab);
   const openFileInTab = usePreviewStore((s) => s.openFileInTab);
+  const closeTab = usePreviewStore((s) => s.closeTab);
+  const addTab = usePreviewStore((s) => s.addTab);
+  const clearAllDiscussions = usePreviewStore((s) => s.clearAllDiscussions);
   const updateActiveContent = usePreviewStore((s) => s.updateActiveContent);
   const setViewMode = usePreviewStore((s) => s.setViewMode);
   const folderPath = usePreviewStore((s) => s.folderPath);
@@ -137,8 +140,12 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
     string | null
   >(null);
   const [showClearCacheModal, setShowClearCacheModal] = useState(false);
+  const [clearTempCache, setClearTempCache] = useState(true);
   const [clearMemoryLedger, setClearMemoryLedger] = useState(true);
   const [clearCompletedSessions, setClearCompletedSessions] = useState(true);
+  const [clearDebatesAndCouncil, setClearDebatesAndCouncil] = useState(true);
+  const [clearPipelineAndReports, setClearPipelineAndReports] = useState(true);
+  const [closeRelatedOpenedFiles, setCloseRelatedOpenedFiles] = useState(true);
   const [clearingCache, setClearingCache] = useState(false);
   const [cacheNotification, setCacheNotification] = useState<string | null>(null);
   const [showProjectTree, setShowProjectTree] = useState<boolean>(true);
@@ -1843,19 +1850,106 @@ ${projDesc}
   const handleExecuteClearCache = async () => {
     if (!resolvedWorkspace) return;
     setClearingCache(true);
+    const clearedSummary: string[] = [];
     try {
-      if (window.electronAPI.clearWorkspaceCache) {
-        const result = await window.electronAPI.clearWorkspaceCache(
-          resolvedWorkspace,
-          clearMemoryLedger
-        );
-        if (clearCompletedSessions) {
-          const remaining = await window.electronAPI.clearAgentTasks();
-          setAgentTasks(remaining);
+      // 1. Clear backend workspace cache (.flymd/handoffs, .flymd/reports, .flymd/checkpoints, .flymd/cache, MEMORY.md)
+      if (clearTempCache || clearMemoryLedger) {
+        if (window.electronAPI.clearWorkspaceCache) {
+          const result = await window.electronAPI.clearWorkspaceCache(
+            resolvedWorkspace,
+            clearMemoryLedger,
+            clearTempCache
+          );
+          if (result) clearedSummary.push(result);
         }
-        setCacheNotification(result || 'Workspace cache cleared successfully.');
-        setTimeout(() => setCacheNotification(null), 4000);
       }
+
+      // 2. Clear finished task sessions & logs
+      if (clearCompletedSessions) {
+        const remaining = await window.electronAPI.clearAgentTasks();
+        setAgentTasks(remaining);
+        setSelectedTaskId(null);
+        clearedSummary.push('task sessions');
+      }
+
+      // 3. Clear all debates & deliberation memory
+      if (clearDebatesAndCouncil) {
+        await clearAllDiscussions(resolvedWorkspace);
+        clearedSummary.push('debate sessions');
+      }
+
+      // 4. Reset pipeline state, checklist, and deliverables reports
+      if (clearPipelineAndReports) {
+        setPipelines((prev) =>
+          prev.map((p) => ({
+            ...p,
+            steps: p.steps.map((s) => ({
+              ...s,
+              status: undefined,
+              completedTaskId: undefined,
+              errorDiagnostic: undefined,
+              completedAt: undefined,
+            })),
+          }))
+        );
+        setRunningPipelineId(null);
+        setRunningPipelineStepIdx(-1);
+        setWaitingForStepApproval(null);
+        globalPipelineRuntime.cancelled = true;
+        globalPipelineRuntime.proceedResolver = null;
+        globalPipelineRuntime.recoveryResolver = null;
+        try {
+          localStorage.removeItem('flymd:active-pipeline-run');
+        } catch {}
+        setCompletedPipelineSummary(null);
+        setAssignedReportDoc(null);
+        setPendingRecoveryPrompt(null);
+        setLifecycleStage('debate');
+        clearedSummary.push('pipeline & report UI');
+      }
+
+      // 5. Close related opened files in editor
+      if (closeRelatedOpenedFiles) {
+        const currentTabs = usePreviewStore.getState().tabs;
+        const normalizedWs = resolvedWorkspace.toLowerCase().replace(/\\/g, '/');
+        const tabsToClose = currentTabs.filter((t) => {
+          if (!t.filePath) return false;
+          const normalizedPath = t.filePath.toLowerCase().replace(/\\/g, '/');
+          const isUnderFlymd =
+            normalizedPath.includes('/.flymd/') ||
+            normalizedPath.includes('\\.flymd\\') ||
+            normalizedPath.endsWith('/.flymd') ||
+            normalizedPath.endsWith('\\.flymd');
+          const isUnderWorkspaceFlymd = normalizedPath.startsWith(`${normalizedWs}/.flymd/`);
+          const isGeneratedReport =
+            t.fileName.toLowerCase().includes('flymd-pipeline-deliverables-report') ||
+            t.fileName.toLowerCase().startsWith('report-task-') ||
+            t.fileName.toLowerCase() === 'memory.md';
+          return isUnderFlymd || isUnderWorkspaceFlymd || isGeneratedReport;
+        });
+
+        for (const tab of tabsToClose) {
+          closeTab(tab.id);
+        }
+
+        const remainingTabs = usePreviewStore.getState().tabs;
+        if (remainingTabs.length === 0) {
+          addTab({
+            fileName: 'Welcome.md',
+            content: '# FlyMD\n\nWorkspace memory and caches cleared.\n',
+          });
+        }
+        if (tabsToClose.length > 0) {
+          clearedSummary.push(`${tabsToClose.length} related open tab(s)`);
+        }
+      }
+
+      setCacheNotification(
+        clearedSummary.length > 0
+          ? `Cleared: ${clearedSummary.join(', ')}.`
+          : 'Workspace memory and cache cleared successfully.'
+      );
+      setTimeout(() => setCacheNotification(null), 4000);
       setShowClearCacheModal(false);
     } catch (err: any) {
       console.error('Failed to clear workspace cache:', err);
@@ -2051,6 +2145,12 @@ ${projDesc}
               onClick={() => {
                 setShowCouncilModal(false);
                 setShowAgentAccountsModal(false);
+                setClearTempCache(true);
+                setClearMemoryLedger(true);
+                setClearCompletedSessions(true);
+                setClearDebatesAndCouncil(true);
+                setClearPipelineAndReports(true);
+                setCloseRelatedOpenedFiles(true);
                 setShowClearCacheModal(true);
               }}
               className="p-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 transition-colors"
@@ -2397,74 +2497,128 @@ ${projDesc}
               </button>
             </div>
 
-            <div className="p-4 space-y-3.5 text-xs">
+            <div className="p-4 space-y-3 text-xs max-h-[75vh] overflow-y-auto">
               <p className="text-slate-300 leading-relaxed">
-                Clean temporary workspace agent data for{' '}
+                Select items to clean and reset for workspace{' '}
                 <strong className="text-white font-mono break-all">
                   {resolvedWorkspace}
                 </strong>
                 :
               </p>
 
-              <div className="space-y-2 p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
-                <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2">
-                  <Check size={12} className="text-emerald-400 shrink-0" />
-                  <span>
-                    Temporary agent handoff packages (
-                    <code className="text-slate-400">.flymd/handoffs</code>)
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2">
-                  <Check size={12} className="text-emerald-400 shrink-0" />
-                  <span>
-                    Temporary agent execution reports (
-                    <code className="text-slate-400">.flymd/reports</code>)
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2">
-                  <Check size={12} className="text-emerald-400 shrink-0" />
-                  <span>
-                    Safety checkpoint backups (
-                    <code className="text-slate-400">.flymd/checkpoints</code>)
-                  </span>
-                </div>
-              </div>
+              <div className="space-y-2 pt-0.5">
+                {/* 1. Temp Cache */}
+                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={clearTempCache}
+                    onChange={(e) => setClearTempCache(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-200 text-[11px]">
+                      Purge Temporary Cache &amp; Checkpoints
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Deletes <code className="text-slate-300">.flymd/handoffs</code>, <code className="text-slate-300">.flymd/reports</code>, <code className="text-slate-300">.flymd/checkpoints</code>, and cognitive cache.
+                    </div>
+                  </div>
+                </label>
 
-              <div className="space-y-2 pt-1">
-                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                {/* 2. Memory Ledger */}
+                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
                   <input
                     type="checkbox"
                     checked={clearMemoryLedger}
                     onChange={(e) => setClearMemoryLedger(e.target.checked)}
-                    className="rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
                   />
                   <div className="min-w-0">
                     <div className="font-semibold text-slate-200 text-[11px]">
                       Reset Shared Agent Memory Ledger
                     </div>
                     <div className="text-[10px] text-slate-400">
-                      Re-initializes{' '}
-                      <code className="text-amber-300">.flymd/MEMORY.md</code> to
-                      a clean slate.
+                      Re-initializes <code className="text-amber-300">.flymd/MEMORY.md</code> to a clean slate.
                     </div>
                   </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                {/* 3. Task Sessions */}
+                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
                   <input
                     type="checkbox"
                     checked={clearCompletedSessions}
                     onChange={(e) =>
                       setClearCompletedSessions(e.target.checked)
                     }
-                    className="rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
                   />
                   <div className="min-w-0">
                     <div className="font-semibold text-slate-200 text-[11px]">
-                      Clear Finished Task Sessions
+                      Clear Finished Task Sessions &amp; Logs
                     </div>
                     <div className="text-[10px] text-slate-400">
-                      Removes completed agent sessions and execution logs from memory.
+                      Removes completed agent session records, execution history, and logs from memory.
+                    </div>
+                  </div>
+                </label>
+
+                {/* 4. Debates & Council */}
+                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={clearDebatesAndCouncil}
+                    onChange={(e) =>
+                      setClearDebatesAndCouncil(e.target.checked)
+                    }
+                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-200 text-[11px]">
+                      Clear All Debates &amp; Deliberation Memory
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Stops active deliberations, purges <code className="text-purple-300">.flymd/discussions</code> transcripts, and resets Council UI.
+                    </div>
+                  </div>
+                </label>
+
+                {/* 5. Pipeline & Reports UI */}
+                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={clearPipelineAndReports}
+                    onChange={(e) =>
+                      setClearPipelineAndReports(e.target.checked)
+                    }
+                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-200 text-[11px]">
+                      Reset Pipeline State &amp; Deliverables Reports
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Resets workflow steps to Idle, cancels running pipeline runs, and resets active report viewers.
+                    </div>
+                  </div>
+                </label>
+
+                {/* 6. Close Related Opened Files */}
+                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={closeRelatedOpenedFiles}
+                    onChange={(e) =>
+                      setCloseRelatedOpenedFiles(e.target.checked)
+                    }
+                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-200 text-[11px]">
+                      Close Related Opened Files &amp; Reports in Editor
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Closes editor tabs pointing to <code className="text-sky-300">.flymd</code> memory, generated reports, and handoffs.
                     </div>
                   </div>
                 </label>

@@ -276,10 +276,11 @@
     openExternalPath: function (targetPath) {
       return invoke('cmd_open_external_path', { targetPath: targetPath });
     },
-    clearWorkspaceCache: function (workspacePath, clearMemory) {
+    clearWorkspaceCache: function (workspacePath, clearMemory, clearTempCache) {
       return invoke('cmd_clear_workspace_cache', {
         workspacePath: workspacePath,
         clearMemory: clearMemory,
+        clearTempCache: clearTempCache !== undefined ? clearTempCache : true,
       });
     },
 

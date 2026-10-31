@@ -126,6 +126,7 @@ pub fn cmd_delete_agent_task(
 pub fn cmd_clear_workspace_cache(
     workspace_path: String,
     clear_memory: bool,
+    clear_temp_cache: Option<bool>,
 ) -> Result<String, String> {
-    super::checkpoint::clear_workspace_memory_and_cache(&workspace_path, clear_memory)
+    super::checkpoint::clear_workspace_memory_and_cache(&workspace_path, clear_memory, clear_temp_cache)
 }

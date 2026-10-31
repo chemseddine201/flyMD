@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { usePreviewStore } from '../../../store';
 import {
@@ -34,6 +35,26 @@ interface ProjectTreeNavigatorProps {
   onWorkspaceChange?: (newWorkspace: string) => void;
 }
 
+function collectSubtreeNodes(node: ProjectTreeNode): ProjectTreeNode[] {
+  const result: ProjectTreeNode[] = [node];
+  if (node.children && node.children.length > 0) {
+    for (const child of node.children) {
+      result.push(...collectSubtreeNodes(child));
+    }
+  }
+  return result;
+}
+
+function resolveScopePath(workspace: string, rawPath: string): string {
+  const trimmed = rawPath.trim();
+  if (/^[a-zA-Z]:[\\/]/.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('\\')) {
+    return trimmed.replace(/\\/g, '/');
+  }
+  const cleanWs = workspace.replace(/\\/g, '/').replace(/\/+$/, '');
+  const cleanRel = trimmed.replace(/\\/g, '/').replace(/^\/+/, '');
+  return `${cleanWs}/${cleanRel}`;
+}
+
 export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   workspacePath,
   onClose,
@@ -46,6 +67,10 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   const deleteProject = usePreviewStore((s) => s.deleteProject);
   const isProjectsLoading = usePreviewStore((s) => s.isProjectsLoading);
   const projectsError = usePreviewStore((s) => s.projectsError);
+  const closeTab = usePreviewStore((s) => s.closeTab);
+  const addTab = usePreviewStore((s) => s.addTab);
+  const setPipelines = usePreviewStore((s) => s.setPipelines);
+  const deleteDiscussion = usePreviewStore((s) => s.deleteDiscussion);
 
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -54,8 +79,18 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectScope, setNewProjectScope] = useState('');
   const [modalWorkspacePath, setModalWorkspacePath] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Delete Project Confirmation Modal states (all default to true)
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [pendingDeleteNode, setPendingDeleteNode] = useState<ProjectTreeNode | null>(null);
+  const [deleteMemoryAndTree, setDeleteMemoryAndTree] = useState(true);
+  const [deleteLinkedDebates, setDeleteLinkedDebates] = useState(true);
+  const [resetLinkedPipelines, setResetLinkedPipelines] = useState(true);
+  const [closeRelatedTabs, setCloseRelatedTabs] = useState(true);
+  const [deleteFilesOnDisk, setDeleteFilesOnDisk] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Collapsible and Resizable sidebar states
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
@@ -65,6 +100,18 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
       return false;
     }
   });
+
+  const pendingSubtree = pendingDeleteNode ? collectSubtreeNodes(pendingDeleteNode) : [];
+  const childSubprojectCount = Math.max(0, pendingSubtree.length - 1);
+  const pendingDebateCount = pendingSubtree.filter((n) => Boolean(n.active_debate_id)).length;
+  const pendingScopePaths = Array.from(
+    new Set(
+      pendingSubtree
+        .flatMap((n) => n.scope_paths || [])
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0)
+    )
+  );
 
   const [treeWidth, setTreeWidth] = useState<number>(() => {
     try {
@@ -200,13 +247,174 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     }
   };
 
-  const handleDelete = async (projectId: string, e: React.MouseEvent) => {
+  const handleOpenDeleteModal = (node: ProjectTreeNode, e: React.MouseEvent) => {
     e.stopPropagation();
+    setPendingDeleteNode(node);
+    setDeleteMemoryAndTree(true);
+    setDeleteLinkedDebates(true);
+    setResetLinkedPipelines(true);
+    setCloseRelatedTabs(true);
+    setDeleteFilesOnDisk(true);
+    setDeleteError(null);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDeleteProject = async () => {
+    if (!pendingDeleteNode) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
     const effectiveWorkspace =
-      workspacePath && workspacePath.trim().length > 0 ? workspacePath.trim() : '.';
-    setDeletingId(projectId);
-    await deleteProject(effectiveWorkspace, projectId);
-    setDeletingId(null);
+      workspacePath && workspacePath.trim().length > 0 && workspacePath.trim() !== '.'
+        ? workspacePath.trim()
+        : usePreviewStore.getState().folderPath || '.';
+
+    try {
+      const subtreeNodes = collectSubtreeNodes(pendingDeleteNode);
+      const allProjectIds = subtreeNodes.map((n) => n.id);
+      const allDebateIds = Array.from(
+        new Set(
+          subtreeNodes
+            .map((n) => n.active_debate_id)
+            .filter((id): id is string => Boolean(id && id.trim().length > 0))
+        )
+      );
+      const allPipelineIds = Array.from(
+        new Set(
+          subtreeNodes
+            .map((n) => n.active_pipeline_id)
+            .filter((id): id is string => Boolean(id && id.trim().length > 0))
+        )
+      );
+      const allScopePaths = Array.from(
+        new Set(
+          subtreeNodes
+            .flatMap((n) => n.scope_paths || [])
+            .map((p) => p.trim())
+            .filter((p) => p.length > 0)
+        )
+      );
+
+      // 1. Delete physical files on disk if requested
+      if (deleteFilesOnDisk && allScopePaths.length > 0) {
+        const normWs = effectiveWorkspace.toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
+        for (const rawPath of allScopePaths) {
+          const resolved = resolveScopePath(effectiveWorkspace, rawPath);
+          const normResolved = resolved.toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
+          if (
+            !normResolved ||
+            normResolved === normWs ||
+            normResolved === '.' ||
+            normResolved === '/' ||
+            normResolved.length <= 3
+          ) {
+            console.warn('[ProjectTreeNavigator] Skipping unsafe path deletion:', resolved);
+            continue;
+          }
+          if (window.electronAPI?.deleteFilePath) {
+            try {
+              await window.electronAPI.deleteFilePath(resolved);
+            } catch (err) {
+              console.warn('[ProjectTreeNavigator] Failed to delete file path:', resolved, err);
+            }
+          }
+        }
+      }
+
+      // 2. Delete linked debates if requested
+      if (deleteLinkedDebates && allDebateIds.length > 0) {
+        for (const debateId of allDebateIds) {
+          try {
+            await deleteDiscussion(effectiveWorkspace, debateId);
+          } catch (err) {
+            console.warn('[ProjectTreeNavigator] Failed to delete debate session:', debateId, err);
+          }
+        }
+      }
+
+      // 3. Reset linked pipelines if requested
+      if (resetLinkedPipelines && allPipelineIds.length > 0) {
+        setPipelines((prev) =>
+          prev.map((p) => {
+            if (allPipelineIds.includes(p.id)) {
+              return {
+                ...p,
+                steps: p.steps.map((s) => ({
+                  ...s,
+                  status: undefined,
+                  completedTaskId: undefined,
+                  errorDiagnostic: undefined,
+                  completedAt: undefined,
+                })),
+              };
+            }
+            return p;
+          })
+        );
+        const runningId = usePreviewStore.getState().runningPipelineId;
+        if (runningId && allPipelineIds.includes(runningId)) {
+          usePreviewStore.getState().setRunningPipelineId(null);
+          usePreviewStore.getState().setRunningPipelineStepIdx(-1);
+          usePreviewStore.getState().setWaitingForStepApproval(null);
+        }
+      }
+
+      // 4. Close related open tabs in editor if requested
+      if (closeRelatedTabs) {
+        const currentTabs = usePreviewStore.getState().tabs;
+        const tabsToClose = currentTabs.filter((t) => {
+          if (!t.filePath) return false;
+          const normTabPath = t.filePath.toLowerCase().replace(/\\/g, '/');
+          for (const pid of allProjectIds) {
+            if (
+              normTabPath.includes(`/.flymd/projects/${pid.toLowerCase()}`) ||
+              normTabPath.includes(`\\.flymd\\projects\\${pid.toLowerCase()}`)
+            ) {
+              return true;
+            }
+          }
+          for (const rawPath of allScopePaths) {
+            const resolved = resolveScopePath(effectiveWorkspace, rawPath);
+            const normResolved = resolved.toLowerCase().replace(/\\/g, '/');
+            if (normTabPath === normResolved || normTabPath.startsWith(`${normResolved}/`)) {
+              return true;
+            }
+          }
+          return false;
+        });
+
+        for (const tab of tabsToClose) {
+          closeTab(tab.id);
+        }
+
+        const remainingTabs = usePreviewStore.getState().tabs;
+        if (remainingTabs.length === 0) {
+          addTab({
+            fileName: 'Welcome.md',
+            content: '# FlyMD\n\nProject files closed.\n',
+          });
+        }
+      }
+
+      // 5. Delete project tree node and scoped memory records
+      if (deleteMemoryAndTree) {
+        await deleteProject(effectiveWorkspace, pendingDeleteNode.id);
+      }
+
+      // Deselect if selected project was in the deleted subtree
+      const currentSelected = usePreviewStore.getState().selectedProjectId;
+      if (currentSelected && allProjectIds.includes(currentSelected)) {
+        selectProject(null);
+      }
+
+      setShowDeleteModal(false);
+      setPendingDeleteNode(null);
+    } catch (err: any) {
+      console.error('[ProjectTreeNavigator] Error deleting project:', err);
+      setDeleteError(err?.message || String(err) || 'Failed to delete project');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getStatusBadge = (status: ProjectStatus) => {
@@ -302,9 +510,9 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
 
             <button
               type="button"
-              title="Delete Project Node"
-              disabled={deletingId === node.id}
-              onClick={(e) => handleDelete(node.id, e)}
+              title="Delete Project / Sub-Project"
+              disabled={isDeleting && pendingDeleteNode?.id === node.id}
+              onClick={(e) => handleOpenDeleteModal(node, e)}
               className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-950/80 text-slate-400 hover:text-red-400 transition-all"
             >
               <Trash2 className="w-3 h-3" />
@@ -566,6 +774,209 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Project Confirmation Modal */}
+      {showDeleteModal && pendingDeleteNode && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-slate-900 border border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-1.5">
+                    <span>Delete {pendingDeleteNode.parent_id ? 'Sub-Project' : 'Project'}</span>
+                  </h3>
+                  <div className="text-[11px] text-slate-400 truncate max-w-sm font-mono">
+                    {pendingDeleteNode.name}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isDeleting) {
+                    setShowDeleteModal(false);
+                    setPendingDeleteNode(null);
+                  }
+                }}
+                disabled={isDeleting}
+                className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {deleteError && (
+              <div className="mt-3 p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] leading-relaxed">
+                {deleteError}
+              </div>
+            )}
+
+            {/* Sub-project warning badge */}
+            {childSubprojectCount > 0 && (
+              <div className="mt-3 flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                <div className="min-w-0">
+                  <div className="font-semibold text-amber-200">
+                    Recursive Sub-Project Deletion
+                  </div>
+                  <div className="text-[11px] text-amber-300/80 mt-0.5">
+                    This project has <strong>{childSubprojectCount}</strong> nested child sub-project(s). Deletion will cascade to all children and their associated data.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 text-[11px] text-slate-400">
+              Select what related memory, caches, and files to delete:
+            </div>
+
+            {/* Checkbox Options List */}
+            <div className="mt-2.5 space-y-2 max-h-60 overflow-y-auto pr-1">
+              {/* 1. Scoped Memory & Tree */}
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={deleteMemoryAndTree}
+                  onChange={(e) => setDeleteMemoryAndTree(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                />
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-200 text-[11px]">
+                    Delete Project Hierarchy &amp; Scoped Memory
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Removes project tree registration and purges scoped memory records under <code className="text-purple-300 font-mono">.flymd/projects/{pendingDeleteNode.id}</code>.
+                  </div>
+                </div>
+              </label>
+
+              {/* 2. Linked Debates */}
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={deleteLinkedDebates}
+                  onChange={(e) => setDeleteLinkedDebates(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                />
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-200 text-[11px]">
+                    Delete Linked Debates &amp; Deliberation History
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Purges active deliberation transcripts in <code className="text-purple-300 font-mono">.flymd/discussions</code> linked to this project or its sub-projects ({pendingDebateCount} linked).
+                  </div>
+                </div>
+              </label>
+
+              {/* 3. Linked Pipelines */}
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={resetLinkedPipelines}
+                  onChange={(e) => setResetLinkedPipelines(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                />
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-200 text-[11px]">
+                    Reset Linked Workflows &amp; Pipelines
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Resets execution steps back to Idle and halts any running pipeline assigned to this project.
+                  </div>
+                </div>
+              </label>
+
+              {/* 4. Close Related Opened Tabs */}
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={closeRelatedTabs}
+                  onChange={(e) => setCloseRelatedTabs(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                />
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-200 text-[11px]">
+                    Close Related Opened Files &amp; Tabs in Editor
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Closes open editor tabs pointing to this project's scoped directories or memory files.
+                  </div>
+                </div>
+              </label>
+
+              {/* 5. Physical Files on Disk */}
+              <label
+                className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-colors ${
+                  pendingScopePaths.length === 0
+                    ? 'bg-slate-900/40 border-slate-800 opacity-60 cursor-not-allowed'
+                    : 'bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border-slate-700/60'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  disabled={pendingScopePaths.length === 0}
+                  checked={pendingScopePaths.length > 0 && deleteFilesOnDisk}
+                  onChange={(e) => setDeleteFilesOnDisk(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                />
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-200 text-[11px]">
+                    Delete Scoped Files &amp; Folders from Disk
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {pendingScopePaths.length > 0 ? (
+                      <span>
+                        Permanently deletes on disk:{' '}
+                        <code className="text-amber-300 font-mono text-[10px]">
+                          {pendingScopePaths.join(', ')}
+                        </code>
+                      </span>
+                    ) : (
+                      <span>No custom scoped paths configured on this project.</span>
+                    )}
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="mt-4 flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setPendingDeleteNode(null);
+                }}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-xs rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteProject}
+                disabled={isDeleting}
+                className="px-4 py-1.5 text-xs rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Activity className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting Project...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

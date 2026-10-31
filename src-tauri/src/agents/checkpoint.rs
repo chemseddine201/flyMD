@@ -290,6 +290,7 @@ pub fn read_project_memory(workspace_path: &str) -> String {
 pub fn clear_workspace_memory_and_cache(
     workspace_path: &str,
     clear_memory: bool,
+    clear_temp_cache: Option<bool>,
 ) -> Result<String, String> {
     let ws = Path::new(workspace_path);
     if !ws.exists() {
@@ -301,59 +302,62 @@ pub fn clear_workspace_memory_and_cache(
     }
 
     let mut cleared_items = Vec::new();
+    let clean_temp = clear_temp_cache.unwrap_or(true);
 
-    // 1. Clean handoffs
-    let handoffs_dir = flymd_dir.join("handoffs");
-    if handoffs_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&handoffs_dir) {
-            let count = entries
-                .flatten()
-                .filter(|e| fs::remove_file(e.path()).is_ok())
-                .count();
-            if count > 0 {
-                cleared_items.push(format!("{} handoff package(s)", count));
+    if clean_temp {
+        // 1. Clean handoffs
+        let handoffs_dir = flymd_dir.join("handoffs");
+        if handoffs_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&handoffs_dir) {
+                let count = entries
+                    .flatten()
+                    .filter(|e| fs::remove_file(e.path()).is_ok())
+                    .count();
+                if count > 0 {
+                    cleared_items.push(format!("{} handoff package(s)", count));
+                }
             }
         }
-    }
 
-    // 2. Clean reports
-    let reports_dir = flymd_dir.join("reports");
-    if reports_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&reports_dir) {
-            let count = entries
-                .flatten()
-                .filter(|e| fs::remove_file(e.path()).is_ok())
-                .count();
-            if count > 0 {
-                cleared_items.push(format!("{} temporary report(s)", count));
+        // 2. Clean reports
+        let reports_dir = flymd_dir.join("reports");
+        if reports_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&reports_dir) {
+                let count = entries
+                    .flatten()
+                    .filter(|e| fs::remove_file(e.path()).is_ok())
+                    .count();
+                if count > 0 {
+                    cleared_items.push(format!("{} temporary report(s)", count));
+                }
             }
         }
-    }
 
-    // 3. Clean checkpoints
-    let checkpoints_dir = flymd_dir.join("checkpoints");
-    if checkpoints_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&checkpoints_dir) {
-            let count = entries
-                .flatten()
-                .filter(|e| fs::remove_dir_all(e.path()).is_ok())
-                .count();
-            if count > 0 {
-                cleared_items.push(format!("{} checkpoint backup(s)", count));
+        // 3. Clean checkpoints
+        let checkpoints_dir = flymd_dir.join("checkpoints");
+        if checkpoints_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&checkpoints_dir) {
+                let count = entries
+                    .flatten()
+                    .filter(|e| fs::remove_dir_all(e.path()).is_ok())
+                    .count();
+                if count > 0 {
+                    cleared_items.push(format!("{} checkpoint backup(s)", count));
+                }
             }
         }
-    }
 
-    // 3b. Clean cross-model cognitive cache
-    let cache_dir = flymd_dir.join("cache");
-    if cache_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&cache_dir) {
-            let count = entries
-                .flatten()
-                .filter(|e| fs::remove_file(e.path()).is_ok())
-                .count();
-            if count > 0 {
-                cleared_items.push(format!("{} cognitive cache packet(s)", count));
+        // 3b. Clean cross-model cognitive cache
+        let cache_dir = flymd_dir.join("cache");
+        if cache_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&cache_dir) {
+                let count = entries
+                    .flatten()
+                    .filter(|e| fs::remove_file(e.path()).is_ok())
+                    .count();
+                if count > 0 {
+                    cleared_items.push(format!("{} cognitive cache packet(s)", count));
+                }
             }
         }
     }
