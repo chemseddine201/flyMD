@@ -77,12 +77,40 @@ Replace generic output filenames (e.g., `plan.md`, `report.md`) with context-awa
 
 ---
 
+## 📌 Initiative 5: Subscription-Aware Model Selection & Dynamic Side-by-Side Effort Matrix
+
+### Core Objective
+Allow users to specify and select exact models according to their active provider subscription tiers (e.g. Claude Pro/Team/Max, OpenAI Plus/Team/API Tier 1–5, Gemini Advanced/Vertex, Ollama local catalogs, DeepSeek), displaying the model selector side-by-side with dynamic effort and thinking controls that automatically adapt to what each selected model actually supports.
+
+### Key Capabilities
+1. **Subscription-Tier Model Catalog & Custom Model Entry**:
+   - Pre-configured, up-to-date catalog of models grouped by provider and typical subscription/API tiers.
+   - Freeform custom model slug input (e.g., `claude-3-7-sonnet-20250219`, `o3-mini`, `deepseek-reasoner`, `gemini-2.0-flash-thinking-exp-01-21`, or custom fine-tuned / Ollama model IDs).
+   - Subscription-tier profile presets (e.g., "OpenAI Tier 1", "Anthropic Claude Pro", "Local Ollama Workstation", "Gemini Advanced") filtering the dropdown to relevant models.
+2. **Side-by-Side Model & Effort Controls UI**:
+   - Unified pairing of **[Model Dropdown]** side-by-side with **[Effort Selector: Low / Med / High]** and **[Thinking Toggle]** everywhere models are chosen:
+     - Pipeline step configuration bar.
+     - Multi-Agent Deliberation participant cards.
+     - Direct agent quick dispatch modal.
+     - Custom actions creator and agent settings.
+3. **Dynamic Effort Adaptation Matrix**:
+   - Intelligent feature detection per model:
+     - **Reasoning Models** (e.g. `o1`, `o3-mini`, `claude-3-7-sonnet`, `gemini-2.0-flash-thinking`, `deepseek-reasoner`): Automatically enable effort levels (`low`, `medium`, `high`) and thinking toggle.
+     - **Standard Non-Reasoning Models** (e.g. `gpt-4o`, `claude-3-5-haiku`, `gemini-1.5-flash`): Gracefully disable or hide the reasoning effort slider, locking to standard temperature/top-p controls without crashing or sending invalid payloads.
+   - Real-time indicator showing whether reasoning tokens are supported, billable, or simulated.
+4. **Subscription Validation & Fallback Guard**:
+   - Automatically probes or validates whether the selected model is accessible with the user's active API key or CLI session.
+   - Graceful fallback with clear UI feedback if a model returns `403 Forbidden` / `Model not available on your plan`.
+
+---
+
 ## 📋 Execution Order for Next Phase
 
 | Order | Initiative | Impact | Risk Level |
 | :---: | :--- | :--- | :---: |
 | **Step 1** | **System Refactor & Code Splitting** | High Maintainability & Code Quality | Very Low (100% Invariant Parity) |
-| **Step 2** | **Context-Aware Smart Plan Naming** | Immediate Organization & File Safety | Very Low |
-| **Step 3** | **Custom Skills Injection & Directory Linking** | Extensibility & Customization | Low |
-| **Step 4** | **Process Monitor & Control Center** | Complete Transparency & System Control | Medium |
+| **Step 2** | **Subscription-Aware Model Selection & Side-by-Side Effort Matrix** | Tailored Subscription Flexibility & Token Control | Low |
+| **Step 3** | **Context-Aware Smart Deliverable File Naming** | Immediate Organization & File Safety | Very Low |
+| **Step 4** | **Custom Skills Injection & Directory Linking** | Extensibility & Customization | Low |
+| **Step 5** | **Process Monitor, Token Quota Guards & Circuit-Breaker** | Complete Transparency & Cost Governance | Medium |
 
