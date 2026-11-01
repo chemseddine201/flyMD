@@ -198,7 +198,8 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = (props) =
                   attachedImages,
                   customActionId,
                   effortLevel,
-                  thinkingEnabled
+                  thinkingEnabled,
+                  modelId
                 ) => {
                   let promptToSend = text;
                   if (attachedImages && attachedImages.length > 0) {
@@ -218,6 +219,7 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = (props) =
                     customActionLabel: customAct?.name,
                     effortLevel,
                     thinkingEnabled,
+                    modelId,
                   });
                 }}
                 onOpenReportInTab={ctrl.handleOpenReportInTab}

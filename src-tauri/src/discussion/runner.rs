@@ -42,6 +42,7 @@ pub struct TurnRequest {
     pub action_query: Option<String>,
     pub thinking_enabled: bool,
     pub effort_level: Option<String>,
+    pub model_id: Option<String>,
 }
 
 /// Builds provider-specific JSON `messages` array preserving immutable prefix frames at Token 0.
@@ -291,13 +292,28 @@ impl CliProvider {
         }
     }
 
-    /// Generates strict read-only command-line flags (TC-03) with user-selected effort & thinking control.
-    pub fn build_cli_args(&self, prompt: &str, effort_level: Option<&str>, thinking_enabled: bool) -> Vec<String> {
+    /// Generates strict read-only command-line flags (TC-03) with user-selected effort, thinking, and model control.
+    pub fn build_cli_args(
+        &self,
+        prompt: &str,
+        effort_level: Option<&str>,
+        thinking_enabled: bool,
+        model_id: Option<&str>,
+    ) -> Vec<String> {
         let raw_effort = effort_level.unwrap_or("medium").to_lowercase();
         let eff = match raw_effort.as_str() {
             "low" | "medium" | "high" | "xhigh" | "max" => raw_effort.as_str(),
             _ => "medium",
         };
+
+        let sanitized_model = model_id.and_then(|m| {
+            let t = m.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t)
+            }
+        });
 
         match self.cli_type {
             CliType::ClaudeCode => {
@@ -307,6 +323,10 @@ impl CliProvider {
                     "--tools".to_string(),
                     "".to_string(),
                 ];
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
+                }
                 if thinking_enabled {
                     args.push("--effort".to_string());
                     args.push(eff.to_string());
@@ -326,6 +346,10 @@ impl CliProvider {
                     "plan".to_string(),
                     "--sandbox".to_string(),
                 ];
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
+                }
                 if thinking_enabled {
                     args.push("--effort".to_string());
                     args.push(eff.to_string());
@@ -391,7 +415,12 @@ impl DiscussionProvider for CliProvider {
                 .join("\n\n---\n\n")
         };
 
-        let args = self.build_cli_args(&full_prompt, request.effort_level.as_deref(), request.thinking_enabled);
+        let args = self.build_cli_args(
+            &full_prompt,
+            request.effort_level.as_deref(),
+            request.thinking_enabled,
+            request.model_id.as_deref(),
+        );
         let start = std::time::Instant::now();
 
         // Ensure sandbox dir exists
@@ -579,6 +608,12 @@ impl DiscussionProvider for HttpProvider {
         let deadline = start + Duration::from_secs(request.timeout_secs.max(10));
 
         let messages = build_http_messages_json(&request, &self.endpoint_url, self.is_ollama);
+        let effective_model = request
+            .model_id
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&self.model_name);
 
         let response = loop {
             attempts += 1;
@@ -590,7 +625,7 @@ impl DiscussionProvider for HttpProvider {
                 let base = self.endpoint_url.trim_end_matches('/');
                 let url = format!("{}/api/chat", base);
                 let body = serde_json::json!({
-                    "model": self.model_name,
+                    "model": effective_model,
                     "messages": messages,
                     "stream": true,
                     "keep_alive": "15m",
@@ -615,7 +650,7 @@ impl DiscussionProvider for HttpProvider {
                     }
                 }
                 let body = serde_json::json!({
-                    "model": self.model_name,
+                    "model": effective_model,
                     "messages": messages,
                     "stream": true,
                     "temperature": 0.6
@@ -1091,6 +1126,7 @@ mod tests {
             action_query: None,
             thinking_enabled: true,
             effort_level: Some("medium".to_string()),
+            model_id: None,
         };
 
         let sink = Box::new(CollectingSink {
@@ -1125,6 +1161,7 @@ mod tests {
             action_query: None,
             thinking_enabled: false,
             effort_level: Some("medium".to_string()),
+            model_id: None,
         };
 
         let err = provider
@@ -1162,10 +1199,13 @@ mod tests {
             PathBuf::from("claude.exe"),
             PathBuf::from("sandbox"),
         );
-        let claude_args_high = claude_adapter.build_cli_args("Debate topic", Some("high"), true);
+        let claude_args_high = claude_adapter.build_cli_args("Debate topic", Some("high"), true, None);
         assert_eq!(claude_args_high, vec!["-p", "Debate topic", "--tools", "", "--effort", "high"]);
 
-        let claude_args_no_think = claude_adapter.build_cli_args("Debate topic", Some("high"), false);
+        let claude_args_with_model = claude_adapter.build_cli_args("Debate topic", Some("high"), true, Some("claude-3-7-sonnet"));
+        assert_eq!(claude_args_with_model, vec!["-p", "Debate topic", "--tools", "", "--model", "claude-3-7-sonnet", "--effort", "high"]);
+
+        let claude_args_no_think = claude_adapter.build_cli_args("Debate topic", Some("high"), false, None);
         assert_eq!(
             claude_args_no_think,
             vec!["-p", "Debate topic", "--tools", "", "--effort", "low", "--settings", "{\"alwaysThinkingEnabled\":false}"]
@@ -1176,13 +1216,19 @@ mod tests {
             PathBuf::from("agy.exe"),
             PathBuf::from("sandbox"),
         );
-        let gemini_args_med = gemini_adapter.build_cli_args("Debate topic", Some("medium"), true);
+        let gemini_args_med = gemini_adapter.build_cli_args("Debate topic", Some("medium"), true, None);
         assert_eq!(
             gemini_args_med,
             vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--effort", "medium"]
         );
 
-        let gemini_args_no_think = gemini_adapter.build_cli_args("Debate topic", Some("medium"), false);
+        let gemini_args_with_model = gemini_adapter.build_cli_args("Debate topic", Some("medium"), true, Some("gemini-2.5-pro"));
+        assert_eq!(
+            gemini_args_with_model,
+            vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--model", "gemini-2.5-pro", "--effort", "medium"]
+        );
+
+        let gemini_args_no_think = gemini_adapter.build_cli_args("Debate topic", Some("medium"), false, None);
         assert_eq!(
             gemini_args_no_think,
             vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--effort", "low"]
@@ -1285,6 +1331,7 @@ mod tests {
             action_query: None,
             thinking_enabled: true,
             effort_level: Some("medium".to_string()),
+            model_id: None,
         };
 
         let openai_msgs = build_http_messages_json(&req, "https://api.deepseek.com", false);

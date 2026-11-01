@@ -30,6 +30,7 @@ import {
   Lock,
   Brain,
 } from 'lucide-react';
+import { ModelEffortSideBySidePicker } from '../common/ModelEffortSideBySidePicker';
 import {
   AgentEffortLevel,
   AgentId,
@@ -756,60 +757,6 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       </select>
                     </div>
 
-                    {/* Step Effort Level & Thinking Controls */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <select
-                        value={step.effortLevel || 'medium'}
-                        disabled={isStepDisabled}
-                        onChange={(e) => {
-                          const newEffort = e.target.value as AgentEffortLevel;
-                          confirmOrExecuteModification(() => {
-                            onUpdatePipelineStep(primaryPipeline.id, idx, {
-                              effortLevel: newEffort,
-                            });
-                          });
-                        }}
-                        title={
-                          stepAgent?.supportsEffort === false
-                            ? `Effort Level: ${step.effortLevel || 'medium'} (Agent uses balanced medium fallback)`
-                            : `Reasoning Effort: ${step.effortLevel || 'medium'}`
-                        }
-                        className="bg-slate-900/90 text-indigo-300 font-bold text-[10px] rounded px-1 py-0.5 border border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer disabled:cursor-not-allowed shrink-0"
-                      >
-                        <option value="low" className="bg-slate-900 text-slate-200">Low</option>
-                        <option value="medium" className="bg-slate-900 text-slate-200">Med</option>
-                        <option value="high" className="bg-slate-900 text-slate-200">High</option>
-                        <option value="xhigh" className="bg-slate-900 text-slate-200">XHigh</option>
-                        <option value="max" className="bg-slate-900 text-slate-200">Max</option>
-                      </select>
-
-                      <button
-                        type="button"
-                        disabled={isStepDisabled}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const currentVal = step.thinkingEnabled ?? true;
-                          confirmOrExecuteModification(() => {
-                            onUpdatePipelineStep(primaryPipeline.id, idx, {
-                              thinkingEnabled: !currentVal,
-                            });
-                          });
-                        }}
-                        title={
-                          (step.thinkingEnabled ?? true)
-                            ? 'Thinking Mode: ON (Click to disable thinking and save tokens)'
-                            : 'Thinking Mode: OFF (Fast direct execution without CoT deliberation)'
-                        }
-                        className={`p-1 rounded transition-colors shrink-0 ${
-                          (step.thinkingEnabled ?? true)
-                            ? 'text-indigo-400 bg-indigo-950/60 border border-indigo-500/40 hover:bg-indigo-900/50'
-                            : 'text-slate-600 bg-slate-950/40 border border-slate-800 hover:text-slate-400'
-                        }`}
-                      >
-                        <Brain size={11} className={(step.thinkingEnabled ?? true) ? 'drop-shadow-[0_0_4px_rgba(129,140,248,0.7)]' : ''} />
-                      </button>
-                    </div>
-
                     {/* Status Badges & Inline Resume/Retry Trigger */}
                     {isStepIncomplete && (
                       <div className="flex items-center gap-1 shrink-0">
@@ -920,6 +867,40 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                         <X size={11} />
                       </button>
                     )}
+                  </div>
+
+                  {/* Dedicated Side-by-Side Model & Effort Matrix Row */}
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-800/60">
+                    <ModelEffortSideBySidePicker
+                      agentId={effectiveAgentId}
+                      selectedModel={step.modelId}
+                      onChangeModel={(newModel) => {
+                        confirmOrExecuteModification(() => {
+                          onUpdatePipelineStep(primaryPipeline.id, idx, {
+                            modelId: newModel,
+                          });
+                        });
+                      }}
+                      effortLevel={step.effortLevel || 'medium'}
+                      onChangeEffortLevel={(newEffort) => {
+                        confirmOrExecuteModification(() => {
+                          onUpdatePipelineStep(primaryPipeline.id, idx, {
+                            effortLevel: newEffort,
+                          });
+                        });
+                      }}
+                      thinkingEnabled={step.thinkingEnabled ?? true}
+                      onToggleThinking={() => {
+                        const currentVal = step.thinkingEnabled ?? true;
+                        confirmOrExecuteModification(() => {
+                          onUpdatePipelineStep(primaryPipeline.id, idx, {
+                            thinkingEnabled: !currentVal,
+                          });
+                        });
+                      }}
+                      disabled={isStepDisabled}
+                      compact={true}
+                    />
                   </div>
 
                   {/* Inline Step Note Editor Popover */}

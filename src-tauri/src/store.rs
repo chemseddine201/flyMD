@@ -471,6 +471,7 @@ mod tests {
             modified_files: Vec::new(),
             effort_level: Some("medium".to_string()),
             thinking_enabled: Some(true),
+            model_id: None,
         }
     }
 

@@ -303,6 +303,7 @@ impl AgentOrchestrator {
                 .clone()
                 .or_else(|| Some("medium".to_string())),
             thinking_enabled: req.thinking_enabled.or(Some(true)),
+            model_id: req.model_id.clone(),
         };
 
         let memory_entry = format!(

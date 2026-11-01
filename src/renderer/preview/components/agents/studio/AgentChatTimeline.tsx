@@ -67,7 +67,8 @@ interface AgentChatTimelineProps {
     attachedImages?: ChatImageAttachment[],
     customActionId?: string,
     effortLevel?: AgentEffortLevel,
-    thinkingEnabled?: boolean
+    thinkingEnabled?: boolean,
+    modelId?: string
   ) => Promise<void>;
   onOpenReportInTab: (
     filePath?: string,

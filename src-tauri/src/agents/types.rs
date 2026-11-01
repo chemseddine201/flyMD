@@ -232,6 +232,8 @@ pub struct AgentTaskRequest {
     pub effort_level: Option<String>,
     #[serde(rename = "thinkingEnabled", default)]
     pub thinking_enabled: Option<bool>,
+    #[serde(rename = "modelId", default)]
+    pub model_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -329,6 +331,8 @@ pub struct AgentTaskRecord {
     pub effort_level: Option<String>,
     #[serde(rename = "thinkingEnabled", default)]
     pub thinking_enabled: Option<bool>,
+    #[serde(rename = "modelId", default)]
+    pub model_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

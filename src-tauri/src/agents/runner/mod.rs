@@ -231,10 +231,12 @@ pub fn spawn_agent_execution(
                     _ => "medium",
                 };
                 let thinking_on = record.thinking_enabled.unwrap_or(true);
+                let model_val = record.model_id.as_deref();
 
                 emit_log(format!(
-                    "[Reasoning Config] Agent: {} | Effort: {} | Thinking: {}",
+                    "[Reasoning Config] Agent: {} | Model: {} | Effort: {} | Thinking: {}",
                     agent_name,
+                    model_val.unwrap_or("default"),
                     effort_val,
                     if thinking_on { "ON" } else { "OFF" }
                 ));
@@ -248,6 +250,7 @@ pub fn spawn_agent_execution(
                     warm_cli_continue,
                     thinking_on,
                     effort_val,
+                    model_val,
                 );
 
                 #[cfg(target_os = "windows")]
@@ -476,6 +479,7 @@ pub fn spawn_agent_execution(
                             false,
                             thinking_on,
                             effort_val,
+                            model_val,
                         );
                         #[cfg(target_os = "windows")]
                         {

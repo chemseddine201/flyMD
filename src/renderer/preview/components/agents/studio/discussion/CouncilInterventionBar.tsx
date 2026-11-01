@@ -1,6 +1,7 @@
 import React from 'react';
 import { Target, Brain, RotateCw, Zap, Send } from 'lucide-react';
 import { AgentEffortLevel } from '../../../../../../shared/types';
+import { ModelEffortSideBySidePicker } from '../../common/ModelEffortSideBySidePicker';
 
 export interface ParticipantAgentOption {
   id: string;
@@ -22,6 +23,8 @@ export interface CouncilInterventionBarProps {
   onChangeTargetedEffortLevel: (level: AgentEffortLevel) => void;
   targetedThinkingEnabled: boolean;
   onToggleTargetedThinking: () => void;
+  targetedModelId?: string;
+  onChangeTargetedModelId?: (model: string) => void;
   targetedActionQuery: string;
   onChangeTargetedActionQuery: (query: string) => void;
   isDispatchingTargeted: boolean;
@@ -46,6 +49,8 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
       onChangeTargetedEffortLevel,
       targetedThinkingEnabled,
       onToggleTargetedThinking,
+      targetedModelId,
+      onChangeTargetedModelId,
       targetedActionQuery,
       onChangeTargetedActionQuery,
       isDispatchingTargeted,
@@ -138,61 +143,17 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                     </select>
                   </div>
 
-                  <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-purple-500/30 text-xs">
-                    <span className="text-purple-400 font-semibold text-[11px]">
-                      Effort:
-                    </span>
-                    <select
-                      value={targetedEffortLevel}
-                      onChange={(e) =>
-                        onChangeTargetedEffortLevel(
-                          e.target.value as AgentEffortLevel
-                        )
-                      }
-                      className="bg-transparent border-0 text-sky-300 font-bold focus:outline-none cursor-pointer text-xs"
-                    >
-                      <option value="low" className="bg-slate-900">
-                        Low Effort
-                      </option>
-                      <option value="medium" className="bg-slate-900">
-                        Med Effort
-                      </option>
-                      <option value="high" className="bg-slate-900">
-                        High Effort
-                      </option>
-                      <option value="xhigh" className="bg-slate-900">
-                        X-High Effort
-                      </option>
-                      <option value="max" className="bg-slate-900">
-                        Max Effort
-                      </option>
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={onToggleTargetedThinking}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold transition cursor-pointer ${
-                      targetedThinkingEnabled
-                        ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300'
-                        : 'bg-slate-950 border-purple-500/30 text-slate-400 line-through'
-                    }`}
-                    title={
-                      targetedThinkingEnabled ? 'Thinking: ON' : 'Thinking: OFF'
-                    }
-                  >
-                    <Brain
-                      size={12}
-                      className={
-                        targetedThinkingEnabled
-                          ? 'text-indigo-400'
-                          : 'text-slate-500'
-                      }
-                    />
-                    <span>
-                      {targetedThinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}
-                    </span>
-                  </button>
+                  {/* Side-by-Side Model & Effort Matrix */}
+                  <ModelEffortSideBySidePicker
+                    agentId={targetedAgentId || 'claude-code'}
+                    selectedModel={targetedModelId}
+                    onChangeModel={onChangeTargetedModelId || (() => {})}
+                    effortLevel={targetedEffortLevel}
+                    onChangeEffortLevel={onChangeTargetedEffortLevel}
+                    thinkingEnabled={targetedThinkingEnabled}
+                    onToggleThinking={onToggleTargetedThinking}
+                    compact={true}
+                  />
                 </div>
 
                 <div className="flex items-center gap-2">

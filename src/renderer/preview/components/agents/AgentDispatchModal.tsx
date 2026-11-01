@@ -24,6 +24,8 @@ import {
 import { usePreviewStore } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
 import { AgentId, AgentTaskIntent, AgentEffortLevel } from '../../../../shared/types';
+import { ModelEffortSideBySidePicker } from './common/ModelEffortSideBySidePicker';
+import { getDefaultModelForAgent } from '../../../../shared/constants/models';
 
 export const AgentDispatchModal: React.FC = () => {
   const dispatchDraft = usePreviewStore((s) => s.dispatchDraft);
@@ -49,6 +51,9 @@ export const AgentDispatchModal: React.FC = () => {
   const [executionMode, setExecutionMode] = useState<'in-app' | 'web'>('in-app');
   const [effortLevel, setEffortLevel] = useState<AgentEffortLevel>('medium');
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
+  const [selectedModel, setSelectedModel] = useState<string>(() =>
+    getDefaultModelForAgent('claude-code')
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const checklistItems = useMemo(() => {
@@ -172,6 +177,7 @@ export const AgentDispatchModal: React.FC = () => {
         nextIntentInChain: nextAgentInChain ? nextIntentInChain : undefined,
         effortLevel,
         thinkingEnabled,
+        modelId: selectedModel || undefined,
       });
 
       const [updatedTasks, updatedCheckpoints] = await Promise.all([
@@ -435,54 +441,21 @@ export const AgentDispatchModal: React.FC = () => {
             </div>
           )}
 
-          {/* Step 4: Reasoning Effort & Thinking Control */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl bg-slate-950/70 border border-slate-800">
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                Reasoning Effort Level
-              </label>
-              <select
-                value={effortLevel}
-                onChange={(e) =>
-                  setEffortLevel(e.target.value as AgentEffortLevel)
-                }
-                className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sky-300 font-bold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
-                title="Tokens and reasoning depth allocated for this task"
-              >
-                <option value="low">Low (Fastest • Minimal Tokens)</option>
-                <option value="medium">Medium (Balanced • Default)</option>
-                <option value="high">High (Deep Verification)</option>
-                <option value="xhigh">X-High (Exhaustive Architecture)</option>
-                <option value="max">Max (Maximum Effort)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                Extended Thinking Mode (CoT)
-              </label>
-              <button
-                type="button"
-                onClick={() => setThinkingEnabled((prev) => !prev)}
-                className={`w-full px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
-                  thinkingEnabled
-                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-xs'
-                    : 'bg-slate-900 border-slate-700 text-slate-400 line-through'
-                }`}
-              >
-                <Brain
-                  size={14}
-                  className={
-                    thinkingEnabled ? 'text-indigo-400' : 'text-slate-500'
-                  }
-                />
-                <span>
-                  {thinkingEnabled
-                    ? 'Thinking Enabled (ON)'
-                    : 'Thinking Disabled (OFF)'}
-                </span>
-              </button>
-            </div>
+          {/* Step 4: Side-by-Side Model Selection & Reasoning Effort Control */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300">
+              Model Selection & Reasoning Effort Matrix
+            </label>
+            <ModelEffortSideBySidePicker
+              agentId={targetAgentId}
+              selectedModel={selectedModel}
+              onChangeModel={setSelectedModel}
+              effortLevel={effortLevel}
+              onChangeEffortLevel={setEffortLevel}
+              thinkingEnabled={thinkingEnabled}
+              onToggleThinking={() => setThinkingEnabled((prev) => !prev)}
+              compact={false}
+            />
           </div>
 
           {/* Step 5: Safety & Multi-Agent Protection Switches */}

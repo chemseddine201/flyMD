@@ -120,6 +120,8 @@ export interface AgentProfile {
   isCustom?: boolean;
   supportsEffort?: boolean;
   supportsThinking?: boolean;
+  defaultModelId?: string;
+  subscriptionTier?: string;
 }
 
 export interface AgentCredentialConfig {
@@ -140,6 +142,8 @@ export interface AgentCredentialConfig {
   disabled?: boolean;
   defaultEffortLevel?: AgentEffortLevel;
   defaultThinkingEnabled?: boolean;
+  selectedModel?: string;
+  subscriptionTier?: string;
 }
 
 export type AgentCredentialsMap = Record<string, AgentCredentialConfig>;
@@ -185,6 +189,7 @@ export interface AgentTaskRequest {
   previousFailedTaskId?: string;
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
+  modelId?: string;
 }
 
 
@@ -263,6 +268,7 @@ export interface AgentTaskRecord {
   modifiedFiles?: string[];
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
+  modelId?: string;
 }
 
 export interface AgentCheckpoint {
@@ -299,6 +305,7 @@ export interface AgentPipelineStep {
   completedAt?: number;
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
+  modelId?: string;
 }
 
 export interface AgentPipelinePreset {

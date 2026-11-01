@@ -5,6 +5,8 @@ import {
   AgentCredentialsMap,
   AgentEffortLevel,
 } from '../../../../shared/types';
+import { ModelEffortSideBySidePicker } from './common/ModelEffortSideBySidePicker';
+import { SUBSCRIPTION_TIERS } from '../../../../shared/constants/models';
 import {
   X,
   KeyRound,
@@ -824,49 +826,46 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="text-slate-400 text-[11px] block mb-1">
-                        Default Reasoning Effort Level
+                  {/* Subscription Plan Tier */}
+                  {SUBSCRIPTION_TIERS[selectedProfile.id] && (
+                    <div className="pt-1">
+                      <label className="text-slate-400 text-[11px] block mb-1 font-semibold">
+                        Provider Subscription Plan Tier
                       </label>
                       <select
-                        value={currentCred.defaultEffortLevel || 'medium'}
-                        onChange={(e) =>
-                          updateCredField({
-                            defaultEffortLevel: e.target.value as AgentEffortLevel,
-                          })
-                        }
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sky-300 font-bold"
+                        value={currentCred.subscriptionTier || 'pro'}
+                        onChange={(e) => updateCredField({ subscriptionTier: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-emerald-300 font-bold text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
                       >
-                        <option value="low">Low (Fast • Minimal Tokens)</option>
-                        <option value="medium">Medium (Default • Balanced)</option>
-                        <option value="high">High (Deep Verification)</option>
-                        <option value="xhigh">X-High (Exhaustive Architecture)</option>
-                        <option value="max">Max (Maximum Effort)</option>
+                        {SUBSCRIPTION_TIERS[selectedProfile.id].map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label} — {t.description}
+                          </option>
+                        ))}
                       </select>
                     </div>
+                  )}
 
-                    <div>
-                      <label className="text-slate-400 text-[11px] block mb-1">
-                        Default Thinking Mode (CoT)
-                      </label>
-                      <select
-                        value={
-                          currentCred.defaultThinkingEnabled === false
-                            ? 'disabled'
-                            : 'enabled'
-                        }
-                        onChange={(e) =>
-                          updateCredField({
-                            defaultThinkingEnabled: e.target.value === 'enabled',
-                          })
-                        }
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-indigo-300 font-bold"
-                      >
-                        <option value="enabled">Enabled (Thinking ON)</option>
-                        <option value="disabled">Disabled (Direct Output • Saves Tokens)</option>
-                      </select>
-                    </div>
+                  {/* Side-by-Side Default Model & Reasoning Effort Matrix */}
+                  <div className="pt-1">
+                    <label className="text-slate-400 text-[11px] block mb-1 font-semibold">
+                      Default Model & Reasoning Effort Matrix
+                    </label>
+                    <ModelEffortSideBySidePicker
+                      agentId={selectedProfile.id}
+                      selectedModel={currentCred.selectedModel}
+                      onChangeModel={(m) => updateCredField({ selectedModel: m })}
+                      effortLevel={currentCred.defaultEffortLevel || 'medium'}
+                      onChangeEffortLevel={(eff) => updateCredField({ defaultEffortLevel: eff })}
+                      thinkingEnabled={currentCred.defaultThinkingEnabled ?? true}
+                      onToggleThinking={() =>
+                        updateCredField({
+                          defaultThinkingEnabled: !(currentCred.defaultThinkingEnabled ?? true),
+                        })
+                      }
+                      subscriptionTier={currentCred.subscriptionTier}
+                      compact={false}
+                    />
                   </div>
 
                   <div className="flex items-center justify-end pt-2">

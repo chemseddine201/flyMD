@@ -66,6 +66,7 @@ export interface DispatchChatTaskFn {
       previousFailedTaskId?: string;
       effortLevel?: AgentEffortLevel;
       thinkingEnabled?: boolean;
+      modelId?: string;
     }
   ): Promise<AgentTaskRecord | null>;
 }
@@ -291,6 +292,7 @@ export function usePipelineRunnerAndRecovery({
             const dispatchedTask = await handleSendInAppChatTask(promptText, {
               agentId: effectiveStepAgentId,
               intent: currentStep.intent,
+              modelId: currentStep.modelId,
               effortLevel:
                 activeRecoveryForStep?.overrideEffortLevel ||
                 currentStep.effortLevel ||

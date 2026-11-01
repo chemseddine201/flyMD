@@ -19,6 +19,7 @@ import {
   DiscussionParticipant,
   AgentEffortLevel,
 } from '../../../../../../shared/types';
+import { ModelEffortSideBySidePicker } from '../../common/ModelEffortSideBySidePicker';
 import {
   DeliberationPreset,
   ACTION_CATALOG,
@@ -739,13 +740,6 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                               <option value="http-llm">OpenAI / HTTP</option>
                             )}
                           </select>
-                          <input
-                            type="text"
-                            value={p.modelId}
-                            onChange={(e) => onUpdateParticipant(idx, { modelId: e.target.value })}
-                            placeholder="Model ID"
-                            className="flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 font-mono text-[11px]"
-                          />
                           <button
                             type="button"
                             disabled={customParticipants.length <= 2}
@@ -757,7 +751,25 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                           </button>
                         </div>
 
-                        {/* Row 2: Custom Action Directive & Thinking Mode */}
+                        {/* Row 2: Side-by-Side Model & Effort Matrix */}
+                        <div className="pt-1.5 border-t border-slate-800/60">
+                          <ModelEffortSideBySidePicker
+                            agentId={p.providerId || p.agentId}
+                            selectedModel={p.modelId}
+                            onChangeModel={(m) => onUpdateParticipant(idx, { modelId: m })}
+                            effortLevel={p.effortLevel || 'medium'}
+                            onChangeEffortLevel={(eff) => onUpdateParticipant(idx, { effortLevel: eff })}
+                            thinkingEnabled={p.thinkingEnabled ?? true}
+                            onToggleThinking={() =>
+                              onUpdateParticipant(idx, {
+                                thinkingEnabled: !(p.thinkingEnabled ?? true),
+                              })
+                            }
+                            compact={true}
+                          />
+                        </div>
+
+                        {/* Row 3: Custom Action Directive */}
                         <div className="flex items-center gap-2 pt-1.5 border-t border-slate-800/60">
                           <span className="text-[11px] font-semibold text-sky-400 shrink-0">Custom Action:</span>
                           <select
@@ -786,36 +798,6 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                               </option>
                             ))}
                           </select>
-
-                          <select
-                            value={p.effortLevel || 'medium'}
-                            onChange={(e) =>
-                              onUpdateParticipant(idx, {
-                                effortLevel: e.target.value as AgentEffortLevel,
-                              })
-                            }
-                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[11px] text-sky-300 font-bold focus:outline-none cursor-pointer"
-                            title="Effort level for this participant"
-                          >
-                            <option value="low">Low Effort</option>
-                            <option value="medium">Med Effort</option>
-                            <option value="high">High Effort</option>
-                            <option value="xhigh">X-High Effort</option>
-                            <option value="max">Max Effort</option>
-                          </select>
-
-                          <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={p.thinkingEnabled ?? true}
-                              onChange={(e) => onUpdateParticipant(idx, { thinkingEnabled: e.target.checked })}
-                              className="rounded bg-slate-950 border-slate-800 text-indigo-500 focus:ring-0"
-                            />
-                            <span className="flex items-center gap-1 text-indigo-300 font-medium">
-                              <Brain size={12} className="text-indigo-400" />
-                              <span>Thinking</span>
-                            </span>
-                          </label>
                         </div>
 
                         {/* Row 3: Optional Freeform Query Directive for this Agent */}

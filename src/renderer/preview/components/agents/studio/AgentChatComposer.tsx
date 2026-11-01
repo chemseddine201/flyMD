@@ -20,6 +20,7 @@ import {
   AGENT_INTENT_PRESETS,
   STARTER_CUSTOM_PIPELINE_ACTIONS,
 } from '../../../../../shared/constants';
+import { ModelEffortSideBySidePicker } from '../common/ModelEffortSideBySidePicker';
 
 export interface ChatImageAttachment {
   id: string;
@@ -60,7 +61,8 @@ export interface AgentChatComposerProps {
     attachedImages?: ChatImageAttachment[],
     customActionId?: string,
     effortLevel?: AgentEffortLevel,
-    thinkingEnabled?: boolean
+    thinkingEnabled?: boolean,
+    modelId?: string
   ) => Promise<void>;
 }
 
@@ -92,6 +94,7 @@ export const AgentChatComposer = React.memo(
   const [selectedCustomActionId, setSelectedCustomActionId] = useState('');
   const [composerEffort, setComposerEffort] = useState<AgentEffortLevel>('medium');
   const [composerThinking, setComposerThinking] = useState(true);
+  const [composerModel, setComposerModel] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -187,7 +190,8 @@ export const AgentChatComposer = React.memo(
       imagesToSend,
       customActId || undefined,
       composerEffort,
-      composerThinking
+      composerThinking,
+      composerModel || undefined
     );
   };
 
@@ -316,58 +320,18 @@ export const AgentChatComposer = React.memo(
             </select>
           </div>
 
-          {/* Effort Selector Pill */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-700 text-xs">
-            <span className="text-[10px] font-bold text-slate-400">Effort:</span>
-            <select
-              value={composerEffort}
-              disabled={isComposerDisabled}
-              onChange={(e) =>
-                setComposerEffort(e.target.value as AgentEffortLevel)
-              }
-              className="bg-transparent text-sky-300 font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
-              title="Reasoning effort level and token budget"
-            >
-              <option value="low" className="bg-slate-900">
-                Low
-              </option>
-              <option value="medium" className="bg-slate-900">
-                Med (Default)
-              </option>
-              <option value="high" className="bg-slate-900">
-                High
-              </option>
-              <option value="xhigh" className="bg-slate-900">
-                X-High
-              </option>
-              <option value="max" className="bg-slate-900">
-                Max
-              </option>
-            </select>
-          </div>
-
-          {/* Thinking Mode Toggle Pill */}
-          <button
-            type="button"
+          {/* Side-by-Side Model & Effort Matrix */}
+          <ModelEffortSideBySidePicker
+            agentId={selectedAgentId}
+            selectedModel={composerModel}
+            onChangeModel={setComposerModel}
+            effortLevel={composerEffort}
+            onChangeEffortLevel={setComposerEffort}
+            thinkingEnabled={composerThinking}
+            onToggleThinking={() => setComposerThinking((prev) => !prev)}
+            compact={true}
             disabled={isComposerDisabled}
-            onClick={() => setComposerThinking((prev) => !prev)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed ${
-              composerThinking
-                ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-xs'
-                : 'bg-slate-950 border-slate-700 text-slate-400 line-through'
-            }`}
-            title={
-              composerThinking
-                ? 'Thinking Mode: ENABLED (Click to turn off and save tokens)'
-                : 'Thinking Mode: DISABLED (Fast direct output, no extended reasoning)'
-            }
-          >
-            <Brain
-              size={12}
-              className={composerThinking ? 'text-indigo-400' : 'text-slate-500'}
-            />
-            <span>{composerThinking ? 'Thinking ON' : 'Thinking OFF'}</span>
-          </button>
+          />
         </div>
 
         <span className="text-[10px] text-slate-400 hidden sm:inline">

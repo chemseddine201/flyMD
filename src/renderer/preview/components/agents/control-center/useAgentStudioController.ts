@@ -498,6 +498,7 @@ ${projDesc}
         previousFailedTaskId?: string;
         effortLevel?: AgentEffortLevel;
         thinkingEnabled?: boolean;
+        modelId?: string;
       }
     ): Promise<AgentTaskRecord | null> => {
       setSubmitting(true);
@@ -528,6 +529,7 @@ ${projDesc}
           previousFailedTaskId: overrides?.previousFailedTaskId,
           effortLevel: overrides?.effortLevel ?? 'medium',
           thinkingEnabled: overrides?.thinkingEnabled ?? true,
+          modelId: overrides?.modelId,
         });
 
         const [tasks, checkpoints] = await Promise.all([
