@@ -370,6 +370,32 @@ impl AppStore {
         self.data.lock().unwrap_or_else(|e| e.into_inner()).agent_tasks.clone()
     }
 
+    /// Mutates an agent task in place under a single lock acquisition without TOCTOU races.
+    /// Returns the updated task snapshot and the full task list snapshot.
+    /// If `persist` is true, immediately saves to disk (for state transitions like running/completed/failed).
+    pub fn mutate_agent_task<F>(
+        &self,
+        task_id: &str,
+        persist: bool,
+        f: F,
+    ) -> Option<(crate::agents::AgentTaskRecord, Vec<crate::agents::AgentTaskRecord>)>
+    where
+        F: FnOnce(&mut crate::agents::AgentTaskRecord),
+    {
+        let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
+        let pos = guard.agent_tasks.iter().position(|t| t.id == task_id)?;
+        f(&mut guard.agent_tasks[pos]);
+        let updated_task = guard.agent_tasks[pos].clone();
+        let all_tasks = guard.agent_tasks.clone();
+        drop(guard);
+
+        if persist {
+            self.save();
+        }
+
+        Some((updated_task, all_tasks))
+    }
+
     pub fn save_agent_tasks(&self, tasks: Vec<crate::agents::AgentTaskRecord>) {
         let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         guard.agent_tasks = tasks;

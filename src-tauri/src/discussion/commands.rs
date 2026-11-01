@@ -240,48 +240,7 @@ fn check_tcp_port_alive(url_str: &str, default_port: u16) -> bool {
 }
 
 fn resolve_executable(name: &str) -> Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        if name == "claude" || name == "claude.exe" {
-            if let Ok(userprofile) = std::env::var("USERPROFILE") {
-                let p = PathBuf::from(&userprofile)
-                    .join(".local")
-                    .join("bin")
-                    .join("claude.exe");
-                if p.exists() {
-                    return Some(p);
-                }
-            }
-        }
-        if name == "agy" || name == "agy.exe" {
-            if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
-                let p = PathBuf::from(&localappdata)
-                    .join("agy")
-                    .join("bin")
-                    .join("agy.exe");
-                if p.exists() {
-                    return Some(p);
-                }
-            }
-        }
-    }
-
-    if let Ok(path_var) = std::env::var("PATH") {
-        for dir in std::env::split_paths(&path_var) {
-            let candidate = dir.join(name);
-            if candidate.exists() {
-                return Some(candidate);
-            }
-            #[cfg(target_os = "windows")]
-            {
-                let with_exe = dir.join(format!("{}.exe", name));
-                if with_exe.exists() {
-                    return Some(with_exe);
-                }
-            }
-        }
-    }
-    None
+    crate::common::process::find_binary_on_system(&[name]).map(PathBuf::from)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

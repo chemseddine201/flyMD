@@ -30,6 +30,35 @@ pub fn kill_process_tree(pid: u32) {
     }
 }
 
+/// Checks if a process ID is currently running on the system.
+pub fn is_pid_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::process::Command;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        if let Ok(output) = Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let needle = format!("\"{}\"", pid);
+            return text
+                .lines()
+                .any(|line| line.split(',').nth(1).map(|col| col.trim()) == Some(needle.as_str()));
+        }
+        false
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+}
+
 /// Resolves the user's home directory across Windows and Unix platforms.
 pub fn get_user_home_dir() -> Option<PathBuf> {
     if let Ok(profile) = std::env::var("USERPROFILE") {

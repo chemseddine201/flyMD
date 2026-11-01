@@ -93,34 +93,7 @@ pub fn atomic_write_json<T: Serialize>(target: &Path, value: &T) -> Result<(), S
 }
 
 /// Check if a process ID is currently running on the system.
-pub fn is_pid_alive(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        use std::process::Command;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        // Exact CSV second-column PID match without flashing a console window
-        if let Ok(output) = Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-        {
-            let text = String::from_utf8_lossy(&output.stdout);
-            let needle = format!("\"{}\"", pid);
-            return text
-                .lines()
-                .any(|line| line.split(',').nth(1).map(|col| col.trim()) == Some(needle.as_str()));
-        }
-        false
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Path::new(&format!("/proc/{}", pid)).exists()
-    }
-}
+pub use crate::common::process::is_pid_alive;
 
 /// Returns `true` only if `.session.lock` exists and belongs to a different live OS process.
 /// Automatically prunes stale locks left behind by dead/crashed processes.

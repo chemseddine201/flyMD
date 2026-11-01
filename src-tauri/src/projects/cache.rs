@@ -893,23 +893,19 @@ pub fn parse_handoff_blocks_from_markdown(
     out
 }
 
-/// Merges an agent's completed turn/task output + live disk SHA-256 scan into `.flymd/cache/cognitive_state.json`.
-pub fn update_workspace_cognitive_cache(
+/// Merges an already-parsed handoff envelope + optional live disk SHA-256 scan into `.flymd/cache/cognitive_state.json`.
+pub fn update_workspace_cognitive_cache_with_parsed(
     workspace_path: &Path,
     producer_agent: &str,
     producer_role: &str,
     pipeline_id: Option<&str>,
     step_or_round: u32,
     original_contract: Option<&str>,
-    agent_output_markdown: &str,
+    parsed: ParsedAgentCognitiveOutput,
+    refresh_digest: bool,
     used_cli_agent_id: Option<&str>,
 ) -> CognitiveHandoffPacket {
     let mut packet = load_cognitive_packet(workspace_path).unwrap_or_default();
-    let parsed = parse_handoff_blocks_from_markdown(
-        agent_output_markdown,
-        producer_agent,
-        producer_role,
-    );
 
     packet.schema_version = COGNITIVE_CACHE_SCHEMA_VERSION;
     packet.updated_at = now_ms();
@@ -936,8 +932,9 @@ pub fn update_workspace_cognitive_cache(
         }
     }
 
-    // Refresh live SHA-256 + symbol digest from workspace disk
-    packet.workspace_digest = scan_workspace_digest(workspace_path, 48);
+    if refresh_digest || packet.workspace_digest.is_empty() {
+        packet.workspace_digest = scan_workspace_digest(workspace_path, 48);
+    }
 
     for inv in parsed.locked_invariants {
         if !packet.locked_invariants.contains(&inv) && packet.locked_invariants.len() < 16 {
@@ -971,6 +968,35 @@ pub fn update_workspace_cognitive_cache(
 
     let _ = save_cognitive_packet(workspace_path, &packet);
     packet
+}
+
+/// Merges an agent's completed turn/task output + live disk SHA-256 scan into `.flymd/cache/cognitive_state.json`.
+pub fn update_workspace_cognitive_cache(
+    workspace_path: &Path,
+    producer_agent: &str,
+    producer_role: &str,
+    pipeline_id: Option<&str>,
+    step_or_round: u32,
+    original_contract: Option<&str>,
+    agent_output_markdown: &str,
+    used_cli_agent_id: Option<&str>,
+) -> CognitiveHandoffPacket {
+    let parsed = parse_handoff_blocks_from_markdown(
+        agent_output_markdown,
+        producer_agent,
+        producer_role,
+    );
+    update_workspace_cognitive_cache_with_parsed(
+        workspace_path,
+        producer_agent,
+        producer_role,
+        pipeline_id,
+        step_or_round,
+        original_contract,
+        parsed,
+        true,
+        used_cli_agent_id,
+    )
 }
 
 /// Filters `peer_messages` addressed to a given role or agent ID.

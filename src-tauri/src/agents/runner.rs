@@ -5,12 +5,13 @@ use super::types::{
     now_ms, AgentErrorDiagnostic, AgentStreamEvent, AgentTaskRecord, AgentToolAction,
 };
 use crate::store::SharedStore;
+use std::collections::HashSet;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
@@ -472,13 +473,33 @@ pub fn spawn_agent_execution(
             .clone()
             .unwrap_or_else(|| record.workspace_path.clone());
 
-        let update_task = |mutator: &dyn Fn(&mut AgentTaskRecord)| {
-            let mut tasks = store.get_agent_tasks();
-            if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
-                mutator(t);
+        let last_disk_flush = Arc::new(Mutex::new(std::time::Instant::now()));
+        let last_ipc_broadcast = Arc::new(Mutex::new(std::time::Instant::now()));
+
+        let update_task_flush = |mutator: &dyn Fn(&mut AgentTaskRecord), force_flush: bool| {
+            let mut ldf = last_disk_flush.lock().unwrap_or_else(|e| e.into_inner());
+            let should_flush = force_flush || ldf.elapsed() >= Duration::from_millis(1000);
+            if should_flush {
+                *ldf = std::time::Instant::now();
             }
-            store.save_agent_tasks(tasks.clone());
-            app.emit("agent:tasks-updated", &tasks).ok();
+            drop(ldf);
+
+            if let Some((_, all_tasks)) = store.mutate_agent_task(&task_id, should_flush, mutator) {
+                let mut lib = last_ipc_broadcast.lock().unwrap_or_else(|e| e.into_inner());
+                if force_flush || lib.elapsed() >= Duration::from_millis(100) {
+                    *lib = std::time::Instant::now();
+                    drop(lib);
+                    app.emit("agent:tasks-updated", &all_tasks).ok();
+                }
+            }
+        };
+
+        let update_task = |mutator: &dyn Fn(&mut AgentTaskRecord)| {
+            update_task_flush(mutator, true);
+        };
+
+        let update_task_streaming = |mutator: &dyn Fn(&mut AgentTaskRecord)| {
+            update_task_flush(mutator, false);
         };
 
         let emit_log = |line: String| {
@@ -489,7 +510,7 @@ pub fn spawn_agent_execution(
                 timestamp: now_ms(),
             };
             app.emit("agent:stream", &evt).ok();
-            update_task(&|t| {
+            update_task_streaming(&|t| {
                 t.logs.push(line.clone());
             });
         };
@@ -966,6 +987,9 @@ pub fn spawn_agent_execution(
                     (line.to_string(), None)
                 };
 
+                let mut seen_tool_labels: HashSet<String> =
+                    record.tool_actions.iter().map(|a| a.label.clone()).collect();
+
                 loop {
                     if cancel_flag.load(Ordering::Relaxed) {
                         process_manager.terminate_task_tree(&task_id);
@@ -984,51 +1008,63 @@ pub fn spawn_agent_execution(
                                     &mut captured_cli_error,
                                     &mut last_known_activity,
                                 );
-                                let snap = collected_md.clone();
                                 let sid_snap = captured_session_id.clone();
-                                update_task(&|t| {
+                                let md_snap = if collected_md.is_empty() {
+                                    None
+                                } else {
+                                    Some(collected_md.clone())
+                                };
+                                let new_tool_action = if let Some((ref t_name, ref t_target)) = tool_info {
+                                    let kind = if t_name.eq_ignore_ascii_case("write")
+                                        || t_name.eq_ignore_ascii_case("edit")
+                                        || t_name.eq_ignore_ascii_case("multiedit")
+                                    {
+                                        "write"
+                                    } else if t_name.eq_ignore_ascii_case("read")
+                                        || t_name.eq_ignore_ascii_case("glob")
+                                        || t_name.eq_ignore_ascii_case("grep")
+                                    {
+                                        "read"
+                                    } else {
+                                        "cli"
+                                    };
+                                    let label = if let Some(ref tf) = t_target {
+                                        format!("{}: `{}`", t_name, tf.split(['/', '\\']).next_back().unwrap_or(tf))
+                                    } else {
+                                        format!("Tool: {}", t_name)
+                                    };
+                                    if seen_tool_labels.insert(label.clone()) {
+                                        Some(AgentToolAction::new(
+                                            format!("tool-live-{}", now_ms()),
+                                            kind.to_string(),
+                                            label.clone(),
+                                            t_target.clone(),
+                                            "done".to_string(),
+                                            now_ms(),
+                                        ))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                };
+
+                                update_task_streaming(&|t| {
                                     t.progress_stage = Some("executing".to_string());
                                     t.progress_percent = (t.progress_percent.max(75) + 1).min(96);
                                     if sid_snap.is_some() {
                                         t.cli_session_id = sid_snap.clone();
                                     }
-                                    if !snap.is_empty() {
-                                        t.response_markdown = Some(snap.clone());
+                                    if md_snap.is_some() {
+                                        t.response_markdown = md_snap.clone();
                                     }
                                     if !display_line.is_empty() {
                                         t.logs.push(display_line.clone());
                                     }
-                                    if let Some((ref t_name, ref t_target)) = tool_info {
-                                        let kind = if t_name.eq_ignore_ascii_case("write")
-                                            || t_name.eq_ignore_ascii_case("edit")
-                                            || t_name.eq_ignore_ascii_case("multiedit")
-                                        {
-                                            "write"
-                                        } else if t_name.eq_ignore_ascii_case("read")
-                                            || t_name.eq_ignore_ascii_case("glob")
-                                            || t_name.eq_ignore_ascii_case("grep")
-                                        {
-                                            "read"
-                                        } else {
-                                            "cli"
-                                        };
-                                        let label = if let Some(ref tf) = t_target {
-                                            format!("{}: `{}`", t_name, tf.split(['/', '\\']).next_back().unwrap_or(tf))
-                                        } else {
-                                            format!("Tool: {}", t_name)
-                                        };
-                                        if !t.tool_actions.iter().any(|a| a.label == label) {
-                                            t.tool_actions.push(AgentToolAction::new(
-                                                format!("tool-live-{}", now_ms()),
-                                                kind.to_string(),
-                                                label.clone(),
-                                                t_target.clone(),
-                                                "done".to_string(),
-                                                now_ms(),
-                                            ));
-                                            if t.thinking_trace.len() < 24 {
-                                                t.thinking_trace.push(format!("Executed {}", label));
-                                            }
+                                    if let Some(ref act) = new_tool_action {
+                                        t.tool_actions.push(act.clone());
+                                        if t.thinking_trace.len() < 24 {
+                                            t.thinking_trace.push(format!("Executed {}", act.label));
                                         }
                                     }
                                 });
@@ -1046,7 +1082,7 @@ pub fn spawn_agent_execution(
                                 if is_quota && captured_cli_error.is_none() {
                                     captured_cli_error = Some(trimmed_err);
                                 }
-                                update_task(&|t| {
+                                update_task_streaming(&|t| {
                                     t.logs.push(err_line.clone());
                                     if is_quota {
                                         t.logs.push("[Notice] CLI provider quota reached (429).".to_string());
@@ -1677,14 +1713,15 @@ fn persist_task_cognitive_handoff(
     } else {
         1
     };
-    let pkt = crate::projects::cache::update_workspace_cognitive_cache(
+    let pkt = crate::projects::cache::update_workspace_cognitive_cache_with_parsed(
         ws_path,
         agent_id,
         intent,
         pipeline_id,
         step_num,
         Some(original_contract),
-        raw_output_md,
+        parsed.clone(),
+        true,
         used_cli_agent_id,
     );
 
@@ -1722,9 +1759,9 @@ pub fn finalize_task(
     status: &str,
     error: Option<String>,
 ) {
-    let mut tasks = store.get_agent_tasks();
-    if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
-        t.status = status.to_string();
+    let status_str = status.to_string();
+    if let Some((_, all_tasks)) = store.mutate_agent_task(task_id, true, |t| {
+        t.status = status_str;
         t.completed_at = Some(now_ms());
         if status == "completed" {
             t.progress_stage = Some("completed".to_string());
@@ -1736,9 +1773,9 @@ pub fn finalize_task(
         if let Some(err) = error {
             t.error = Some(err);
         }
+    }) {
+        app.emit("agent:tasks-updated", &all_tasks).ok();
     }
-    store.save_agent_tasks(tasks.clone());
-    app.emit("agent:tasks-updated", &tasks).ok();
 }
 
 #[cfg(test)]

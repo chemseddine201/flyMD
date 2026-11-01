@@ -819,7 +819,7 @@ impl AgentOrchestrator {
     }
 
     pub fn cancel_task(&self, task_id: &str) -> Vec<AgentTaskRecord> {
-        if let Some(flag) = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner()).get(task_id) {
+        if let Some(flag) = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner()).remove(task_id) {
             flag.store(true, Ordering::Relaxed);
         }
         self.process_manager.terminate_task_tree(task_id);
@@ -829,6 +829,15 @@ impl AgentOrchestrator {
 
     pub fn clear_completed_tasks(&self) -> Vec<AgentTaskRecord> {
         let mut tasks = self.store.get_agent_tasks();
+        let running_ids: std::collections::HashSet<String> = tasks
+            .iter()
+            .filter(|t| t.status == "running" || t.status == "queued")
+            .map(|t| t.id.clone())
+            .collect();
+        {
+            let mut flags = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner());
+            flags.retain(|id, _| running_ids.contains(id));
+        }
         tasks.retain(|t| t.status == "running" || t.status == "queued");
         self.store.save_agent_tasks(tasks.clone());
         self.app_handle.emit("agent:tasks-updated", &tasks).ok();
@@ -846,7 +855,7 @@ impl AgentOrchestrator {
     }
 
     pub fn delete_task(&self, task_id: &str) -> Vec<AgentTaskRecord> {
-        if let Some(flag) = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner()).get(task_id) {
+        if let Some(flag) = self.cancel_flags.lock().unwrap_or_else(|e| e.into_inner()).remove(task_id) {
             flag.store(true, Ordering::Relaxed);
         }
         self.process_manager.terminate_task_tree(task_id);

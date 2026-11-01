@@ -15,10 +15,11 @@ use super::types::{
     CURRENT_SCHEMA_VERSION,
 };
 use crate::projects::cache::{
-    load_cognitive_packet, parse_handoff_blocks_from_markdown, update_workspace_cognitive_cache,
+    load_cognitive_packet, parse_handoff_blocks_from_markdown,
+    update_workspace_cognitive_cache_with_parsed,
 };
 use async_trait::async_trait;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -676,16 +677,22 @@ impl DiscussionOrchestrator {
                 return Ok(DiscussionStatus::Paused);
             }
 
-            // Check which agents have already completed turns in this round
+            // Check which agents have already completed turns in this round (O(1) set lookup, excluding user interventions)
             let (transcript, _) = read_transcript_with_recovery(&self.session_dir)?;
-            let spoken_agent_ids: Vec<String> = transcript
+            let spoken_agent_ids: HashSet<String> = transcript
                 .iter()
-                .filter(|m| m.round_number == current_round)
+                .filter(|m| {
+                    m.round_number == current_round
+                        && m.message_kind != DiscussionMessageKind::UserIntervention
+                })
                 .map(|m| m.author_agent_id.clone())
                 .collect();
 
-            // If all agents have completed turns in current_round:
-            if spoken_agent_ids.len() >= active_participants.len() {
+            // If all active agents have completed turns in current_round:
+            let all_agents_spoken = active_participants
+                .iter()
+                .all(|p| spoken_agent_ids.contains(&p.agent_id));
+            if all_agents_spoken {
                 if current_round >= self.config.max_rounds {
                     let generator = super::report::ReportGenerator::new(self.session_dir.clone());
                     if let Err(rep_err) =
@@ -955,15 +962,17 @@ impl DiscussionOrchestrator {
             );
         }
 
+        let clean_markdown = parsed.clean_markdown.clone();
         let ws_path = PathBuf::from(&self.config.workspace_path);
-        let _ = update_workspace_cognitive_cache(
+        let _ = update_workspace_cognitive_cache_with_parsed(
             &ws_path,
             &participant.agent_id,
             participant.role.as_str(),
             Some(&self.config.session_id),
             round,
             Some(&self.config.user_idea),
-            raw_markdown,
+            parsed,
+            false, // Deliberation turns are read-only councils, avoid heavy disk walk
             None,
         );
 
@@ -975,7 +984,7 @@ impl DiscussionOrchestrator {
             .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
             .count();
 
-        (parsed.clean_markdown, target_peers)
+        (clean_markdown, target_peers)
     }
 
     async fn execute_agent_turn(
