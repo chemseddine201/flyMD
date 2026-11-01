@@ -1,7 +1,7 @@
 //! Discussion Orchestrator: 8-state discussion lifecycle, barrier synchronization,
 //! checkpointing, and deterministic multi-turn debate coordinator.
 
-use super::commands::provider_lookup_key;
+use super::provider_registry::provider_lookup_key;
 use super::epistemic::evaluate_debate_epistemic_policy;
 use super::memory::MemoryManager;
 use super::runner::{DiscussionProvider, ProviderError, StreamSink, TurnRequest};
@@ -694,17 +694,7 @@ impl DiscussionOrchestrator {
                 .all(|p| spoken_agent_ids.contains(&p.agent_id));
             if all_agents_spoken {
                 if current_round >= self.config.max_rounds {
-                    let generator = super::report::ReportGenerator::new(self.session_dir.clone());
-                    if let Err(rep_err) =
-                        generator.generate_report(&self.config, &mut self.metadata)
-                    {
-                        self.metadata.error_message =
-                            Some(format!("Report synthesis warning: {}", rep_err));
-                        let _ = save_metadata(&self.session_dir, &self.metadata);
-                    }
-                    self.transition_status(DiscussionStatus::AwaitingReview)?;
-                    self.release_lock();
-                    return Ok(DiscussionStatus::AwaitingReview);
+                    return self.finalize_and_generate_report();
                 } else {
                     self.metadata.current_round += 1;
                     self.metadata.updated_at = now_ms();
@@ -841,25 +831,7 @@ impl DiscussionOrchestrator {
                     );
                 }
 
-                let decisions = self.memory.load_decisions();
-                self.metadata.decisions_count = decisions.len();
-                let active_disputes = self.memory.load_disagreements();
-                self.metadata.active_disagreements_count = active_disputes
-                    .iter()
-                    .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
-                    .count();
-                let _ = save_metadata(&self.session_dir, &self.metadata);
-
-                // Synthesize 12-section evidence report
-                let generator = super::report::ReportGenerator::new(self.session_dir.clone());
-                if let Err(rep_err) = generator.generate_report(&self.config, &mut self.metadata) {
-                    self.metadata.error_message =
-                        Some(format!("Report synthesis warning: {}", rep_err));
-                    let _ = save_metadata(&self.session_dir, &self.metadata);
-                }
-                self.transition_status(DiscussionStatus::AwaitingReview)?;
-                self.release_lock();
-                return Ok(DiscussionStatus::AwaitingReview);
+                return self.finalize_and_generate_report();
             } else {
                 // Advance to next round
                 self.metadata.current_round += 1;
@@ -868,6 +840,11 @@ impl DiscussionOrchestrator {
             }
         }
 
+        self.finalize_and_generate_report()
+    }
+
+    /// Synthesizes the 12-section evidence report, updates decision metrics, transitions to AwaitingReview, and releases lock.
+    fn finalize_and_generate_report(&mut self) -> Result<DiscussionStatus, String> {
         let decisions = self.memory.load_decisions();
         self.metadata.decisions_count = decisions.len();
         let active_disputes = self.memory.load_disagreements();
