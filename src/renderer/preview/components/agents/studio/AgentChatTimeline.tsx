@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Bot,
   Send,
@@ -40,13 +40,18 @@ import {
 } from '../../../../../shared/constants';
 import { markdownService } from '../../../services/MarkdownService';
 import { ActionLogTimeline } from './ActionLogTimeline';
-import { AgentChatComposer, ChatImageAttachment } from './AgentChatComposer';
+import {
+  AgentChatComposer,
+  AgentChatComposerHandle,
+  ChatImageAttachment,
+} from './AgentChatComposer';
 
 export type { ChatImageAttachment };
 
 interface AgentChatTimelineProps {
   visibleAgents: AgentProfile[];
   allAgents: AgentProfile[];
+  agentsById?: Map<string, AgentProfile>;
   selectedAgentId: AgentId;
   onSelectAgent: (id: AgentId) => void;
   selectedIntent: AgentTaskIntent;
@@ -95,6 +100,7 @@ interface AgentChatTimelineProps {
 export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
   visibleAgents,
   allAgents,
+  agentsById,
   selectedAgentId,
   onSelectAgent,
   selectedIntent,
@@ -125,6 +131,8 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
   const [relayCustomActionId, setRelayCustomActionId] = useState<string>('');
   const [relayEffort, setRelayEffort] = useState<AgentEffortLevel>('medium');
   const [relayThinking, setRelayThinking] = useState<boolean>(true);
+  const [isTimelineDragOver, setIsTimelineDragOver] = useState<boolean>(false);
+  const composerRef = useRef<AgentChatComposerHandle>(null);
 
   const availableCustomActions =
     customActions.length > 0 ? customActions : STARTER_CUSTOM_PIPELINE_ACTIONS;
@@ -146,10 +154,13 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
     submitting || (isPipelineActive && !isPausedForApproval);
 
   const activeAgent =
-    allAgents.find((a) => a.id === selectedAgentId) || visibleAgents[0];
+    agentsById?.get(selectedAgentId) ||
+    allAgents.find((a) => a.id === selectedAgentId) ||
+    visibleAgents[0];
 
   const taskAgent = selectedTask
-    ? allAgents.find((a) => a.id === selectedTask.targetAgentId)
+    ? agentsById?.get(selectedTask.targetAgentId) ||
+      allAgents.find((a) => a.id === selectedTask.targetAgentId)
     : activeAgent;
 
   const effectiveRelayAgent =
@@ -158,17 +169,77 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
     visibleAgents.find((a) => a.id !== selectedTask?.targetAgentId)?.id ||
     'claude-code';
 
-  const renderedReplyHtml = React.useMemo(() => {
-    if (!selectedTask?.responseMarkdown) return '';
-    try {
-      return markdownService.render(selectedTask.responseMarkdown);
-    } catch {
-      return selectedTask.responseMarkdown;
+  // Throttle Markdown-to-HTML rendering to ~100ms intervals while actively streaming (`status === 'running'`),
+  // while rendering immediately on task switch or terminal task state.
+  const [renderedReplyHtml, setRenderedReplyHtml] = useState<string>('');
+  const lastRenderedTaskIdRef = useRef<string | undefined>(undefined);
+  const lastRenderTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    const md = selectedTask?.responseMarkdown;
+    if (!md) {
+      setRenderedReplyHtml('');
+      lastRenderedTaskIdRef.current = selectedTask?.id;
+      return;
     }
-  }, [selectedTask?.responseMarkdown]);
+
+    const renderNow = () => {
+      lastRenderedTaskIdRef.current = selectedTask?.id;
+      lastRenderTimeRef.current = Date.now();
+      try {
+        setRenderedReplyHtml(markdownService.render(md));
+      } catch {
+        setRenderedReplyHtml(md);
+      }
+    };
+
+    const isTaskSwitch = lastRenderedTaskIdRef.current !== selectedTask?.id;
+    const isRunning = selectedTask?.status === 'running';
+    const elapsed = Date.now() - lastRenderTimeRef.current;
+
+    if (isTaskSwitch || !isRunning || elapsed >= 100) {
+      renderNow();
+      return;
+    }
+
+    const timer = setTimeout(renderNow, 100 - elapsed);
+    return () => clearTimeout(timer);
+  }, [selectedTask?.id, selectedTask?.status, selectedTask?.responseMarkdown]);
+
+  const dispatchQuickStartPrompt = (intent: AgentTaskIntent, promptText: string) => {
+    const { effortLevel, thinkingEnabled } =
+      composerRef.current?.getEffortAndThinking() ?? {
+        effortLevel: 'medium' as AgentEffortLevel,
+        thinkingEnabled: true,
+      };
+    onSelectIntent(intent);
+    onSendChatTask(promptText, undefined, undefined, effortLevel, thinkingEnabled);
+  };
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden">
+    <div
+      onDragOver={(e) => {
+        if (e.dataTransfer?.types?.includes('Files')) {
+          e.preventDefault();
+          setIsTimelineDragOver(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) {
+          setIsTimelineDragOver(false);
+        }
+      }}
+      onDrop={(e) => {
+        setIsTimelineDragOver(false);
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          e.preventDefault();
+          composerRef.current?.appendImageFiles(e.dataTransfer.files);
+        }
+      }}
+      className={`flex-1 h-full flex flex-col bg-slate-950 overflow-hidden transition-colors ${
+        isTimelineDragOver ? 'ring-2 ring-inset ring-sky-500/60 bg-sky-950/15' : ''
+      }`}
+    >
       {/* Studio Chat Messages Stream */}
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
         {!selectedTask ? (
@@ -193,16 +264,12 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-left pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  onSelectIntent('refine-plan');
-                  onSendChatTask(
-                    'Refine and structure this Markdown specification with a clear step-by-step checklist.',
-                    undefined,
-                    undefined,
-                    'medium',
-                    true
-                  );
-                }}
+                onClick={() =>
+                  dispatchQuickStartPrompt(
+                    'refine-plan',
+                    'Refine and structure this Markdown specification with a clear step-by-step checklist.'
+                  )
+                }
                 className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-sky-500/50 transition-all group"
               >
                 <div className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
@@ -215,16 +282,12 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
 
               <button
                 type="button"
-                onClick={() => {
-                  onSelectIntent('build');
-                  onSendChatTask(
-                    'Execute the checklist steps in this Markdown plan and generate the implementation report.',
-                    undefined,
-                    undefined,
-                    'medium',
-                    true
-                  );
-                }}
+                onClick={() =>
+                  dispatchQuickStartPrompt(
+                    'build',
+                    'Execute the checklist steps in this Markdown plan and generate the implementation report.'
+                  )
+                }
                 className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-emerald-500/50 transition-all group"
               >
                 <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
@@ -237,16 +300,12 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
 
               <button
                 type="button"
-                onClick={() => {
-                  onSelectIntent('review');
-                  onSendChatTask(
-                    'Audit this Markdown specification and implementation for edge cases, bugs, and security risks.',
-                    undefined,
-                    undefined,
-                    'medium',
-                    true
-                  );
-                }}
+                onClick={() =>
+                  dispatchQuickStartPrompt(
+                    'review',
+                    'Audit this Markdown specification and implementation for edge cases, bugs, and security risks.'
+                  )
+                }
                 className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-amber-500/50 transition-all group"
               >
                 <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
@@ -734,8 +793,10 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
 
         {/* Isolated Keystroke Input Composer */}
         <AgentChatComposer
+          ref={composerRef}
           visibleAgents={visibleAgents}
           allAgents={allAgents}
+          agentsById={agentsById}
           selectedAgentId={selectedAgentId}
           onSelectAgent={onSelectAgent}
           selectedIntent={selectedIntent}

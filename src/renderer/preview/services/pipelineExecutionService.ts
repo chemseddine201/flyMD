@@ -1,5 +1,14 @@
-import { AgentTaskIntent, AgentTaskRecord, AgentId, AgentEffortLevel } from '../../../shared/types';
+import {
+  AgentTaskIntent,
+  AgentTaskRecord,
+  AgentId,
+  AgentEffortLevel,
+  AgentPipelinePreset,
+  AgentPipelineStep,
+  CustomPipelineAction,
+} from '../../../shared/types';
 import { usePreviewStore } from '../store';
+import { selectTasksById } from '../store/selectors/agentSelectors';
 
 export interface RecoveryModalDecision {
   action: 'continue_from_breakpoint' | 'revert_and_retry' | 'pause';
@@ -7,6 +16,248 @@ export interface RecoveryModalDecision {
   overrideEffortLevel?: AgentEffortLevel;
   overrideThinkingEnabled?: boolean;
   extraDirective?: string;
+}
+
+/**
+ * Module-level pipeline runtime controller so `viewMode` / tab switches never
+ * orphan an active pipeline execution loop.
+ */
+export const globalPipelineRuntime: {
+  cancelled: boolean;
+  proceedResolver: (() => void) | null;
+  recoveryResolver: ((decision: RecoveryModalDecision) => void) | null;
+} = {
+  cancelled: false,
+  proceedResolver: null,
+  recoveryResolver: null,
+};
+
+export const isPipelineCancelledRef = {
+  get current() {
+    return globalPipelineRuntime.cancelled;
+  },
+  set current(val: boolean) {
+    globalPipelineRuntime.cancelled = val;
+  },
+};
+
+export const proceedNextStepResolverRef = {
+  get current() {
+    return globalPipelineRuntime.proceedResolver;
+  },
+  set current(val: (() => void) | null) {
+    globalPipelineRuntime.proceedResolver = val;
+  },
+};
+
+export function proceedNextWorkflowStep(): void {
+  if (proceedNextStepResolverRef.current) {
+    const resolve = proceedNextStepResolverRef.current;
+    proceedNextStepResolverRef.current = null;
+    resolve();
+  }
+}
+
+export async function cancelActivePipelineExecution(
+  targetPipelineId?: string,
+  onClearRecoveryPrompt?: () => void
+): Promise<void> {
+  const storeState = usePreviewStore.getState();
+  const activePipeId = targetPipelineId || storeState.runningPipelineId;
+  isPipelineCancelledRef.current = true;
+  storeState.setRunningPipelineId(null);
+  storeState.setRunningPipelineStepIdx(-1);
+  storeState.setWaitingForStepApproval(null);
+  onClearRecoveryPrompt?.();
+
+  if (proceedNextStepResolverRef.current) {
+    const r = proceedNextStepResolverRef.current;
+    proceedNextStepResolverRef.current = null;
+    r();
+  }
+  if (globalPipelineRuntime.recoveryResolver) {
+    const rr = globalPipelineRuntime.recoveryResolver;
+    globalPipelineRuntime.recoveryResolver = null;
+    rr({ action: 'pause' });
+  }
+  if (activePipeId) {
+    storeState.setPipelines((prev) =>
+      prev.map((p) =>
+        p.id !== activePipeId
+          ? p
+          : {
+              ...p,
+              steps: p.steps.map((s) =>
+                s.status === 'running' ? { ...s, status: 'pending' as const } : s
+              ),
+            }
+      )
+    );
+    const runningTasks = storeState.agentTasks.filter(
+      (t) => t.status === 'running' && t.pipelineId === activePipeId
+    );
+    for (const rt of runningTasks) {
+      try {
+        await window.electronAPI.cancelAgentTask(rt.id);
+      } catch {}
+    }
+    if (runningTasks.length > 0) {
+      try {
+        const updated = await window.electronAPI.getAgentTasks();
+        storeState.setAgentTasks(updated);
+      } catch {}
+    }
+  }
+}
+
+export interface BuildPipelineStepPromptParams {
+  pipeline: AgentPipelinePreset;
+  stepIdx: number;
+  currentStep: AgentPipelineStep;
+  previousTask: AgentTaskRecord | null;
+  assignedPipelineName?: string | null;
+  customAction?: CustomPipelineAction | null;
+  priorTask?: AgentTaskRecord | null;
+  recoveryMode?: 'continue_from_breakpoint' | 'revert_and_retry';
+  extraDirective?: string;
+}
+
+export function buildPipelineStepPrompt(params: BuildPipelineStepPromptParams): {
+  promptText: string;
+  combinedStepNote: string;
+} {
+  const {
+    pipeline,
+    stepIdx,
+    currentStep,
+    previousTask,
+    assignedPipelineName,
+    customAction,
+    priorTask,
+    recoveryMode,
+    extraDirective,
+  } = params;
+
+  const stepContextTag = assignedPipelineName
+    ? ` | Contract: "${assignedPipelineName}"`
+    : '';
+
+  let promptText = `Pipeline [${pipeline.name}] — Step ${stepIdx + 1}/${
+    pipeline.steps.length
+  } (${currentStep.label})${
+    previousTask ? ` relayed from @${previousTask.targetAgentId}` : ''
+  }${stepContextTag}`;
+
+  if (customAction?.promptTemplate) {
+    promptText = `${promptText}\n\n[Action Directive]: ${customAction.promptTemplate}`;
+  }
+
+  if (
+    priorTask?.verificationReport &&
+    !priorTask.verificationReport.passed &&
+    priorTask.verificationReport.gaps.length > 0
+  ) {
+    const gapLines = priorTask.verificationReport.gaps
+      .map((g) => `- ${g}`)
+      .join('\n');
+    promptText = `[REQUIRED FIXES FROM PREVIOUS VERIFICATION]:\nThe previous run left the deliverable incomplete with the following missing items/stubs:\n${gapLines}\nYou MUST create and write real, working code for these files in the workspace.\n\n${promptText}`;
+  }
+
+  if (recoveryMode === 'continue_from_breakpoint') {
+    promptText = `[BREAKPOINT CONTINUATION MODE]: Continue from the last breakpoint where the previous run stopped. Keep all valid files already written in the workspace, complete any unfinished or missing files, and verify all deliverables.\n\n${promptText}`;
+  } else if (recoveryMode === 'revert_and_retry') {
+    promptText = `[CLEAN RETRY AFTER CHECKPOINT ROLLBACK]: Modified files from the interrupted run were reverted to the pre-task safety checkpoint. Execute this step cleanly and write each deliverable file incrementally.\n\n${promptText}`;
+  }
+
+  const combinedStepNote = [currentStep.stepNote, extraDirective]
+    .filter(Boolean)
+    .join('\n');
+
+  if (combinedStepNote) {
+    promptText = `[STEP ${stepIdx + 1} DIRECTIVE / ERROR REPORT]:\n${combinedStepNote}\n\n${promptText}`;
+  }
+
+  return { promptText, combinedStepNote };
+}
+
+export function buildStandaloneRecoveryPrompt(
+  failedTask: AgentTaskRecord,
+  mode: 'continue_from_breakpoint' | 'revert_and_retry',
+  extraDirective?: string
+): string {
+  const basePrompt =
+    failedTask.customPrompt ||
+    `Execute ${failedTask.intent} on ${failedTask.fileName}`;
+  const recoveryPrefix =
+    mode === 'continue_from_breakpoint'
+      ? `[BREAKPOINT CONTINUATION MODE]: Continue from the last breakpoint where the previous task stopped. Keep all valid files already written in the workspace, complete any unfinished or missing files, and verify all deliverables.`
+      : `[CLEAN RETRY AFTER CHECKPOINT ROLLBACK]: Modified files from the interrupted run were reverted to the pre-task safety checkpoint. Execute this task cleanly and write each deliverable file incrementally.`;
+
+  return [
+    recoveryPrefix,
+    extraDirective ? `[RECOVERY DIRECTIVE]: ${extraDirective}` : '',
+    basePrompt,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export async function resolveUpstreamPlanFromDisk(
+  previousTask: AgentTaskRecord | null,
+  resolvedWorkspace: string,
+  initialDocName: string,
+  isFirstStep: boolean
+): Promise<{
+  upstreamPlanMarkdown: string | undefined;
+  resolvedPlanFilePath: string | undefined;
+  resolvedPlanFileName: string;
+}> {
+  let upstreamPlanMarkdown = previousTask?.responseMarkdown;
+  let resolvedPlanFilePath = previousTask?.filePath;
+  let resolvedPlanFileName = previousTask?.fileName || initialDocName;
+
+  if (!isFirstStep && previousTask && resolvedWorkspace) {
+    const sep = resolvedWorkspace.includes('\\') ? '\\' : '/';
+    const checkedMdFile =
+      previousTask.verificationReport?.checkedFiles?.find((f) =>
+        f.toLowerCase().endsWith('.md')
+      );
+    const candidateMdNames = [
+      checkedMdFile,
+      previousTask.fileName?.toLowerCase().endsWith('.md')
+        ? previousTask.fileName
+        : undefined,
+      initialDocName,
+      'IMPLEMENTATION_PLAN.md',
+    ].filter(Boolean) as string[];
+
+    for (const mdName of candidateMdNames) {
+      const candidatePath =
+        mdName.includes('/') || mdName.includes('\\')
+          ? mdName
+          : `${resolvedWorkspace}${sep}${mdName}`;
+      try {
+        const diskRes = await window.electronAPI.readFile(candidatePath);
+        if (
+          diskRes &&
+          typeof diskRes.content === 'string' &&
+          diskRes.content.trim().length >= 150
+        ) {
+          upstreamPlanMarkdown = diskRes.content;
+          resolvedPlanFilePath = diskRes.path || candidatePath;
+          resolvedPlanFileName =
+            diskRes.name || mdName.split(/[\\/]/).pop() || initialDocName;
+          break;
+        }
+      } catch {}
+    }
+  }
+
+  return {
+    upstreamPlanMarkdown,
+    resolvedPlanFilePath,
+    resolvedPlanFileName,
+  };
 }
 
 /**
@@ -90,7 +341,7 @@ export function waitForTaskFinished(
         t.status === 'cancelled' ||
         t.status === 'failed');
 
-    const initial = usePreviewStore.getState().agentTasks.find((t) => t.id === taskId);
+    const initial = selectTasksById(usePreviewStore.getState()).get(taskId);
     if (isTerminal(initial)) {
       resolve(initial!);
       return;
@@ -105,7 +356,7 @@ export function waitForTaskFinished(
       if (fallbackTimer) clearInterval(fallbackTimer);
     };
 
-    // 1. Reactive memory subscription on store mutation
+    // 1. Reactive memory subscription on store mutation (O(1) lookup via memoized Map)
     const unsubscribe = usePreviewStore.subscribe((state) => {
       if (resolved) return;
       if (isCancelledRef.current) {
@@ -113,7 +364,7 @@ export function waitForTaskFinished(
         resolve(null);
         return;
       }
-      const found = state.agentTasks.find((t) => t.id === taskId);
+      const found = selectTasksById(state).get(taskId);
       if (isTerminal(found)) {
         cleanup();
         resolve(found!);
@@ -131,7 +382,7 @@ export function waitForTaskFinished(
         const tasks = await window.electronAPI.getAgentTasks?.();
         if (tasks && Array.isArray(tasks)) {
           usePreviewStore.getState().setAgentTasks(tasks);
-          const found = tasks.find((t) => t.id === taskId);
+          const found = selectTasksById(usePreviewStore.getState()).get(taskId);
           if (isTerminal(found)) {
             cleanup();
             resolve(found!);
@@ -141,4 +392,3 @@ export function waitForTaskFinished(
     }, 3000);
   });
 }
-

@@ -137,3 +137,4 @@ export const DiscussionSessionSidebar: React.FC<DiscussionSessionSidebarProps> =
     </div>
   );
 };
+

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -39,6 +39,7 @@ import {
 interface AgentProgressInspectorProps {
   selectedTask: AgentTaskRecord | null;
   checkpoints: AgentCheckpoint[];
+  checkpointsById?: Map<string, AgentCheckpoint>;
   restoringCheckpointId: string | null;
   onRestoreCheckpoint: (checkpointId: string) => void;
   onClearTaskLogs: (taskId: string) => void;
@@ -107,6 +108,7 @@ export const TaskElapsedClock: React.FC<{
 export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   selectedTask,
   checkpoints,
+  checkpointsById,
   restoringCheckpointId,
   onRestoreCheckpoint,
   onClearTaskLogs,
@@ -132,8 +134,23 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
     : 0;
 
   const checkpoint = selectedTask?.checkpointId
-    ? checkpoints.find((c) => c.id === selectedTask.checkpointId)
+    ? checkpointsById
+      ? checkpointsById.get(selectedTask.checkpointId)
+      : checkpoints.find((c) => c.id === selectedTask.checkpointId)
     : undefined;
+
+  // Incremental O(L) cursor for scanning newly appended `Created file:` log lines
+  const logScanCursorRef = useRef<{
+    taskId: string | null;
+    ws: string;
+    nextIdx: number;
+    createdFromLogs: Map<string, TouchedFile>;
+  }>({
+    taskId: null,
+    ws: '',
+    nextIdx: 0,
+    createdFromLogs: new Map(),
+  });
 
   // Extract checklist items from markdown source
   const parsedChecklist = useMemo(() => {
@@ -203,36 +220,53 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
       }
     }
 
-    // 2. Inspect logs for file creation notices
-    if (selectedTask.logs) {
-      for (const log of selectedTask.logs) {
-        const createdMatch = log.match(/Created file:\s*`?([^`\r\n]+)`?/i);
-        if (createdMatch && createdMatch[1]) {
-          const raw = createdMatch[1].trim().replace(/\\/g, '/');
-          if (!raw.includes('/.') && !raw.startsWith('.')) {
-            const name = raw.split('/').pop() || raw;
+    // 2. Inspect logs incrementally (O(delta) per render, O(L) total across a streaming run)
+    const logs = selectedTask.logs || [];
+    const cursor = logScanCursorRef.current;
+    if (
+      cursor.taskId !== selectedTask.id ||
+      cursor.ws !== ws ||
+      logs.length < cursor.nextIdx
+    ) {
+      cursor.taskId = selectedTask.id;
+      cursor.ws = ws;
+      cursor.nextIdx = 0;
+      cursor.createdFromLogs = new Map();
+    }
+    for (let i = cursor.nextIdx; i < logs.length; i++) {
+      const log = logs[i];
+      const createdMatch = log.match(/Created file:\s*`?([^`\r\n]+)`?/i);
+      if (createdMatch && createdMatch[1]) {
+        const raw = createdMatch[1].trim().replace(/\\/g, '/');
+        if (!raw.includes('/.') && !raw.startsWith('.')) {
+          const name = raw.split('/').pop() || raw;
+          const key = name.toLowerCase();
+          if (!cursor.createdFromLogs.has(key)) {
             const fullPath =
               raw.includes(':') || raw.startsWith('/')
                 ? raw
                 : ws
                 ? `${ws}/${raw}`
                 : raw;
-            const isHtml =
-              name.toLowerCase().endsWith('.html') ||
-              name.toLowerCase().endsWith('.htm');
-            if (!map.has(name.toLowerCase())) {
-              map.set(name.toLowerCase(), {
-                name,
-                fullPath,
-                isHtml,
-                status: 'created',
-                toolLabel: `Created ${name}`,
-              });
-            }
+            const isHtml = key.endsWith('.html') || key.endsWith('.htm');
+            cursor.createdFromLogs.set(key, {
+              name,
+              fullPath,
+              isHtml,
+              status: 'created',
+              toolLabel: `Created ${name}`,
+            });
           }
         }
       }
     }
+    cursor.nextIdx = logs.length;
+
+    cursor.createdFromLogs.forEach((file, key) => {
+      if (!map.has(key)) {
+        map.set(key, file);
+      }
+    });
 
     // 2b. Include explicit modifiedFiles from task record or errorDiagnostic
     const recordedModFiles = [

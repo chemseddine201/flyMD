@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useImperativeHandle } from 'react';
 import {
   Sparkles,
   FileCheck2,
@@ -28,9 +28,18 @@ export interface ChatImageAttachment {
   dataUrl: string;
 }
 
+export interface AgentChatComposerHandle {
+  getEffortAndThinking: () => {
+    effortLevel: AgentEffortLevel;
+    thinkingEnabled: boolean;
+  };
+  appendImageFiles: (files: FileList | File[]) => void;
+}
+
 export interface AgentChatComposerProps {
   visibleAgents: AgentProfile[];
   allAgents: AgentProfile[];
+  agentsById?: Map<string, AgentProfile>;
   selectedAgentId: AgentId;
   onSelectAgent: (id: AgentId) => void;
   selectedIntent: AgentTaskIntent;
@@ -55,9 +64,11 @@ export interface AgentChatComposerProps {
   ) => Promise<void>;
 }
 
-export const AgentChatComposer: React.FC<AgentChatComposerProps> = React.memo(({
+export const AgentChatComposer = React.memo(
+  React.forwardRef<AgentChatComposerHandle, AgentChatComposerProps>(({
   visibleAgents,
   allAgents,
+  agentsById,
   selectedAgentId,
   onSelectAgent,
   selectedIntent,
@@ -74,7 +85,7 @@ export const AgentChatComposer: React.FC<AgentChatComposerProps> = React.memo(({
   customActions = [],
   onOpenCustomActionsModal,
   onSendChatTask,
-}) => {
+}, ref) => {
   const [promptInput, setPromptInput] = useState('');
   const [attachedImages, setAttachedImages] = useState<ChatImageAttachment[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -89,9 +100,11 @@ export const AgentChatComposer: React.FC<AgentChatComposerProps> = React.memo(({
     customActions.length > 0 ? customActions : STARTER_CUSTOM_PIPELINE_ACTIONS;
 
   const activeAgent =
-    allAgents.find((a) => a.id === selectedAgentId) || visibleAgents[0];
+    agentsById?.get(selectedAgentId) ||
+    allAgents.find((a) => a.id === selectedAgentId) ||
+    visibleAgents[0];
 
-  const addImageFiles = (files: FileList | File[]) => {
+  const addImageFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files);
     const imageFiles = fileArray.filter((f) => f.type.startsWith('image/'));
     if (imageFiles.length === 0) return;
@@ -114,7 +127,19 @@ export const AgentChatComposer: React.FC<AgentChatComposerProps> = React.memo(({
       };
       reader.readAsDataURL(file);
     });
-  };
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getEffortAndThinking: () => ({
+        effortLevel: composerEffort,
+        thinkingEnabled: composerThinking,
+      }),
+      appendImageFiles: addImageFiles,
+    }),
+    [composerEffort, composerThinking, addImageFiles]
+  );
 
   const handlePaste = (e: React.ClipboardEvent) => {
     if (e.clipboardData.files && e.clipboardData.files.length > 0) {
@@ -175,6 +200,7 @@ export const AgentChatComposer: React.FC<AgentChatComposerProps> = React.memo(({
       onDragLeave={() => setIsDragOver(false)}
       onDrop={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         setIsDragOver(false);
         if (e.dataTransfer.files) addImageFiles(e.dataTransfer.files);
       }}
@@ -464,5 +490,6 @@ export const AgentChatComposer: React.FC<AgentChatComposerProps> = React.memo(({
       </div>
     </div>
   );
-});
+  })
+);
 

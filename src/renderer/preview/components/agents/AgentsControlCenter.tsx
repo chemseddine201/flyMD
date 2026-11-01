@@ -1,47 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Bot,
-  KeyRound,
-  Users,
-  RefreshCw,
-  BrainCircuit,
-  SlidersHorizontal,
-  Trash2,
-  AlertTriangle,
-  Check,
-  Loader2,
-  X,
-  FolderGit2,
-  FolderTree,
-  Boxes,
-  Brain,
-  FileText,
-  Rocket,
-  RotateCcw,
-  CheckCircle2,
-  AlertCircle,
-  Play,
-  Copy,
-  ChevronDown,
-  ChevronRight,
-  ShieldCheck,
-  Clock,
-} from 'lucide-react';
-import { usePreviewStore, selectActiveTab } from '../../store';
-import {
-  AGENT_INTENT_PRESETS,
-  BUILTIN_AGENT_PIPELINES,
-  STARTER_CUSTOM_PIPELINE_ACTIONS,
-} from '../../../../shared/constants';
-import {
-  AgentId,
-  AgentPipelinePreset,
-  AgentPipelineStep,
-  AgentTaskIntent,
-  AgentTaskRecord,
-  CustomPipelineAction,
-  AgentEffortLevel,
-} from '../../../../shared/types';
+import React from 'react';
+import { Check } from 'lucide-react';
 import { AgentStudioSidebar } from './studio/AgentStudioSidebar';
 import { AgentChatTimeline } from './studio/AgentChatTimeline';
 import { AgentProgressInspector } from './studio/AgentProgressInspector';
@@ -52,24 +10,12 @@ import { ProjectSynthesisReportViewer } from './projects/ProjectSynthesisReportV
 import { CustomPipelineActionsModal } from './studio/CustomPipelineActionsModal';
 import { ClearWorkspaceCacheModal } from './modals/ClearWorkspaceCacheModal';
 import { PipelineRecoveryModal } from './modals/PipelineRecoveryModal';
-import {
-  RecoveryModalDecision,
-  composeEpistemicStepPayload,
-  waitForTaskFinished,
-} from '../../services/pipelineExecutionService';
+import { StudioTopHeaderBar } from './control-center/StudioTopHeaderBar';
+import { PipelineStatusBanners } from './control-center/PipelineStatusBanners';
+import { useAgentStudioController } from './control-center/useAgentStudioController';
+import { RecoveryModalDecision } from '../../services/pipelineExecutionService';
 
 export type { RecoveryModalDecision };
-
-// Module-level pipeline runtime controller so viewMode / tab switches never orphan an active pipeline run
-const globalPipelineRuntime: {
-  cancelled: boolean;
-  proceedResolver: (() => void) | null;
-  recoveryResolver: ((decision: RecoveryModalDecision) => void) | null;
-} = {
-  cancelled: false,
-  proceedResolver: null,
-  recoveryResolver: null,
-};
 
 interface AgentsControlCenterProps {
   folderPath?: string;
@@ -77,2056 +23,139 @@ interface AgentsControlCenterProps {
   supervisionConfig?: any;
 }
 
-export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
-  folderPath: propFolderPath,
-  activeTab: propActiveTab,
-  supervisionConfig: propSupervisionConfig,
-}) => {
-  const agentProfiles = usePreviewStore((s) => s.agentProfiles);
-  const setAgentProfiles = usePreviewStore((s) => s.setAgentProfiles);
-  const agentTasks = usePreviewStore((s) => s.agentTasks);
-  const setAgentTasks = usePreviewStore((s) => s.setAgentTasks);
-  const agentCheckpoints = usePreviewStore((s) => s.agentCheckpoints);
-  const setAgentCheckpoints = usePreviewStore((s) => s.setAgentCheckpoints);
-  const setShowAgentAccountsModal = usePreviewStore(
-    (s) => s.setShowAgentAccountsModal
-  );
-  const setShowCouncilModal = usePreviewStore((s) => s.setShowCouncilModal);
-  const openDispatchModal = usePreviewStore((s) => s.openDispatchModal);
-  const activeTab = usePreviewStore(selectActiveTab);
-  const openFileInTab = usePreviewStore((s) => s.openFileInTab);
-  const closeTab = usePreviewStore((s) => s.closeTab);
-  const addTab = usePreviewStore((s) => s.addTab);
-  const clearAllDiscussions = usePreviewStore((s) => s.clearAllDiscussions);
-  const updateActiveContent = usePreviewStore((s) => s.updateActiveContent);
-  const setViewMode = usePreviewStore((s) => s.setViewMode);
-  const folderPath = usePreviewStore((s) => s.folderPath);
-  const supervisionConfig = usePreviewStore((s) => s.supervisionConfig);
-  const folderFiles = usePreviewStore((s) => s.folderFiles);
-  const setFolderFiles = usePreviewStore((s) => s.setFolderFiles);
-
-  // Persistent Workflow & Pipeline Execution State from Global Store (survives viewMode switches)
-  const pipelines = usePreviewStore((s) => s.pipelines);
-  const setPipelines = usePreviewStore((s) => s.setPipelines);
-  const runningPipelineId = usePreviewStore((s) => s.runningPipelineId);
-  const setRunningPipelineId = usePreviewStore((s) => s.setRunningPipelineId);
-  const runningPipelineStepIdx = usePreviewStore((s) => s.runningPipelineStepIdx);
-  const setRunningPipelineStepIdx = usePreviewStore(
-    (s) => s.setRunningPipelineStepIdx
-  );
-  const waitingForStepApproval = usePreviewStore((s) => s.waitingForStepApproval);
-  const setWaitingForStepApproval = usePreviewStore(
-    (s) => s.setWaitingForStepApproval
-  );
-  const assignedReportDoc = usePreviewStore((s) => s.assignedReportDoc);
-  const setAssignedReportDoc = usePreviewStore((s) => s.setAssignedReportDoc);
-  const lifecycleStage = usePreviewStore((s) => s.agentLifecycleStage);
-  const setLifecycleStage = usePreviewStore((s) => s.setAgentLifecycleStage);
-
-  // Only show agents enabled by the user in all studio selectors
-  const enabledProfiles = agentProfiles.filter((a) => a.enabled);
-  const visibleAgents =
-    enabledProfiles.length > 0 ? enabledProfiles : agentProfiles;
-
-  const [selectedAgentId, setSelectedAgentId] = useState<AgentId>(
-    () => visibleAgents[0]?.id || 'antigravity'
-  );
-  const [selectedIntent, setSelectedIntent] =
-    useState<AgentTaskIntent>('refine-plan');
-  const [selectedSourceFile, setSelectedSourceFile] = useState<string>('');
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [restoringCheckpointId, setRestoringCheckpointId] = useState<
-    string | null
-  >(null);
-  const [showClearCacheModal, setShowClearCacheModal] = useState(false);
-  const [clearTempCache, setClearTempCache] = useState(true);
-  const [clearMemoryLedger, setClearMemoryLedger] = useState(true);
-  const [clearCompletedSessions, setClearCompletedSessions] = useState(true);
-  const [clearDebatesAndCouncil, setClearDebatesAndCouncil] = useState(true);
-  const [clearPipelineAndReports, setClearPipelineAndReports] = useState(true);
-  const [closeRelatedOpenedFiles, setCloseRelatedOpenedFiles] = useState(true);
-  const [clearingCache, setClearingCache] = useState(false);
-  const [cacheNotification, setCacheNotification] = useState<string | null>(null);
-  const [showProjectTree, setShowProjectTree] = useState<boolean>(true);
-  const [showObservabilityHUD, setShowObservabilityHUD] = useState<boolean>(false);
-  const [workspaceFocusMode, setWorkspaceFocusMode] = useState<'workspace' | 'file'>('workspace');
-  const [focusFilePath, setFocusFilePath] = useState<string>('');
-
-  const projects = usePreviewStore((s) => s.projects);
-  const selectedProjectId = usePreviewStore((s) => s.selectedProjectId);
-  const activeProject = usePreviewStore((s) => s.activeProject);
-  const loadProjects = usePreviewStore((s) => s.loadProjects);
-  const rollupProject = usePreviewStore((s) => s.rollupProject);
-  const activeReportMarkdown = usePreviewStore((s) => s.activeReportMarkdown);
-  const appendProjectMemory = usePreviewStore((s) => s.appendProjectMemory);
-  const injectGuidance = usePreviewStore((s) => s.injectGuidance);
-
-  const isPipelineCancelledRef = {
-    get current() {
-      return globalPipelineRuntime.cancelled;
-    },
-    set current(val: boolean) {
-      globalPipelineRuntime.cancelled = val;
-    },
-  };
-
-  // Workflow Execution Mode: 'auto' (uninterrupted relay) vs. 'manual' (step approval required)
-  const [workflowExecutionMode, setWorkflowExecutionMode] = useState<'auto' | 'manual'>(() => {
-    try {
-      return (localStorage.getItem('flymd:workflow-execution-mode') as 'auto' | 'manual') || 'auto';
-    } catch {
-      return 'auto';
-    }
-  });
-
-  const handleSetWorkflowExecutionMode = (mode: 'auto' | 'manual') => {
-    setWorkflowExecutionMode(mode);
-    try {
-      localStorage.setItem('flymd:workflow-execution-mode', mode);
-    } catch {}
-  };
-
-  const proceedNextStepResolverRef = {
-    get current() {
-      return globalPipelineRuntime.proceedResolver;
-    },
-    set current(val: (() => void) | null) {
-      globalPipelineRuntime.proceedResolver = val;
-    },
-  };
-
-  const handleProceedNextWorkflowStep = () => {
-    if (proceedNextStepResolverRef.current) {
-      const resolve = proceedNextStepResolverRef.current;
-      proceedNextStepResolverRef.current = null;
-      resolve();
-    }
-  };
-
-  // Live Reconciliation: Ensure `runningPipelineId`, `runningPipelineStepIdx`, and `step.status`
-  // stay synchronized with live `agentTasks` across remounts or background updates.
-  useEffect(() => {
-    const primary = pipelines[0];
-    if (!primary) return;
-
-    const runningTaskForPipeline = agentTasks.find(
-      (t) => t.status === 'running' && t.pipelineId === primary.id
-    );
-
-    if (runningTaskForPipeline && !runningPipelineId) {
-      // Find matching step index by completedTaskId or intent
-      let matchIdx = primary.steps.findIndex(
-        (s) => s.completedTaskId === runningTaskForPipeline.id
-      );
-      if (matchIdx === -1) {
-        matchIdx = primary.steps.findIndex(
-          (s) =>
-            s.status === 'running' ||
-            (s.intent === runningTaskForPipeline.intent && s.status !== 'completed')
-        );
-      }
-      setRunningPipelineId(primary.id);
-      if (matchIdx !== -1) {
-        setRunningPipelineStepIdx(matchIdx);
-      }
-    }
-  }, [agentTasks, pipelines, runningPipelineId, setRunningPipelineId, setRunningPipelineStepIdx]);
-
-  // Ensure selectedAgentId stays within enabled visibleAgents
-  useEffect(() => {
-    if (
-      visibleAgents.length > 0 &&
-      !visibleAgents.some((a) => a.id === selectedAgentId)
-    ) {
-      setSelectedAgentId(visibleAgents[0].id);
-    }
-  }, [visibleAgents, selectedAgentId]);
-
-  // User-Defined Custom Pipeline Actions Library
-  const [customActions, setCustomActions] = useState<CustomPipelineAction[]>(() => {
-    try {
-      const saved = localStorage.getItem('flymd:custom-pipeline-actions');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return STARTER_CUSTOM_PIPELINE_ACTIONS;
-  });
-
-  const [showCustomActionsModal, setShowCustomActionsModal] = useState<boolean>(false);
-
-  const handleSaveCustomAction = (action: CustomPipelineAction) => {
-    setCustomActions((prev) => {
-      const existingIdx = prev.findIndex((a) => a.id === action.id);
-      let updated: CustomPipelineAction[];
-      if (existingIdx >= 0) {
-        updated = prev.map((a, idx) => (idx === existingIdx ? action : a));
-      } else {
-        updated = [...prev, action];
-      }
-      try {
-        localStorage.setItem(
-          'flymd:custom-pipeline-actions',
-          JSON.stringify(updated)
-        );
-      } catch {}
-      return updated;
-    });
-  };
-
-  const handleDeleteCustomAction = (actionId: string) => {
-    setCustomActions((prev) => {
-      const filtered = prev.filter((a) => a.id !== actionId);
-      try {
-        localStorage.setItem(
-          'flymd:custom-pipeline-actions',
-          JSON.stringify(filtered)
-        );
-      } catch {}
-      return filtered;
-    });
-  };
-
-  const [cwdWorkspace, setCwdWorkspace] = useState<string>('');
-
-  useEffect(() => {
-    if (!folderPath && !propFolderPath && window.electronAPI?.getCurrentWorkingDirectory) {
-      window.electronAPI.getCurrentWorkingDirectory().then((cwd) => {
-        if (cwd && cwd !== '.') {
-          setCwdWorkspace(cwd);
-        }
-      }).catch(() => {});
-    }
-  }, [folderPath, propFolderPath]);
-
-  const resolvedWorkspace =
-    propFolderPath ||
-    folderPath ||
-    propSupervisionConfig?.path ||
-    supervisionConfig?.path ||
-    (propActiveTab?.filePath ? propActiveTab.filePath.replace(/[\\/][^\\/]+$/, '') : '') ||
-    (activeTab?.filePath ? activeTab.filePath.replace(/[\\/][^\\/]+$/, '') : '') ||
-    cwdWorkspace ||
-    (typeof window !== 'undefined' ? (window as any)._flymd_last_workspace : '') ||
-    '.';
-
-  // Live Progress Inspector resizable width (persisted)
-  const [inspectorWidth, setInspectorWidth] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('flymd:agents-inspector-width');
-      return saved ? parseInt(saved, 10) : 340;
-    } catch {
-      return 340;
-    }
-  });
-
-  const isInspectorResizingRef = useRef(false);
-
-  const handleInspectorResizeMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    isInspectorResizingRef.current = true;
-    const startX = e.clientX;
-    const startWidth = inspectorWidth;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!isInspectorResizingRef.current) return;
-      const delta = startX - moveEvent.clientX;
-      const newWidth = Math.max(260, Math.min(750, startWidth + delta));
-      setInspectorWidth(newWidth);
-      try {
-        localStorage.setItem('flymd:agents-inspector-width', String(newWidth));
-      } catch {}
-    };
-
-    const handleMouseUp = () => {
-      isInspectorResizingRef.current = false;
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  };
-
-  const selectedTask =
-    agentTasks.find((t) => t.id === selectedTaskId) || agentTasks[0] || null;
-
-  useEffect(() => {
-    if (resolvedWorkspace) {
-      loadProjects(resolvedWorkspace);
-    }
-  }, [resolvedWorkspace, loadProjects]);
-
-  const [completedPipelineSummary, setCompletedPipelineSummary] = useState<{
-    pipelineName: string;
-    stepsCount: number;
-    filesCreated: number;
-    lastTaskOutput?: string;
-  } | null>(null);
-
-  // Interactive Pipeline & Task Error Recovery Modal State
-  const [pendingRecoveryPrompt, setPendingRecoveryPrompt] = useState<{
-    failedTask: AgentTaskRecord;
-    pipeline?: AgentPipelinePreset;
-    stepIdx?: number;
-    stepLabel?: string;
-    isLivePipelinePause: boolean;
-  } | null>(null);
-  const [recoveryAgentId, setRecoveryAgentId] = useState<AgentId>('');
-  const [recoveryEffortLevel, setRecoveryEffortLevel] = useState<AgentEffortLevel>('medium');
-  const [recoveryThinkingEnabled, setRecoveryThinkingEnabled] = useState<boolean>(true);
-  const [recoveryExtraDirective, setRecoveryExtraDirective] = useState<string>('');
-
-  const cancelActivePipelineRun = async (targetPipelineId?: string) => {
-    const storeState = usePreviewStore.getState();
-    const activePipeId = targetPipelineId || storeState.runningPipelineId;
-    isPipelineCancelledRef.current = true;
-    storeState.setRunningPipelineId(null);
-    storeState.setRunningPipelineStepIdx(-1);
-    storeState.setWaitingForStepApproval(null);
-    setPendingRecoveryPrompt(null);
-    if (proceedNextStepResolverRef.current) {
-      const r = proceedNextStepResolverRef.current;
-      proceedNextStepResolverRef.current = null;
-      r();
-    }
-    if (globalPipelineRuntime.recoveryResolver) {
-      const rr = globalPipelineRuntime.recoveryResolver;
-      globalPipelineRuntime.recoveryResolver = null;
-      rr({ action: 'pause' });
-    }
-    if (activePipeId) {
-      storeState.setPipelines((prev) =>
-        prev.map((p) =>
-          p.id !== activePipeId
-            ? p
-            : {
-                ...p,
-                steps: p.steps.map((s) =>
-                  s.status === 'running' ? { ...s, status: 'pending' as const } : s
-                ),
-              }
-        )
-      );
-      const runningTasks = storeState.agentTasks.filter(
-        (t) => t.status === 'running' && t.pipelineId === activePipeId
-      );
-      for (const rt of runningTasks) {
-        try {
-          await window.electronAPI.cancelAgentTask(rt.id);
-        } catch {}
-      }
-      if (runningTasks.length > 0) {
-        try {
-          const updated = await window.electronAPI.getAgentTasks();
-          storeState.setAgentTasks(updated);
-        } catch {}
-      }
-    }
-  };
-
-  const handleLaunchDedicatedPipeline = async (
-    preset: AgentPipelinePreset,
-    reportMarkdown: string
-  ) => {
-    setPipelines((prev) => [preset, ...prev.filter((p) => p.id !== preset.id)]);
-    setAssignedReportDoc({
-      pipelineId: preset.id,
-      pipelineName: preset.name,
-      reportMarkdown,
-      assignedAt: new Date().toLocaleTimeString(),
-    });
-
-    if (resolvedWorkspace && activeProject) {
-      await appendProjectMemory(
-        resolvedWorkspace,
-        activeProject.id,
-        'operator',
-        'decision',
-        `Assigned Dedicated Pipeline: ${preset.name} (${preset.steps.length} steps)`,
-        `Pipeline created from synthesis report with ${preset.steps.length} execution tasks.`,
-        ['pipeline', 'provision', 'contract']
-      );
-    }
-    setLifecycleStage('pipeline');
-  };
-
-  const handleSendBackToDebate = async (
-    feedback: string,
-    reportMarkdown: string
-  ) => {
-    if (resolvedWorkspace && activeProject) {
-      await appendProjectMemory(
-        resolvedWorkspace,
-        activeProject.id,
-        'operator',
-        'decision',
-        `Operator Steering & Re-deliberation Directive`,
-        `Feedback: ${feedback}\n\nReport Context:\n${reportMarkdown}`,
-        ['steering', 'recycle', 'feedback']
-      );
-    }
-    try {
-      await injectGuidance(
-        `[OPERATOR RE-DELIBERATION GUIDANCE]: ${feedback}\n\nPlease re-evaluate previous assumptions and consensus points in light of this guidance.`
-      );
-    } catch {}
-    setLifecycleStage('debate');
-  };
-
-  const handleAuditDeliverablesInDebate = async () => {
-    if (resolvedWorkspace && activeProject) {
-      await appendProjectMemory(
-        resolvedWorkspace,
-        activeProject.id,
-        'pipeline',
-        'deliverable',
-        `Completed Pipeline Execution Deliverables: ${completedPipelineSummary?.pipelineName || 'Tasks'}`,
-        completedPipelineSummary?.lastTaskOutput || 'Deliverables generated by pipeline execution.',
-        ['evidence', 'deliverables', 'audit']
-      );
-    }
-    try {
-      await injectGuidance(
-        `[EMPIRICAL DELIVERABLES AUDIT]: Pipeline execution has completed deliverables for "${completedPipelineSummary?.pipelineName || activeProject?.name}". All models: audit generated files and verify invariants against original requirements.`
-      );
-    } catch {}
-    setLifecycleStage('debate');
-  };
-
-  const handleRollupToMaster = async () => {
-    if (!resolvedWorkspace || !activeProject) return;
-    const summary = `### [Project: ${activeProject.name}] — Completed\n- **Status**: Verified by evidence\n- **Scope**: ${activeProject.scope_paths.join(', ') || 'Entire Workspace'}\n- **Timestamp**: ${new Date().toISOString()}\n`;
-    await rollupProject(resolvedWorkspace, activeProject.id, summary);
-  };
-
-  const effectiveReportMarkdown = useMemo(() => {
-    if (activeReportMarkdown && activeReportMarkdown.trim().length > 0) {
-      return activeReportMarkdown;
-    }
-    const projName = activeProject?.name || 'General Project Task';
-    const projDesc =
-      activeProject?.description ||
-      'Structured execution plan, objectives, and deliverables.';
-    return `# Synthesis Report & Execution Contract: ${projName}
-
-- **Project Node**: \`${activeProject?.id || 'root'}\`
-- **Scope Paths**: ${
-      activeProject?.scope_paths?.length
-        ? activeProject.scope_paths.join(', ')
-        : 'Entire Workspace'
-    }
-- **Epistemic Classification**: \`[Agent Consensus]\`
-
----
-
-## 1. Executive Summary & Objectives
-${projDesc}
-
-## 2. Actionable Implementation Checklist
-- [ ] Review specifications, domain objectives, and requirements
-- [ ] Implement core content, deliverables, or target components
-- [ ] Cross-validate deliverables against constraints and criteria
-- [ ] Audit final outputs, settle deliverables, and mark milestone complete
-
-## 3. Epistemic Acceptance Criteria
-- Clear alignment with core project goals
-- Rigorous verification of constraints and deliverables
-- Evidence before done: all artifacts and deliverables settled cleanly
-`;
-  }, [activeReportMarkdown, activeProject]);
-
-  const handleUpdatePipelineStep = (
-    pipelineId: string,
-    stepIdx: number,
-    updates: Partial<AgentPipelineStep>
-  ) => {
-    // Updating a step note on a pending step does not cancel the pipeline
-    const isOnlyNoteUpdate =
-      Object.keys(updates).length === 1 && 'stepNote' in updates;
-    if (runningPipelineId === pipelineId && !isOnlyNoteUpdate) {
-      cancelActivePipelineRun(pipelineId);
-    }
-    setPipelines((prev) =>
-      prev.map((p) => {
-        if (p.id !== pipelineId) return p;
-        const steps = p.steps.map((s, idx) =>
-          idx === stepIdx ? { ...s, ...updates } : s
-        );
-        return { ...p, steps };
-      })
-    );
-  };
-
-  const handleAddPipelineStep = (pipelineId: string) => {
-    if (runningPipelineId === pipelineId) {
-      cancelActivePipelineRun(pipelineId);
-    }
-    const defaultAgent = visibleAgents[0]?.id || 'antigravity';
-    setPipelines((prev) =>
-      prev.map((p) => {
-        if (p.id !== pipelineId) return p;
-        const nextIntent: AgentTaskIntent =
-          p.steps.length === 0
-            ? 'refine-plan'
-            : p.steps.length === 1
-            ? 'build'
-            : p.steps.length === 2
-            ? 'review'
-            : 'fix-bugs';
-        const presetLabel =
-          AGENT_INTENT_PRESETS.find((ip) => ip.id === nextIntent)?.title ||
-          nextIntent;
-        const newStep: AgentPipelineStep = {
-          stepId: `step-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          agentId: defaultAgent,
-          intent: nextIntent,
-          label: `${p.steps.length + 1}. ${presetLabel}`,
-          requireConfirmation: false,
-          status: 'pending',
-        };
-        return {
-          ...p,
-          steps: [...p.steps, newStep],
-        };
-      })
-    );
-  };
-
-  const handleClearStepDoneStatus = (pipelineId: string) => {
-    setPipelines((prev) =>
-      prev.map((p) => {
-        if (p.id !== pipelineId) return p;
-        const steps = p.steps.map((s) => ({
-          ...s,
-          status: 'pending' as const,
-          completedTaskId: undefined,
-          completedAt: undefined,
-        }));
-        return { ...p, steps };
-      })
-    );
-  };
-
-  const handleRemovePipelineStep = (pipelineId: string, stepIdx: number) => {
-    if (runningPipelineId === pipelineId) {
-      cancelActivePipelineRun(pipelineId);
-    }
-    setPipelines((prev) =>
-      prev.map((p) => {
-        if (p.id !== pipelineId) return p;
-        if (p.steps.length <= 1) return p;
-        const steps = p.steps.filter((_, idx) => idx !== stepIdx);
-        return { ...p, steps };
-      })
-    );
-  };
-
-  const handleResetPipelines = () => {
-    if (runningPipelineId) {
-      cancelActivePipelineRun(runningPipelineId);
-    }
-    const fallbackAgent = visibleAgents[0]?.id || 'antigravity';
-    const secondAgent = visibleAgents[1]?.id || fallbackAgent;
-    const reset = BUILTIN_AGENT_PIPELINES.map((p) => ({
-      ...p,
-      steps: p.steps.map((s, idx) => ({
-        ...s,
-        agentId: visibleAgents.some((va) => va.id === s.agentId)
-          ? s.agentId
-          : idx % 2 === 0
-          ? fallbackAgent
-          : secondAgent,
-      })),
-    }));
-    setPipelines(reset);
-    try {
-      localStorage.removeItem('flymd:custom-pipelines');
-    } catch {}
-  };
-
-  const handleRefreshAll = async () => {
-    setRefreshing(true);
-    try {
-      const [profiles, tasks, checkpoints] = await Promise.all([
-        window.electronAPI.discoverAgents(),
-        window.electronAPI.getAgentTasks(),
-        window.electronAPI.getAgentCheckpoints(),
-      ]);
-      setAgentProfiles(profiles);
-      setAgentTasks(tasks);
-      setAgentCheckpoints(checkpoints);
-    } catch (err) {
-      console.error('Failed to refresh agent studio state:', err);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const resolveCurrentSourceDocument = async (overridePath?: string) => {
-    // Workspace-First Root Architecture: default to entire project workspace unless user pinned a specific file
-    if (workspaceFocusMode === 'workspace' && !overridePath && resolvedWorkspace) {
-      const wsName = resolvedWorkspace.split(/[\\/]/).pop() || 'Project-Workspace';
-      return {
-        filePath: resolvedWorkspace,
-        fileName: `Entire Project (${wsName})`,
-        markdownContent:
-          activeTab?.content ||
-          `# Project Workspace: ${wsName}\n\nManaging full multi-file codebase and system architecture.\n`,
-      };
-    }
-
-    // If activeTab is an unsaved Welcome tab and the user has a real .md file in the workspace (e.g. Untitled-1.md), prefer that file
-    const userWorkspaceFiles = folderFiles.filter(
-      (f) => !f.path.includes('.flymd') && !f.name.startsWith('report-task-')
-    );
-    const fallbackWorkspaceFile =
-      !activeTab?.filePath && userWorkspaceFiles.length > 0
-        ? userWorkspaceFiles[0].path
-        : '';
-
-    const targetPath =
-      overridePath ||
-      (workspaceFocusMode === 'file' && focusFilePath ? focusFilePath : '') ||
-      selectedSourceFile ||
-      activeTab?.filePath ||
-      fallbackWorkspaceFile ||
-      '';
-
-    if (targetPath && targetPath !== activeTab?.filePath) {
-      try {
-        const res = await window.electronAPI.readFile(targetPath);
-        if (res && typeof res.content === 'string') {
-          return {
-            filePath: res.path || targetPath,
-            fileName:
-              res.name || targetPath.split(/[\\/]/).pop() || 'Document.md',
-            markdownContent: res.content,
-          };
-        }
-      } catch {}
-    }
-    return {
-      filePath: activeTab?.filePath || '',
-      fileName: activeTab?.fileName || 'Workspace-Specification.md',
-      markdownContent:
-        activeTab?.content ||
-        '# Project Specification\n\n- [ ] Define core architecture\n- [ ] Implement feature modules\n- [ ] Verify and test\n',
-    };
-  };
-
-  const handleSendInAppChatTask = async (
-    promptText: string,
-    overrides?: {
-      agentId?: AgentId;
-      intent?: AgentTaskIntent;
-      filePath?: string;
-      fileName?: string;
-      markdownContent?: string;
-      sourceAgentId?: AgentId;
-      pipelineId?: string;
-      nextAgentInChain?: AgentId;
-      nextIntentInChain?: AgentTaskIntent;
-      epistemicPolicy?: 'collaborative' | 'independent-audit';
-      customActionLabel?: string;
-      stepNote?: string;
-      attemptCount?: number;
-      resumeSessionId?: string;
-      resumeFromBreakpoint?: boolean;
-      previousFailedTaskId?: string;
-      effortLevel?: AgentEffortLevel;
-      thinkingEnabled?: boolean;
-    }
-  ): Promise<AgentTaskRecord | null> => {
-    setSubmitting(true);
-    try {
-      const doc = await resolveCurrentSourceDocument(overrides?.filePath);
-      const record = await window.electronAPI.dispatchAgentTask({
-        targetAgentId: overrides?.agentId || selectedAgentId,
-        sourceAgentId: overrides?.sourceAgentId,
-        filePath: overrides?.filePath ?? doc.filePath,
-        fileName: overrides?.fileName ?? doc.fileName,
-        markdownContent: overrides?.markdownContent ?? doc.markdownContent,
-        intent: overrides?.intent || selectedIntent,
-        customPrompt: promptText.trim() || undefined,
-        workspacePath: resolvedWorkspace,
-        createSafetyCheckpoint: true,
-        safeParallelMode: false,
-        attachSharedMemory: true,
-        executionMode: 'in-app',
-        pipelineId: overrides?.pipelineId,
-        nextAgentInChain: overrides?.nextAgentInChain,
-        nextIntentInChain: overrides?.nextIntentInChain,
-        epistemicPolicy: overrides?.epistemicPolicy,
-        customActionLabel: overrides?.customActionLabel,
-        stepNote: overrides?.stepNote,
-        attemptCount: overrides?.attemptCount,
-        resumeSessionId: overrides?.resumeSessionId,
-        resumeFromBreakpoint: overrides?.resumeFromBreakpoint,
-        previousFailedTaskId: overrides?.previousFailedTaskId,
-        effortLevel: overrides?.effortLevel ?? 'medium',
-        thinkingEnabled: overrides?.thinkingEnabled ?? true,
-      });
-
-      const [tasks, checkpoints] = await Promise.all([
-        window.electronAPI.getAgentTasks(),
-        window.electronAPI.getAgentCheckpoints(),
-      ]);
-      setAgentTasks(tasks);
-      setAgentCheckpoints(checkpoints);
-      if (record?.id) {
-        setSelectedTaskId(record.id);
-      }
-      return record || null;
-    } catch (err) {
-      console.error('Failed to run in-app agent task:', err);
-      return null;
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleRunPipelineInStudio = async (
-    pipeline: AgentPipelinePreset,
-    initialRecovery?: {
-      stepIdx: number;
-      mode: 'continue_from_breakpoint' | 'revert_and_retry';
-      failedTask: AgentTaskRecord;
-      overrideAgentId?: AgentId;
-      overrideEffortLevel?: AgentEffortLevel;
-      overrideThinkingEnabled?: boolean;
-      extraDirective?: string;
-    }
-  ) => {
-    const store = usePreviewStore.getState();
-    if (!pipeline.steps.length || store.runningPipelineId) return;
-
-    // Find the first step that is not yet completed (Incremental Extension)
-    const firstPendingIdx =
-      initialRecovery?.stepIdx !== undefined && initialRecovery.stepIdx >= 0
-        ? initialRecovery.stepIdx
-        : pipeline.steps.findIndex((s) => s.status !== 'completed');
-    if (firstPendingIdx === -1) {
-      // All steps already completed
-      return;
-    }
-
-    store.setRunningPipelineId(pipeline.id);
-    isPipelineCancelledRef.current = false;
-
-    try {
-      let previousTask: AgentTaskRecord | null = null;
-      if (firstPendingIdx > 0) {
-        const prevCompletedStep = pipeline.steps[firstPendingIdx - 1];
-        if (prevCompletedStep?.completedTaskId) {
-          const allCurrentTasks = usePreviewStore.getState().agentTasks;
-          previousTask =
-            allCurrentTasks.find(
-              (t) => t.id === prevCompletedStep.completedTaskId
-            ) || null;
-        }
-      }
-
-      for (let idx = firstPendingIdx; idx < pipeline.steps.length; idx++) {
-        if (isPipelineCancelledRef.current) break;
-
-        let activeRecoveryForStep =
-          initialRecovery && initialRecovery.stepIdx === idx
-            ? {
-                mode: initialRecovery.mode,
-                failedTask: initialRecovery.failedTask,
-                overrideAgentId: initialRecovery.overrideAgentId,
-                overrideEffortLevel: initialRecovery.overrideEffortLevel,
-                overrideThinkingEnabled: initialRecovery.overrideThinkingEnabled,
-                extraDirective: initialRecovery.extraDirective,
-              }
-            : null;
-
-        let stepSucceeded = false;
-
-        while (!isPipelineCancelledRef.current) {
-          // If user requested "Revert Modified Files & Retry", restore the safety checkpoint first
-          if (
-            activeRecoveryForStep?.mode === 'revert_and_retry' &&
-            activeRecoveryForStep.failedTask?.checkpointId
-          ) {
-            await handleRestoreCheckpoint(
-              activeRecoveryForStep.failedTask.checkpointId
-            );
-          }
-
-          // If user switched agent, effort level, or thinking mode in the recovery modal, persist on the step
-          if (
-            activeRecoveryForStep?.overrideAgentId ||
-            activeRecoveryForStep?.overrideEffortLevel ||
-            activeRecoveryForStep?.overrideThinkingEnabled !== undefined
-          ) {
-            const newAg = activeRecoveryForStep?.overrideAgentId;
-            const newEffort = activeRecoveryForStep?.overrideEffortLevel;
-            const newThinking = activeRecoveryForStep?.overrideThinkingEnabled;
-            usePreviewStore.getState().setPipelines((prev) =>
-              prev.map((p) => {
-                if (p.id !== pipeline.id) return p;
-                const steps = p.steps.map((s, sIdx) =>
-                  sIdx === idx
-                    ? {
-                        ...s,
-                        ...(newAg ? { agentId: newAg } : {}),
-                        ...(newEffort ? { effortLevel: newEffort } : {}),
-                        ...(newThinking !== undefined
-                          ? { thinkingEnabled: newThinking }
-                          : {}),
-                      }
-                    : s
-                );
-                return { ...p, steps };
-              })
-            );
-          }
-
-          const latestPipelines = usePreviewStore.getState().pipelines;
-          const livePipeline =
-            latestPipelines.find((p) => p.id === pipeline.id) || pipeline;
-          const currentStep = livePipeline.steps[idx] || pipeline.steps[idx];
-          const nextStep =
-            livePipeline.steps[idx + 1] || pipeline.steps[idx + 1];
-
-          const effectiveStepAgentId =
-            activeRecoveryForStep?.overrideAgentId || currentStep.agentId;
-
-          usePreviewStore.getState().setRunningPipelineStepIdx(idx);
-          setSelectedAgentId(effectiveStepAgentId);
-          setSelectedIntent(currentStep.intent);
-
-          // Mark current step as running in global store (persisted immediately)
-          usePreviewStore.getState().setPipelines((prev) =>
-            prev.map((p) => {
-              if (p.id !== pipeline.id) return p;
-              const steps = p.steps.map((s, sIdx) =>
-                sIdx === idx ? { ...s, status: 'running' as const } : s
-              );
-              return { ...p, steps };
-            })
-          );
-
-          const isFirstStep = idx === 0;
-          const currentAssignedReport =
-            usePreviewStore.getState().assignedReportDoc || assignedReportDoc;
-          const assignedReport =
-            currentAssignedReport?.pipelineId === pipeline.id ||
-            currentAssignedReport
-              ? currentAssignedReport
-              : null;
-
-          const initialDocContent =
-            assignedReport?.reportMarkdown || activeTab?.content || '';
-          const initialDocName = assignedReport
-            ? `${assignedReport.pipelineName.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')}_Contract.md`
-            : activeTab?.fileName || 'IMPLEMENTATION_PLAN.md';
-
-          const stepContextTag = assignedReport
-            ? ` | Contract: "${assignedReport.pipelineName}"`
-            : '';
-
-          const customAct = currentStep.customActionId
-            ? customActions.find((a) => a.id === currentStep.customActionId) ||
-              STARTER_CUSTOM_PIPELINE_ACTIONS.find(
-                (a) => a.id === currentStep.customActionId
-              )
-            : null;
-
-          let promptText = `Pipeline [${pipeline.name}] — Step ${idx + 1}/${
-            pipeline.steps.length
-          } (${currentStep.label})${
-            previousTask ? ` relayed from @${previousTask.targetAgentId}` : ''
-          }${stepContextTag}`;
-
-          if (customAct?.promptTemplate) {
-            promptText = `${promptText}\n\n[Action Directive]: ${customAct.promptTemplate}`;
-          }
-
-          // Check if current step previously failed deliverable verification
-          const priorTask =
-            activeRecoveryForStep?.failedTask ||
-            (currentStep.completedTaskId
-              ? usePreviewStore
-                  .getState()
-                  .agentTasks.find((t) => t.id === currentStep.completedTaskId)
-              : undefined);
-
-          if (
-            priorTask?.verificationReport &&
-            !priorTask.verificationReport.passed &&
-            priorTask.verificationReport.gaps.length > 0
-          ) {
-            const gapLines = priorTask.verificationReport.gaps
-              .map((g) => `- ${g}`)
-              .join('\n');
-            promptText = `[REQUIRED FIXES FROM PREVIOUS VERIFICATION]:\nThe previous run left the deliverable incomplete with the following missing items/stubs:\n${gapLines}\nYou MUST create and write real, working code for these files in the workspace.\n\n${promptText}`;
-          }
-
-          if (activeRecoveryForStep?.mode === 'continue_from_breakpoint') {
-            promptText = `[BREAKPOINT CONTINUATION MODE]: Continue from the last breakpoint where the previous run stopped. Keep all valid files already written in the workspace, complete any unfinished or missing files, and verify all deliverables.\n\n${promptText}`;
-          } else if (activeRecoveryForStep?.mode === 'revert_and_retry') {
-            promptText = `[CLEAN RETRY AFTER CHECKPOINT ROLLBACK]: Modified files from the interrupted run were reverted to the pre-task safety checkpoint. Execute this step cleanly and write each deliverable file incrementally.\n\n${promptText}`;
-          }
-
-          const combinedStepNote = [
-            currentStep.stepNote,
-            activeRecoveryForStep?.extraDirective,
-          ]
-            .filter(Boolean)
-            .join('\n');
-
-          if (combinedStepNote) {
-            promptText = `[STEP ${idx + 1} DIRECTIVE / ERROR REPORT]:\n${combinedStepNote}\n\n${promptText}`;
-          }
-
-          const effectivePolicy =
-            customAct?.epistemicPolicy ||
-            (currentStep.intent === 'review' ||
-            currentStep.intent === 'fix-bugs'
-              ? 'independent-audit'
-              : 'collaborative');
-
-          // If previous step was `refine-plan` (or created a `.md` plan file on disk), read the full `.md` implementation plan from disk
-          let upstreamPlanMarkdown = previousTask?.responseMarkdown;
-          let resolvedPlanFilePath = previousTask?.filePath;
-          let resolvedPlanFileName = previousTask?.fileName || initialDocName;
-
-          if (!isFirstStep && previousTask && resolvedWorkspace) {
-            const sep = resolvedWorkspace.includes('\\') ? '\\' : '/';
-            const checkedMdFile =
-              previousTask.verificationReport?.checkedFiles?.find((f) =>
-                f.toLowerCase().endsWith('.md')
-              );
-            const candidateMdNames = [
-              checkedMdFile,
-              previousTask.fileName?.toLowerCase().endsWith('.md')
-                ? previousTask.fileName
-                : undefined,
-              initialDocName,
-              'IMPLEMENTATION_PLAN.md',
-            ].filter(Boolean) as string[];
-
-            for (const mdName of candidateMdNames) {
-              const candidatePath =
-                mdName.includes('/') || mdName.includes('\\')
-                  ? mdName
-                  : `${resolvedWorkspace}${sep}${mdName}`;
-              try {
-                const diskRes = await window.electronAPI.readFile(candidatePath);
-                if (
-                  diskRes &&
-                  typeof diskRes.content === 'string' &&
-                  diskRes.content.trim().length >= 150
-                ) {
-                  upstreamPlanMarkdown = diskRes.content;
-                  resolvedPlanFilePath = diskRes.path || candidatePath;
-                  resolvedPlanFileName =
-                    diskRes.name ||
-                    mdName.split(/[\\/]/).pop() ||
-                    initialDocName;
-                  break;
-                }
-              } catch {}
-            }
-          }
-
-          const stepMarkdownContent = composeEpistemicStepPayload(
-            initialDocContent,
-            upstreamPlanMarkdown,
-            currentStep.intent,
-            isFirstStep,
-            previousTask?.targetAgentId,
-            previousTask?.intent as AgentTaskIntent | undefined
-          );
-
-          const isBreakpointResume =
-            activeRecoveryForStep?.mode === 'continue_from_breakpoint';
-          const nextAttemptCount = priorTask
-            ? (priorTask.attemptCount || 0) + 1
-            : 0;
-
-          const dispatchedTask = await handleSendInAppChatTask(promptText, {
-            agentId: effectiveStepAgentId,
-            intent: currentStep.intent,
-            effortLevel:
-              activeRecoveryForStep?.overrideEffortLevel ||
-              currentStep.effortLevel ||
-              'medium',
-            thinkingEnabled:
-              activeRecoveryForStep?.overrideThinkingEnabled ??
-              currentStep.thinkingEnabled ??
-              true,
-            filePath: isFirstStep
-              ? activeTab?.filePath || previousTask?.filePath
-              : resolvedPlanFilePath ||
-                previousTask?.outputReportPath ||
-                activeTab?.filePath,
-            fileName: isFirstStep ? initialDocName : resolvedPlanFileName,
-            markdownContent: stepMarkdownContent,
-            sourceAgentId: previousTask?.targetAgentId,
-            pipelineId: pipeline.id,
-            nextAgentInChain: nextStep?.agentId,
-            nextIntentInChain: nextStep?.intent,
-            epistemicPolicy: effectivePolicy,
-            customActionLabel: customAct?.name,
-            stepNote: combinedStepNote || undefined,
-            attemptCount: nextAttemptCount,
-            resumeFromBreakpoint: isBreakpointResume,
-            previousFailedTaskId: priorTask?.id,
-            resumeSessionId: isBreakpointResume
-              ? priorTask?.cliSessionId ||
-                priorTask?.errorDiagnostic?.cliSessionId
-              : undefined,
-          });
-
-          if (!dispatchedTask?.id) {
-            console.error(`Pipeline step ${idx + 1} failed to dispatch.`);
-            usePreviewStore.getState().setPipelines((prev) =>
-              prev.map((p) => {
-                if (p.id !== pipeline.id) return p;
-                const steps = p.steps.map((s, sIdx) =>
-                  sIdx === idx ? { ...s, status: 'failed' as const } : s
-                );
-                return { ...p, steps };
-              })
-            );
-            break;
-          }
-
-          // Immediately bind `completedTaskId: dispatchedTask.id` while `status: 'running'`
-          usePreviewStore.getState().setPipelines((prev) =>
-            prev.map((p) => {
-              if (p.id !== pipeline.id) return p;
-              const steps = p.steps.map((s, sIdx) =>
-                sIdx === idx
-                  ? {
-                      ...s,
-                      status: 'running' as const,
-                      completedTaskId: dispatchedTask.id,
-                    }
-                  : s
-              );
-              return { ...p, steps };
-            })
-          );
-
-          try {
-            localStorage.setItem(
-              'flymd:active-pipeline-run',
-              JSON.stringify({
-                pipelineId: pipeline.id,
-                pipelineName: pipeline.name,
-                stepIdx: idx,
-                totalSteps: pipeline.steps.length,
-                currentTaskId: dispatchedTask.id,
-              })
-            );
-          } catch {}
-
-          // Reliably await task completion before executing the next step
-          const completed = await waitForTaskFinished(dispatchedTask.id, isPipelineCancelledRef);
-          if (isPipelineCancelledRef.current || !completed) {
-            break;
-          }
-
-          if (completed.status === 'completed') {
-            // Mark this step permanently completed in global store
-            usePreviewStore.getState().setPipelines((prev) =>
-              prev.map((p) => {
-                if (p.id !== pipeline.id) return p;
-                const steps = p.steps.map((s, sIdx) =>
-                  sIdx === idx
-                    ? {
-                        ...s,
-                        status: 'completed' as const,
-                        completedTaskId: completed.id,
-                        completedAt: Date.now(),
-                      }
-                    : s
-                );
-                return { ...p, steps };
-              })
-            );
-            previousTask = completed;
-            stepSucceeded = true;
-            break;
-          }
-
-          // Task ended with 'incomplete' or 'failed' (or 'cancelled')
-          const terminalStatus =
-            completed.status === 'incomplete'
-              ? 'incomplete'
-              : completed.status === 'failed'
-              ? 'failed'
-              : 'pending';
-
-          usePreviewStore.getState().setPipelines((prev) =>
-            prev.map((p) => {
-              if (p.id !== pipeline.id) return p;
-              const steps = p.steps.map((s, sIdx) =>
-                sIdx === idx
-                  ? {
-                      ...s,
-                      status: terminalStatus as any,
-                      completedTaskId: completed.id,
-                    }
-                  : s
-              );
-              return { ...p, steps };
-            })
-          );
-
-          if (completed.status === 'cancelled') {
-            break;
-          }
-
-          // Interactive Error Recovery Prompt: Ask the user whether to Continue from Last Breakpoint
-          // (keeping modified files) OR Revert Modified Files & Retry Cleanly!
-          setRecoveryAgentId(effectiveStepAgentId);
-          setRecoveryEffortLevel(
-            (completed.effortLevel as AgentEffortLevel) ||
-              currentStep.effortLevel ||
-              'medium'
-          );
-          setRecoveryThinkingEnabled(
-            completed.thinkingEnabled ?? currentStep.thinkingEnabled ?? true
-          );
-          setRecoveryExtraDirective('');
-          setPendingRecoveryPrompt({
-            failedTask: completed,
-            pipeline: livePipeline,
-            stepIdx: idx,
-            stepLabel: currentStep.label,
-            isLivePipelinePause: true,
-          });
-
-          const userDecision = await new Promise<RecoveryModalDecision>(
-            (resolve) => {
-              globalPipelineRuntime.recoveryResolver = resolve;
-            }
-          );
-
-          setPendingRecoveryPrompt(null);
-          globalPipelineRuntime.recoveryResolver = null;
-
-          if (
-            isPipelineCancelledRef.current ||
-            userDecision.action === 'pause'
-          ) {
-            break;
-          }
-
-          activeRecoveryForStep = {
-            mode: userDecision.action,
-            failedTask: completed,
-            overrideAgentId: userDecision.overrideAgentId,
-            overrideEffortLevel: userDecision.overrideEffortLevel,
-            overrideThinkingEnabled: userDecision.overrideThinkingEnabled,
-            extraDirective: userDecision.extraDirective,
-          };
-        }
-
-        if (!stepSucceeded || isPipelineCancelledRef.current) {
-          break;
-        }
-
-        const latestPipelinesAfterStep = usePreviewStore.getState().pipelines;
-        const livePipeAfter =
-          latestPipelinesAfterStep.find((p) => p.id === pipeline.id) ||
-          pipeline;
-        const nextStepAfter =
-          livePipeAfter.steps[idx + 1] || pipeline.steps[idx + 1];
-
-        // If there is a next step and Manual mode is active, pause and request user approval
-        if (
-          idx + 1 < pipeline.steps.length &&
-          workflowExecutionMode === 'manual' &&
-          previousTask
-        ) {
-          const currentProfiles = usePreviewStore.getState().agentProfiles;
-          const nextAgent = currentProfiles.find(
-            (a) => a.id === nextStepAfter?.agentId
-          );
-          const touchedFiles = (previousTask.toolActions || []).filter(
-            (a) => a.kind === 'write' || a.label.toLowerCase().includes('file')
-          ).length;
-
-          usePreviewStore.getState().setWaitingForStepApproval({
-            completedStepIdx: idx,
-            nextStepIdx: idx + 1,
-            nextAgentName: nextAgent?.name || nextStepAfter?.agentId || 'Agent',
-            nextIntent: nextStepAfter?.intent || 'next step',
-            completedTaskId: previousTask.id,
-            filesCreatedCount: touchedFiles,
-          });
-
-          await new Promise<void>((resolve) => {
-            proceedNextStepResolverRef.current = resolve;
-          });
-
-          usePreviewStore.getState().setWaitingForStepApproval(null);
-          if (isPipelineCancelledRef.current) break;
-        }
-      }
-
-      const finalPipe =
-        usePreviewStore
-          .getState()
-          .pipelines.find((p) => p.id === pipeline.id) || pipeline;
-      const allCompleted =
-        finalPipe.steps.length > 0 &&
-        finalPipe.steps.every((s) => s.status === 'completed');
-
-      if (!isPipelineCancelledRef.current && allCompleted && previousTask) {
-        setCompletedPipelineSummary({
-          pipelineName: pipeline.name,
-          stepsCount: pipeline.steps.length,
-          filesCreated: (previousTask.toolActions || []).filter(
-            (a) => a.kind === 'write' || a.label.toLowerCase().includes('file')
-          ).length,
-          lastTaskOutput: previousTask.responseMarkdown,
-        });
-      }
-    } finally {
-      usePreviewStore.getState().setRunningPipelineId(null);
-      usePreviewStore.getState().setRunningPipelineStepIdx(-1);
-      usePreviewStore.getState().setWaitingForStepApproval(null);
-      proceedNextStepResolverRef.current = null;
-      try {
-        localStorage.removeItem('flymd:active-pipeline-run');
-      } catch {}
-    }
-  };
-
-  // Executes standalone or pipeline task recovery (Continue from Last Breakpoint vs Revert Modified Files & Retry)
-  const executeRecoveryDecision = async (
-    failedTask: AgentTaskRecord,
-    mode: 'continue_from_breakpoint' | 'revert_and_retry',
-    pipeline?: AgentPipelinePreset,
-    stepIdx?: number,
-    overrideAgentId?: AgentId,
-    extraDirective?: string,
-    overrideEffortLevel?: AgentEffortLevel,
-    overrideThinkingEnabled?: boolean
-  ) => {
-    // 1. If a live pipeline run is paused awaiting globalPipelineRuntime.recoveryResolver, resolve it directly!
-    if (globalPipelineRuntime.recoveryResolver) {
-      const resolve = globalPipelineRuntime.recoveryResolver;
-      globalPipelineRuntime.recoveryResolver = null;
-      setPendingRecoveryPrompt(null);
-      resolve({
-        action: mode,
-        overrideAgentId,
-        overrideEffortLevel,
-        overrideThinkingEnabled,
-        extraDirective,
-      });
-      return;
-    }
-
-    setPendingRecoveryPrompt(null);
-
-    // 2. Check if this task belongs to a pipeline step
-    const storePipelines = usePreviewStore.getState().pipelines;
-    const matchedPipeline =
-      pipeline ||
-      storePipelines.find(
-        (p) =>
-          p.id === failedTask.pipelineId ||
-          p.steps.some((s) => s.completedTaskId === failedTask.id)
-      );
-    let matchedStepIdx =
-      stepIdx !== undefined && stepIdx >= 0
-        ? stepIdx
-        : matchedPipeline
-        ? matchedPipeline.steps.findIndex(
-            (s) => s.completedTaskId === failedTask.id
-          )
-        : -1;
-    if (matchedPipeline && matchedStepIdx === -1) {
-      matchedStepIdx = matchedPipeline.steps.findIndex(
-        (s) =>
-          (s.status === 'incomplete' || s.status === 'failed') &&
-          s.intent === failedTask.intent
-      );
-    }
-
-    if (matchedPipeline && matchedStepIdx >= 0) {
-      await handleRunPipelineInStudio(matchedPipeline, {
-        stepIdx: matchedStepIdx,
-        mode,
-        failedTask,
-        overrideAgentId,
-        overrideEffortLevel,
-        overrideThinkingEnabled,
-        extraDirective,
-      });
-      return;
-    }
-
-    // 3. Standalone task recovery (outside a pipeline)
-    if (mode === 'revert_and_retry' && failedTask.checkpointId) {
-      await handleRestoreCheckpoint(failedTask.checkpointId);
-    }
-
-    const targetAg = overrideAgentId || failedTask.targetAgentId;
-    setSelectedAgentId(targetAg);
-    setSelectedIntent(failedTask.intent);
-
-    const basePrompt =
-      failedTask.customPrompt ||
-      `Execute ${failedTask.intent} on ${failedTask.fileName}`;
-    const recoveryPrefix =
-      mode === 'continue_from_breakpoint'
-        ? `[BREAKPOINT CONTINUATION MODE]: Continue from the last breakpoint where the previous task stopped. Keep all valid files already written in the workspace, complete any unfinished or missing files, and verify all deliverables.`
-        : `[CLEAN RETRY AFTER CHECKPOINT ROLLBACK]: Modified files from the interrupted run were reverted to the pre-task safety checkpoint. Execute this task cleanly and write each deliverable file incrementally.`;
-
-    const fullPrompt = [
-      recoveryPrefix,
-      extraDirective ? `[RECOVERY DIRECTIVE]: ${extraDirective}` : '',
-      basePrompt,
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-
-    await handleSendInAppChatTask(fullPrompt, {
-      agentId: targetAg,
-      intent: failedTask.intent,
-      filePath: failedTask.filePath,
-      fileName: failedTask.fileName,
-      attemptCount: (failedTask.attemptCount || 0) + 1,
-      resumeFromBreakpoint: mode === 'continue_from_breakpoint',
-      previousFailedTaskId: failedTask.id,
-      effortLevel:
-        overrideEffortLevel ||
-        (failedTask.effortLevel as AgentEffortLevel) ||
-        'medium',
-      thinkingEnabled:
-        overrideThinkingEnabled ?? failedTask.thinkingEnabled ?? true,
-      resumeSessionId:
-        mode === 'continue_from_breakpoint'
-          ? failedTask.cliSessionId ||
-            failedTask.errorDiagnostic?.cliSessionId
-          : undefined,
-    });
-  };
-
-  const handleRecoverTask = async (
-    task: AgentTaskRecord,
-    mode: 'continue_from_breakpoint' | 'revert_and_retry' | 'ask'
-  ) => {
-    setSelectedTaskId(task.id);
-    const storePipelines = usePreviewStore.getState().pipelines;
-    const matchedPipeline = storePipelines.find(
-      (p) =>
-        p.id === task.pipelineId ||
-        p.steps.some((s) => s.completedTaskId === task.id)
-    );
-    const matchedStepIdx = matchedPipeline
-      ? matchedPipeline.steps.findIndex((s) => s.completedTaskId === task.id)
-      : -1;
-
-    if (mode === 'ask') {
-      setRecoveryAgentId(task.targetAgentId);
-      setRecoveryEffortLevel((task.effortLevel as AgentEffortLevel) || 'medium');
-      setRecoveryThinkingEnabled(task.thinkingEnabled ?? true);
-      setRecoveryExtraDirective('');
-      setPendingRecoveryPrompt({
-        failedTask: task,
-        pipeline: matchedPipeline,
-        stepIdx: matchedStepIdx >= 0 ? matchedStepIdx : undefined,
-        stepLabel:
-          matchedStepIdx >= 0
-            ? matchedPipeline?.steps[matchedStepIdx]?.label
-            : undefined,
-        isLivePipelinePause: Boolean(globalPipelineRuntime.recoveryResolver),
-      });
-      return;
-    }
-
-    await executeRecoveryDecision(
-      task,
-      mode,
-      matchedPipeline,
-      matchedStepIdx >= 0 ? matchedStepIdx : undefined,
-      undefined,
-      undefined,
-      (task.effortLevel as AgentEffortLevel) || 'medium',
-      task.thinkingEnabled ?? true
-    );
-  };
-
-  const handleRecoverPipelineStep = (
-    pipeline: AgentPipelinePreset,
-    stepIdx: number,
-    linkedTask?: AgentTaskRecord
-  ) => {
-    const step = pipeline.steps[stepIdx];
-    const targetTask =
-      linkedTask ||
-      (step?.completedTaskId
-        ? agentTasks.find((t) => t.id === step.completedTaskId)
-        : undefined) ||
-      agentTasks.find(
-        (t) =>
-          (t.pipelineId === pipeline.id || t.intent === step?.intent) &&
-          (t.status === 'incomplete' || t.status === 'failed')
-      ) ||
-      selectedTask;
-
-    if (!targetTask) {
-      // No prior task record found — simply run the pipeline from this step
-      handleRunPipelineInStudio(pipeline);
-      return;
-    }
-
-    setSelectedTaskId(targetTask.id);
-    setRecoveryAgentId(step?.agentId || targetTask.targetAgentId);
-    setRecoveryEffortLevel(
-      (targetTask.effortLevel as AgentEffortLevel) ||
-        step?.effortLevel ||
-        'medium'
-    );
-    setRecoveryThinkingEnabled(
-      targetTask.thinkingEnabled ?? step?.thinkingEnabled ?? true
-    );
-    setRecoveryExtraDirective(step?.stepNote || '');
-    setPendingRecoveryPrompt({
-      failedTask: targetTask,
-      pipeline,
-      stepIdx,
-      stepLabel: step?.label || `Step ${stepIdx + 1}`,
-      isLivePipelinePause: Boolean(globalPipelineRuntime.recoveryResolver),
-    });
-  };
-
-  const handleRelayToNextAgent = async (
-    task: AgentTaskRecord,
-    nextAgentId: AgentId,
-    nextIntent: AgentTaskIntent,
-    customActionId?: string,
-    effortLevel?: AgentEffortLevel,
-    thinkingEnabled?: boolean
-  ) => {
-    setSelectedAgentId(nextAgentId);
-    setSelectedIntent(nextIntent);
-    const customAct = customActionId
-      ? customActions.find((a) => a.id === customActionId) ||
-        STARTER_CUSTOM_PIPELINE_ACTIONS.find((a) => a.id === customActionId)
-      : null;
-
-    const originalContract =
-      assignedReportDoc?.reportMarkdown || activeTab?.content || '';
-    const relayPayload = composeEpistemicStepPayload(
-      originalContract,
-      task.responseMarkdown,
-      nextIntent,
-      false,
-      task.targetAgentId,
-      task.intent as AgentTaskIntent | undefined
-    );
-
-    let prompt = `Relayed from @${task.targetAgentId} (${task.intent}) → Continue with ${
-      customAct?.name.toUpperCase() || nextIntent.toUpperCase()
-    }`;
-    if (customAct?.promptTemplate) {
-      prompt = `${prompt}\n\n[Action Directive]: ${customAct.promptTemplate}`;
-    }
-
-    await handleSendInAppChatTask(prompt, {
-      agentId: nextAgentId,
-      intent: nextIntent,
-      filePath: task.outputReportPath || task.filePath,
-      fileName: task.fileName,
-      markdownContent: relayPayload,
-      sourceAgentId: task.targetAgentId,
-      epistemicPolicy: customAct?.epistemicPolicy,
-      customActionLabel: customAct?.name,
-      effortLevel: effortLevel || 'medium',
-      thinkingEnabled: thinkingEnabled ?? true,
-    });
-  };
-
-  const handleOpenReportInTab = async (
-    filePath?: string,
-    markdownFallback?: string,
-    titleFallback?: string
-  ) => {
-    if (filePath) {
-      try {
-        const res = await window.electronAPI.readFile(filePath);
-        if (res && typeof res.content === 'string') {
-          openFileInTab(
-            {
-              path: res.path || filePath,
-              name: res.name || filePath.split(/[\\/]/).pop() || 'Report.md',
-              content: res.content,
-              lastModified: res.lastModified,
-            },
-            { activate: true }
-          );
-          setViewMode('preview');
-          return;
-        }
-      } catch {}
-    }
-
-    if (markdownFallback) {
-      openFileInTab(
-        {
-          path: filePath || `agent-report-${Date.now()}.md`,
-          name: titleFallback || 'Agent-Report.md',
-          content: markdownFallback,
-          lastModified: Date.now(),
-        },
-        { activate: true }
-      );
-      setViewMode('preview');
-    }
-  };
-
-  const handleApplyToActiveTab = (markdownContent: string) => {
-    if (!markdownContent.trim()) return;
-    if (activeTab) {
-      updateActiveContent(markdownContent);
-      setViewMode('split');
-    } else {
-      openFileInTab(
-        {
-          path: `applied-plan-${Date.now()}.md`,
-          name: 'Refined-Plan.md',
-          content: markdownContent,
-          lastModified: Date.now(),
-        },
-        { activate: true }
-      );
-      setViewMode('preview');
-    }
-  };
-
-  const handlePasteExternalReply = async (task: AgentTaskRecord) => {
-    if (task.status === 'running' || (runningPipelineId && !waitingForStepApproval)) {
-      alert('Cannot paste external reply while an agent or workflow is actively running.');
-      return;
-    }
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text || !text.trim()) {
-        alert(
-          'Your clipboard is empty. Copy the Markdown response first, then click Paste Clipboard Reply.'
-        );
-        return;
-      }
-      if (window.electronAPI.completeWebTaskWithReply) {
-        await window.electronAPI.completeWebTaskWithReply(task.id, text);
-      }
-      const tasks = await window.electronAPI.getAgentTasks();
-      setAgentTasks(tasks);
-    } catch (err) {
-      console.error('Failed to paste reply:', err);
-    }
-  };
-
-  const handleRestoreCheckpoint = async (checkpointId: string) => {
-    setRestoringCheckpointId(checkpointId);
-    try {
-      await window.electronAPI.restoreAgentCheckpoint(checkpointId);
-      const [tasks, checkpoints] = await Promise.all([
-        window.electronAPI.getAgentTasks(),
-        window.electronAPI.getAgentCheckpoints(),
-      ]);
-      setAgentTasks(tasks);
-      setAgentCheckpoints(checkpoints);
-    } catch (err) {
-      console.error('Failed to restore checkpoint:', err);
-    } finally {
-      setRestoringCheckpointId(null);
-    }
-  };
-
-  const handleCancelTask = async (taskId: string) => {
-    isPipelineCancelledRef.current = true;
-    setRunningPipelineId(null);
-    setRunningPipelineStepIdx(-1);
-    if (proceedNextStepResolverRef.current) {
-      proceedNextStepResolverRef.current();
-    }
-    setWaitingForStepApproval(null);
-    try {
-      await window.electronAPI.cancelAgentTask(taskId);
-      const tasks = await window.electronAPI.getAgentTasks();
-      setAgentTasks(tasks);
-    } catch (err) {
-      console.error('Failed to cancel task:', err);
-    }
-  };
-
-  const handleClearFinished = async () => {
-    if (runningPipelineId) return;
-    try {
-      const remaining = await window.electronAPI.clearAgentTasks();
-      setAgentTasks(remaining);
-    } catch (err) {
-      console.error('Failed to clear finished tasks:', err);
-    }
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-    if (runningPipelineId) return;
-    try {
-      if (window.electronAPI.deleteAgentTask) {
-        const remaining = await window.electronAPI.deleteAgentTask(taskId);
-        setAgentTasks(remaining);
-      } else {
-        setAgentTasks(agentTasks.filter((t) => t.id !== taskId));
-      }
-      if (selectedTaskId === taskId) {
-        setSelectedTaskId(null);
-      }
-    } catch (err) {
-      console.error('Failed to delete task:', err);
-    }
-  };
-
-  const handleClearTaskLogs = async (taskId: string) => {
-    if (runningPipelineId) return;
-    try {
-      if (window.electronAPI.clearAgentTaskLogs) {
-        await window.electronAPI.clearAgentTaskLogs(taskId);
-      }
-      const tasks = await window.electronAPI.getAgentTasks();
-      setAgentTasks(tasks);
-    } catch (err) {
-      console.error('Failed to clear task logs:', err);
-    }
-  };
-
-  const handleDeleteWorkspaceFile = async (filePath: string) => {
-    try {
-      if (window.electronAPI.deleteFilePath) {
-        await window.electronAPI.deleteFilePath(filePath);
-      }
-      setFolderFiles(folderFiles.filter((f) => f.path !== filePath));
-      if (selectedSourceFile === filePath) {
-        setSelectedSourceFile('');
-      }
-    } catch (err) {
-      console.error('Failed to delete workspace file:', err);
-    }
-  };
-
-  const cleanWorkspaceFiles = useMemo(() => {
-    return folderFiles.filter(
-      (f) =>
-        !f.path.includes('/.') &&
-        !f.path.includes('\\.') &&
-        !f.name.startsWith('.') &&
-        !f.name.startsWith('report-task-')
-    );
-  }, [folderFiles]);
-
-  const handleExecuteClearCache = async () => {
-    if (!resolvedWorkspace) return;
-    setClearingCache(true);
-    const clearedSummary: string[] = [];
-    try {
-      // 1. Clear backend workspace cache (.flymd/handoffs, .flymd/reports, .flymd/checkpoints, .flymd/cache, MEMORY.md)
-      if (clearTempCache || clearMemoryLedger) {
-        if (window.electronAPI.clearWorkspaceCache) {
-          const result = await window.electronAPI.clearWorkspaceCache(
-            resolvedWorkspace,
-            clearMemoryLedger,
-            clearTempCache
-          );
-          if (result) clearedSummary.push(result);
-        }
-      }
-
-      // 2. Clear finished task sessions & logs
-      if (clearCompletedSessions) {
-        const remaining = await window.electronAPI.clearAgentTasks();
-        setAgentTasks(remaining);
-        setSelectedTaskId(null);
-        clearedSummary.push('task sessions');
-      }
-
-      // 3. Clear all debates & deliberation memory
-      if (clearDebatesAndCouncil) {
-        await clearAllDiscussions(resolvedWorkspace);
-        clearedSummary.push('debate sessions');
-      }
-
-      // 4. Reset pipeline state, checklist, and deliverables reports
-      if (clearPipelineAndReports) {
-        setPipelines((prev) =>
-          prev.map((p) => ({
-            ...p,
-            steps: p.steps.map((s) => ({
-              ...s,
-              status: undefined,
-              completedTaskId: undefined,
-              errorDiagnostic: undefined,
-              completedAt: undefined,
-            })),
-          }))
-        );
-        setRunningPipelineId(null);
-        setRunningPipelineStepIdx(-1);
-        setWaitingForStepApproval(null);
-        globalPipelineRuntime.cancelled = true;
-        globalPipelineRuntime.proceedResolver = null;
-        globalPipelineRuntime.recoveryResolver = null;
-        try {
-          localStorage.removeItem('flymd:active-pipeline-run');
-        } catch {}
-        setCompletedPipelineSummary(null);
-        setAssignedReportDoc(null);
-        setPendingRecoveryPrompt(null);
-        setLifecycleStage('debate');
-        clearedSummary.push('pipeline & report UI');
-      }
-
-      // 5. Close related opened files in editor
-      if (closeRelatedOpenedFiles) {
-        const currentTabs = usePreviewStore.getState().tabs;
-        const normalizedWs = resolvedWorkspace.toLowerCase().replace(/\\/g, '/');
-        const tabsToClose = currentTabs.filter((t) => {
-          if (!t.filePath) return false;
-          const normalizedPath = t.filePath.toLowerCase().replace(/\\/g, '/');
-          const isUnderFlymd =
-            normalizedPath.includes('/.flymd/') ||
-            normalizedPath.includes('\\.flymd\\') ||
-            normalizedPath.endsWith('/.flymd') ||
-            normalizedPath.endsWith('\\.flymd');
-          const isUnderWorkspaceFlymd = normalizedPath.startsWith(`${normalizedWs}/.flymd/`);
-          const isGeneratedReport =
-            t.fileName.toLowerCase().includes('flymd-pipeline-deliverables-report') ||
-            t.fileName.toLowerCase().startsWith('report-task-') ||
-            t.fileName.toLowerCase() === 'memory.md';
-          return isUnderFlymd || isUnderWorkspaceFlymd || isGeneratedReport;
-        });
-
-        for (const tab of tabsToClose) {
-          closeTab(tab.id);
-        }
-
-        const remainingTabs = usePreviewStore.getState().tabs;
-        if (remainingTabs.length === 0) {
-          addTab({
-            fileName: 'Welcome.md',
-            content: '# FlyMD\n\nWorkspace memory and caches cleared.\n',
-          });
-        }
-        if (tabsToClose.length > 0) {
-          clearedSummary.push(`${tabsToClose.length} related open tab(s)`);
-        }
-      }
-
-      setCacheNotification(
-        clearedSummary.length > 0
-          ? `Cleared: ${clearedSummary.join(', ')}.`
-          : 'Workspace memory and cache cleared successfully.'
-      );
-      setTimeout(() => setCacheNotification(null), 4000);
-      setShowClearCacheModal(false);
-    } catch (err: any) {
-      console.error('Failed to clear workspace cache:', err);
-      setCacheNotification(`Error: ${err?.message || err}`);
-      setTimeout(() => setCacheNotification(null), 4000);
-    } finally {
-      setClearingCache(false);
-    }
-  };
-
-  const handleOpenSharedMemory = async () => {
-    if (!resolvedWorkspace) return;
-    const sep = resolvedWorkspace.includes('\\') ? '\\' : '/';
-    const memoryPath = `${resolvedWorkspace}${sep}.flymd${sep}MEMORY.md`;
-    await handleOpenReportInTab(
-      memoryPath,
-      '# FlyMD Shared Agent Memory Ledger\n\n> Auto-maintained context ledger across agents.\n',
-      'MEMORY.md'
-    );
-  };
+export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = (props) => {
+  const ctrl = useAgentStudioController(props);
+
+  const activeFileName =
+    ctrl.workspaceFocusMode === 'workspace'
+      ? `Entire Project (${
+          ctrl.resolvedWorkspace
+            ? ctrl.resolvedWorkspace.split(/[\\/]/).pop()
+            : 'Root'
+        })`
+      : ctrl.focusFilePath
+      ? ctrl.cleanWorkspaceFilesByPath.get(ctrl.focusFilePath)?.name ||
+        ctrl.focusFilePath.split(/[\\/]/).pop() ||
+        'Focused File'
+      : ctrl.activeTab?.fileName || 'Workspace Specification';
+
+  const activeFilePath =
+    ctrl.workspaceFocusMode === 'workspace'
+      ? ctrl.resolvedWorkspace
+      : ctrl.focusFilePath ||
+        ctrl.activeTab?.filePath ||
+        ctrl.cleanWorkspaceFiles[0]?.path ||
+        '';
 
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden">
-      {/* Compact Studio Top Header Bar */}
-      <header className="h-12 shrink-0 px-4 border-b border-slate-800/90 bg-slate-900/95 flex items-center justify-between gap-3 select-none">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-            <Bot size={16} />
-          </div>
-          <h1 className="text-xs sm:text-sm font-extrabold text-white truncate">
-            Agent Studio — Live Chat, Progress &amp; Multi-Agent Relay
-          </h1>
-          <span className="hidden md:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-            In-App Native Studio
-          </span>
+      <StudioTopHeaderBar
+        resolvedWorkspace={ctrl.resolvedWorkspace}
+        showProjectTree={ctrl.showProjectTree}
+        onToggleProjectTree={() => ctrl.setShowProjectTree(!ctrl.showProjectTree)}
+        activeProject={ctrl.activeProject}
+        lifecycleStage={ctrl.lifecycleStage}
+        onSelectLifecycleStage={ctrl.setLifecycleStage}
+        workspaceFocusMode={ctrl.workspaceFocusMode}
+        focusFilePath={ctrl.focusFilePath}
+        activeTabFilePath={ctrl.activeTab?.filePath}
+        cleanWorkspaceFiles={ctrl.cleanWorkspaceFiles}
+        onChangeTargetScope={(mode, filePath) => {
+          ctrl.setWorkspaceFocusMode(mode);
+          ctrl.setFocusFilePath(filePath);
+        }}
+        onOpenAdvancedDispatchModal={() => {
+          ctrl.setShowCouncilModal(false);
+          ctrl.setShowAgentAccountsModal(false);
+          ctrl.openDispatchModal({
+            targetAgentId: ctrl.selectedAgentId,
+            sourceFilePath: ctrl.activeTab?.filePath || '',
+            sourceFileName: ctrl.activeTab?.fileName || 'Specification.md',
+            markdownContent: ctrl.activeTab?.content || '',
+          });
+        }}
+        onOpenCouncilBroadcastModal={() => {
+          ctrl.setShowAgentAccountsModal(false);
+          ctrl.setShowCouncilModal(true);
+        }}
+        showObservabilityHUD={ctrl.showObservabilityHUD}
+        onToggleObservabilityHUD={() =>
+          ctrl.setShowObservabilityHUD(!ctrl.showObservabilityHUD)
+        }
+        onOpenSharedMemory={ctrl.handleOpenSharedMemory}
+        onRequestClearCacheModal={() => {
+          ctrl.setShowCouncilModal(false);
+          ctrl.setShowAgentAccountsModal(false);
+          ctrl.requestOpenClearCacheModal();
+        }}
+        onOpenAgentAccountsModal={() => {
+          ctrl.setShowCouncilModal(false);
+          ctrl.setShowAgentAccountsModal(true);
+        }}
+        refreshing={ctrl.refreshing}
+        onRefreshAll={ctrl.handleRefreshAll}
+      />
 
-          {/* Project Hierarchy Tree Toggle */}
-          {resolvedWorkspace && (
-            <button
-              type="button"
-              onClick={() => setShowProjectTree(!showProjectTree)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                showProjectTree
-                  ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 border border-slate-800'
-              }`}
-              title="Toggle Hierarchical Projects Tree Navigator"
-            >
-              <FolderTree size={13} className="text-indigo-400" />
-              <span>Projects</span>
-            </button>
-          )}
-
-          {/* Active Project Indicator */}
-          {activeProject && (
-            <div className="hidden xl:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 text-[11px] max-w-[180px] truncate">
-              <Boxes size={12} className="shrink-0 text-indigo-400" />
-              <span className="truncate">{activeProject.name}</span>
-            </div>
-          )}
-
-          {/* 3-Stage Linear Lifecycle Switcher */}
-          <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 ml-1">
-            <button
-              type="button"
-              onClick={() => setLifecycleStage('debate')}
-              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                lifecycleStage === 'debate'
-                  ? 'bg-sky-500 text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="1. Multi-Agent Deliberation & Architectural Debate"
-            >
-              <span>🗣️ 1. Debate</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setLifecycleStage('report')}
-              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                lifecycleStage === 'report'
-                  ? 'bg-sky-500 text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="2. Synthesis Report & Operator Checkpoint Gate"
-            >
-              <span>📋 2. Report</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLifecycleStage('pipeline')}
-              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                lifecycleStage === 'pipeline'
-                  ? 'bg-sky-500 text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="3. Dedicated DAG Pipeline Execution & Process Isolation"
-            >
-              <span>🚀 3. Pipeline</span>
-            </button>
-          </div>
-
-          {/* Workspace-First Target Scope Selector */}
-          <div className="hidden lg:flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-xs ml-2">
-            <FolderGit2 size={12} className="text-sky-400 shrink-0" />
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Scope:</span>
-            <select
-              value={workspaceFocusMode === 'workspace' ? '__root__' : focusFilePath || activeTab?.filePath || ''}
-              onChange={(e) => {
-                if (e.target.value === '__root__') {
-                  setWorkspaceFocusMode('workspace');
-                  setFocusFilePath('');
-                } else {
-                  setWorkspaceFocusMode('file');
-                  setFocusFilePath(e.target.value);
-                }
-              }}
-              className="bg-transparent text-slate-200 font-semibold text-[11px] focus:outline-none cursor-pointer border-0 py-0 max-w-[220px] truncate"
-              title="Target Scope: Entire Project Workspace vs Specific Focused Document"
-            >
-              <option value="__root__">
-                🌐 Entire Workspace ({resolvedWorkspace ? resolvedWorkspace.split(/[\\/]/).pop() : 'Root'})
-              </option>
-              {cleanWorkspaceFiles.map((wf) => (
-                <option key={wf.path} value={wf.path}>
-                  📄 {wf.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              setShowCouncilModal(false);
-              setShowAgentAccountsModal(false);
-              openDispatchModal({
-                targetAgentId: selectedAgentId,
-                sourceFilePath: activeTab?.filePath || '',
-                sourceFileName: activeTab?.fileName || 'Specification.md',
-                markdownContent: activeTab?.content || '',
-              });
-            }}
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
-            title="Advanced Task Options (Checklist filter, Parallel Worktree, etc.)"
-          >
-            <SlidersHorizontal size={14} className="text-sky-400" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowAgentAccountsModal(false);
-              setShowCouncilModal(true);
-            }}
-            className="p-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 transition-colors"
-            title="Council Broadcast (Multi-Agent Sync)"
-          >
-            <Users size={14} />
-          </button>
-
-          {resolvedWorkspace && (
-            <button
-              type="button"
-              onClick={() => setShowObservabilityHUD(!showObservabilityHUD)}
-              className={`p-2 rounded-lg border transition-colors ${
-                showObservabilityHUD
-                  ? 'bg-purple-600/30 border-purple-500 text-purple-300'
-                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
-              }`}
-              title="Dual-Layer Memory & Observability HUD (Master Memory, Scoped Ledger, Evidence Receipts)"
-            >
-              <Brain size={14} className="text-purple-400" />
-            </button>
-          )}
-
-          {resolvedWorkspace && (
-            <button
-              type="button"
-              onClick={handleOpenSharedMemory}
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
-              title="Open Shared Memory (.flymd/MEMORY.md)"
-            >
-              <BrainCircuit size={14} className="text-amber-400" />
-            </button>
-          )}
-
-          {resolvedWorkspace && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowCouncilModal(false);
-                setShowAgentAccountsModal(false);
-                setClearTempCache(true);
-                setClearMemoryLedger(true);
-                setClearCompletedSessions(true);
-                setClearDebatesAndCouncil(true);
-                setClearPipelineAndReports(true);
-                setCloseRelatedOpenedFiles(true);
-                setShowClearCacheModal(true);
-              }}
-              className="p-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 transition-colors"
-              title="Clear Memory & Cache (Handoffs, checkpoints, memory ledger)"
-            >
-              <Trash2 size={14} className="text-rose-400" />
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowCouncilModal(false);
-              setShowAgentAccountsModal(true);
-            }}
-            className="p-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 transition-colors shadow-sm"
-            title="Custom Agents & Logins (API Keys & Profiles)"
-          >
-            <KeyRound size={14} />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleRefreshAll}
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors"
-            title="Refresh Agents & Sessions"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Studio Workspace with Project Navigator & Observability HUD */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Far Left: Project Hierarchy Tree Navigator */}
-        {showProjectTree && resolvedWorkspace && (
+        {ctrl.showProjectTree && ctrl.resolvedWorkspace && (
           <ProjectTreeNavigator
-            workspacePath={resolvedWorkspace}
-            onClose={() => setShowProjectTree(false)}
+            workspacePath={ctrl.resolvedWorkspace}
+            onClose={() => ctrl.setShowProjectTree(false)}
           />
         )}
 
-        {/* Center: Active Lifecycle Stage */}
-        {lifecycleStage === 'debate' ? (
+        {ctrl.lifecycleStage === 'debate' ? (
           <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden">
             <DiscussionStudio
-              resolvedWorkspace={resolvedWorkspace}
-              onNavigateToReport={() => setLifecycleStage('report')}
+              resolvedWorkspace={ctrl.resolvedWorkspace}
+              onNavigateToReport={() => ctrl.setLifecycleStage('report')}
             />
           </div>
-        ) : lifecycleStage === 'report' ? (
+        ) : ctrl.lifecycleStage === 'report' ? (
           <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden p-2">
             <ProjectSynthesisReportViewer
-              workspacePath={resolvedWorkspace}
-              reportMarkdown={effectiveReportMarkdown}
-              onLaunchDedicatedPipeline={handleLaunchDedicatedPipeline}
-              onRollupToMaster={handleRollupToMaster}
-              onSendBackToDebate={handleSendBackToDebate}
+              workspacePath={ctrl.resolvedWorkspace}
+              reportMarkdown={ctrl.effectiveReportMarkdown}
+              onLaunchDedicatedPipeline={ctrl.handleLaunchDedicatedPipeline}
+              onRollupToMaster={ctrl.handleRollupToMaster}
+              onSendBackToDebate={ctrl.handleSendBackToDebate}
             />
           </div>
         ) : (
           <div className="flex-1 flex min-h-0 overflow-hidden">
-            {/* Left Sidebar: Agents, Custom Workflow Steps Repeater & Sessions */}
             <AgentStudioSidebar
-              visibleAgents={visibleAgents}
-              allAgents={agentProfiles}
-              selectedAgentId={selectedAgentId}
-              onSelectAgent={(id) => setSelectedAgentId(id)}
-              agentTasks={agentTasks}
-              selectedTaskId={selectedTask?.id || null}
-              onSelectTask={(id) => setSelectedTaskId(id)}
-              onDeleteTask={handleDeleteTask}
-              onClearFinished={handleClearFinished}
-              onOpenAccountsModal={() => setShowAgentAccountsModal(true)}
-              pipelines={pipelines}
-              onUpdatePipelineStep={handleUpdatePipelineStep}
-              onAddPipelineStep={handleAddPipelineStep}
-              onRemovePipelineStep={handleRemovePipelineStep}
-              onResetPipelines={handleResetPipelines}
-              onRunPipelineInStudio={handleRunPipelineInStudio}
+              visibleAgents={ctrl.visibleAgents}
+              allAgents={ctrl.agentProfiles}
+              agentsById={ctrl.agentsById}
+              tasksById={ctrl.tasksById}
+              selectedAgentId={ctrl.selectedAgentId}
+              onSelectAgent={ctrl.setSelectedAgentId}
+              agentTasks={ctrl.agentTasks}
+              selectedTaskId={ctrl.selectedTask?.id || null}
+              onSelectTask={ctrl.setSelectedTaskId}
+              onDeleteTask={ctrl.handleDeleteTask}
+              onClearFinished={ctrl.handleClearFinished}
+              onOpenAccountsModal={() => ctrl.setShowAgentAccountsModal(true)}
+              pipelines={ctrl.pipelines}
+              onUpdatePipelineStep={ctrl.handleUpdatePipelineStep}
+              onAddPipelineStep={ctrl.handleAddPipelineStep}
+              onRemovePipelineStep={ctrl.handleRemovePipelineStep}
+              onResetPipelines={ctrl.handleResetPipelines}
+              onRunPipelineInStudio={ctrl.handleRunPipelineInStudio}
               onCancelPipeline={() => {
-                cancelActivePipelineRun(runningPipelineId || pipelines[0]?.id);
+                ctrl.cancelActivePipelineRun(
+                  ctrl.runningPipelineId || ctrl.pipelines[0]?.id
+                );
               }}
-              runningPipelineId={runningPipelineId}
-              runningPipelineStepIdx={runningPipelineStepIdx}
-              workflowExecutionMode={workflowExecutionMode}
-              onSetWorkflowExecutionMode={handleSetWorkflowExecutionMode}
-              waitingForStepApproval={waitingForStepApproval}
-              onProceedNextWorkflowStep={handleProceedNextWorkflowStep}
+              runningPipelineId={ctrl.runningPipelineId}
+              runningPipelineStepIdx={ctrl.runningPipelineStepIdx}
+              workflowExecutionMode={ctrl.workflowExecutionMode}
+              onSetWorkflowExecutionMode={ctrl.handleSetWorkflowExecutionMode}
+              waitingForStepApproval={ctrl.waitingForStepApproval}
+              onProceedNextWorkflowStep={ctrl.handleProceedNextWorkflowStep}
               onDropFileOnAgent={async (agentId, customFile) => {
-                setSelectedAgentId(agentId);
-                await handleSendInAppChatTask('', {
+                ctrl.setSelectedAgentId(agentId);
+                await ctrl.handleSendInAppChatTask('', {
                   agentId,
                   filePath: customFile?.filePath,
                   fileName: customFile?.fileName,
@@ -2136,102 +165,34 @@ ${projDesc}
               onOpenExternalBrowser={async (agentId) => {
                 await window.electronAPI.launchAgentWebAuth(agentId);
               }}
-              customActions={customActions}
-              onOpenCustomActionsModal={() => setShowCustomActionsModal(true)}
-              onClearStepDoneStatus={handleClearStepDoneStatus}
-              onRecoverPipelineStep={handleRecoverPipelineStep}
+              customActions={ctrl.customActions}
+              onOpenCustomActionsModal={() => ctrl.setShowCustomActionsModal(true)}
+              onClearStepDoneStatus={ctrl.handleClearStepDoneStatus}
+              onRecoverPipelineStep={ctrl.handleRecoverPipelineStep}
             />
 
-            {/* Center Pane: Interactive Multi-Agent Chat & Streaming Timeline */}
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-              {/* Assigned Report Document Context Banner */}
-              {assignedReportDoc && (
-                <div className="px-4 py-2 bg-sky-950/40 border-b border-sky-500/30 flex items-center justify-between text-xs text-sky-200">
-                  <div className="flex items-center gap-2">
-                    <FileText size={14} className="text-sky-400" />
-                    <span>
-                      <strong className="text-white">Active Contract:</strong> {assignedReportDoc.pipelineName} (Assigned at {assignedReportDoc.assignedAt})
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setLifecycleStage('report')}
-                      className="text-[11px] text-sky-400 hover:text-sky-300 font-semibold underline"
-                    >
-                      View Report
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Completed Pipeline Audit Action Banner (Recycling Vector 2) */}
-              {completedPipelineSummary && (
-                <div className="px-4 py-2.5 bg-gradient-to-r from-purple-950/50 via-slate-900 to-indigo-950/50 border-b border-purple-500/40 flex items-center justify-between gap-3 text-xs text-slate-200 shadow-sm animate-fadeIn">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                    <div>
-                      <span className="font-bold text-slate-100">
-                        Pipeline Completed: {completedPipelineSummary.pipelineName}
-                      </span>
-                      <span className="text-[11px] text-slate-400 ml-2">
-                        ({completedPipelineSummary.stepsCount} steps finished)
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setLifecycleStage('report')}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
-                    >
-                      📋 View Report
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAuditDeliverablesInDebate}
-                      className="px-3 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow transition-all flex items-center gap-1.5"
-                    >
-                      <RotateCcw size={12} />
-                      <span>🔄 Audit Deliverables in Council</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+              <PipelineStatusBanners
+                assignedReportDoc={ctrl.assignedReportDoc}
+                completedPipelineSummary={ctrl.completedPipelineSummary}
+                onViewReport={() => ctrl.setLifecycleStage('report')}
+                onAuditDeliverablesInDebate={ctrl.handleAuditDeliverablesInDebate}
+              />
 
               <AgentChatTimeline
-                visibleAgents={visibleAgents}
-                allAgents={agentProfiles}
-                selectedAgentId={selectedAgentId}
-                onSelectAgent={(id) => setSelectedAgentId(id)}
-                selectedIntent={selectedIntent}
-                onSelectIntent={(intent) => setSelectedIntent(intent)}
-                selectedTask={selectedTask}
-                activeFileName={
-                  workspaceFocusMode === 'workspace'
-                    ? `Entire Project (${
-                        resolvedWorkspace
-                          ? resolvedWorkspace.split(/[\\/]/).pop()
-                          : 'Root'
-                      })`
-                    : focusFilePath
-                    ? cleanWorkspaceFiles.find((f) => f.path === focusFilePath)
-                        ?.name ||
-                      focusFilePath.split(/[\\/]/).pop() ||
-                      'Focused File'
-                    : activeTab?.fileName || 'Workspace Specification'
-                }
-                activeFilePath={
-                  workspaceFocusMode === 'workspace'
-                    ? resolvedWorkspace
-                    : focusFilePath ||
-                      activeTab?.filePath ||
-                      cleanWorkspaceFiles[0]?.path ||
-                      ''
-                }
-                watchedFiles={cleanWorkspaceFiles}
-                selectedSourceFile={selectedSourceFile}
-                onSelectSourceFile={(path) => setSelectedSourceFile(path)}
+                visibleAgents={ctrl.visibleAgents}
+                allAgents={ctrl.agentProfiles}
+                agentsById={ctrl.agentsById}
+                selectedAgentId={ctrl.selectedAgentId}
+                onSelectAgent={ctrl.setSelectedAgentId}
+                selectedIntent={ctrl.selectedIntent}
+                onSelectIntent={ctrl.setSelectedIntent}
+                selectedTask={ctrl.selectedTask}
+                activeFileName={activeFileName}
+                activeFilePath={activeFilePath}
+                watchedFiles={ctrl.cleanWorkspaceFiles}
+                selectedSourceFile={ctrl.selectedSourceFile}
+                onSelectSourceFile={ctrl.setSelectedSourceFile}
                 onSendChatTask={async (
                   text,
                   attachedImages,
@@ -2248,58 +209,36 @@ ${projDesc}
                       ? `${promptToSend}\n\n### Attached Reference Images:\n${imagesMarkdown}`
                       : `### Attached Reference Images:\n${imagesMarkdown}`;
                   }
-                  const customAct = customActionId
-                    ? customActions.find((a) => a.id === customActionId) ||
-                      STARTER_CUSTOM_PIPELINE_ACTIONS.find(
-                        (a) => a.id === customActionId
-                      )
-                    : null;
+                  const customAct = ctrl.resolveCustomAction(customActionId);
                   if (customAct?.promptTemplate) {
                     promptToSend = `${promptToSend}\n\n[Action Directive]: ${customAct.promptTemplate}`;
                   }
-                  await handleSendInAppChatTask(promptToSend, {
+                  await ctrl.handleSendInAppChatTask(promptToSend, {
                     epistemicPolicy: customAct?.epistemicPolicy,
                     customActionLabel: customAct?.name,
                     effortLevel,
                     thinkingEnabled,
                   });
                 }}
-                onOpenReportInTab={handleOpenReportInTab}
-                onApplyToActiveTab={handleApplyToActiveTab}
-                onRelayToNextAgent={(
-                  task,
-                  nextAgentId,
-                  nextIntent,
-                  customActionId,
-                  effortLevel,
-                  thinkingEnabled
-                ) =>
-                  handleRelayToNextAgent(
-                    task,
-                    nextAgentId,
-                    nextIntent,
-                    customActionId,
-                    effortLevel,
-                    thinkingEnabled
-                  )
-                }
-                onPasteExternalReply={handlePasteExternalReply}
-                onCancelTask={handleCancelTask}
-                onRecoverTask={handleRecoverTask}
-                submitting={submitting}
-                runningPipelineId={runningPipelineId}
-                workflowExecutionMode={workflowExecutionMode}
-                waitingForStepApproval={waitingForStepApproval}
-                customActions={customActions}
-                onOpenCustomActionsModal={() => setShowCustomActionsModal(true)}
+                onOpenReportInTab={ctrl.handleOpenReportInTab}
+                onApplyToActiveTab={ctrl.handleApplyToActiveTab}
+                onRelayToNextAgent={ctrl.handleRelayToNextAgent}
+                onPasteExternalReply={ctrl.handlePasteExternalReply}
+                onCancelTask={ctrl.handleCancelTask}
+                onRecoverTask={ctrl.handleRecoverTask}
+                submitting={ctrl.submitting}
+                runningPipelineId={ctrl.runningPipelineId}
+                workflowExecutionMode={ctrl.workflowExecutionMode}
+                waitingForStepApproval={ctrl.waitingForStepApproval}
+                customActions={ctrl.customActions}
+                onOpenCustomActionsModal={() => ctrl.setShowCustomActionsModal(true)}
               />
             </div>
 
-            {/* Splitter Drag Handle between Center Chat Pane and Live Progress Inspector */}
             <div
-              onMouseDown={handleInspectorResizeMouseDown}
+              onMouseDown={ctrl.handleInspectorResizeMouseDown}
               onDoubleClick={() => {
-                setInspectorWidth(340);
+                ctrl.setInspectorWidth(340);
                 try {
                   localStorage.setItem('flymd:agents-inspector-width', '340');
                 } catch {}
@@ -2310,125 +249,109 @@ ${projDesc}
               <div className="w-0.5 h-8 bg-slate-700/80 group-hover:bg-sky-200 rounded transition-colors" />
             </div>
 
-            {/* Right Pane: Live Progress, Antigravity Files Deck & Activity/Terminal Inspector */}
             <AgentProgressInspector
-              width={inspectorWidth}
-              isPipelineRunning={!!runningPipelineId}
-              selectedTask={selectedTask}
-              checkpoints={agentCheckpoints}
-              restoringCheckpointId={restoringCheckpointId}
-              onRestoreCheckpoint={handleRestoreCheckpoint}
-              onClearTaskLogs={handleClearTaskLogs}
-              onDeleteTask={handleDeleteTask}
-              onCancelTask={handleCancelTask}
-              onRecoverTask={handleRecoverTask}
-              activeMarkdownContent={activeTab?.content || ''}
-              watchedFiles={cleanWorkspaceFiles}
+              width={ctrl.inspectorWidth}
+              isPipelineRunning={!!ctrl.runningPipelineId}
+              selectedTask={ctrl.selectedTask}
+              checkpoints={ctrl.agentCheckpoints}
+              checkpointsById={ctrl.checkpointsById}
+              restoringCheckpointId={ctrl.restoringCheckpointId}
+              onRestoreCheckpoint={ctrl.handleRestoreCheckpoint}
+              onClearTaskLogs={ctrl.handleClearTaskLogs}
+              onDeleteTask={ctrl.handleDeleteTask}
+              onCancelTask={ctrl.handleCancelTask}
+              onRecoverTask={ctrl.handleRecoverTask}
+              activeMarkdownContent={ctrl.activeTab?.content || ''}
+              watchedFiles={ctrl.cleanWorkspaceFiles}
               onRunSingleChecklistItem={(itemText) =>
-                handleSendInAppChatTask(
+                ctrl.handleSendInAppChatTask(
                   `Execute checklist step: "${itemText}"`,
-                  {
-                    intent: 'build',
-                  }
+                  { intent: 'build' }
                 )
               }
-              onOpenFileInEditor={(path) => handleOpenReportInTab(path)}
+              onOpenFileInEditor={(path) => ctrl.handleOpenReportInTab(path)}
               onSelectWatchedFileForDispatch={(file) => {
-                setSelectedSourceFile(file.path);
-                handleSendInAppChatTask(`Analyze and process ${file.name}`, {
+                ctrl.setSelectedSourceFile(file.path);
+                ctrl.handleSendInAppChatTask(`Analyze and process ${file.name}`, {
                   filePath: file.path,
                   fileName: file.name,
                   sourceAgentId: file.sourceAgent,
                 });
               }}
-              onDeleteWorkspaceFile={handleDeleteWorkspaceFile}
+              onDeleteWorkspaceFile={ctrl.handleDeleteWorkspaceFile}
             />
           </div>
         )}
 
-        {/* Far Right: Dual-Layer Memory & Observability HUD */}
-        {showObservabilityHUD && resolvedWorkspace && (
+        {ctrl.showObservabilityHUD && ctrl.resolvedWorkspace && (
           <ProjectObservabilityHUD
-            workspacePath={resolvedWorkspace}
-            onClose={() => setShowObservabilityHUD(false)}
+            workspacePath={ctrl.resolvedWorkspace}
+            onClose={() => ctrl.setShowObservabilityHUD(false)}
           />
         )}
       </div>
 
-      {/* Floating Cache Operation Feedback Banner */}
-      {cacheNotification && (
+      {ctrl.cacheNotification && (
         <div className="absolute top-14 right-4 z-40 bg-emerald-950/90 border border-emerald-500/40 text-emerald-200 text-xs px-3.5 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-fade-in">
           <Check size={14} className="text-emerald-400 shrink-0" />
-          <span>{cacheNotification}</span>
+          <span>{ctrl.cacheNotification}</span>
         </div>
       )}
 
-      {/* Clear Memory & Cache Confirmation Modal */}
       <ClearWorkspaceCacheModal
-        isOpen={showClearCacheModal}
-        onClose={() => !clearingCache && setShowClearCacheModal(false)}
-        resolvedWorkspace={resolvedWorkspace}
-        clearingCache={clearingCache}
-        onExecuteClearCache={handleExecuteClearCache}
-        clearTempCache={clearTempCache}
-        setClearTempCache={setClearTempCache}
-        clearMemoryLedger={clearMemoryLedger}
-        setClearMemoryLedger={setClearMemoryLedger}
-        clearCompletedSessions={clearCompletedSessions}
-        setClearCompletedSessions={setClearCompletedSessions}
-        clearDebatesAndCouncil={clearDebatesAndCouncil}
-        setClearDebatesAndCouncil={setClearDebatesAndCouncil}
-        clearPipelineAndReports={clearPipelineAndReports}
-        setClearPipelineAndReports={setClearPipelineAndReports}
-        closeRelatedOpenedFiles={closeRelatedOpenedFiles}
-        setCloseRelatedOpenedFiles={setCloseRelatedOpenedFiles}
+        isOpen={ctrl.showClearCacheModal}
+        onClose={() => !ctrl.clearingCache && ctrl.setShowClearCacheModal(false)}
+        resolvedWorkspace={ctrl.resolvedWorkspace}
+        clearingCache={ctrl.clearingCache}
+        onExecuteClearCache={ctrl.handleExecuteClearCache}
+        clearTempCache={ctrl.clearTempCache}
+        setClearTempCache={ctrl.setClearTempCache}
+        clearMemoryLedger={ctrl.clearMemoryLedger}
+        setClearMemoryLedger={ctrl.setClearMemoryLedger}
+        clearCompletedSessions={ctrl.clearCompletedSessions}
+        setClearCompletedSessions={ctrl.setClearCompletedSessions}
+        clearDebatesAndCouncil={ctrl.clearDebatesAndCouncil}
+        setClearDebatesAndCouncil={ctrl.setClearDebatesAndCouncil}
+        clearPipelineAndReports={ctrl.clearPipelineAndReports}
+        setClearPipelineAndReports={ctrl.setClearPipelineAndReports}
+        closeRelatedOpenedFiles={ctrl.closeRelatedOpenedFiles}
+        setCloseRelatedOpenedFiles={ctrl.setCloseRelatedOpenedFiles}
       />
 
-      {/* Interactive Pipeline & Task Error Recovery Modal */}
       <PipelineRecoveryModal
-        promptData={pendingRecoveryPrompt}
-        agentCheckpoints={agentCheckpoints}
-        visibleAgents={visibleAgents}
-        recoveryAgentId={recoveryAgentId}
-        setRecoveryAgentId={setRecoveryAgentId}
-        recoveryEffortLevel={recoveryEffortLevel}
-        setRecoveryEffortLevel={setRecoveryEffortLevel}
-        recoveryThinkingEnabled={recoveryThinkingEnabled}
-        setRecoveryThinkingEnabled={setRecoveryThinkingEnabled}
-        recoveryExtraDirective={recoveryExtraDirective}
-        setRecoveryExtraDirective={setRecoveryExtraDirective}
-        onDismissOrPause={() => {
-          if (globalPipelineRuntime.recoveryResolver) {
-            const resolve = globalPipelineRuntime.recoveryResolver;
-            globalPipelineRuntime.recoveryResolver = null;
-            setPendingRecoveryPrompt(null);
-            resolve({ action: 'pause' });
-          } else {
-            setPendingRecoveryPrompt(null);
-          }
-        }}
+        promptData={ctrl.pendingRecoveryPrompt}
+        agentCheckpoints={ctrl.agentCheckpoints}
+        visibleAgents={ctrl.visibleAgents}
+        recoveryAgentId={ctrl.recoveryAgentId}
+        setRecoveryAgentId={ctrl.setRecoveryAgentId}
+        recoveryEffortLevel={ctrl.recoveryEffortLevel}
+        setRecoveryEffortLevel={ctrl.setRecoveryEffortLevel}
+        recoveryThinkingEnabled={ctrl.recoveryThinkingEnabled}
+        setRecoveryThinkingEnabled={ctrl.setRecoveryThinkingEnabled}
+        recoveryExtraDirective={ctrl.recoveryExtraDirective}
+        setRecoveryExtraDirective={ctrl.setRecoveryExtraDirective}
+        onDismissOrPause={ctrl.dismissOrPauseRecoveryPrompt}
         onExecuteDecision={(mode) => {
-          if (!pendingRecoveryPrompt) return;
-          executeRecoveryDecision(
-            pendingRecoveryPrompt.failedTask,
+          if (!ctrl.pendingRecoveryPrompt) return;
+          ctrl.executeRecoveryDecision(
+            ctrl.pendingRecoveryPrompt.failedTask,
             mode,
-            pendingRecoveryPrompt.pipeline,
-            pendingRecoveryPrompt.stepIdx,
-            recoveryAgentId || pendingRecoveryPrompt.failedTask.targetAgentId,
-            recoveryExtraDirective.trim() || undefined,
-            recoveryEffortLevel,
-            recoveryThinkingEnabled
+            ctrl.pendingRecoveryPrompt.pipeline,
+            ctrl.pendingRecoveryPrompt.stepIdx,
+            ctrl.recoveryAgentId || ctrl.pendingRecoveryPrompt.failedTask.targetAgentId,
+            ctrl.recoveryExtraDirective.trim() || undefined,
+            ctrl.recoveryEffortLevel,
+            ctrl.recoveryThinkingEnabled
           );
         }}
       />
 
-      {/* User-Defined Custom Pipeline Actions Library Modal */}
       <CustomPipelineActionsModal
-        isOpen={showCustomActionsModal}
-        onClose={() => setShowCustomActionsModal(false)}
-        customActions={customActions}
-        onSaveAction={handleSaveCustomAction}
-        onDeleteAction={handleDeleteCustomAction}
+        isOpen={ctrl.showCustomActionsModal}
+        onClose={() => ctrl.setShowCustomActionsModal(false)}
+        customActions={ctrl.customActions}
+        onSaveAction={ctrl.handleSaveCustomAction}
+        onDeleteAction={ctrl.handleDeleteCustomAction}
       />
     </div>
   );

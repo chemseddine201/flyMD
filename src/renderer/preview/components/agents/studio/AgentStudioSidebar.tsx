@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   Bot,
   Plus,
@@ -54,6 +54,8 @@ import {
 interface AgentStudioSidebarProps {
   visibleAgents: AgentProfile[];
   allAgents: AgentProfile[];
+  agentsById?: Map<string, AgentProfile>;
+  tasksById?: Map<string, AgentTaskRecord>;
   selectedAgentId: AgentId;
   onSelectAgent: (id: AgentId) => void;
   agentTasks: AgentTaskRecord[];
@@ -124,6 +126,8 @@ const INTENT_ICONS: Record<AgentTaskIntent, React.ReactNode> = {
 export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   visibleAgents,
   allAgents,
+  agentsById,
+  tasksById,
   selectedAgentId,
   onSelectAgent,
   agentTasks,
@@ -207,12 +211,41 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
 
   const primaryPipeline = pipelines[0] || BUILTIN_AGENT_PIPELINES[0];
 
+  const visibleAgentsMap = useMemo(() => {
+    const map = new Map<string, AgentProfile>();
+    for (const a of visibleAgents) map.set(a.id, a);
+    return map;
+  }, [visibleAgents]);
+
+  const fallbackAllAgentsMap = useMemo(() => {
+    if (agentsById) return agentsById;
+    const map = new Map<string, AgentProfile>();
+    for (const a of allAgents) map.set(a.id, a);
+    return map;
+  }, [agentsById, allAgents]);
+
+  const effectiveTasksById = useMemo(() => {
+    if (tasksById) return tasksById;
+    const map = new Map<string, AgentTaskRecord>();
+    for (const t of agentTasks) map.set(t.id, t);
+    return map;
+  }, [tasksById, agentTasks]);
+
+  const pipelineStepTaskIds = useMemo(() => {
+    const set = new Set<string>();
+    if (primaryPipeline) {
+      for (const s of primaryPipeline.steps) {
+        if (s.completedTaskId) set.add(s.completedTaskId);
+      }
+    }
+    return set;
+  }, [primaryPipeline]);
+
   // Live Task-to-Step Reconciliation: ensures workflow indicators never disappear while a backend task is running
   const liveRunningTaskForPipeline = agentTasks.find(
     (t) =>
       t.status === 'running' &&
-      (t.pipelineId === primaryPipeline?.id ||
-        primaryPipeline?.steps.some((s) => s.completedTaskId === t.id))
+      (t.pipelineId === primaryPipeline?.id || pipelineStepTaskIds.has(t.id))
   );
 
   const effectiveRunningStepIdx = (() => {
@@ -482,15 +515,15 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
           {/* Workflow Steps List */}
           <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
             {primaryPipeline.steps.map((step, idx) => {
-              const effectiveAgentId = visibleAgents.some((a) => a.id === step.agentId)
+              const effectiveAgentId = visibleAgentsMap.has(step.agentId)
                 ? step.agentId
                 : visibleAgents[0]?.id || step.agentId;
               const stepAgent =
-                visibleAgents.find((a) => a.id === effectiveAgentId) ||
-                allAgents.find((a) => a.id === effectiveAgentId);
+                visibleAgentsMap.get(effectiveAgentId) ||
+                fallbackAllAgentsMap.get(effectiveAgentId);
 
               const linkedTask = step.completedTaskId
-                ? agentTasks.find((t) => t.id === step.completedTaskId)
+                ? effectiveTasksById.get(step.completedTaskId)
                 : effectiveRunningStepIdx === idx && liveRunningTaskForPipeline
                 ? liveRunningTaskForPipeline
                 : undefined;
@@ -982,7 +1015,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
           {(() => {
             const completedCount = primaryPipeline.steps.filter((s, sIdx) => {
               const lt = s.completedTaskId
-                ? agentTasks.find((t) => t.id === s.completedTaskId)
+                ? effectiveTasksById.get(s.completedTaskId)
                 : undefined;
               return (
                 s.status === 'completed' ||
@@ -996,14 +1029,14 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
               completedCount === primaryPipeline.steps.length;
             const firstPendingIdx = primaryPipeline.steps.findIndex((s) => {
               const lt = s.completedTaskId
-                ? agentTasks.find((t) => t.id === s.completedTaskId)
+                ? effectiveTasksById.get(s.completedTaskId)
                 : undefined;
               return s.status !== 'completed' && lt?.status !== 'completed';
             });
             const firstPendingStep =
               firstPendingIdx >= 0 ? primaryPipeline.steps[firstPendingIdx] : undefined;
             const firstPendingTask = firstPendingStep?.completedTaskId
-              ? agentTasks.find((t) => t.id === firstPendingStep.completedTaskId)
+              ? effectiveTasksById.get(firstPendingStep.completedTaskId)
               : undefined;
             const isFirstPendingInterrupted =
               firstPendingStep?.status === 'incomplete' ||
@@ -1135,7 +1168,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             </div>
           ) : (
             agentTasks.map((task) => {
-              const agent = allAgents.find((a) => a.id === task.targetAgentId);
+              const agent = fallbackAllAgentsMap.get(task.targetAgentId);
               const isSelected = task.id === selectedTaskId;
               const bestFilePath =
                 task.outputReportPath ||

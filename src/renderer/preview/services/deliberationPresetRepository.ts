@@ -328,22 +328,30 @@ export const DEFAULT_PRESET_TEMPLATES: DeliberationPreset[] = [
 
 export const STORAGE_KEY_PRESETS = 'flymd_deliberation_presets_v3';
 
+let cachedPresetsSnapshot: DeliberationPreset[] | null = null;
+
 export const loadSavedPresets = (): DeliberationPreset[] => {
+  if (cachedPresetsSnapshot !== null) {
+    return cachedPresetsSnapshot;
+  }
   try {
     const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_PRESETS) : null;
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        cachedPresetsSnapshot = parsed;
         return parsed;
       }
     }
   } catch (e) {
     console.warn('Failed to load presets from localStorage', e);
   }
+  cachedPresetsSnapshot = DEFAULT_PRESET_TEMPLATES;
   return DEFAULT_PRESET_TEMPLATES;
 };
 
 export const savePresetsToStorage = (updated: DeliberationPreset[]): void => {
+  cachedPresetsSnapshot = updated;
   try {
     localStorage.setItem(STORAGE_KEY_PRESETS, JSON.stringify(updated));
   } catch (e) {
