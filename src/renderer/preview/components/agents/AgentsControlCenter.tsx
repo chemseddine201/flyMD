@@ -50,14 +50,15 @@ import { ProjectTreeNavigator } from './projects/ProjectTreeNavigator';
 import { ProjectObservabilityHUD } from './projects/ProjectObservabilityHUD';
 import { ProjectSynthesisReportViewer } from './projects/ProjectSynthesisReportViewer';
 import { CustomPipelineActionsModal } from './studio/CustomPipelineActionsModal';
+import { ClearWorkspaceCacheModal } from './modals/ClearWorkspaceCacheModal';
+import { PipelineRecoveryModal } from './modals/PipelineRecoveryModal';
+import {
+  RecoveryModalDecision,
+  composeEpistemicStepPayload,
+  waitForTaskFinished,
+} from '../../services/pipelineExecutionService';
 
-export interface RecoveryModalDecision {
-  action: 'continue_from_breakpoint' | 'revert_and_retry' | 'pause';
-  overrideAgentId?: AgentId;
-  overrideEffortLevel?: AgentEffortLevel;
-  overrideThinkingEnabled?: boolean;
-  extraDirective?: string;
-}
+export type { RecoveryModalDecision };
 
 // Module-level pipeline runtime controller so viewMode / tab switches never orphan an active pipeline run
 const globalPipelineRuntime: {
@@ -378,8 +379,6 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = ({
   const [recoveryEffortLevel, setRecoveryEffortLevel] = useState<AgentEffortLevel>('medium');
   const [recoveryThinkingEnabled, setRecoveryThinkingEnabled] = useState<boolean>(true);
   const [recoveryExtraDirective, setRecoveryExtraDirective] = useState<string>('');
-  const [recoveryCopiedLog, setRecoveryCopiedLog] = useState<boolean>(false);
-  const [recoveryShowStderr, setRecoveryShowStderr] = useState<boolean>(false);
 
   const cancelActivePipelineRun = async (targetPipelineId?: string) => {
     const storeState = usePreviewStore.getState();
@@ -790,121 +789,6 @@ ${projDesc}
     }
   };
 
-  // Helper to reliably await a task reaching a terminal state (completed, cancelled, failed) without premature timeout
-  const waitForTaskFinished = (taskId: string): Promise<AgentTaskRecord | null> => {
-    return new Promise((resolve) => {
-      const checkTerminal = () => {
-        const tasks = usePreviewStore.getState().agentTasks;
-        const found = tasks.find((t) => t.id === taskId);
-        if (
-          found &&
-          (found.status === 'completed' ||
-            found.status === 'incomplete' ||
-            found.status === 'cancelled' ||
-            found.status === 'failed')
-        ) {
-          return found;
-        }
-        return null;
-      };
-
-      const immediate = checkTerminal();
-      if (immediate) {
-        resolve(immediate);
-        return;
-      }
-
-      const timer = setInterval(async () => {
-        if (isPipelineCancelledRef.current) {
-          clearInterval(timer);
-          resolve(null);
-          return;
-        }
-        try {
-          const tasks = await window.electronAPI.getAgentTasks();
-          usePreviewStore.getState().setAgentTasks(tasks);
-          const found = tasks.find((t) => t.id === taskId);
-          if (
-            found &&
-            (found.status === 'completed' ||
-              found.status === 'incomplete' ||
-              found.status === 'cancelled' ||
-              found.status === 'failed')
-          ) {
-            clearInterval(timer);
-            resolve(found);
-          }
-        } catch {
-          // ignore transient poll error
-        }
-      }, 750);
-    });
-  };
-
-  // Passes the full detailed Markdown implementation plan when transitioning from `refine-plan` to `build`,
-  // and withholds subjective upstream prose on adversarial verification steps (`review` / `fix-bugs`) to prevent confirmation bias.
-  const composeEpistemicStepPayload = (
-    originalContract: string,
-    upstreamOutput: string | undefined,
-    targetIntent: AgentTaskIntent,
-    isFirstStep: boolean,
-    upstreamAgentId?: string,
-    upstreamIntent?: AgentTaskIntent
-  ): string => {
-    const cleanContract = (originalContract || '').trim();
-    const cleanUpstream = (upstreamOutput || '').trim();
-
-    if (isFirstStep || !cleanUpstream) {
-      return cleanContract || cleanUpstream;
-    }
-
-    // Blind Audit / Ground-Truth Rebuild: withhold upstream subjective prose summary so Critic/Reviewer
-    // inspects raw disk files against the Immutable Original Contract and concludes its own résumé first.
-    if (targetIntent === 'review' || targetIntent === 'fix-bugs') {
-      return cleanContract || cleanUpstream;
-    }
-
-    // Plan -> Build Handoff: When upstream step was `refine-plan` or target step is `build`,
-    // pass the FULL detailed Markdown implementation plan without truncation so the Builder
-    // has every architectural specification, file breakdown, DOM ID, formula, and checklist item.
-    if (upstreamIntent === 'refine-plan' || targetIntent === 'build') {
-      if (!cleanContract || cleanUpstream.length >= cleanContract.length * 0.7) {
-        return cleanUpstream;
-      }
-      return `${cleanUpstream}\n\n---\n\n## Original Reference Contract\n${cleanContract}`;
-    }
-
-    // Collaborative Inheritance (`write-tests`, `explain`, etc.):
-    const highSignalLines = cleanUpstream
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(
-        (l) =>
-          l.startsWith('- [ ]') ||
-          l.startsWith('* [ ]') ||
-          l.startsWith('@') ||
-          l.startsWith('- @') ||
-          l.startsWith('### ') ||
-          l.includes('Invariant') ||
-          l.includes('Contract') ||
-          l.includes('<independent_resume>')
-      )
-      .slice(0, 40);
-
-    const compactDelta =
-      highSignalLines.length >= 3
-        ? highSignalLines.join('\n')
-        : cleanUpstream.slice(0, 3200);
-
-    if (!cleanContract) {
-      return compactDelta;
-    }
-
-    return `${cleanContract}\n\n---\n\n## Upstream Compact Delta (from @${
-      upstreamAgentId || 'previous-agent'
-    })\n${compactDelta}`;
-  };
-
   const handleRunPipelineInStudio = async (
     pipeline: AgentPipelinePreset,
     initialRecovery?: {
@@ -1246,7 +1130,7 @@ ${projDesc}
           } catch {}
 
           // Reliably await task completion before executing the next step
-          const completed = await waitForTaskFinished(dispatchedTask.id);
+          const completed = await waitForTaskFinished(dispatchedTask.id, isPipelineCancelledRef);
           if (isPipelineCancelledRef.current || !completed) {
             break;
           }
@@ -2480,239 +2364,40 @@ ${projDesc}
       )}
 
       {/* Clear Memory & Cache Confirmation Modal */}
-      {showClearCacheModal && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in select-none">
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/60">
-              <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
-                <Trash2 size={15} />
-                <span>Clear Workspace Memory &amp; Cache</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => !clearingCache && setShowClearCacheModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              >
-                <X size={15} />
-              </button>
-            </div>
+      <ClearWorkspaceCacheModal
+        isOpen={showClearCacheModal}
+        onClose={() => !clearingCache && setShowClearCacheModal(false)}
+        resolvedWorkspace={resolvedWorkspace}
+        clearingCache={clearingCache}
+        onExecuteClearCache={handleExecuteClearCache}
+        clearTempCache={clearTempCache}
+        setClearTempCache={setClearTempCache}
+        clearMemoryLedger={clearMemoryLedger}
+        setClearMemoryLedger={setClearMemoryLedger}
+        clearCompletedSessions={clearCompletedSessions}
+        setClearCompletedSessions={setClearCompletedSessions}
+        clearDebatesAndCouncil={clearDebatesAndCouncil}
+        setClearDebatesAndCouncil={setClearDebatesAndCouncil}
+        clearPipelineAndReports={clearPipelineAndReports}
+        setClearPipelineAndReports={setClearPipelineAndReports}
+        closeRelatedOpenedFiles={closeRelatedOpenedFiles}
+        setCloseRelatedOpenedFiles={setCloseRelatedOpenedFiles}
+      />
 
-            <div className="p-4 space-y-3 text-xs max-h-[75vh] overflow-y-auto">
-              <p className="text-slate-300 leading-relaxed">
-                Select items to clean and reset for workspace{' '}
-                <strong className="text-white font-mono break-all">
-                  {resolvedWorkspace}
-                </strong>
-                :
-              </p>
-
-              <div className="space-y-2 pt-0.5">
-                {/* 1. Temp Cache */}
-                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={clearTempCache}
-                    onChange={(e) => setClearTempCache(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
-                  />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-slate-200 text-[11px]">
-                      Purge Temporary Cache &amp; Checkpoints
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      Deletes <code className="text-slate-300">.flymd/handoffs</code>, <code className="text-slate-300">.flymd/reports</code>, <code className="text-slate-300">.flymd/checkpoints</code>, and cognitive cache.
-                    </div>
-                  </div>
-                </label>
-
-                {/* 2. Memory Ledger */}
-                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={clearMemoryLedger}
-                    onChange={(e) => setClearMemoryLedger(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
-                  />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-slate-200 text-[11px]">
-                      Reset Shared Agent Memory Ledger
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      Re-initializes <code className="text-amber-300">.flymd/MEMORY.md</code> to a clean slate.
-                    </div>
-                  </div>
-                </label>
-
-                {/* 3. Task Sessions */}
-                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={clearCompletedSessions}
-                    onChange={(e) =>
-                      setClearCompletedSessions(e.target.checked)
-                    }
-                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
-                  />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-slate-200 text-[11px]">
-                      Clear Finished Task Sessions &amp; Logs
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      Removes completed agent session records, execution history, and logs from memory.
-                    </div>
-                  </div>
-                </label>
-
-                {/* 4. Debates & Council */}
-                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={clearDebatesAndCouncil}
-                    onChange={(e) =>
-                      setClearDebatesAndCouncil(e.target.checked)
-                    }
-                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
-                  />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-slate-200 text-[11px]">
-                      Clear All Debates &amp; Deliberation Memory
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      Stops active deliberations, purges <code className="text-purple-300">.flymd/discussions</code> transcripts, and resets Council UI.
-                    </div>
-                  </div>
-                </label>
-
-                {/* 5. Pipeline & Reports UI */}
-                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={clearPipelineAndReports}
-                    onChange={(e) =>
-                      setClearPipelineAndReports(e.target.checked)
-                    }
-                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
-                  />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-slate-200 text-[11px]">
-                      Reset Pipeline State &amp; Deliverables Reports
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      Resets workflow steps to Idle, cancels running pipeline runs, and resets active report viewers.
-                    </div>
-                  </div>
-                </label>
-
-                {/* 6. Close Related Opened Files */}
-                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={closeRelatedOpenedFiles}
-                    onChange={(e) =>
-                      setCloseRelatedOpenedFiles(e.target.checked)
-                    }
-                    className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
-                  />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-slate-200 text-[11px]">
-                      Close Related Opened Files &amp; Reports in Editor
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      Closes editor tabs pointing to <code className="text-sky-300">.flymd</code> memory, generated reports, and handoffs.
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-800 bg-slate-950/60">
-              <button
-                type="button"
-                disabled={clearingCache}
-                onClick={() => setShowClearCacheModal(false)}
-                className="px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={clearingCache}
-                onClick={handleExecuteClearCache}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors shadow-lg shadow-rose-950/50"
-              >
-                {clearingCache ? (
-                  <>
-                    <Loader2 size={13} className="animate-spin" />
-                    <span>Clearing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={13} />
-                    <span>Clear Cache &amp; Memory</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Interactive Pipeline & Task Error Recovery Modal (Continue from Breakpoint vs Revert Modified Files & Retry) */}
-      {pendingRecoveryPrompt && (() => {
-        const ft = pendingRecoveryPrompt.failedTask;
-        const diag = ft.errorDiagnostic;
-        const cp = ft.checkpointId
-          ? agentCheckpoints.find((c) => c.id === ft.checkpointId)
-          : undefined;
-        const fallbackStderr = (ft.logs || []).filter(
-          (l) =>
-            l.includes('[stderr]') ||
-            l.includes('[Hang Watchdog]') ||
-            l.includes('[Process Error]') ||
-            l.includes('[CLI Error]') ||
-            l.includes('[Verification Gate]') ||
-            l.toLowerCase().includes('error') ||
-            l.toLowerCase().includes('exception')
-        );
-        const stderrLines =
-          diag?.stderrTrace && diag.stderrTrace.length > 0
-            ? diag.stderrTrace
-            : fallbackStderr;
-        const exceptionMsg =
-          diag?.exceptionMessage ||
-          ft.error ||
-          ft.outcomeReason ||
-          fallbackStderr[fallbackStderr.length - 1] ||
-          'Unexpected interruption or missing deliverables detected.';
-        const lastActivity =
-          diag?.lastKnownActivity ||
-          (ft.toolActions && ft.toolActions.length > 0
-            ? ft.toolActions[ft.toolActions.length - 1].label
-            : ft.thinkingTrace && ft.thinkingTrace.length > 0
-            ? ft.thinkingTrace[ft.thinkingTrace.length - 1]
-            : undefined);
-
-        const modFilesSet = new Set<string>();
-        for (const mf of [
-          ...(ft.modifiedFiles || []),
-          ...(diag?.modifiedFiles || []),
-          ...(ft.verificationReport?.checkedFiles || []),
-        ]) {
-          const clean = mf.trim().replace(/\\/g, '/').split('/').pop();
-          if (clean && !clean.startsWith('.')) modFilesSet.add(clean);
-        }
-        for (const act of ft.toolActions || []) {
-          if (act.targetPath) {
-            const clean = act.targetPath
-              .replace(/\\/g, '/')
-              .split('/')
-              .pop();
-            if (clean && !clean.startsWith('.')) modFilesSet.add(clean);
-          }
-        }
-        const modifiedFileNames = Array.from(modFilesSet);
-
-        const handleDismissOrPause = () => {
+      {/* Interactive Pipeline & Task Error Recovery Modal */}
+      <PipelineRecoveryModal
+        promptData={pendingRecoveryPrompt}
+        agentCheckpoints={agentCheckpoints}
+        visibleAgents={visibleAgents}
+        recoveryAgentId={recoveryAgentId}
+        setRecoveryAgentId={setRecoveryAgentId}
+        recoveryEffortLevel={recoveryEffortLevel}
+        setRecoveryEffortLevel={setRecoveryEffortLevel}
+        recoveryThinkingEnabled={recoveryThinkingEnabled}
+        setRecoveryThinkingEnabled={setRecoveryThinkingEnabled}
+        recoveryExtraDirective={recoveryExtraDirective}
+        setRecoveryExtraDirective={setRecoveryExtraDirective}
+        onDismissOrPause={() => {
           if (globalPipelineRuntime.recoveryResolver) {
             const resolve = globalPipelineRuntime.recoveryResolver;
             globalPipelineRuntime.recoveryResolver = null;
@@ -2721,369 +2406,21 @@ ${projDesc}
           } else {
             setPendingRecoveryPrompt(null);
           }
-        };
-
-        const handleCopyModalErrorLog = async () => {
-          const report = [
-            `=== FlyMD Pipeline & Task Error Diagnostic ===`,
-            `Task ID: ${ft.id}`,
-            pendingRecoveryPrompt.pipeline
-              ? `Pipeline: ${pendingRecoveryPrompt.pipeline.name} — Step ${(pendingRecoveryPrompt.stepIdx ?? 0) + 1} (${pendingRecoveryPrompt.stepLabel || ft.intent})`
-              : `Standalone Task: ${ft.fileName}`,
-            `Agent: ${ft.targetAgentId} (${ft.intent})`,
-            `Status: ${ft.status.toUpperCase()}`,
-            `Category: ${diag?.category || 'execution_interrupted'}`,
-            diag?.exitCode !== undefined ? `Exit Code: ${diag.exitCode}` : '',
-            ft.cliSessionId || diag?.cliSessionId
-              ? `CLI Session ID: ${ft.cliSessionId || diag?.cliSessionId}`
-              : '',
-            `Title: ${diag?.title || 'Task Execution Interrupted'}`,
-            `Exception Message: ${exceptionMsg}`,
-            lastActivity ? `Last Breakpoint: ${lastActivity}` : '',
-            modifiedFileNames.length > 0
-              ? `Modified Files (${modifiedFileNames.length}): ${modifiedFileNames.join(', ')}`
-              : 'Modified Files: None',
-            stderrLines.length > 0
-              ? `\n--- Exception / Stderr Trace ---\n${stderrLines.join('\n')}`
-              : '',
-          ]
-            .filter(Boolean)
-            .join('\n');
-          try {
-            await navigator.clipboard.writeText(report);
-            setRecoveryCopiedLog(true);
-            setTimeout(() => setRecoveryCopiedLog(false), 2000);
-          } catch {}
-        };
-
-        return (
-          <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in select-none">
-            <div className="w-full max-w-2xl rounded-2xl border border-amber-500/50 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-950/80">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
-                    <AlertTriangle size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-extrabold text-white truncate">
-                      {pendingRecoveryPrompt.pipeline
-                        ? `Pipeline Step ${(pendingRecoveryPrompt.stepIdx ?? 0) + 1} Interrupted — Resume or Revert & Retry`
-                        : `Task Interrupted — Resume or Revert & Retry`}
-                    </h3>
-                    <p className="text-[11px] text-slate-400 truncate">
-                      {diag?.title ||
-                        `Choose whether to continue from the last breakpoint or revert modified files and retry cleanly.`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleCopyModalErrorLog}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-bold transition-colors"
-                    title="Copy clean exception & error diagnostic log"
-                  >
-                    {recoveryCopiedLog ? (
-                      <>
-                        <Check size={12} className="text-emerald-400" />
-                        <span className="text-emerald-300">Copied Log</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={12} />
-                        <span>Copy Error Log</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDismissOrPause}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                    title="Pause pipeline here and inspect workspace"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Modal Body */}
-              <div className="p-5 space-y-4 overflow-y-auto text-xs">
-                {/* 1. Clean Exception & Error Diagnostic Block */}
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/25 p-3.5 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-                      <AlertCircle size={13} className="text-rose-400" />
-                      Clean Exception &amp; Error Diagnostic
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded bg-slate-950/90 border border-slate-700 text-[10px] font-mono font-bold uppercase text-amber-300">
-                        {diag?.category || ft.status}
-                      </span>
-                      {diag?.exitCode !== undefined && diag?.exitCode !== null && (
-                        <span className="px-2 py-0.5 rounded bg-rose-950 border border-rose-500/50 text-[10px] font-mono font-bold text-rose-300">
-                          Exit Code: {diag.exitCode}
-                        </span>
-                      )}
-                      {(ft.cliSessionId || diag?.cliSessionId) && (
-                        <span className="px-2 py-0.5 rounded bg-sky-950 border border-sky-500/40 text-[10px] font-mono text-sky-300">
-                          Session Ready
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-slate-950/95 border border-slate-800 p-2.5 font-mono text-[11px] text-rose-200 leading-relaxed select-text">
-                    {exceptionMsg}
-                  </div>
-
-                  {lastActivity && (
-                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-slate-950/70 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
-                      <Clock size={12} className="text-sky-400 shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <span className="font-bold text-sky-300">
-                          Last Active Breakpoint:{' '}
-                        </span>
-                        <span className="font-mono text-slate-200 break-words">
-                          {lastActivity}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {stderrLines.length > 0 && (
-                    <div className="rounded-lg border border-slate-800 bg-slate-950/90 overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => setRecoveryShowStderr((prev) => !prev)}
-                        className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold text-slate-300 hover:text-white bg-slate-900/80 transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          {recoveryShowStderr ? (
-                            <ChevronDown size={12} />
-                          ) : (
-                            <ChevronRight size={12} />
-                          )}
-                          <span>
-                            Exception &amp; Stderr Trace ({stderrLines.length}{' '}
-                            lines)
-                          </span>
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-normal">
-                          {recoveryShowStderr ? 'Hide trace' : 'Show trace'}
-                        </span>
-                      </button>
-                      {recoveryShowStderr && (
-                        <div className="p-2.5 max-h-40 overflow-y-auto font-mono text-[10px] text-rose-300/90 space-y-1 select-text border-t border-slate-800">
-                          {stderrLines.map((line, i) => (
-                            <div key={i} className="leading-relaxed break-words">
-                              {line}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Modified Files & Safety Checkpoint Status */}
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                      <ShieldCheck size={13} className="text-emerald-400" />
-                      Workspace Files Modified by Current Failed Task (
-                      {modifiedFileNames.length})
-                    </span>
-                    {cp && !cp.restored ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold">
-                        Safety Checkpoint Ready ({cp.id})
-                      </span>
-                    ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                        Workspace Snapshot Active
-                      </span>
-                    )}
-                  </div>
-
-                  {modifiedFileNames.length === 0 ? (
-                    <div className="text-[11px] text-slate-400 italic">
-                      No workspace code deliverables were written to disk before this task paused. Both options below are safe to run immediately.
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {modifiedFileNames.map((fname) => (
-                          <span
-                            key={fname}
-                            className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700 font-mono text-[11px] text-sky-300"
-                          >
-                            {fname}
-                          </span>
-                        ))}
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">
-                        • Choose{' '}
-                        <strong className="text-emerald-300">
-                          Continue from Last Breakpoint
-                        </strong>{' '}
-                        to keep these {modifiedFileNames.length} file(s) and finish
-                        the remaining implementation from where the agent stopped.
-                        <br />• Choose{' '}
-                        <strong className="text-amber-300">
-                          Revert Modified Files &amp; Retry
-                        </strong>{' '}
-                        to roll back modified files and remove partial files using
-                        the pre-task safety checkpoint before re-running cleanly.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Optional Agent Switcher, Effort & Thinking Calibration & Recovery Note */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Target Agent:
-                    </label>
-                    <select
-                      value={recoveryAgentId || ft.targetAgentId}
-                      onChange={(e) =>
-                        setRecoveryAgentId(e.target.value as AgentId)
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-semibold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
-                    >
-                      {visibleAgents.map((ag) => (
-                        <option key={ag.id} value={ag.id} className="bg-slate-900">
-                          @{ag.name}{' '}
-                          {ag.id === ft.targetAgentId ? '(Current)' : '(Switch)'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Reasoning Effort:
-                    </label>
-                    <select
-                      value={recoveryEffortLevel}
-                      onChange={(e) =>
-                        setRecoveryEffortLevel(e.target.value as AgentEffortLevel)
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sky-300 font-bold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
-                      title="Adjust effort level (e.g. switch to Low/Medium to avoid timeouts)"
-                    >
-                      <option value="low" className="bg-slate-900">Low (Fast)</option>
-                      <option value="medium" className="bg-slate-900">Medium (Default)</option>
-                      <option value="high" className="bg-slate-900">High</option>
-                      <option value="xhigh" className="bg-slate-900">X-High</option>
-                      <option value="max" className="bg-slate-900">Max</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Thinking Mode:
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setRecoveryThinkingEnabled((prev) => !prev)}
-                      className={`w-full px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                        recoveryThinkingEnabled
-                          ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-xs'
-                          : 'bg-slate-950 border-slate-700 text-slate-400 line-through'
-                      }`}
-                      title={
-                        recoveryThinkingEnabled
-                          ? 'Thinking Mode: ON (Extended reasoning active)'
-                          : 'Thinking Mode: OFF (Fast direct generation, no token burn)'
-                      }
-                    >
-                      <Brain
-                        size={12}
-                        className={
-                          recoveryThinkingEnabled
-                            ? 'text-indigo-400'
-                            : 'text-slate-500'
-                        }
-                      />
-                      <span>{recoveryThinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Optional Directive / Hint:
-                    </label>
-                    <input
-                      type="text"
-                      value={recoveryExtraDirective}
-                      onChange={(e) => setRecoveryExtraDirective(e.target.value)}
-                      placeholder="e.g. Write incrementally..."
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-sky-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Footer: Explicit User Decision Buttons */}
-              <div className="px-5 py-3.5 border-t border-slate-800 bg-slate-950/90 flex items-center justify-between gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleDismissOrPause}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  Pause Pipeline &amp; Inspect
-                </button>
-
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      executeRecoveryDecision(
-                        ft,
-                        'revert_and_retry',
-                        pendingRecoveryPrompt.pipeline,
-                        pendingRecoveryPrompt.stepIdx,
-                        recoveryAgentId || ft.targetAgentId,
-                        recoveryExtraDirective.trim() || undefined,
-                        recoveryEffortLevel,
-                        recoveryThinkingEnabled
-                      )
-                    }
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-bold text-xs transition-all cursor-pointer"
-                    title="Restore pre-task safety checkpoint (reverting modified files and deleting newly created partial files) and retry cleanly"
-                  >
-                    <RotateCcw size={13} />
-                    <span>Revert Modified Files &amp; Retry</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      executeRecoveryDecision(
-                        ft,
-                        'continue_from_breakpoint',
-                        pendingRecoveryPrompt.pipeline,
-                        pendingRecoveryPrompt.stepIdx,
-                        recoveryAgentId || ft.targetAgentId,
-                        recoveryExtraDirective.trim() || undefined,
-                        recoveryEffortLevel,
-                        recoveryThinkingEnabled
-                      )
-                    }
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
-                    title="Keep modified files on disk and resume execution from the last breakpoint"
-                  >
-                    <Play size={13} fill="currentColor" />
-                    <span>Continue from Last Breakpoint (Keep Files)</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+        }}
+        onExecuteDecision={(mode) => {
+          if (!pendingRecoveryPrompt) return;
+          executeRecoveryDecision(
+            pendingRecoveryPrompt.failedTask,
+            mode,
+            pendingRecoveryPrompt.pipeline,
+            pendingRecoveryPrompt.stepIdx,
+            recoveryAgentId || pendingRecoveryPrompt.failedTask.targetAgentId,
+            recoveryExtraDirective.trim() || undefined,
+            recoveryEffortLevel,
+            recoveryThinkingEnabled
+          );
+        }}
+      />
 
       {/* User-Defined Custom Pipeline Actions Library Modal */}
       <CustomPipelineActionsModal
