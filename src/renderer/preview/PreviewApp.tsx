@@ -41,8 +41,34 @@ import { undo, redo } from '@codemirror/commands';
 import { scheduleBadgeClear } from './store/utils/badgeTimers';
 
 export const PreviewApp: React.FC = () => {
-  const store = usePreviewStore();
-  const activeTab = selectActiveTab(store);
+  // Targeted selectors: isolate PreviewApp from agent & debate streaming token storms
+  const settings = usePreviewStore((s) => s.settings);
+  const activeTab = usePreviewStore(selectActiveTab);
+  const tabs = usePreviewStore((s) => s.tabs);
+  const viewMode = usePreviewStore((s) => s.viewMode);
+  const isPinned = usePreviewStore((s) => s.isPinned);
+  const statusMessage = usePreviewStore((s) => s.statusMessage);
+  const folderPath = usePreviewStore((s) => s.folderPath);
+  const folderName = usePreviewStore((s) => s.folderName);
+  const folderFiles = usePreviewStore((s) => s.folderFiles);
+  const supervisionConfig = usePreviewStore((s) => s.supervisionConfig);
+  const sidebarCollapsed = usePreviewStore((s) => s.sidebarCollapsed);
+  const sidebarExplorerMode = usePreviewStore((s) => s.sidebarExplorerMode);
+  const outlineOpen = usePreviewStore((s) => s.outlineOpen);
+  const outlinePinned = usePreviewStore((s) => s.outlinePinned);
+  const showAgentAccountsModal = usePreviewStore((s) => s.showAgentAccountsModal);
+  const agentProfiles = usePreviewStore((s) => s.agentProfiles);
+  const showOllamaModal = usePreviewStore((s) => s.showOllamaModal);
+  const showSettings = usePreviewStore((s) => s.showSettings);
+
+  // Stable action dispatcher reading latest state without full-store subscription
+  const store = React.useMemo(() => {
+    return new Proxy({} as ReturnType<typeof usePreviewStore.getState>, {
+      get: (_, prop: string | symbol) => {
+        return (usePreviewStore.getState() as any)[prop];
+      },
+    });
+  }, []);
 
   const editorRef = useRef<any>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);

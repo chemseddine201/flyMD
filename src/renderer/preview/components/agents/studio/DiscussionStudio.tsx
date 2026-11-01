@@ -434,6 +434,61 @@ const ROUND_METADATA = [
   { round: 3, title: 'Phase 3: Rebuttal & Consensus Synthesis', desc: 'Agents revise stances, document concessions, and record unresolved trade-offs.' },
 ];
 
+const LiveStreamingTurnCard: React.FC<{
+  roundNumber: number;
+  currentRound?: number;
+  isRunning: boolean;
+}> = React.memo(({ roundNumber, currentRound, isRunning }) => {
+  const streamingChunks = usePreviewStore((s: PreviewStoreState) => s.streamingChunks);
+  const streamingThinking = usePreviewStore((s: PreviewStoreState) => s.streamingThinking);
+
+  const entries = Object.entries(streamingChunks);
+  if (entries.length === 0 || roundNumber !== currentRound || !isRunning) {
+    return null;
+  }
+  const activeStreamingEntry = entries[entries.length - 1];
+  const agentId = activeStreamingEntry[0];
+  const chunkText = String(activeStreamingEntry[1]);
+  const thinkingText = streamingThinking[agentId];
+
+  return (
+    <div className="rounded-xl border border-sky-500/50 bg-sky-950/20 p-4 space-y-3 shadow-lg animate-fadeIn">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5 text-xs font-bold text-sky-400">
+          <Sparkles size={14} className="animate-spin text-sky-400" />
+          <span>Deliberating: {agentId}...</span>
+        </div>
+        <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold animate-pulse">
+          LIVE IN PROGRESS
+        </span>
+      </div>
+
+      {thinkingText && (
+        <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/30 p-3 space-y-1.5 animate-fadeIn">
+          <div className="flex items-center justify-between text-xs font-bold text-indigo-300">
+            <div className="flex items-center gap-2">
+              <Brain size={14} className="text-indigo-400 animate-pulse" />
+              <span>Streaming Analytical Reasoning...</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse font-mono">
+              REASONING
+            </span>
+          </div>
+          <div className="p-2.5 rounded-lg bg-slate-950/90 font-mono text-[11px] text-slate-300 max-h-48 overflow-y-auto border border-indigo-500/20 whitespace-pre-wrap leading-relaxed">
+            {thinkingText}
+            <span className="inline-block w-2 h-3.5 bg-indigo-400 ml-1 animate-pulse" />
+          </div>
+        </div>
+      )}
+
+      <div className="text-xs text-slate-200 font-mono whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto p-2.5 rounded-lg bg-slate-950/80 border border-slate-800">
+        {chunkText}
+        <span className="inline-block w-2 h-3.5 bg-sky-400 ml-1 animate-pulse" />
+      </div>
+    </div>
+  );
+});
+
 export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   resolvedWorkspace,
   onNavigateToReport,
@@ -442,8 +497,6 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const activeSessionId = usePreviewStore((s: PreviewStoreState) => s.activeSessionId);
   const activeMeta = usePreviewStore((s: PreviewStoreState) => s.activeDiscussionMeta);
   const activeTranscript = usePreviewStore((s: PreviewStoreState) => s.activeTranscript);
-  const streamingChunks = usePreviewStore((s: PreviewStoreState) => s.streamingChunks);
-  const streamingThinking = usePreviewStore((s: PreviewStoreState) => s.streamingThinking);
   const availableProviders = usePreviewStore((s: PreviewStoreState) => s.availableProviders);
   const activeReportMarkdown = usePreviewStore((s: PreviewStoreState) => s.activeReportMarkdown);
   const activeReportVersion = usePreviewStore((s: PreviewStoreState) => s.activeReportVersion);
@@ -617,9 +670,23 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     );
   }, [discussions, searchTerm]);
 
-  // Group active transcript into rounds like Antigravity for VS Code
+  // Group active transcript into rounds in single-pass O(M)
   const roundGroups = useMemo(() => {
     const totalRounds = Math.max(3, activeMeta?.currentRound || 1);
+    const msgsByRound = new Map<number, DiscussionMessage[]>();
+    const tokensByRound = new Map<number, number>();
+
+    for (const m of activeTranscript) {
+      const r = m.roundNumber;
+      let list = msgsByRound.get(r);
+      if (!list) {
+        list = [];
+        msgsByRound.set(r, list);
+      }
+      list.push(m);
+      tokensByRound.set(r, (tokensByRound.get(r) || 0) + (m.tokenUsage?.totalTokens || 0));
+    }
+
     const groups: {
       round: number;
       title: string;
@@ -630,6 +697,10 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       isDone: boolean;
     }[] = [];
 
+    const currentRound = activeMeta?.currentRound || 1;
+    const isSessionDone =
+      activeMeta?.status === 'awaiting_review' || activeMeta?.status === 'completed';
+
     for (let r = 1; r <= totalRounds; r++) {
       const meta = ROUND_METADATA.find((m) => m.round === r) || {
         round: r,
@@ -637,10 +708,10 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         desc: 'Continued multi-agent cross-examination and refinement.',
       };
 
-      const msgs = activeTranscript.filter((m) => m.roundNumber === r);
-      const roundTokens = msgs.reduce((acc, m) => acc + (m.tokenUsage?.totalTokens || 0), 0);
-      const isCurrent = (activeMeta?.currentRound || 1) === r;
-      const isDone = (activeMeta?.currentRound || 1) > r || activeMeta?.status === 'awaiting_review' || activeMeta?.status === 'completed';
+      const msgs = msgsByRound.get(r) || [];
+      const roundTokens = tokensByRound.get(r) || 0;
+      const isCurrent = currentRound === r;
+      const isDone = currentRound > r || isSessionDone;
 
       groups.push({
         round: r,
@@ -1143,12 +1214,6 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
     return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
   };
 
-  // Find single currently active streaming chunk if any
-  const activeStreamingEntry = useMemo(() => {
-    const entries = Object.entries(streamingChunks);
-    if (entries.length === 0) return null;
-    return entries[entries.length - 1]; // Only the latest active turn!
-  }, [streamingChunks]);
 
   return (
     <div className="flex-1 h-full w-full min-h-0 flex overflow-hidden bg-slate-950 text-slate-200 font-sans">
@@ -1576,7 +1641,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
               {activeTab === 'timeline' && (
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
                   {/* Empty state for fresh session */}
-                  {activeTranscript.length === 0 && !activeStreamingEntry && (
+                  {activeTranscript.length === 0 && !isRunning && (
                     <div className="p-8 text-center text-slate-500 bg-slate-900/30 rounded-xl border border-slate-800/60">
                       <Bot size={32} className="mx-auto mb-2 text-sky-400 opacity-60 animate-bounce" />
                       <h4 className="text-sm font-semibold text-slate-300">Agents are ready to deliberate</h4>
@@ -1590,7 +1655,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   {roundGroups.map((group) => {
                     const isExpanded = expandedRounds[group.round] ?? true;
                     const roundMessages = applyTimelineFilter(group.messages);
-                    const isRoundStreaming = activeStreamingEntry && group.round === activeMeta?.currentRound && isRunning;
+                    const isRoundStreaming = group.round === activeMeta?.currentRound && isRunning;
 
                     if (roundMessages.length === 0 && !isRoundStreaming && group.round > (activeMeta?.currentRound || 1)) {
                       return null; // Don't show empty future rounds
@@ -1862,43 +1927,11 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                             )}
 
                             {/* Active Streaming Turn Card (Rendered neatly under the current round!) */}
-                            {isRoundStreaming && activeStreamingEntry && (
-                              <div className="rounded-xl border border-sky-500/50 bg-sky-950/20 p-4 space-y-3 shadow-lg animate-fadeIn">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2.5 text-xs font-bold text-sky-400">
-                                    <Sparkles size={14} className="animate-spin text-sky-400" />
-                                    <span>Deliberating: {activeStreamingEntry[0]}...</span>
-                                  </div>
-                                  <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold animate-pulse">
-                                    LIVE IN PROGRESS
-                                  </span>
-                                </div>
-
-                                {/* Live Reasoning Block if streaming thinking exists */}
-                                {streamingThinking[activeStreamingEntry[0]] && (
-                                  <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/30 p-3 space-y-1.5 animate-fadeIn">
-                                    <div className="flex items-center justify-between text-xs font-bold text-indigo-300">
-                                      <div className="flex items-center gap-2">
-                                        <Brain size={14} className="text-indigo-400 animate-pulse" />
-                                        <span>Streaming Analytical Reasoning...</span>
-                                      </div>
-                                      <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse font-mono">
-                                        REASONING
-                                      </span>
-                                    </div>
-                                    <div className="p-2.5 rounded-lg bg-slate-950/90 font-mono text-[11px] text-slate-300 max-h-48 overflow-y-auto border border-indigo-500/20 whitespace-pre-wrap leading-relaxed">
-                                      {streamingThinking[activeStreamingEntry[0]]}
-                                      <span className="inline-block w-2 h-3.5 bg-indigo-400 ml-1 animate-pulse" />
-                                    </div>
-                                  </div>
-                                )}
-
-                                <div className="text-xs text-slate-200 font-mono whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto p-2.5 rounded-lg bg-slate-950/80 border border-slate-800">
-                                  {String(activeStreamingEntry[1])}
-                                  <span className="inline-block w-2 h-3.5 bg-sky-400 ml-1 animate-pulse" />
-                                </div>
-                              </div>
-                            )}
+                            <LiveStreamingTurnCard
+                              roundNumber={group.round}
+                              currentRound={activeMeta?.currentRound}
+                              isRunning={isRunning}
+                            />
                           </div>
                         )}
                       </div>

@@ -74,6 +74,36 @@ const PROGRESS_STAGES = [
   { id: 'completed', label: '5. Verified & Saved to Workspace', minPct: 100 },
 ];
 
+export const TaskElapsedClock: React.FC<{
+  startedAt?: number;
+  createdAt?: number;
+  status?: string;
+  className?: string;
+}> = React.memo(({ startedAt, createdAt, status, className }) => {
+  const [elapsedSec, setElapsedSec] = useState<number>(0);
+
+  useEffect(() => {
+    if (status === 'running') {
+      const start = startedAt || createdAt || Date.now();
+      const updateTimer = () => {
+        const diff = Math.max(0, Math.floor((Date.now() - start) / 1000));
+        setElapsedSec(diff);
+      };
+      updateTimer();
+      const timer = setInterval(updateTimer, 1000);
+      return () => clearInterval(timer);
+    } else {
+      setElapsedSec(0);
+    }
+  }, [status, startedAt, createdAt]);
+
+  const m = Math.floor(elapsedSec / 60);
+  const s = elapsedSec % 60;
+  const formatted = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+  return <span className={className}>{formatted}</span>;
+});
+
 export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   selectedTask,
   checkpoints,
@@ -93,30 +123,8 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   const [contextTarget, setContextTarget] =
     useState<SidebarContextMenuTarget | null>(null);
   const [viewTab, setViewTab] = useState<'activity' | 'terminal'>('activity');
-  const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [copiedErrorLog, setCopiedErrorLog] = useState<boolean>(false);
   const [showStderrTrace, setShowStderrTrace] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (selectedTask?.status === 'running') {
-      const start = selectedTask.startedAt || selectedTask.createdAt || Date.now();
-      const updateTimer = () => {
-        const diff = Math.max(0, Math.floor((Date.now() - start) / 1000));
-        setElapsedSec(diff);
-      };
-      updateTimer();
-      const timer = setInterval(updateTimer, 1000);
-      return () => clearInterval(timer);
-    } else {
-      setElapsedSec(0);
-    }
-  }, [selectedTask?.status, selectedTask?.startedAt, selectedTask?.createdAt]);
-
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
 
   const pct = selectedTask
     ? selectedTask.progressPercent ??
@@ -341,7 +349,11 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[11px] font-bold text-amber-300 flex items-center gap-1">
                   <Clock size={11} />
-                  <span>{formatTimer(elapsedSec)}</span>
+                  <TaskElapsedClock
+                    startedAt={selectedTask.startedAt}
+                    createdAt={selectedTask.createdAt}
+                    status={selectedTask.status}
+                  />
                 </span>
                 {onCancelTask && (
                   <button
@@ -420,9 +432,12 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                   <span className="truncate">{stage.label}</span>
                 </div>
                 {isCurrent && (
-                  <span className="text-[10px] font-mono text-sky-400 shrink-0">
-                    {formatTimer(elapsedSec)}
-                  </span>
+                  <TaskElapsedClock
+                    startedAt={selectedTask?.startedAt}
+                    createdAt={selectedTask?.createdAt}
+                    status={selectedTask?.status}
+                    className="text-[10px] font-mono text-sky-400 shrink-0"
+                  />
                 )}
               </div>
             );
