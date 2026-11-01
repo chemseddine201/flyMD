@@ -9,9 +9,10 @@ pub fn now_ms() -> i64 {
     crate::common::time::now_ms()
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DiscussionStatus {
+    #[default]
     Created,
     Running,
     Paused,
@@ -22,16 +23,11 @@ pub enum DiscussionStatus {
     Interrupted,
 }
 
-impl Default for DiscussionStatus {
-    fn default() -> Self {
-        DiscussionStatus::Created
-    }
-}
-
 /// Agent role. Serialized as a plain lowercase string (e.g. `"critic"`); any
 /// unrecognised string becomes `Custom(..)` so user-defined roles round-trip.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum AgentRole {
+    #[default]
     Architect,
     Critic,
     Auditor,
@@ -95,12 +91,6 @@ pub struct AgentCustomAction {
     pub description: String,
     #[serde(rename = "promptDirective", default)]
     pub prompt_directive: String,
-}
-
-impl Default for AgentRole {
-    fn default() -> Self {
-        AgentRole::Architect
-    }
 }
 
 impl AgentRole {

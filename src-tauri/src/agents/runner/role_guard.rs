@@ -11,6 +11,7 @@ use std::path::Path;
 /// - In `refine-plan`, prunes any newly created source code files, normalizes checklists to `- [ ]`,
 ///   and ensures the plan deliverable is synchronized to disk.
 /// - In `build` / `fix-bugs` / `write-tests`, extracts fenced code blocks and writes them to disk.
+#[allow(clippy::too_many_arguments)]
 pub fn enforce_role_boundary_and_plan_sync(
     intent: &str,
     file_name: &str,

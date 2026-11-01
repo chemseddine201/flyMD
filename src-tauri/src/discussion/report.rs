@@ -254,7 +254,7 @@ impl ReportGenerator {
         report.push_str("## 8. Alternatives Considered\n\n");
         report.push_str(&format!("1. **Monolithic Single-Tier Design**: Rejected due to high coupling and difficulty isolating business state from UI rendering in {}.\n", config.topic));
         report.push_str(&format!("2. **Heavyweight Multi-Process Overhead**: Considered by Critic, but rejected as excessive complexity for the target scope of {}.\n", config.topic));
-        report.push_str(&format!("3. **Decoupled Modular Architecture (Selected)**: Unanimously adopted to maximize responsiveness, testability, and clarity.\n\n"));
+        report.push_str("3. **Decoupled Modular Architecture (Selected)**: Unanimously adopted to maximize responsiveness, testability, and clarity.\n\n");
 
         // Section 9: Recommended Approach and Epistemic Rationale
         report.push_str("## 9. Recommended Approach and Epistemic Rationale\n\n");

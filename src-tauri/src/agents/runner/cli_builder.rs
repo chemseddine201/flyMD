@@ -4,6 +4,7 @@ use std::process::Command;
 
 /// Constructs a configured CLI `Command` for the target agent runner.
 /// Unifies Windows `.cmd` / `.bat` shell invocation and native executables without duplicating arguments.
+#[allow(clippy::too_many_arguments)]
 pub fn build_agent_cli_command(
     bin: &str,
     agent_id: &str,

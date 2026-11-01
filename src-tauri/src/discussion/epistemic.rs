@@ -335,7 +335,7 @@ pub fn evaluate_pipeline_epistemic_policy_with_override(
                     EpistemicMode::PrimaryMapper
                 }
             }
-            "build" | _ => {
+            _ => {
                 if prior_execution_failed {
                     if files_to_reread.is_empty() {
                         files_to_reread = select_priority_audit_files(workspace_path, 3);

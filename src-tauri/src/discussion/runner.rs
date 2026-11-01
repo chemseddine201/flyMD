@@ -254,12 +254,10 @@ pub fn check_denylist_violation(text: &str) -> Option<&'static str> {
         ".pem",
         ".key",
     ];
-    for pattern in &forbidden {
-        if lower.contains(pattern) {
-            return Some(pattern);
-        }
-    }
-    None
+    forbidden
+        .iter()
+        .find(|&&pattern| lower.contains(pattern))
+        .copied()
 }
 
 /// Terminates an entire Windows process tree (including grandchild processes like node.exe/python.exe) (TC-10).

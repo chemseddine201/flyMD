@@ -402,6 +402,7 @@ impl MemoryManager {
     /// - Frame 0 (`system`, anchored): 100% shared immutable protocol + spec + workspace SHA-256 index
     /// - Frames `1..round-1` (`user`, anchored): append-only frozen round ledgers
     /// - Final Frame (`user`, dynamic): active role persona, `@Role` peer inbox, epistemic gate & turn directive
+    #[allow(clippy::too_many_arguments)]
     pub fn assemble_prefix_pinned_frames(
         &self,
         participant: &DiscussionParticipant,
@@ -588,7 +589,7 @@ mod tests {
     fn test_token_estimation() {
         let text = "Hello world, this is a test of token estimation for markdown code blocks.";
         let tokens = MemoryManager::estimate_tokens(text);
-        assert!(tokens >= 15 && tokens <= 25);
+        assert!((15..=25).contains(&tokens));
     }
 
     #[test]

@@ -90,6 +90,12 @@ impl LlmManager {
     }
 }
 
+impl Default for LlmManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub type SharedLlmManager = Arc<LlmManager>;
 
 fn normalize_base_url(endpoint: &str) -> String {

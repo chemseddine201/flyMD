@@ -36,19 +36,16 @@ pub fn parse_fence_tag(tag_line: &str) -> (String, Option<String>) {
                 }
             }
         } else {
-            let v_clean = token.trim_matches(|c| {
-                c == '"' || c == '\'' || c == '`' || c == '(' || c == ')'
-            });
-            if v_clean.ends_with(".js")
+            let v_clean = token.trim_matches(['"', '\'', '`', '(', ')']);
+            if (v_clean.ends_with(".js")
                 || v_clean.ends_with(".css")
                 || v_clean.ends_with(".html")
                 || v_clean.ends_with(".ts")
                 || v_clean.ends_with(".json")
-                || v_clean.ends_with(".py")
+                || v_clean.ends_with(".py"))
+                && !v_clean.is_empty()
             {
-                if !v_clean.is_empty() {
-                    return (lang, Some(v_clean.to_string()));
-                }
+                return (lang, Some(v_clean.to_string()));
             }
         }
     }
@@ -69,14 +66,12 @@ pub fn find_filename_in_preceding_lines(lines: &[&str], fence_idx: usize) -> Opt
         scanned += 1;
         let stripped = line
             .trim_start_matches('#')
-            .trim_start_matches(|c| c == '*' || c == '_' || c == '`' || c == '-')
-            .trim_end_matches(|c| c == '*' || c == '_' || c == '`')
+            .trim_start_matches(['*', '_', '`', '-'])
+            .trim_end_matches(['*', '_', '`'])
             .trim();
 
         for word in stripped.split_whitespace() {
-            let clean_word = word.trim_matches(|c| {
-                c == '`' || c == '"' || c == '\'' || c == ':' || c == '(' || c == ')'
-            });
+            let clean_word = word.trim_matches(['`', '"', '\'', ':', '(', ')']);
             if clean_word.ends_with(".js")
                 || clean_word.ends_with(".css")
                 || clean_word.ends_with(".html")
@@ -86,10 +81,10 @@ pub fn find_filename_in_preceding_lines(lines: &[&str], fence_idx: usize) -> Opt
             {
                 let clean_name = clean_word
                     .split('/')
-                    .last()
+                    .next_back()
                     .unwrap_or(clean_word)
                     .split('\\')
-                    .last()
+                    .next_back()
                     .unwrap_or(clean_word);
                 return Some(clean_name.to_string());
             }
@@ -107,10 +102,9 @@ pub fn extract_filename_from_comment(first_line: &str) -> Option<String> {
         rest.trim_end_matches("*/").trim()
     } else if let Some(rest) = trimmed.strip_prefix('#') {
         rest.trim()
-    } else if let Some(rest) = trimmed.strip_prefix("<!--") {
-        rest.trim_end_matches("-->").trim()
     } else {
-        return None;
+        let rest = trimmed.strip_prefix("<!--")?;
+        rest.trim_end_matches("-->").trim()
     };
 
     let stripped = comment_body
@@ -121,9 +115,7 @@ pub fn extract_filename_from_comment(first_line: &str) -> Option<String> {
         .trim();
 
     for word in stripped.split_whitespace() {
-        let clean_word = word.trim_matches(|c| {
-            c == '`' || c == '"' || c == '\'' || c == ':' || c == '(' || c == ')'
-        });
+        let clean_word = word.trim_matches(['`', '"', '\'', ':', '(', ')']);
         if clean_word.ends_with(".js")
             || clean_word.ends_with(".css")
             || clean_word.ends_with(".html")
@@ -133,10 +125,10 @@ pub fn extract_filename_from_comment(first_line: &str) -> Option<String> {
         {
             let clean_name = clean_word
                 .split('/')
-                .last()
+                .next_back()
                 .unwrap_or(clean_word)
                 .split('\\')
-                .last()
+                .next_back()
                 .unwrap_or(clean_word);
             return Some(clean_name.to_string());
         }
@@ -249,10 +241,10 @@ pub fn extract_and_write_code_blocks(
                         let _ = fs::create_dir_all(parent);
                     }
                     let content = current_lines.join("\n");
-                    if fs::write(&full_path, content.as_bytes()).is_ok() {
-                        if !created_files.contains(&target_name) {
-                            created_files.push(target_name);
-                        }
+                    if fs::write(&full_path, content.as_bytes()).is_ok()
+                        && !created_files.contains(&target_name)
+                    {
+                        created_files.push(target_name);
                     }
                 }
 

@@ -7,12 +7,13 @@ use std::path::{Path, PathBuf};
 
 /// Resolves a guaranteed writable base path for workspace operations.
 pub fn resolve_safe_workspace(workspace_path: &Path) -> PathBuf {
-    if !workspace_path.as_os_str().is_empty() && workspace_path != Path::new(".") {
-        if fs::create_dir_all(workspace_path).is_ok() {
-            let test_dir = workspace_path.join(".flymd");
-            if fs::create_dir_all(&test_dir).is_ok() {
-                return workspace_path.to_path_buf();
-            }
+    if !workspace_path.as_os_str().is_empty()
+        && workspace_path != Path::new(".")
+        && fs::create_dir_all(workspace_path).is_ok()
+    {
+        let test_dir = workspace_path.join(".flymd");
+        if fs::create_dir_all(&test_dir).is_ok() {
+            return workspace_path.to_path_buf();
         }
     }
     if let Ok(cwd) = std::env::current_dir() {
@@ -142,13 +143,11 @@ pub fn read_project_memory_records(
 
     if let Ok(file) = fs::File::open(&file_path) {
         let reader = BufReader::new(file);
-        for line_res in reader.lines() {
-            if let Ok(line) = line_res {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() {
-                    if let Ok(rec) = serde_json::from_str::<ProjectMemoryRecord>(trimmed) {
-                        records.push(rec);
-                    }
+        for line in reader.lines().map_while(Result::ok) {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                if let Ok(rec) = serde_json::from_str::<ProjectMemoryRecord>(trimmed) {
+                    records.push(rec);
                 }
             }
         }
@@ -167,15 +166,14 @@ pub fn read_master_memory(workspace_path: &Path) -> String {
         }
     }
 
-    let default_content = format!(
-        "# Workspace Master Shared Memory\n\n\
+    let default_content = "# Workspace Master Shared Memory\n\n\
         > Global architectural invariants, cross-project API contracts, and high-level milestones.\n\n\
         ## 1. System Invariants & Architecture Contracts\n\
         - All projects run in isolated process trees with PID tracking.\n\
         - Deliverables require verified evidence before marked completed.\n\n\
         ## 2. Completed Projects & Rollup Summaries\n\
         _No projects rolled up yet._\n"
-    );
+        .to_string();
 
     // Best-effort initialize on disk
     if let Some(parent) = path.parent() {

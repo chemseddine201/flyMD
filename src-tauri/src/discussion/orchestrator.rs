@@ -4,7 +4,7 @@
 use super::provider_registry::provider_lookup_key;
 use super::epistemic::evaluate_debate_epistemic_policy;
 use super::memory::MemoryManager;
-use super::runner::{DiscussionProvider, ProviderError, StreamSink, TurnRequest};
+use super::runner::{DiscussionProvider, ProviderError, StreamSink, TurnRequest, TurnResponse};
 use super::storage::{
     append_transcript_message, atomic_write_json, load_metadata, read_transcript_with_recovery,
     save_metadata, SessionLock,
@@ -164,6 +164,12 @@ impl StreamSink for EventStreamSink {
             chunk: chunk.to_string(),
         });
     }
+}
+
+struct PreparedParticipantTurn {
+    turn_request: TurnRequest,
+    stream_sink: Option<Box<dyn StreamSink>>,
+    truncated: bool,
 }
 
 pub struct DiscussionOrchestrator {
@@ -485,126 +491,33 @@ impl DiscussionOrchestrator {
             .clone()
             .unwrap_or_else(|| "Targeted User Directive".to_string());
 
-        let ws_path = PathBuf::from(&self.config.workspace_path);
-        let cognitive_pkt = load_cognitive_packet(&ws_path);
-        let active_dispute_topics: Vec<String> = self
-            .memory
-            .load_disagreements()
-            .into_iter()
-            .filter(|d| matches!(d.status, DisagreementStatus::UnresolvedDivergence))
-            .map(|d| d.topic)
-            .collect();
-        let epistemic_decision = evaluate_debate_epistemic_policy(
-            &participant.role,
+        let PreparedParticipantTurn {
+            turn_request,
+            stream_sink,
+            truncated,
+        } = self.build_participant_turn_request(
+            &participant,
             round,
-            &ws_path,
-            cognitive_pkt.as_ref(),
-            &active_dispute_topics,
-        );
-
-        let (frames, truncated) = self
-            .memory
-            .assemble_prefix_pinned_frames(
-                &participant,
-                round,
-                &self.config.topic,
-                &self.config.user_idea,
-                &ws_path,
-                &epistemic_decision,
-                cognitive_pkt.as_ref(),
-                Some(&label),
-                Some(&trimmed_query),
-            )
-            .map_err(|e| format!("Failed to assemble context frames: {}", e))?;
-
-        let system_prompt = frames
-            .first()
-            .map(|f| f.content.clone())
-            .unwrap_or_default();
-        let user_prompt = frames
-            .iter()
-            .skip(1)
-            .map(|f| f.content.as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-
-        let turn_request = TurnRequest {
-            session_id: self.config.session_id.clone(),
-            round_number: round,
-            agent_id: participant.agent_id.clone(),
-            role: participant.role.clone(),
-            system_prompt,
-            user_prompt,
-            messages: frames,
-            context_summary: String::new(),
-            timeout_secs: self.config.turn_timeout_secs,
-            topic: self.config.topic.clone(),
-            user_idea: self.config.user_idea.clone(),
-            action_name: action_name.clone(),
-            action_query: Some(trimmed_query.clone()),
-            thinking_enabled: participant.thinking_enabled,
-            effort_level: participant.effort_level.clone(),
-        };
-
-        let stream_sink: Option<Box<dyn StreamSink>> = self.event_listener.as_ref().map(|l| {
-            Box::new(EventStreamSink {
-                session_id: self.config.session_id.clone(),
-                round,
-                agent_id: participant.agent_id.clone(),
-                listener: l.clone(),
-                suppress_handoff: std::sync::Mutex::new(false),
-            }) as Box<dyn StreamSink>
-        });
+            Some(&label),
+            action_name.clone(),
+            Some(trimmed_query),
+        )?;
 
         let response = provider
             .execute_turn(turn_request, self.cancel_flag.clone(), stream_sink)
             .await
             .map_err(|e| format!("Targeted action failed: {}", e))?;
 
-        let (clean_markdown, target_peer_ids) =
-            self.ingest_turn_cognitive_state(&participant, round, &response.raw_markdown);
-
-        let msg_id = format!("targeted-r{}-{}-{}", round, participant.agent_id, now_ms());
-        let message = DiscussionMessage {
-            id: msg_id.clone(),
-            session_id: self.config.session_id.clone(),
-            round_number: round,
-            turn_index,
-            author_agent_id: participant.agent_id.clone(),
-            author_role: participant.role.as_str().to_string(),
-            author_provider: participant.provider_id.clone(),
-            message_kind: DiscussionMessageKind::TargetedAction,
-            target_peer_ids,
-            content: clean_markdown,
-            timestamp: now_ms(),
-            token_usage: Some(response.usage.clone()),
-            duration_ms: response.duration_ms,
-            truncated,
-            thinking_content: response.thinking.clone(),
-            action_name: action_name.clone(),
-            model_id: Some(response.model_id.clone()),
-            simulated: response.simulated,
-            author_display_name: Some(participant.display_name.clone()),
-        };
-
-        append_transcript_message(&self.session_dir, &message)?;
-        self.metadata.total_messages += 1;
-        self.metadata.total_tokens += response.usage.total_tokens;
-        self.metadata.updated_at = now_ms();
-        save_metadata(&self.session_dir, &self.metadata)?;
-
-        self.notify(DiscussionEvent::TurnCompleted {
-            session_id: self.config.session_id.clone(),
+        self.commit_participant_turn_response(
+            &participant,
             round,
-            agent_id: participant.agent_id.clone(),
-            message_id: msg_id,
-            usage: response.usage,
-            thinking: response.thinking,
-            simulated: response.simulated,
+            turn_index,
+            "targeted",
+            DiscussionMessageKind::TargetedAction,
             action_name,
-        });
-
-        Ok(message)
+            truncated,
+            response,
+        )
     }
 
     /// Approves final report and finalizes session.
@@ -964,32 +877,14 @@ impl DiscussionOrchestrator {
         (clean_markdown, target_peers)
     }
 
-    async fn execute_agent_turn(
-        &mut self,
+    fn build_participant_turn_request(
+        &self,
         participant: &DiscussionParticipant,
         round: u32,
-        turn_index: u32,
-    ) -> Result<(), String> {
-        let action_name = participant.custom_action.as_ref().map(|a| a.name.clone());
-        let action_query = participant.custom_query.clone().or_else(|| {
-            participant
-                .custom_action
-                .as_ref()
-                .map(|a| a.prompt_directive.clone())
-        });
-
-        self.notify(DiscussionEvent::TurnStarted {
-            session_id: self.config.session_id.clone(),
-            round,
-            agent_id: participant.agent_id.clone(),
-            role: participant.role.as_str().to_string(),
-            action_name: action_name.clone(),
-        });
-
-        // 1. Resolve Provider (composite provider_id::model_id with fallback)
-        let provider = self.resolve_participant_provider(participant)?;
-
-        // 2. Evaluate Role-Aware Epistemic Policy & Assemble Prefix-Pinned KV Cache Frames
+        frame_action_label: Option<&str>,
+        request_action_name: Option<String>,
+        action_query: Option<String>,
+    ) -> Result<PreparedParticipantTurn, String> {
         let ws_path = PathBuf::from(&self.config.workspace_path);
         let cognitive_pkt = load_cognitive_packet(&ws_path);
         let active_dispute_topics: Vec<String> = self
@@ -1018,16 +913,10 @@ impl DiscussionOrchestrator {
                 &ws_path,
                 &epistemic_decision,
                 cognitive_pkt.as_ref(),
-                action_name.as_deref(),
+                frame_action_label,
                 action_query.as_deref(),
             )
             .map_err(|e| format!("Failed to assemble context frames: {}", e))?;
-
-        let message_kind = match round {
-            1 => DiscussionMessageKind::InitialAnalysis,
-            2 => DiscussionMessageKind::PeerCritique,
-            _ => DiscussionMessageKind::RebuttalRevision,
-        };
 
         let system_prompt = frames
             .first()
@@ -1052,13 +941,12 @@ impl DiscussionOrchestrator {
             timeout_secs: self.config.turn_timeout_secs,
             topic: self.config.topic.clone(),
             user_idea: self.config.user_idea.clone(),
-            action_name: action_name.clone(),
-            action_query: action_query.clone(),
+            action_name: request_action_name,
+            action_query,
             thinking_enabled: participant.thinking_enabled,
             effort_level: participant.effort_level.clone(),
         };
 
-        // Prepare streaming sink if listener attached
         let stream_sink: Option<Box<dyn StreamSink>> = self.event_listener.as_ref().map(|l| {
             Box::new(EventStreamSink {
                 session_id: self.config.session_id.clone(),
@@ -1069,57 +957,128 @@ impl DiscussionOrchestrator {
             }) as Box<dyn StreamSink>
         });
 
-        // Execute turn with cancellation monitoring
-        let result = provider
+        Ok(PreparedParticipantTurn {
+            turn_request,
+            stream_sink,
+            truncated,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn commit_participant_turn_response(
+        &mut self,
+        participant: &DiscussionParticipant,
+        round: u32,
+        turn_index: u32,
+        id_prefix: &str,
+        message_kind: DiscussionMessageKind,
+        action_name: Option<String>,
+        truncated: bool,
+        response: TurnResponse,
+    ) -> Result<DiscussionMessage, String> {
+        let (clean_markdown, target_peer_ids) =
+            self.ingest_turn_cognitive_state(participant, round, &response.raw_markdown);
+
+        let msg_id = format!("{}-r{}-{}-{}", id_prefix, round, participant.agent_id, now_ms());
+        let message = DiscussionMessage {
+            id: msg_id.clone(),
+            session_id: self.config.session_id.clone(),
+            round_number: round,
+            turn_index,
+            author_agent_id: participant.agent_id.clone(),
+            author_role: participant.role.as_str().to_string(),
+            author_provider: participant.provider_id.clone(),
+            message_kind,
+            target_peer_ids,
+            content: clean_markdown,
+            timestamp: now_ms(),
+            token_usage: Some(response.usage.clone()),
+            duration_ms: response.duration_ms,
+            truncated,
+            thinking_content: response.thinking.clone(),
+            action_name: action_name.clone(),
+            model_id: Some(response.model_id.clone()),
+            simulated: response.simulated,
+            author_display_name: Some(participant.display_name.clone()),
+        };
+
+        append_transcript_message(&self.session_dir, &message)?;
+
+        self.metadata.total_messages += 1;
+        self.metadata.total_tokens += response.usage.total_tokens;
+        self.metadata.updated_at = now_ms();
+        save_metadata(&self.session_dir, &self.metadata)?;
+
+        self.notify(DiscussionEvent::TurnCompleted {
+            session_id: self.config.session_id.clone(),
+            round,
+            agent_id: participant.agent_id.clone(),
+            message_id: msg_id,
+            usage: response.usage,
+            thinking: response.thinking,
+            simulated: response.simulated,
+            action_name,
+        });
+
+        Ok(message)
+    }
+
+    async fn execute_agent_turn(
+        &mut self,
+        participant: &DiscussionParticipant,
+        round: u32,
+        turn_index: u32,
+    ) -> Result<(), String> {
+        let action_name = participant.custom_action.as_ref().map(|a| a.name.clone());
+        let action_query = participant.custom_query.clone().or_else(|| {
+            participant
+                .custom_action
+                .as_ref()
+                .map(|a| a.prompt_directive.clone())
+        });
+
+        self.notify(DiscussionEvent::TurnStarted {
+            session_id: self.config.session_id.clone(),
+            round,
+            agent_id: participant.agent_id.clone(),
+            role: participant.role.as_str().to_string(),
+            action_name: action_name.clone(),
+        });
+
+        let provider = self.resolve_participant_provider(participant)?;
+        let PreparedParticipantTurn {
+            turn_request,
+            stream_sink,
+            truncated,
+        } = self.build_participant_turn_request(
+            participant,
+            round,
+            action_name.as_deref(),
+            action_name.clone(),
+            action_query,
+        )?;
+
+        let message_kind = match round {
+            1 => DiscussionMessageKind::InitialAnalysis,
+            2 => DiscussionMessageKind::PeerCritique,
+            _ => DiscussionMessageKind::RebuttalRevision,
+        };
+
+        match provider
             .execute_turn(turn_request, self.cancel_flag.clone(), stream_sink)
-            .await;
-
-        match result {
+            .await
+        {
             Ok(response) => {
-                let (clean_markdown, target_peer_ids) =
-                    self.ingest_turn_cognitive_state(participant, round, &response.raw_markdown);
-
-                let msg_id = format!("msg-r{}-{}-{}", round, participant.agent_id, now_ms());
-                let message = DiscussionMessage {
-                    id: msg_id.clone(),
-                    session_id: self.config.session_id.clone(),
-                    round_number: round,
-                    turn_index,
-                    author_agent_id: participant.agent_id.clone(),
-                    author_role: participant.role.as_str().to_string(),
-                    author_provider: participant.provider_id.clone(),
-                    message_kind,
-                    target_peer_ids,
-                    content: clean_markdown,
-                    timestamp: now_ms(),
-                    token_usage: Some(response.usage.clone()),
-                    duration_ms: response.duration_ms,
-                    truncated,
-                    thinking_content: response.thinking.clone(),
-                    action_name: action_name.clone(),
-                    model_id: Some(response.model_id.clone()),
-                    simulated: response.simulated,
-                    author_display_name: Some(participant.display_name.clone()),
-                };
-
-                append_transcript_message(&self.session_dir, &message)?;
-
-                self.metadata.total_messages += 1;
-                self.metadata.total_tokens += response.usage.total_tokens;
-                self.metadata.updated_at = now_ms();
-                save_metadata(&self.session_dir, &self.metadata)?;
-
-                self.notify(DiscussionEvent::TurnCompleted {
-                    session_id: self.config.session_id.clone(),
+                self.commit_participant_turn_response(
+                    participant,
                     round,
-                    agent_id: participant.agent_id.clone(),
-                    message_id: msg_id,
-                    usage: response.usage,
-                    thinking: response.thinking,
-                    simulated: response.simulated,
+                    turn_index,
+                    "msg",
+                    message_kind,
                     action_name,
-                });
-
+                    truncated,
+                    response,
+                )?;
                 Ok(())
             }
             Err(ProviderError::Cancelled) => {
@@ -1133,8 +1092,15 @@ impl DiscussionOrchestrator {
             }
             Err(e) => {
                 let err_str = match &e {
-                    ProviderError::NetworkError(msg) if msg.contains("connection error") || msg.contains("11434") || msg.contains("refused") => {
-                        format!("Failed to connect to local engine ({}). Ensure service is running or switch Preset Engine to 'Local Adaptive Reasoner'.", msg)
+                    ProviderError::NetworkError(msg)
+                        if msg.contains("connection error")
+                            || msg.contains("11434")
+                            || msg.contains("refused") =>
+                    {
+                        format!(
+                            "Failed to connect to local engine ({}). Ensure service is running or switch Preset Engine to 'Local Adaptive Reasoner'.",
+                            msg
+                        )
                     }
                     other => other.to_string(),
                 };

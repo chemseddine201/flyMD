@@ -125,11 +125,10 @@ pub fn run() {
             for arg in &argv[1..] {
                 if !arg.starts_with('-')
                     && (arg.ends_with(".md") || arg.ends_with(".markdown") || arg.ends_with(".txt"))
+                    && Path::new(arg).exists()
                 {
-                    if Path::new(arg).exists() {
-                        open_file_in_preview_helper(app, arg);
-                        return;
-                    }
+                    open_file_in_preview_helper(app, arg);
+                    return;
                 }
             }
             if let Some(win) = app.get_webview_window("float") {
@@ -250,11 +249,10 @@ pub fn run() {
             for arg in &args[1..] {
                 if !arg.starts_with('-')
                     && (arg.ends_with(".md") || arg.ends_with(".markdown") || arg.ends_with(".txt"))
+                    && Path::new(arg).exists()
                 {
-                    if Path::new(arg).exists() {
-                        open_file_in_preview_helper(app.handle(), arg);
-                        break;
-                    }
+                    open_file_in_preview_helper(app.handle(), arg);
+                    break;
                 }
             }
 

@@ -192,6 +192,7 @@ impl ProjectManager {
     }
 
     /// Append record to project scoped memory.
+    #[allow(clippy::too_many_arguments)]
     pub fn append_project_memory(
         &self,
         workspace_path: &Path,

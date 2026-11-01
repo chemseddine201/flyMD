@@ -104,6 +104,7 @@ impl AgentToolAction {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn with_details(
         id: String,
         kind: String,

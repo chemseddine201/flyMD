@@ -50,6 +50,12 @@ impl DiscussionManager {
     }
 }
 
+impl Default for DiscussionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn extract_panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(s) = payload.downcast_ref::<&str>() {
         (*s).to_string()

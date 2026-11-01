@@ -40,7 +40,7 @@ pub fn sha256_hex(data: &[u8]) -> String {
     ];
 
     let bit_len = (data.len() as u64).wrapping_mul(8);
-    let mut padded = Vec::with_capacity(((data.len() + 9 + 63) / 64) * 64);
+    let mut padded = Vec::with_capacity((data.len() + 9).div_ceil(64) * 64);
     padded.extend_from_slice(data);
     padded.push(0x80);
     while (padded.len() % 64) != 56 {
@@ -48,7 +48,7 @@ pub fn sha256_hex(data: &[u8]) -> String {
     }
     padded.extend_from_slice(&bit_len.to_be_bytes());
 
-    for chunk in padded.chunks_exact(64) {
+    for chunk in padded.as_chunks::<64>().0 {
         let mut w = [0u32; 64];
         for i in 0..16 {
             w[i] = u32::from_be_bytes([
@@ -409,12 +409,10 @@ pub fn extract_file_contracts_and_symbols(
                     }
                 }
             }
-            "md" | "markdown" => {
-                if t.starts_with("## ") || t.starts_with("### ") {
-                    let h = t.trim_start_matches('#').trim();
-                    if !h.is_empty() && h.len() <= 60 && !symbols.contains(&h.to_string()) {
-                        symbols.push(h.to_string());
-                    }
+            "md" | "markdown" if t.starts_with("## ") || t.starts_with("### ") => {
+                let h = t.trim_start_matches('#').trim();
+                if !h.is_empty() && h.len() <= 60 && !symbols.contains(&h.to_string()) {
+                    symbols.push(h.to_string());
                 }
             }
             _ => {}
@@ -795,7 +793,7 @@ pub fn parse_handoff_blocks_from_markdown(
     for line in out.clean_markdown.lines() {
         let trimmed = line
             .trim()
-            .trim_start_matches(|c: char| c == '-' || c == '*' || c == '>')
+            .trim_start_matches(['-', '*', '>'])
             .trim();
         if trimmed.is_empty() {
             continue;
@@ -813,7 +811,7 @@ pub fn parse_handoff_blocks_from_markdown(
                 let target_low = target_token.to_ascii_lowercase();
                 if known_targets.contains(&target_low.as_str()) {
                     let msg_body = after_at[target_token.len()..]
-                        .trim_start_matches(|c: char| c == ':' || c == '-' || c == ')' || c == ']')
+                        .trim_start_matches([':', '-', ')', ']'])
                         .trim();
                     if msg_body.len() >= 10
                         && !out
@@ -894,6 +892,7 @@ pub fn parse_handoff_blocks_from_markdown(
 }
 
 /// Merges an already-parsed handoff envelope + optional live disk SHA-256 scan into `.flymd/cache/cognitive_state.json`.
+#[allow(clippy::too_many_arguments)]
 pub fn update_workspace_cognitive_cache_with_parsed(
     workspace_path: &Path,
     producer_agent: &str,
@@ -971,6 +970,7 @@ pub fn update_workspace_cognitive_cache_with_parsed(
 }
 
 /// Merges an agent's completed turn/task output + live disk SHA-256 scan into `.flymd/cache/cognitive_state.json`.
+#[allow(clippy::too_many_arguments)]
 pub fn update_workspace_cognitive_cache(
     workspace_path: &Path,
     producer_agent: &str,

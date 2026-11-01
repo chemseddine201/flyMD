@@ -378,6 +378,12 @@ impl SkillsManager {
     }
 }
 
+impl Default for SkillsManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Helper to parse YAML frontmatter from a markdown string.
 fn parse_yaml_frontmatter(content: &str, default_name: &str) -> (SkillFrontmatter, String) {
     let trimmed = content.trim_start();
@@ -400,7 +406,7 @@ fn parse_yaml_frontmatter(content: &str, default_name: &str) -> (SkillFrontmatte
     if let Some(end_idx) = rest.find("\n---") {
         let yaml_str = &rest[..end_idx];
         let body = rest[end_idx + 4..]
-            .trim_start_matches(|c| c == '\r' || c == '\n')
+            .trim_start_matches(['\r', '\n'])
             .to_string();
 
         let mut name = default_name.to_string();
@@ -413,31 +419,31 @@ fn parse_yaml_frontmatter(content: &str, default_name: &str) -> (SkillFrontmatte
 
         for line in yaml_str.lines() {
             let l = line.trim();
-            if l.starts_with("name:") {
-                let val = l[5..].trim().trim_matches('"').trim_matches('\'');
+            if let Some(stripped) = l.strip_prefix("name:") {
+                let val = stripped.trim().trim_matches('"').trim_matches('\'');
                 if !val.is_empty() {
                     name = val.to_string();
                 }
-            } else if l.starts_with("description:") {
-                description = l[12..]
+            } else if let Some(stripped) = l.strip_prefix("description:") {
+                description = stripped
                     .trim()
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
-            } else if l.starts_with("version:") {
-                version = l[8..]
+            } else if let Some(stripped) = l.strip_prefix("version:") {
+                version = stripped
                     .trim()
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
-            } else if l.starts_with("author:") {
-                author = l[7..]
+            } else if let Some(stripped) = l.strip_prefix("author:") {
+                author = stripped
                     .trim()
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
-            } else if l.starts_with("compatibility:") {
-                let raw = l[14..].trim();
+            } else if let Some(stripped) = l.strip_prefix("compatibility:") {
+                let raw = stripped.trim();
                 if raw.starts_with('[') && raw.ends_with(']') {
                     compatibility = raw[1..raw.len() - 1]
                         .split(',')
@@ -445,8 +451,8 @@ fn parse_yaml_frontmatter(content: &str, default_name: &str) -> (SkillFrontmatte
                         .filter(|s| !s.is_empty())
                         .collect();
                 }
-            } else if l.starts_with("replaces:") {
-                let raw = l[9..].trim();
+            } else if let Some(stripped) = l.strip_prefix("replaces:") {
+                let raw = stripped.trim();
                 if raw.starts_with('[') && raw.ends_with(']') {
                     replaces = raw[1..raw.len() - 1]
                         .split(',')
