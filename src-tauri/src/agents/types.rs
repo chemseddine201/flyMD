@@ -1,14 +1,10 @@
 //! Data models, task records, and serialization contracts for the FlyMD Multi-Agent system.
 
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Returns current timestamp in milliseconds since Unix epoch.
 pub fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    crate::common::time::now_ms()
 }
 
 /// Counts total checklist items (`- [ ]`, `- [x]`) and completed items.

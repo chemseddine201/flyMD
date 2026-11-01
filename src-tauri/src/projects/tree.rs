@@ -69,19 +69,26 @@ impl ProjectTree {
         Ok(())
     }
 
-    /// Removes a project node and all of its recursive child projects.
+    /// Removes a project node and all of its recursive child projects in O(N) time.
     /// Returns the list of removed node IDs.
     pub fn remove_subtree(&mut self, root_id: &str) -> Vec<String> {
+        // Pre-index parent -> children in O(N) instead of scanning all nodes per queue element
+        let mut children_map: HashMap<&str, Vec<&str>> = HashMap::with_capacity(self.nodes.len());
+        for node in self.nodes.values() {
+            if let Some(p_id) = node.parent_id.as_deref() {
+                children_map.entry(p_id).or_default().push(&node.id);
+            }
+        }
+
         let mut to_remove = Vec::new();
-        let mut queue = vec![root_id.to_string()];
+        let mut queue = vec![root_id];
 
         while let Some(current_id) = queue.pop() {
-            if self.nodes.contains_key(&current_id) {
-                to_remove.push(current_id.clone());
-                // Find direct children of current_id
-                for n in self.nodes.values() {
-                    if n.parent_id.as_deref() == Some(&current_id) {
-                        queue.push(n.id.clone());
+            if self.nodes.contains_key(current_id) {
+                to_remove.push(current_id.to_string());
+                if let Some(children) = children_map.get(current_id) {
+                    for &child_id in children {
+                        queue.push(child_id);
                     }
                 }
             }
@@ -152,22 +159,39 @@ impl ProjectTree {
         false
     }
 
-    /// Builds a nested recursive tree view starting from all root projects.
+    /// Builds a nested recursive tree view starting from all root projects in O(N) time.
     pub fn build_nested_hierarchy(&self) -> Vec<ProjectTreeNode> {
-        let root_nodes = self.get_children(None);
-        root_nodes
-            .into_iter()
-            .map(|root| self.build_subtree(root))
-            .collect()
-    }
+        // Build parent_id -> children adjacency map in a single O(N) pass
+        let mut children_by_parent: HashMap<Option<&str>, Vec<&ProjectNode>> =
+            HashMap::with_capacity(self.nodes.len());
+        for node in self.nodes.values() {
+            children_by_parent
+                .entry(node.parent_id.as_deref())
+                .or_default()
+                .push(node);
+        }
 
-    fn build_subtree(&self, node: ProjectNode) -> ProjectTreeNode {
-        let children = self
-            .get_children(Some(&node.id))
-            .into_iter()
-            .map(|child| self.build_subtree(child))
-            .collect();
-        ProjectTreeNode { node, children }
+        fn build_rec(
+            node: &ProjectNode,
+            adj: &HashMap<Option<&str>, Vec<&ProjectNode>>,
+        ) -> ProjectTreeNode {
+            let children = match adj.get(&Some(node.id.as_str())) {
+                Some(child_nodes) => child_nodes.iter().map(|c| build_rec(c, adj)).collect(),
+                None => Vec::new(),
+            };
+            ProjectTreeNode {
+                node: (*node).clone(),
+                children,
+            }
+        }
+
+        match children_by_parent.get(&None) {
+            Some(roots) => roots
+                .iter()
+                .map(|root| build_rec(root, &children_by_parent))
+                .collect(),
+            None => Vec::new(),
+        }
     }
 }
 
@@ -239,5 +263,26 @@ mod tests {
         assert!(tree.get("sub").is_none());
         assert!(tree.get("leaf").is_none());
         assert!(tree.get("root").is_some());
+    }
+
+    #[test]
+    fn test_build_nested_hierarchy() {
+        let mut tree = ProjectTree::new();
+        tree.insert(make_test_node("root-1", None, "Root 1")).unwrap();
+        tree.insert(make_test_node("child-1", Some("root-1"), "Child 1")).unwrap();
+        tree.insert(make_test_node("grandchild-1", Some("child-1"), "Grandchild 1")).unwrap();
+        tree.insert(make_test_node("root-2", None, "Root 2")).unwrap();
+
+        let hierarchy = tree.build_nested_hierarchy();
+        assert_eq!(hierarchy.len(), 2);
+
+        let root1 = hierarchy.iter().find(|h| h.node.id == "root-1").unwrap();
+        assert_eq!(root1.children.len(), 1);
+        assert_eq!(root1.children[0].node.id, "child-1");
+        assert_eq!(root1.children[0].children.len(), 1);
+        assert_eq!(root1.children[0].children[0].node.id, "grandchild-1");
+
+        let root2 = hierarchy.iter().find(|h| h.node.id == "root-2").unwrap();
+        assert_eq!(root2.children.len(), 0);
     }
 }

@@ -58,14 +58,7 @@ pub fn redact_secrets(input: &str) -> String {
     redacted
 }
 
-/// Truncates a UTF-8 string safely at a character boundary (never slicing mid-codepoint on
-/// multi-byte Arabic, CJK, or emoji sequences), appending `"..."` if truncated.
-pub fn truncate_utf8_chars(s: &str, max_chars: usize) -> String {
-    match s.char_indices().nth(max_chars) {
-        Some((byte_idx, _)) => format!("{}...", &s[..byte_idx]),
-        None => s.to_string(),
-    }
-}
+pub use crate::common::utf8::truncate_utf8_chars;
 
 pub struct ReportGenerator {
     pub session_dir: PathBuf,

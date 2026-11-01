@@ -129,12 +129,11 @@ pub fn build_recall_pack(
     // Budget enforcement (~4 characters per token heuristic) — strictly UTF-8 char-boundary safe
     let estimated_tokens = rendered.len() / 4;
     if estimated_tokens > max_tokens && max_tokens > 100 {
-        let mut byte_limit = (max_tokens * 4).min(rendered.len());
-        while byte_limit > 0 && !rendered.is_char_boundary(byte_limit) {
-            byte_limit -= 1;
-        }
-        if rendered.len() > byte_limit {
-            rendered.truncate(byte_limit);
+        let byte_limit = (max_tokens * 4).min(rendered.len());
+        let valid_slice = crate::common::utf8::truncate_utf8_bytes_boundary(&rendered, byte_limit);
+        let valid_len = valid_slice.len();
+        if rendered.len() > valid_len {
+            rendered.truncate(valid_len);
             rendered.push_str("\n\n_[Recall Pack truncated to preserve token budget]_");
         }
     }

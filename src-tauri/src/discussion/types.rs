@@ -6,10 +6,7 @@ use std::collections::HashMap;
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
 pub fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    crate::common::time::now_ms()
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

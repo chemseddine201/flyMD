@@ -261,19 +261,7 @@ pub fn append_project_memory(workspace_path: &str, entry_markdown: &str) {
     fs::write(&mem_file, current).ok();
 }
 
-/// Safely returns up to the last `max_bytes` of a UTF-8 string on a valid character boundary.
-pub fn safe_tail_utf8(content: &str, max_bytes: usize) -> String {
-    if content.len() <= max_bytes {
-        return content.to_string();
-    }
-    let min_start = content.len() - max_bytes;
-    let start_idx = content
-        .char_indices()
-        .map(|(idx, _)| idx)
-        .find(|&idx| idx >= min_start)
-        .unwrap_or(content.len());
-    content[start_idx..].to_string()
-}
+pub use crate::common::utf8::safe_tail_utf8;
 
 /// Reads recent history from `.flymd/MEMORY.md` for cross-agent context synchronization.
 pub fn read_project_memory(workspace_path: &str) -> String {

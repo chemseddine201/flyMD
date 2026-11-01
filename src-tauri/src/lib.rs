@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod common;
 pub mod discussion;
 pub mod files;
 pub mod llm;
