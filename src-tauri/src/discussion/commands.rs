@@ -112,6 +112,7 @@ pub async fn cmd_resume_discussion(
                     custom_skills_dir: None,
                     include_default_skills: true,
                     token_budget_cap: None,
+                    ..Default::default()
                 });
             let providers =
                 build_provider_map(&persisted_config, manager.client.clone(), Some(&store));
@@ -530,6 +531,7 @@ mod tests {
             custom_skills_dir: None,
             include_default_skills: true,
             token_budget_cap: None,
+            ..Default::default()
         };
         crate::discussion::storage::atomic_write_json(&temp_dir.join("config.json"), &config).unwrap();
 
@@ -583,6 +585,7 @@ mod tests {
             active_disagreements_count: 0,
             decisions_count: 0,
             latest_report_version: 0,
+            ..Default::default()
         };
         crate::discussion::storage::save_metadata(&temp_dir, &stuck_meta).unwrap();
 

@@ -65,6 +65,10 @@ pub struct AgentCredentialConfig {
     pub default_effort_level: Option<String>,
     #[serde(rename = "defaultThinkingEnabled")]
     pub default_thinking_enabled: Option<bool>,
+    #[serde(rename = "selectedModel", default)]
+    pub selected_model: Option<String>,
+    #[serde(rename = "subscriptionTier", default)]
+    pub subscription_tier: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -175,6 +179,10 @@ pub struct AgentProfile {
     pub supports_effort: Option<bool>,
     #[serde(rename = "supportsThinking", default)]
     pub supports_thinking: Option<bool>,
+    #[serde(rename = "defaultModelId", default, skip_serializing_if = "Option::is_none")]
+    pub default_model_id: Option<String>,
+    #[serde(rename = "subscriptionTier", default, skip_serializing_if = "Option::is_none")]
+    pub subscription_tier: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -28,11 +28,18 @@ export interface AgentCustomAction {
 export interface AvailableProviderInfo {
   id: string;
   name: string;
+  providerType?: string;
   available: boolean;
   model: string;
   supportsThinking: boolean;
   supportsEffort?: boolean;
   description: string;
+  authStatus?: string;
+  subscriptionTier?: string;
+  accountLabel?: string;
+  vendor?: string;
+  accentColor?: string;
+  isCustom?: boolean;
 }
 
 export interface DiscussionTokenUsage {
@@ -64,7 +71,48 @@ export type DiscussionMessageKind =
   | 'rebuttal_revision'
   | 'synthesis_report'
   | 'user_intervention'
-  | 'targeted_action';
+  | 'targeted_action'
+  | 'skipped_consensus';
+
+export type RoundExecutionStatus =
+  | 'executed'
+  | 'converged_early'
+  | 'ignored_consensus';
+
+export interface RoundExecutionRecord {
+  roundNumber: number;
+  title: string;
+  status: RoundExecutionStatus;
+  convergedFromRound?: number;
+  reason?: string;
+  skippedAgentNames: string[];
+}
+
+export type DebateRepeaterMode = 'off' | 'cycle' | 'per_round';
+
+export interface CustomRoleDefinition {
+  id: string;
+  roleKey: string;
+  name: string;
+  experienceProfile: string;
+  defaultDirective: string;
+  assignedSkillUris: string[];
+  avatarColor: string;
+  isBuiltIn?: boolean;
+}
+
+export interface DiscussionRoundSlot {
+  slotId: string;
+  participant: DiscussionParticipant;
+  roundDirective?: string;
+}
+
+export interface DiscussionRoundPlan {
+  roundNumber: number;
+  title: string;
+  objective?: string;
+  slots: DiscussionRoundSlot[];
+}
 
 export interface DiscussionMessage {
   id: string;
@@ -148,6 +196,9 @@ export interface DiscussionConfig {
   customSkillsDir?: string | null;
   includeDefaultSkills?: boolean;
   tokenBudgetCap?: number | null;
+  selectedEngines?: string[];
+  repeaterMode?: DebateRepeaterMode;
+  roundSchedule?: DiscussionRoundPlan[];
 }
 
 export interface DiscussionMetadata {
@@ -166,6 +217,9 @@ export interface DiscussionMetadata {
   activeDisagreementsCount: number;
   decisionsCount: number;
   latestReportVersion: number;
+  convergedAtRound?: number;
+  convergenceReason?: string;
+  roundLedger?: RoundExecutionRecord[];
 }
 
 export interface DiscussionStreamEvent {

@@ -8,6 +8,8 @@ export interface ParticipantAgentOption {
   name: string;
   role: string;
   color?: string;
+  /** Actual engine/provider that powers this participant (from the live transcript or config). */
+  providerId?: string;
 }
 
 export interface CouncilInterventionBarProps {
@@ -17,6 +19,9 @@ export interface CouncilInterventionBarProps {
   participantAgents: ParticipantAgentOption[];
   targetedAgentId: string;
   onChangeTargetedAgentId: (id: string) => void;
+  /** Subscription-aware lookups so the model picker reflects the participant's real engine. */
+  getSubscriptionTierForAgent?: (agentOrProviderId: string) => string | undefined;
+  getDynamicModelsForAgent?: (agentOrProviderId: string) => string[];
   targetedActionName: string;
   onChangeTargetedActionName: (name: string) => void;
   targetedEffortLevel: AgentEffortLevel;
@@ -43,6 +48,8 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
       participantAgents,
       targetedAgentId,
       onChangeTargetedAgentId,
+      getSubscriptionTierForAgent,
+      getDynamicModelsForAgent,
       targetedActionName,
       onChangeTargetedActionName,
       targetedEffortLevel,
@@ -59,6 +66,10 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
       onChangeGuidanceInput,
       onSendGuidance,
     }) => {
+      const targetedProviderId =
+        participantAgents.find((ag) => ag.id === targetedAgentId)?.providerId ||
+        targetedAgentId;
+
       return (
         <div className="shrink-0 border-t border-slate-800 bg-slate-900/95 backdrop-blur-sm">
           {showTargetedDispatch && (
@@ -145,7 +156,9 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
 
                   {/* Side-by-Side Model & Effort Matrix */}
                   <ModelEffortSideBySidePicker
-                    agentId={targetedAgentId || 'claude-code'}
+                    agentId={targetedProviderId}
+                    subscriptionTier={getSubscriptionTierForAgent?.(targetedProviderId)}
+                    dynamicModels={getDynamicModelsForAgent?.(targetedProviderId)}
                     selectedModel={targetedModelId}
                     onChangeModel={onChangeTargetedModelId || (() => {})}
                     effortLevel={targetedEffortLevel}

@@ -1,10 +1,13 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DiscussionConfig,
   DiscussionParticipant,
   AvailableProviderInfo,
   AgentEffortLevel,
   SkillDescriptor,
+  CustomRoleDefinition,
+  DebateRepeaterMode,
+  DiscussionRoundPlan,
 } from '../../../../../../shared/types';
 import {
   DeliberationPreset,
@@ -12,21 +15,50 @@ import {
   loadSavedPresets,
   savePresetsToStorage,
 } from '../../../../services/deliberationPresetRepository';
+import {
+  loadAllRoleDefinitions,
+  saveUserCustomRoles,
+} from '../../../../services/customRoleRepository';
 import { DISCUSSION_AVATAR_PALETTE } from '../../../../utils/discussionTextUtils';
-import { selectParticipantsById } from '../../../../store';
+import { selectParticipantsById, usePreviewStore, PreviewStoreState } from '../../../../store';
+import { useSubscriptionAgents } from '../../../../hooks/useSubscriptionAgents';
+import { getDefaultModelForAgent } from '../../../../../../shared/constants/models';
+
+export type NewDebateModeTab = 'preset' | 'repeater' | 'actions' | 'custom';
 
 export interface UseNewDeliberationDraftParams {
   resolvedWorkspace: string;
-  availableProviders: AvailableProviderInfo[];
+  availableProviders?: AvailableProviderInfo[];
   startNewDiscussion: (config: DiscussionConfig) => Promise<void>;
 }
 
+const PHASE_TITLES = [
+  'Discovery, Architecture & Domain Synthesis',
+  'Adversarial Red-Team, Risk & Edge-Case Critique',
+  'Implementation Blueprint, Trade-Offs & Verification',
+  'Security, Performance & Operational Resilience Audit',
+];
+
 export function useNewDeliberationDraft({
   resolvedWorkspace,
-  availableProviders,
   startNewDiscussion,
 }: UseNewDeliberationDraftParams) {
   const [showNewModal, setShowNewModal] = useState(false);
+  const setShowAgentAccountsModal = usePreviewStore(
+    (s: PreviewStoreState) => s.setShowAgentAccountsModal
+  );
+
+  // Live subscription-aware dynamic agent & model discovery
+  const {
+    dynamicProviders,
+    activeSubscriptionProviders,
+    providersById,
+    preferredDefaultAgentId,
+    isRefreshing: isRefreshingSubscriptions,
+    refreshSubscriptionAgents,
+    getSubscriptionTierForAgent,
+    getDynamicModelsForAgent,
+  } = useSubscriptionAgents(true);
 
   // Presets & Custom Actions Management State
   const [presets, setPresets] = useState<DeliberationPreset[]>(loadSavedPresets);
@@ -39,27 +71,217 @@ export function useNewDeliberationDraft({
   );
   const [isCreatingNewPreset, setIsCreatingNewPreset] = useState(false);
 
+  // Specialist Roles Library (Built-in + Unlimited User Custom Roles)
+  const [allRoles, setAllRoles] = useState<CustomRoleDefinition[]>(
+    loadAllRoleDefinitions
+  );
+
   // New discussion configuration state
   const [newTopic, setNewTopic] = useState('');
   const [newIdea, setNewIdea] = useState('');
-  const [maxRounds, setMaxRounds] = useState(3);
-  const [maxRoundsInput, setMaxRoundsInput] = useState<string>('3');
+  const [maxRounds, setMaxRounds] = useState(4);
+  const [maxRoundsInput, setMaxRoundsInput] = useState<string>('4');
   const [turnTimeoutSecs, setTurnTimeoutSecs] = useState(120);
   const [turnTimeoutInput, setTurnTimeoutInput] = useState<string>('120');
-  const [newDebateMode, setNewDebateMode] = useState<
-    'preset' | 'actions' | 'custom'
-  >('preset');
-  const [presetEngine, setPresetEngine] = useState<string>('mock');
+  const [newDebateMode, setNewDebateMode] =
+    useState<NewDebateModeTab>('preset');
+
+  const [presetEngine, setPresetEngine] = useState<string>('');
+  const [selectedEngines, setSelectedEngines] = useState<string[]>([]);
+  const hasUserCustomizedEngines = useRef(false);
+
+  const [repeaterMode, setRepeaterMode] = useState<DebateRepeaterMode>('off');
+  const [roundSchedule, setRoundSchedule] = useState<DiscussionRoundPlan[]>([]);
+
   const [presetEffortLevel, setPresetEffortLevel] =
     useState<AgentEffortLevel>('medium');
   const [presetThinkingEnabled, setPresetThinkingEnabled] =
     useState<boolean>(true);
   const [enableStepModeInNew, setEnableStepModeInNew] = useState(false);
   const [customSkillsDir, setCustomSkillsDir] = useState<string>('');
-  const [includeDefaultSkills, setIncludeDefaultSkills] = useState<boolean>(true);
+  const [includeDefaultSkills, setIncludeDefaultSkills] =
+    useState<boolean>(true);
   const [detectedSkills, setDetectedSkills] = useState<SkillDescriptor[]>([]);
   const [isScanningSkills, setIsScanningSkills] = useState<boolean>(false);
-  const [tokenBudgetCapInput, setTokenBudgetCapInput] = useState<string>('50000');
+  const [tokenBudgetCapInput, setTokenBudgetCapInput] =
+    useState<string>('50000');
+
+  // Re-fetch live subscription agents every time the modal opens
+  useEffect(() => {
+    if (showNewModal) {
+      refreshSubscriptionAgents();
+    }
+  }, [showNewModal, refreshSubscriptionAgents]);
+
+  // Synchronize default engine(s) with the user's real connected subscriptions
+  useEffect(() => {
+    if (!presetEngine && preferredDefaultAgentId) {
+      setPresetEngine(preferredDefaultAgentId);
+    }
+    if (!hasUserCustomizedEngines.current) {
+      if (activeSubscriptionProviders.length > 0) {
+        setSelectedEngines(activeSubscriptionProviders.map((p) => p.id));
+      } else if (preferredDefaultAgentId) {
+        setSelectedEngines([preferredDefaultAgentId]);
+      }
+    }
+  }, [activeSubscriptionProviders, preferredDefaultAgentId, presetEngine]);
+
+  const handleToggleSelectedEngine = useCallback((engineId: string) => {
+    hasUserCustomizedEngines.current = true;
+    setSelectedEngines((prev) => {
+      if (prev.includes(engineId)) {
+        return prev.length <= 1 ? prev : prev.filter((id) => id !== engineId);
+      }
+      return [...prev, engineId];
+    });
+  }, []);
+
+  const handleSelectAllReadyEngines = useCallback(() => {
+    hasUserCustomizedEngines.current = true;
+    if (activeSubscriptionProviders.length > 0) {
+      setSelectedEngines(activeSubscriptionProviders.map((p) => p.id));
+    } else {
+      setSelectedEngines([preferredDefaultAgentId || 'mock']);
+    }
+  }, [activeSubscriptionProviders, preferredDefaultAgentId]);
+
+  const handleCreateCustomRole = useCallback(
+    (roleInput: Omit<CustomRoleDefinition, 'id' | 'isBuiltIn'>) => {
+      const created: CustomRoleDefinition = {
+        ...roleInput,
+        id: `custom-role-${Date.now()}`,
+        isBuiltIn: false,
+      };
+      setAllRoles((prev) => {
+        const next = [...prev, created];
+        saveUserCustomRoles(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleDeleteCustomRole = useCallback((roleId: string) => {
+    setAllRoles((prev) => {
+      const next = prev.filter((r) => r.isBuiltIn || r.id !== roleId);
+      saveUserCustomRoles(next);
+      return next;
+    });
+  }, []);
+
+  const buildRoundPlans = useCallback(
+    (
+      count: number,
+      engines: string[],
+      roles: CustomRoleDefinition[]
+    ): DiscussionRoundPlan[] => {
+      const pool =
+        engines.length > 0 ? engines : [preferredDefaultAgentId || 'mock'];
+      const rolePool =
+        roles.length > 0 ? roles : loadAllRoleDefinitions();
+
+      const plans: DiscussionRoundPlan[] = [];
+      let cursor = 0;
+
+      for (let r = 1; r <= count; r++) {
+        const phaseTitle =
+          PHASE_TITLES[(r - 1) % PHASE_TITLES.length];
+        const slotsCount = Math.min(Math.max(2, pool.length), 3);
+        const slots = Array.from({ length: slotsCount }, (_, sIdx) => {
+          const engId = pool[cursor % pool.length];
+          const roleDef = rolePool[cursor % rolePool.length];
+          cursor += 1;
+
+          const tier = getSubscriptionTierForAgent(engId);
+          const prov = providersById.get(engId);
+          const resolvedModel =
+            prov?.model || getDefaultModelForAgent(engId, tier);
+
+          return {
+            slotId: `slot-r${r}-${sIdx + 1}-${Date.now() + cursor}`,
+            roundDirective: roleDef.defaultDirective,
+            participant: {
+              agentId: `round${r}-slot${sIdx + 1}-${roleDef.id}`,
+              providerId: engId,
+              modelId: resolvedModel,
+              displayName: roleDef.name,
+              role: roleDef.roleKey,
+              roleDescription: roleDef.experienceProfile,
+              avatarColor: roleDef.avatarColor,
+              assignedSkillUris: roleDef.assignedSkillUris || [],
+              contextBudgetTokens: 24000,
+              thinkingEnabled: presetThinkingEnabled,
+              effortLevel: presetEffortLevel,
+            },
+          };
+        });
+
+        plans.push({
+          roundNumber: r,
+          title: `Round ${r}: ${phaseTitle}`,
+          objective:
+            'Apply specialized role experience, challenge peer assumptions, and converge when consensus is verified.',
+          slots,
+        });
+      }
+
+      return plans;
+    },
+    [
+      preferredDefaultAgentId,
+      getSubscriptionTierForAgent,
+      providersById,
+      presetThinkingEnabled,
+      presetEffortLevel,
+    ]
+  );
+
+  const handleAutoBuildRoundSchedule = useCallback(
+    (targetMode?: 'cycle' | 'per_round') => {
+      const modeToBuild =
+        targetMode || (repeaterMode === 'per_round' ? 'per_round' : 'cycle');
+      const effectiveMax = Math.min(
+        10,
+        Math.max(1, parseInt(maxRoundsInput, 10) || maxRounds || 3)
+      );
+      const count =
+        modeToBuild === 'per_round'
+          ? effectiveMax
+          : Math.min(effectiveMax, Math.max(2, Math.min(3, selectedEngines.length || 2)));
+      setRoundSchedule(buildRoundPlans(count, selectedEngines, allRoles));
+    },
+    [
+      repeaterMode,
+      maxRoundsInput,
+      maxRounds,
+      selectedEngines,
+      buildRoundPlans,
+      allRoles,
+    ]
+  );
+
+  // Keep per_round schedule length aligned when user changes maxRounds
+  useEffect(() => {
+    if (repeaterMode !== 'per_round') return;
+    const targetLen = Math.min(10, Math.max(1, maxRounds));
+    setRoundSchedule((prev) => {
+      if (prev.length === targetLen) return prev;
+      if (prev.length > targetLen) return prev.slice(0, targetLen);
+      const extra = buildRoundPlans(
+        targetLen - prev.length,
+        selectedEngines,
+        allRoles
+      ).map((p, idx) => ({
+        ...p,
+        roundNumber: prev.length + idx + 1,
+        title: `Round ${prev.length + idx + 1}: ${
+          PHASE_TITLES[(prev.length + idx) % PHASE_TITLES.length]
+        }`,
+      }));
+      return [...prev, ...extra];
+    });
+  }, [repeaterMode, maxRounds, buildRoundPlans, selectedEngines, allRoles]);
 
   const handleBrowseSkillsDir = useCallback(async () => {
     if (window.electronAPI?.openFolderDialog) {
@@ -87,7 +309,9 @@ export function useNewDeliberationDraft({
     }
     if (window.electronAPI?.scanCustomSkillsDir) {
       try {
-        const skills = await window.electronAPI.scanCustomSkillsDir(dirPath.trim());
+        const skills = await window.electronAPI.scanCustomSkillsDir(
+          dirPath.trim()
+        );
         setDetectedSkills(skills || []);
       } catch {
         setDetectedSkills([]);
@@ -105,7 +329,6 @@ export function useNewDeliberationDraft({
       ).participants
   );
 
-  // O(1) lookup maps for presets, providers, and configured participants
   const presetsById = useMemo(() => {
     const map = new Map<string, DeliberationPreset>();
     for (const p of presets) {
@@ -113,14 +336,6 @@ export function useNewDeliberationDraft({
     }
     return map;
   }, [presets]);
-
-  const providersById = useMemo(() => {
-    const map = new Map<string, AvailableProviderInfo>();
-    for (const ap of availableProviders) {
-      map.set(ap.id, ap);
-    }
-    return map;
-  }, [availableProviders]);
 
   const customParticipantsById = selectParticipantsById(customParticipants);
 
@@ -169,6 +384,18 @@ export function useNewDeliberationDraft({
   );
 
   const handleStartCreatePreset = useCallback(() => {
+    const defaultEng = preferredDefaultAgentId || 'mock';
+    const defaultTier = getSubscriptionTierForAgent(defaultEng);
+    const defaultModel =
+      providersById.get(defaultEng)?.model ||
+      getDefaultModelForAgent(defaultEng, defaultTier);
+    const secondEng =
+      selectedEngines.find((id) => id !== defaultEng) || defaultEng;
+    const secondTier = getSubscriptionTierForAgent(secondEng);
+    const secondModel =
+      providersById.get(secondEng)?.model ||
+      getDefaultModelForAgent(secondEng, secondTier);
+
     const newId = `preset-${Date.now()}`;
     const newPreset: DeliberationPreset = {
       id: newId,
@@ -180,8 +407,8 @@ export function useNewDeliberationDraft({
       participants: [
         {
           agentId: `agent-lead-${Date.now()}`,
-          providerId: 'mock',
-          modelId: 'custom-expert-v1',
+          providerId: defaultEng,
+          modelId: defaultModel,
           displayName: 'Domain Architect',
           role: 'architect',
           roleDescription:
@@ -199,8 +426,8 @@ export function useNewDeliberationDraft({
         },
         {
           agentId: `agent-critic-${Date.now()}`,
-          providerId: 'mock',
-          modelId: 'custom-critic-v1',
+          providerId: secondEng,
+          modelId: secondModel,
           displayName: 'Adversarial Critic',
           role: 'critic',
           roleDescription:
@@ -221,7 +448,12 @@ export function useNewDeliberationDraft({
     setIsCreatingNewPreset(true);
     setEditingPreset(newPreset);
     setNewDebateMode('actions');
-  }, []);
+  }, [
+    preferredDefaultAgentId,
+    getSubscriptionTierForAgent,
+    providersById,
+    selectedEngines,
+  ]);
 
   const handleSaveEditingPreset = useCallback(() => {
     if (!editingPreset) return;
@@ -282,22 +514,42 @@ export function useNewDeliberationDraft({
         DISCUSSION_AVATAR_PALETTE[
           (nextIdx - 1) % DISCUSSION_AVATAR_PALETTE.length
         ];
+      const enginePool =
+        selectedEngines.length > 0
+          ? selectedEngines
+          : [preferredDefaultAgentId || 'mock'];
+      const chosenProvider = enginePool[(nextIdx - 1) % enginePool.length];
+      const tier = getSubscriptionTierForAgent(chosenProvider);
+      const modelId =
+        providersById.get(chosenProvider)?.model ||
+        getDefaultModelForAgent(chosenProvider, tier);
+      const roleDef = allRoles[(nextIdx - 1) % allRoles.length];
+
       const newAgent: DiscussionParticipant = {
         agentId: `agent-custom-${Date.now()}`,
-        providerId: 'mock',
-        modelId: 'custom-expert-v1',
-        displayName: `Expert Agent ${nextIdx}`,
-        role: 'critic',
+        providerId: chosenProvider,
+        modelId,
+        displayName: roleDef?.name || `Expert Agent ${nextIdx}`,
+        role: roleDef?.roleKey || 'critic',
         roleDescription:
+          roleDef?.experienceProfile ||
           'Provide specialized domain analysis and technical critique.',
-        avatarColor: color,
-        assignedSkillUris: [],
+        avatarColor: roleDef?.avatarColor || color,
+        assignedSkillUris: roleDef?.assignedSkillUris || [],
         contextBudgetTokens: 16000,
         thinkingEnabled: true,
+        effortLevel: presetEffortLevel,
       };
       return [...prev, newAgent];
     });
-  }, []);
+  }, [
+    selectedEngines,
+    preferredDefaultAgentId,
+    getSubscriptionTierForAgent,
+    providersById,
+    allRoles,
+    presetEffortLevel,
+  ]);
 
   const handleUpdateParticipant = useCallback(
     (index: number, updates: Partial<DiscussionParticipant>) => {
@@ -316,6 +568,11 @@ export function useNewDeliberationDraft({
     );
   }, []);
 
+  const handleOpenManageAccounts = useCallback(() => {
+    setShowNewModal(false);
+    setShowAgentAccountsModal(true);
+  }, [setShowAgentAccountsModal]);
+
   const handleLaunchNewDiscussion = useCallback(async () => {
     if (!resolvedWorkspace) return;
     const sessionId = `disc-${Date.now()}`;
@@ -324,27 +581,104 @@ export function useNewDeliberationDraft({
       newIdea.trim() ||
       `In-depth multi-perspective evaluation and decision analysis for: ${topicToUse}`;
 
+    const effectiveMaxRounds = Math.min(
+      10,
+      Math.max(1, parseInt(maxRoundsInput, 10) || maxRounds || 3)
+    );
+
     const currentPreset =
       presetsById.get(selectedPreset) ||
       presets[0] ||
       DEFAULT_PRESET_TEMPLATES[0];
+
+    const activeEnginePool =
+      selectedEngines.length > 0
+        ? selectedEngines
+        : [presetEngine || preferredDefaultAgentId || 'mock'];
+
+    // Round Repeater / Per-Round Split applies only when launched from the Repeater tab with an active mode
+    const effectiveRepeaterMode: DebateRepeaterMode =
+      newDebateMode === 'repeater' ? repeaterMode : 'off';
+    const useRepeaterSchedule = effectiveRepeaterMode !== 'off';
+
+    let finalRoundSchedule: DiscussionRoundPlan[] | undefined;
+    if (useRepeaterSchedule) {
+      const sourceSchedule =
+        roundSchedule.length > 0
+          ? roundSchedule
+          : buildRoundPlans(
+              effectiveRepeaterMode === 'per_round'
+                ? effectiveMaxRounds
+                : Math.min(effectiveMaxRounds, 2),
+              activeEnginePool,
+              allRoles
+            );
+
+      finalRoundSchedule = sourceSchedule.map((plan, pIdx) => ({
+        ...plan,
+        roundNumber: plan.roundNumber || pIdx + 1,
+        title:
+          plan.title?.trim() ||
+          `Round ${pIdx + 1}: ${PHASE_TITLES[pIdx % PHASE_TITLES.length]}`,
+        slots: plan.slots.map((slot, sIdx) => {
+          const sp = slot.participant;
+          const tier = getSubscriptionTierForAgent(sp.providerId);
+          const resolvedModel =
+            sp.modelId ||
+            providersById.get(sp.providerId)?.model ||
+            getDefaultModelForAgent(sp.providerId, tier);
+          return {
+            ...slot,
+            slotId: slot.slotId || `slot-r${pIdx + 1}-${sIdx + 1}`,
+            participant: {
+              ...sp,
+              agentId:
+                sp.agentId?.trim() || `round-${pIdx + 1}-agent-${sIdx + 1}`,
+              displayName:
+                sp.displayName?.trim() || `Specialist ${sIdx + 1}`,
+              role: sp.role || 'critic',
+              modelId: resolvedModel,
+              roleDescription:
+                sp.roleDescription?.trim() ||
+                'Provide specialized domain experience, rigorous critique, and actionable synthesis.',
+              contextBudgetTokens: sp.contextBudgetTokens || 24000,
+              effortLevel: sp.effortLevel || presetEffortLevel || 'medium',
+              thinkingEnabled:
+                sp.thinkingEnabled ?? presetThinkingEnabled ?? true,
+            },
+          };
+        }),
+      }));
+    }
+
     let participants =
-      newDebateMode === 'preset'
+      newDebateMode === 'preset' || newDebateMode === 'repeater'
         ? currentPreset.participants
         : customParticipants;
 
-    if (newDebateMode === 'preset') {
-      let targetProvider = presetEngine;
-      if (presetEngine === 'auto') {
-        const best = availableProviders.find(
-          (ap) => ap.available && ap.id !== 'mock'
-        );
-        targetProvider = best ? best.id : 'mock';
+    if (finalRoundSchedule && finalRoundSchedule.length > 0) {
+      // Populate base participants from scheduled slots so metadata & sidebars reflect the scheduled team
+      const seen = new Set<string>();
+      const collected: DiscussionParticipant[] = [];
+      for (const plan of finalRoundSchedule) {
+        for (const slot of plan.slots) {
+          const key = `${slot.participant.displayName}::${slot.participant.providerId}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            collected.push(slot.participant);
+          }
+        }
       }
+      if (collected.length >= 2) {
+        participants = collected;
+      }
+    } else if (newDebateMode === 'preset' || newDebateMode === 'repeater') {
+      // Multi-engine preset support: rotate every selected subscription engine across the preset team
+      const poolToDistribute = activeEnginePool;
 
-      const matched = providersById.get(targetProvider);
-      participants = participants.map((p) => {
-        if (targetProvider === 'mock') {
+      participants = participants.map((p, idx) => {
+        const assignedEngine = poolToDistribute[idx % poolToDistribute.length];
+        if (assignedEngine === 'mock') {
           return {
             ...p,
             providerId: 'mock',
@@ -353,12 +687,30 @@ export function useNewDeliberationDraft({
             effortLevel: presetEffortLevel,
           };
         }
+        const matched = providersById.get(assignedEngine);
+        const tier = getSubscriptionTierForAgent(assignedEngine);
         return {
           ...p,
-          providerId: targetProvider,
-          modelId: matched?.model || p.modelId,
+          providerId: assignedEngine,
+          modelId:
+            matched?.model ||
+            getDefaultModelForAgent(assignedEngine, tier) ||
+            p.modelId,
           thinkingEnabled: presetThinkingEnabled,
           effortLevel: presetEffortLevel,
+        };
+      });
+    } else {
+      // Ensure custom participants with legacy 'mock' fallback upgrade to real provider if untouched
+      participants = participants.map((p) => {
+        const matched = providersById.get(p.providerId);
+        const tier = getSubscriptionTierForAgent(p.providerId);
+        return {
+          ...p,
+          modelId:
+            p.modelId && p.modelId !== 'custom-expert-v1'
+              ? p.modelId
+              : matched?.model || getDefaultModelForAgent(p.providerId, tier),
         };
       });
     }
@@ -384,10 +736,7 @@ export function useNewDeliberationDraft({
       topic: topicToUse,
       userIdea: ideaToUse,
       workspacePath: resolvedWorkspace,
-      maxRounds: Math.min(
-        10,
-        Math.max(1, parseInt(maxRoundsInput, 10) || maxRounds || 3)
-      ),
+      maxRounds: effectiveMaxRounds,
       turnTimeoutSecs: Math.min(
         600,
         Math.max(15, parseInt(turnTimeoutInput, 10) || turnTimeoutSecs || 120)
@@ -402,6 +751,9 @@ export function useNewDeliberationDraft({
         parseInt(tokenBudgetCapInput, 10) > 0
           ? parseInt(tokenBudgetCapInput, 10)
           : undefined,
+      selectedEngines: activeEnginePool,
+      repeaterMode: effectiveRepeaterMode,
+      roundSchedule: finalRoundSchedule,
     };
 
     setShowNewModal(false);
@@ -410,24 +762,30 @@ export function useNewDeliberationDraft({
     resolvedWorkspace,
     newTopic,
     newIdea,
+    maxRoundsInput,
+    maxRounds,
     presetsById,
     selectedPreset,
     presets,
-    newDebateMode,
-    customParticipants,
+    selectedEngines,
     presetEngine,
-    availableProviders,
+    preferredDefaultAgentId,
+    repeaterMode,
+    newDebateMode,
+    roundSchedule,
+    buildRoundPlans,
+    allRoles,
+    customParticipants,
+    getSubscriptionTierForAgent,
     providersById,
-    presetThinkingEnabled,
     presetEffortLevel,
-    maxRoundsInput,
-    maxRounds,
+    presetThinkingEnabled,
     turnTimeoutInput,
     turnTimeoutSecs,
+    detectedSkills,
     enableStepModeInNew,
     customSkillsDir,
     includeDefaultSkills,
-    detectedSkills,
     tokenBudgetCapInput,
     startNewDiscussion,
   ]);
@@ -444,6 +802,7 @@ export function useNewDeliberationDraft({
     setNewTopic,
     newIdea,
     setNewIdea,
+    maxRounds,
     maxRoundsInput,
     setMaxRoundsInput,
     setMaxRounds,
@@ -454,6 +813,23 @@ export function useNewDeliberationDraft({
     setNewDebateMode,
     presetEngine,
     setPresetEngine,
+    selectedEngines,
+    handleToggleSelectedEngine,
+    handleSelectAllReadyEngines,
+    repeaterMode,
+    setRepeaterMode,
+    roundSchedule,
+    setRoundSchedule,
+    handleAutoBuildRoundSchedule,
+    allRoles,
+    handleCreateCustomRole,
+    handleDeleteCustomRole,
+    dynamicProviders,
+    isRefreshingSubscriptions,
+    refreshSubscriptionAgents,
+    getSubscriptionTierForAgent,
+    getDynamicModelsForAgent,
+    handleOpenManageAccounts,
     presetEffortLevel,
     setPresetEffortLevel,
     presetThinkingEnabled,
@@ -486,4 +862,3 @@ export function useNewDeliberationDraft({
     handleLaunchNewDiscussion,
   };
 }
-

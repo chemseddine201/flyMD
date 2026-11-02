@@ -177,6 +177,54 @@ pub enum DiscussionMessageKind {
     UserIntervention,
     /// Out-of-band turn requested by the user for one specific agent.
     TargetedAction,
+    /// Zero-query record indicating a step or round was skipped due to successive summary convergence.
+    SkippedConsensus,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RoundExecutionStatus {
+    #[default]
+    Executed,
+    ConvergedEarly,
+    IgnoredConsensus,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct RoundExecutionRecord {
+    #[serde(rename = "roundNumber")]
+    pub round_number: u32,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub status: RoundExecutionStatus,
+    #[serde(rename = "convergedFromRound", default, skip_serializing_if = "Option::is_none")]
+    pub converged_from_round: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(rename = "skippedAgentNames", default)]
+    pub skipped_agent_names: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DiscussionRoundSlot {
+    #[serde(rename = "slotId", default)]
+    pub slot_id: String,
+    pub participant: DiscussionParticipant,
+    #[serde(rename = "roundDirective", default, skip_serializing_if = "Option::is_none")]
+    pub round_directive: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DiscussionRoundPlan {
+    #[serde(rename = "roundNumber")]
+    pub round_number: u32,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub objective: Option<String>,
+    #[serde(default)]
+    pub slots: Vec<DiscussionRoundSlot>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -260,7 +308,7 @@ pub struct DecisionItem {
     pub evidence_citations: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct DiscussionConfig {
     #[serde(rename = "schemaVersion", default = "default_schema_version")]
     pub schema_version: u32,
@@ -286,6 +334,114 @@ pub struct DiscussionConfig {
     pub include_default_skills: bool,
     #[serde(rename = "tokenBudgetCap", default, skip_serializing_if = "Option::is_none")]
     pub token_budget_cap: Option<u32>,
+    #[serde(rename = "selectedEngines", default, skip_serializing_if = "Vec::is_empty")]
+    pub selected_engines: Vec<String>,
+    #[serde(rename = "repeaterMode", default, skip_serializing_if = "Option::is_none")]
+    pub repeater_mode: Option<String>,
+    #[serde(rename = "roundSchedule", default, skip_serializing_if = "Vec::is_empty")]
+    pub round_schedule: Vec<DiscussionRoundPlan>,
+}
+
+pub type ResolvedRoundSlot = (DiscussionParticipant, Option<String>);
+pub type ResolvedRoundPlan = (String, Option<String>, Vec<ResolvedRoundSlot>);
+
+impl DiscussionConfig {
+    /// Resolves the effective title, objective, and ordered `(participant, round_directive)` slots for `round`.
+    /// Supports explicit per-round plans, repeating cycle templates (`repeaterMode == "cycle"`),
+    /// and 100% backward-compatible fallback to `self.participants`.
+    pub fn resolve_round_plan(&self, round: u32) -> ResolvedRoundPlan {
+        let default_title = match round {
+            1 => "Round 1: Discovery & Position Synthesis".to_string(),
+            2 => "Round 2: Adversarial Critique & Cross-Examination".to_string(),
+            3 => "Round 3: Rebuttal, Trade-off Resolution & Synthesis".to_string(),
+            r => format!("Round {}: Deep Specialist Deliberation", r),
+        };
+
+        let mode = self.repeater_mode.as_deref().unwrap_or("auto");
+        if mode != "off" && !self.round_schedule.is_empty() {
+            let matched_plan = self
+                .round_schedule
+                .iter()
+                .find(|p| p.round_number == round && !p.slots.is_empty())
+                .or_else(|| {
+                    let non_empty: Vec<&DiscussionRoundPlan> = self
+                        .round_schedule
+                        .iter()
+                        .filter(|p| !p.slots.is_empty())
+                        .collect();
+                    if non_empty.is_empty() {
+                        None
+                    } else {
+                        let idx = ((round.saturating_sub(1)) as usize) % non_empty.len();
+                        Some(non_empty[idx])
+                    }
+                });
+
+            if let Some(plan) = matched_plan {
+                let title = if plan.title.trim().is_empty() {
+                    default_title
+                } else {
+                    plan.title.clone()
+                };
+                let mut seen_slot_ids = std::collections::HashSet::new();
+                let slots: Vec<(DiscussionParticipant, Option<String>)> = plan
+                    .slots
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, slot)| {
+                        let mut p = slot.participant.clone();
+                        if p.agent_id.trim().is_empty() {
+                            p.agent_id = format!("slot-r{}-{}", round, idx + 1);
+                        } else if !seen_slot_ids.insert(p.agent_id.clone()) {
+                            p.agent_id = format!("{}-slot{}", p.agent_id, idx + 1);
+                            seen_slot_ids.insert(p.agent_id.clone());
+                        }
+                        let directive = slot
+                            .round_directive
+                            .clone()
+                            .filter(|d| !d.trim().is_empty())
+                            .or_else(|| plan.objective.clone().filter(|o| !o.trim().is_empty()));
+                        (p, directive)
+                    })
+                    .collect();
+                return (title, plan.objective.clone(), slots);
+            }
+        }
+
+        let fallback_slots = self
+            .participants
+            .iter()
+            .cloned()
+            .map(|p| (p, None))
+            .collect();
+        (default_title, None, fallback_slots)
+    }
+
+    /// Collects all unique participants across both `participants` and every round in `round_schedule`
+    /// so provider registries and contribution summaries cover every scheduled engine/role.
+    pub fn all_scheduled_participants(&self) -> Vec<DiscussionParticipant> {
+        let mut out: Vec<DiscussionParticipant> = Vec::new();
+        let mut seen_keys = std::collections::HashSet::new();
+
+        for p in &self.participants {
+            let key = format!("{}::{}::{}", p.agent_id, p.provider_id, p.model_id);
+            if seen_keys.insert(key) {
+                out.push(p.clone());
+            }
+        }
+
+        for plan in &self.round_schedule {
+            for slot in &plan.slots {
+                let p = &slot.participant;
+                let key = format!("{}::{}::{}", p.agent_id, p.provider_id, p.model_id);
+                if seen_keys.insert(key) {
+                    out.push(p.clone());
+                }
+            }
+        }
+
+        out
+    }
 }
 
 fn default_schema_version() -> u32 {
@@ -300,7 +456,7 @@ fn default_turn_timeout() -> u64 {
     120
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct DiscussionMetadata {
     #[serde(rename = "schemaVersion", default = "default_schema_version")]
     pub schema_version: u32,
@@ -331,6 +487,12 @@ pub struct DiscussionMetadata {
     pub decisions_count: usize,
     #[serde(rename = "latestReportVersion")]
     pub latest_report_version: u32,
+    #[serde(rename = "convergedAtRound", default, skip_serializing_if = "Option::is_none")]
+    pub converged_at_round: Option<u32>,
+    #[serde(rename = "convergenceReason", default, skip_serializing_if = "Option::is_none")]
+    pub convergence_reason: Option<String>,
+    #[serde(rename = "roundLedger", default, skip_serializing_if = "Vec::is_empty")]
+    pub round_ledger: Vec<RoundExecutionRecord>,
 }
 
 #[cfg(test)]
@@ -364,8 +526,89 @@ mod tests {
             active_disagreements_count: 0,
             decisions_count: 0,
             latest_report_version: 0,
+            ..Default::default()
         };
         assert_eq!(meta.schema_version, 1);
         assert_eq!(meta.status, DiscussionStatus::Created);
+    }
+
+    #[test]
+    fn test_round_schedule_repeater_resolution() {
+        let p1 = DiscussionParticipant {
+            agent_id: "a1".to_string(),
+            provider_id: "claude-code".to_string(),
+            model_id: "claude-3-7-sonnet".to_string(),
+            display_name: "Architect".to_string(),
+            role: AgentRole::Architect,
+            role_description: "System design".to_string(),
+            avatar_color: "#38bdf8".to_string(),
+            assigned_skill_uris: vec![],
+            context_budget_tokens: 16000,
+            custom_action: None,
+            custom_query: None,
+            thinking_enabled: true,
+            effort_level: Some("high".to_string()),
+        };
+        let p2 = DiscussionParticipant {
+            agent_id: "a2".to_string(),
+            provider_id: "antigravity".to_string(),
+            model_id: "gemini-2.5-pro".to_string(),
+            display_name: "Security Critic".to_string(),
+            role: AgentRole::Custom("Security Critic".to_string()),
+            role_description: "Zero-trust threat modeling".to_string(),
+            avatar_color: "#ef4444".to_string(),
+            assigned_skill_uris: vec![],
+            context_budget_tokens: 16000,
+            custom_action: None,
+            custom_query: None,
+            thinking_enabled: true,
+            effort_level: Some("high".to_string()),
+        };
+
+        let cfg = DiscussionConfig {
+            schema_version: 1,
+            session_id: "s-rep".to_string(),
+            topic: "Microkernel Auth".to_string(),
+            user_idea: "Design auth layer".to_string(),
+            workspace_path: ".".to_string(),
+            max_rounds: 4,
+            turn_timeout_secs: 60,
+            participants: vec![p1.clone()],
+            repeater_mode: Some("cycle".to_string()),
+            round_schedule: vec![
+                DiscussionRoundPlan {
+                    round_number: 1,
+                    title: "Phase A: Blueprint".to_string(),
+                    objective: Some("Propose core contracts".to_string()),
+                    slots: vec![DiscussionRoundSlot {
+                        slot_id: "s1".to_string(),
+                        participant: p1,
+                        round_directive: Some("Draft contracts".to_string()),
+                    }],
+                },
+                DiscussionRoundPlan {
+                    round_number: 2,
+                    title: "Phase B: Threat Audit".to_string(),
+                    objective: Some("Audit vulnerabilities".to_string()),
+                    slots: vec![DiscussionRoundSlot {
+                        slot_id: "s2".to_string(),
+                        participant: p2,
+                        round_directive: Some("Probe attack surface".to_string()),
+                    }],
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Round 3 should repeat Phase A (index 0) and Round 4 should repeat Phase B (index 1)
+        let (r3_title, _, r3_slots) = cfg.resolve_round_plan(3);
+        assert_eq!(r3_title, "Phase A: Blueprint");
+        assert_eq!(r3_slots[0].0.provider_id, "claude-code");
+        assert_eq!(r3_slots[0].1.as_deref(), Some("Draft contracts"));
+
+        let (r4_title, _, r4_slots) = cfg.resolve_round_plan(4);
+        assert_eq!(r4_title, "Phase B: Threat Audit");
+        assert_eq!(r4_slots[0].0.provider_id, "antigravity");
+        assert_eq!(cfg.all_scheduled_participants().len(), 2);
     }
 }

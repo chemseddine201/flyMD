@@ -1,71 +1,65 @@
-# FlyMD v2.2.0 — Token Telemetry & Quota HUD, Custom Skills Injection, Smart Deliverable Naming, and Dual-Engine Architecture 🚀
+# FlyMD v2.3.0 — Debate Convergence Early-Stop, Dynamic Subscription Agents, Collapsible Clean Reports, and Multi-Engine Round Repeater 🚀
 
-**FlyMD v2.2.0** is a major stable release featuring real-time token telemetry with explicit reasoning token breakdowns, boundary-level quota governance guards, dynamic custom skills injection with an interactive tool isolation switch, context-aware multilingual deliverable naming, and subscription-aware side-by-side model and effort controls.
+**FlyMD v2.3.0** introduces a revolutionary leap in autonomous multi-agent deliberations: automatic early convergence detection on successive equivalent summaries with zero wasted queries, live dynamic subscription-aware agent and model discovery, clean untrimmed collapsible reports, and a flexible multi-engine round repeater with unlimited custom specialist roles.
 
 ---
 
 ## 🆕 Major New Features
 
-### 1. Token Usage Telemetry & Quota Governance HUD
-- **Explicit Reasoning Token Measurement**:
-  - Full telemetry separation: Prompt Tokens, Completion Tokens, and Reasoning/Thinking Tokens (Chain of Thought) across all CLI agents, HTTP providers, cognitive handoffs, and deliberation turns.
-  - Transparent badges on every task and turn card showing exact token allocations (e.g. `12,450 tokens (🧠 3,200 reasoning)`).
-- **Studio Token Quota HUD**:
-  - Live status indicator with adaptive coloring:
-    - **Sky (< 80%)**: Normal healthy burn rate.
-    - **Amber (80% – 99%)**: Soft warning threshold.
-    - **Rose (>= 100%)**: Quota cap breached.
-  - Interactive popover with detailed Prompt vs Completion vs Reasoning metrics, workspace cumulative token counter, budget presets (Unlimited, 25k, 50k, 100k, 250k), and policy toggles.
-- **Safe Boundary Quota Guards (Zero OS Process Manipulation)**:
-  - Enforces budget caps safely at turn and step boundaries where markdown deliverables and ledgers have already been written to disk cleanly.
-  - Pauses execution and provides an interactive step card to **Override Quota & Proceed** or adjust budgets without risking file truncation.
+### 1. Early Debate Convergence on Successive Summaries (Zero Wasted Queries)
+- **Automatic Consensus Detection**:
+  - Deliberation steps continuously analyze summary convergence using normalized token Dice similarity + UTF-8 character trigram Dice coefficients.
+  - When two successive agents in the same round (or across consecutive round boundaries) reach equivalent summaries (`>= 0.82` similarity) with **zero newly opened disputes**, remaining turns in the round are skipped immediately.
+  - If a debate reaches full consensus at Round 4 of a 10-round deliberation, Rounds 5 through 10 are completely skipped, saving the user from burning unnecessary queries, tokens, and time.
+- **Skipped Turns & Escaped Steps Ledger**:
+  - Full untrimmed details are captured for every executed step.
+  - Escaped steps within a converged round are explicitly recorded as `SkippedConsensus` (0 queries).
+  - Escaped subsequent rounds are recorded in `metadata.roundLedger` as `ignored_consensus` and displayed as **Duplicated / Ignored (Same as Round M Debate Round)**.
 
-### 2. Custom Skills Injection & User Directory Linking
-- **Configurable Skills Folder Linking**:
-  - Point FlyMD deliberations to external directories containing `SKILL.md` or standalone markdown competencies.
-  - Recursive directory scanner parsing YAML frontmatter tags, versions, descriptions, and replacement declarations.
-- **Interactive Tool Isolation Switch**:
-  - Dedicated toggle: *"Include Default Built-in Tool Skills alongside Custom Skills"*.
-  - **Shared Mode**: Custom skills augment standard built-in competencies, overriding matching names or explicit `replaces` tags.
-  - **Isolated Mode**: Deliberations run in strict domain isolation, omitting general built-in tools.
-- **Precedence Hierarchy**:
-  - `agent:` (0) > `custom:` (1) > `master:` (2) > `global:` (3).
+### 2. Dynamic Subscription-Aware Agent & Model Fetching
+- **Zero Static Hardcoded Dropdowns**:
+  - Cross-application elimination of static agent lists (`claude-code`, etc.).
+  - Dynamically probes user-connected CLI binaries (`claude`, `agy`/`antigravity`, `opencode`, `codex`, `cursor`, `zcode`), HTTP endpoints, live Ollama models (`/api/tags`), and custom user agents.
+- **Subscription Entitlement Filtering**:
+  - Automatically respects user subscription tiers (`Pro`, `Advanced`, `Plus`, `Team`, `Local`) from credentials to unlock corresponding frontier models and reasoning effort ceilings.
+  - Integrated 1-click **Refresh Subscriptions** button and direct link to Manage Logins.
 
-### 3. Context-Aware Smart Deliverable File Naming
-- **Semantic File Pattern**:
-  - Replaces generic filenames (`IMPLEMENTATION_PLAN.md`, `final-report-v1.md`) with structured contextual slugs: `[Project]_[SubProject]_[Topic]_[Kind].md`.
-- **Multilingual Arabic-to-English Transliteration**:
-  - Translates Arabic semantic keywords and phonemes into clean, filesystem-safe ASCII slugs.
-- **Anti-Collision Sequencing**:
-  - Automatically appends `-v2.md`, `-v3.md` if an identically-named file already exists on disk.
+### 3. Untrimmed Collapsible Reports with Locked Ignored Rounds
+- **Clean Untrimmed Markdown**:
+  - Completely eliminates 3-line and 240-character arbitrary truncations in Section 4 of consensus reports.
+  - Emits 100% full, untrimmed markdown documents.
+- **Collapsed by Default with Seamless Expansion**:
+  - Every executed debate round is rendered cleanly in a `<details>` disclosure card that is collapsed by default for executive readability, allowing users to expand any round to inspect the full transcript on demand.
+- **Strictly Non-Expandable Ignored Rounds**:
+  - Any round skipped due to early convergence is displayed as `Round N — Duplicated / Ignored (Same as Round M Debate Round)` and remains strictly non-expandable/locked, preventing visual clutter.
 
-### 4. Subscription-Aware Model Selection & Side-by-Side Effort Matrix
-- **Tiered Model Catalog**:
-  - Pre-configured catalogs for Claude (Pro/Team/Max), OpenAI, Gemini, DeepSeek, and local Ollama.
-- **Side-by-Side Model & Effort Matrix**:
-  - Integrated picker dynamically adapting available effort tiers (`low`, `medium`, `high`, `xhigh`, `max`) and thinking toggles according to the exact capabilities of the selected model.
-
----
-
-## 🛠️ Architecture Hardening & Code Splitting
-
-- **Full SRP Refactoring**:
-  - Decomposed monolithic controllers into single-responsibility custom hooks and pure presenters.
-  - Memoized $O(1)$ selectors and $O(\Delta)$ delta log streaming cursor.
-- **UTF-8 Multibyte Crash Immunity**:
-  - Safe slicing for multibyte Arabic UTF-8 strings ensuring zero panics across log tails, synthesis reports, and file names.
-- **Dual Executable Releases**:
-  - **FlyMD_2.2.0_x64-portable.exe**: Ultra-lightweight native Tauri v2 standalone executable (~15.7 MB).
-  - **FlyMD Setup 2.2.0.exe**: Complete Windows NSIS installer (~70.7 MB).
-  - **FlyMD 2.2.0.exe**: Standalone portable Electron executable (~70.3 MB).
+### 4. Multi-Engine Selection, Round Repeater & Specialist Roles Library
+- **Multi-Engine Subscription Pool**:
+  - Select multiple AI engines simultaneously for a deliberation (e.g. Claude + Gemini + DeepSeek + Ollama).
+  - In Preset mode, selected engines are automatically rotated across participating agents.
+- **Debate Round Repeater & Per-Round Splits**:
+  - **Cycle Repeater Mode**: Define a repeating specialist cycle across all rounds until early convergence is reached.
+  - **Per-Round Split Mode**: Choreograph each individual round with its own engine, model, reasoning effort, and specialist role.
+  - **1-Click Auto-Distribute**: Automatically distributes selected subscription engines and specialist roles across round phases.
+- **Unlimited Specialist Roles Library**:
+  - Built-in specialist roles (Architect, Critic, Auditor, Implementer, Researcher, Performance Lead, UX Strategist) plus full UI CRUD for user-defined custom roles with experience profiles, inquiry directives, and bound custom skills.
 
 ---
 
-## 📦 Binary Checksums (SHA-256)
+## 📦 Production Executables & Cryptographic Hashes
 
-```
-0e863cfcc94304303ccaa7068fdff7e580c3e4256a74bad6c93af8d4aa6ef0e5 *FlyMD_2.2.0_x64-portable.exe
-0e863cfcc94304303ccaa7068fdff7e580c3e4256a74bad6c93af8d4aa6ef0e5 *FlyMD_2.2.0_x64-portable-latest.exe
-040a50520503cdc2054b4d2a22d5e2513e09e0ca8e8069c3fee99e1f51fcc4d0 *FlyMD 2.2.0.exe
-1795509b5ae0a7768f0671697d7325a72ff24df41eb4b871624b36192069e543 *FlyMD Setup 2.2.0.exe
-```
+| Executable | Architecture | Size | SHA-256 Checksum |
+| :--- | :--- | :--- | :--- |
+| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | ~15.8 MB | `9ad8911681cafd07b02ccfcbc24db4e78c272cdc4d15523201bc6d5cf5b0a8cf` |
+| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Portable Symlink) | ~15.8 MB | `9ad8911681cafd07b02ccfcbc24db4e78c272cdc4d15523201bc6d5cf5b0a8cf` |
+| **`FlyMD 2.3.0.exe`** | Windows x64 (Electron Portable) | ~70.3 MB | `28c3a572afd9f3c8372ea5cc69daabd887adb93266132ec4bded0a3ae033fc3f` |
+| **`FlyMD Setup 2.3.0.exe`** | Windows x64 (NSIS Installer) | ~70.7 MB | `859adbb7890324da3f5f706da0b0aec4a45a339352a6511781baf11e53ac2c87` |
+
+---
+
+## 🚦 Verification Summary
+
+- **Rust Test Suite**: 68/68 passed (0 failed, including 10-round early convergence test and multi-engine repeater test).
+- **Rust Clippy**: 0 warnings (`-D warnings` cleanly satisfied).
+- **TypeScript**: 0 compiler errors (`tsc --noEmit`).
+- **Production Bundler**: Vite + Electron + Tauri builds completed successfully.

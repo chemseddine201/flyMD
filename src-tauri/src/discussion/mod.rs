@@ -3,6 +3,7 @@
 //! Provides structured, bounded multi-agent debate and consensus synthesis.
 
 pub mod commands;
+pub mod convergence;
 pub mod epistemic;
 pub mod manager;
 pub mod memory;
@@ -15,6 +16,7 @@ pub mod storage;
 pub mod types;
 
 pub use commands::*;
+pub use convergence::*;
 pub use epistemic::*;
 pub use manager::*;
 pub use memory::*;

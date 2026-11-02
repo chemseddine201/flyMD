@@ -196,7 +196,9 @@ pub fn heal_orphaned_session_on_disk(
                 .filter(|m| m.round_number == config.max_rounds)
                 .count();
 
-            if meta.current_round >= config.max_rounds && final_round_msgs >= active_count {
+            if meta.converged_at_round.is_some()
+                || (meta.current_round >= config.max_rounds && final_round_msgs >= active_count)
+            {
                 if meta.latest_report_version == 0 {
                     let generator = ReportGenerator::new(session_dir.to_path_buf());
                     let _ = generator.generate_report(&config, &mut meta);

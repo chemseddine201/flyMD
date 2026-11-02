@@ -406,7 +406,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
       }
       case 'QuotaLimitReached': {
         const total = payload.total_tokens ?? payload.totalTokens;
-        const cap = payload.token_budget_cap ?? payload.tokenBudgetCap;
+        const cap = payload.token_budget_cap ?? payload.tokenBudgetCap ?? payload.cap;
         set((state) => ({
           isDiscussionRunning: false,
           streamingChunks: {},
@@ -418,6 +418,23 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         }));
         if (workspace && sessionId && window.electronAPI) {
           syncDiscussionFromBackend(set, get, workspace, sessionId, 'paused');
+        }
+        break;
+      }
+      case 'ConvergenceReached': {
+        set((state) => ({
+          streamingChunks: {},
+          streamingThinking: {},
+          activeDiscussionMeta: state.activeDiscussionMeta
+            ? {
+                ...state.activeDiscussionMeta,
+                convergedAtRound: payload.converged_round,
+                convergenceReason: payload.reason,
+              }
+            : null,
+        }));
+        if (workspace && sessionId && window.electronAPI) {
+          syncDiscussionFromBackend(set, get, workspace, sessionId);
         }
         break;
       }

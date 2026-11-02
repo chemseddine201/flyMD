@@ -232,7 +232,18 @@ export function useDiscussionStudioController({
   }, [discussions, searchTerm]);
 
   const roundGroups = useMemo<DiscussionRoundGroup[]>(() => {
-    const totalRounds = Math.max(3, activeMeta?.currentRound || 1);
+    const ledgerByRound = new Map(
+      (activeMeta?.roundLedger || []).map((r) => [r.roundNumber, r])
+    );
+    const maxLedgerRound = (activeMeta?.roundLedger || []).reduce(
+      (acc, r) => Math.max(acc, r.roundNumber),
+      0
+    );
+    const totalRounds = Math.max(
+      3,
+      activeMeta?.currentRound || 1,
+      maxLedgerRound
+    );
     const msgsByRound = new Map<number, DiscussionMessage[]>();
     const tokensByRound = new Map<number, number>();
     const filterNorm = timelineFilter.toLowerCase();
@@ -270,20 +281,25 @@ export function useDiscussionStudioController({
 
     const groups: DiscussionRoundGroup[] = [];
     for (let r = 1; r <= totalRounds; r++) {
+      const ledger = ledgerByRound.get(r);
       const meta = ROUND_METADATA_BY_NUMBER.get(r) || {
         round: r,
         title: `Phase ${r}: Advanced Deliberation`,
         desc: 'Continued multi-agent cross-examination and refinement.',
       };
 
+      const isIgnored = ledger?.status === 'ignored_consensus';
+
       groups.push({
         round: r,
-        title: meta.title,
-        desc: meta.desc,
+        title: ledger?.title || meta.title,
+        desc: ledger?.reason || meta.desc,
         messages: msgsByRound.get(r) || [],
         totalTokens: tokensByRound.get(r) || 0,
-        isCurrent: currentRound === r,
-        isDone: currentRound > r || isSessionDone,
+        isCurrent: currentRound === r && !isIgnored,
+        isDone: (!isIgnored && currentRound > r) || (isSessionDone && !isIgnored),
+        isIgnored,
+        convergedFromRound: ledger?.convergedFromRound,
       });
     }
     return groups;
@@ -291,6 +307,7 @@ export function useDiscussionStudioController({
     activeTranscript,
     activeMeta?.currentRound,
     activeMeta?.status,
+    activeMeta?.roundLedger,
     timelineFilter,
   ]);
 
@@ -336,6 +353,7 @@ export function useDiscussionStudioController({
             name: msg.authorDisplayName || msg.authorAgentId,
             role: msg.authorRole,
             color: configured?.avatarColor,
+            providerId: msg.authorProvider || configured?.providerId,
           });
         }
       }
@@ -347,6 +365,7 @@ export function useDiscussionStudioController({
           name: p.displayName,
           role: p.role,
           color: p.avatarColor,
+          providerId: p.providerId,
         });
       });
     }

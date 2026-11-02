@@ -1,4 +1,4 @@
-# FlyMD v2.2 🪶
+# FlyMD v2.3 🪶
 
 [English](#-english) • [العربية](#-العربية)
 
@@ -8,7 +8,7 @@
 
 > **Ultra-lightweight Tauri v2 + Rust Markdown Supervisor, Native Multi-Agent Studio, Evidence-Graded Debate Engine & Role-Aware Epistemic Cache Handoff Hub.**
 
-[![Version: 2.2.0](https://img.shields.io/badge/Version-2.2.0-purple.svg)](CHANGELOG.md)
+[![Version: 2.3.0](https://img.shields.io/badge/Version-2.3.0-purple.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Framework: Tauri v2](https://img.shields.io/badge/Runtime-Tauri_v2_(Rust)-orange.svg)](https://tauri.app)
 [![Multi-Agent Studio](https://img.shields.io/badge/Multi--Agent-Studio_%26_Debate_Hub-6366f1.svg)](#-whats-new-in-flymd-v210)
@@ -27,6 +27,27 @@ Modern AI-assisted engineering relies on multiple coding agents and models (Clau
 - **Supervise Any Workspace Live**: Watch `.md` documentation by default — or opt-in to supervise full codebases (`.ts`, `.rs`, `.py`, `.html`, `.css`, `.js`, `.json`, etc.) via the configurable **Extensions Picker**.
 - **Orchestrate Heterogeneous Agents**: Run structured multi-round **Evidence-Graded Debates** and sequential **Plan → Build → Review → Fix Pipelines** across CLI agents, Ollama local models, and cloud APIs inside a native 3-pane studio.
 - **Move Comprehension, Prevent Bias**: Share prefix-pinned KV caches and SHA-256 verified **Cognitive Handoff Packets** across models to slash latency and API cost, while enforcing **Blind Independent Audits** on `Critic` / `Review` roles so verification agents inspect raw code diffs and form independent conclusions first.
+
+---
+
+## 🚀 What's New in FlyMD v2.3.0 (Stable)
+
+### 1. Early Debate Convergence on Successive Summaries (Zero Wasted Queries)
+- **Automatic Consensus Detection**: Detects equivalent summaries (`>= 0.82` similarity) between successive agents in a round or across round boundaries with zero newly opened disputes, immediately skipping remaining turns in the round and all subsequent scheduled rounds.
+- **Skipped Turns & Escaped Steps Ledger**: Full untrimmed details captured for every executed step. Escaped steps within a converged round are recorded as `SkippedConsensus` (0 queries), and remaining rounds are locked as Duplicated / Ignored.
+
+### 2. Dynamic Subscription-Aware Agent & Model Discovery
+- **Zero Static Hardcoded Dropdowns**: Dynamically probes connected CLI agents (`claude`, `agy`, `opencode`, `codex`, `cursor`, `zcode`), HTTP endpoints, live Ollama models, and custom user agents.
+- **Subscription Entitlement Filtering**: Automatically respects user subscription tiers (`Pro`, `Advanced`, `Plus`, `Team`, `Local`) from credentials to unlock corresponding frontier models and reasoning effort ceilings.
+
+### 3. Untrimmed Collapsible Reports with Locked Ignored Rounds
+- **Clean Untrimmed Markdown**: Consensus reports render 100% full, untrimmed markdown with zero 3-line or 240-char truncation limits.
+- **Collapsed by Default with Seamless Expansion**: Executed rounds render in clean disclosure cards collapsed by default for executive readability, expandable on click; ignored rounds remain strictly locked.
+
+### 4. Multi-Engine Selection, Round Repeater & Specialist Roles Library
+- **Multi-Engine Subscription Pool**: Select multiple AI engines simultaneously to debate collaboratively, rotated automatically across participating agents.
+- **Debate Round Repeater & Per-Round Splits**: Cycle repeater mode and per-round split mode with 1-click auto-distribution of engines and roles.
+- **Unlimited Specialist Roles Library**: Built-in specialist roles plus full UI CRUD for user-defined custom roles with experience profiles, directives, and custom skill bindings.
 
 ---
 

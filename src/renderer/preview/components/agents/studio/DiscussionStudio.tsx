@@ -172,6 +172,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   participantAgents={ctrl.participantAgents}
                   targetedAgentId={ctrl.targetedAgentId}
                   onChangeTargetedAgentId={ctrl.setTargetedAgentId}
+                  getSubscriptionTierForAgent={draft.getSubscriptionTierForAgent}
+                  getDynamicModelsForAgent={draft.getDynamicModelsForAgent}
                   targetedActionName={ctrl.targetedActionName}
                   onChangeTargetedActionName={ctrl.setTargetedActionName}
                   targetedEffortLevel={ctrl.targetedEffortLevel}
@@ -266,6 +268,26 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         onSkillsDirChange={draft.handleSkillsDirChange}
         tokenBudgetCapInput={draft.tokenBudgetCapInput}
         setTokenBudgetCapInput={draft.setTokenBudgetCapInput}
+        repeater={{
+          dynamicProviders: draft.dynamicProviders,
+          selectedEngines: draft.selectedEngines,
+          onToggleSelectedEngine: draft.handleToggleSelectedEngine,
+          onSelectAllReadyEngines: draft.handleSelectAllReadyEngines,
+          isRefreshingSubscriptions: draft.isRefreshingSubscriptions,
+          onRefreshSubscriptions: draft.refreshSubscriptionAgents,
+          onOpenManageAccounts: draft.handleOpenManageAccounts,
+          repeaterMode: draft.repeaterMode,
+          onChangeRepeaterMode: draft.setRepeaterMode,
+          maxRounds: draft.maxRounds,
+          roundSchedule: draft.roundSchedule,
+          onChangeRoundSchedule: draft.setRoundSchedule,
+          onAutoBuildRoundSchedule: draft.handleAutoBuildRoundSchedule,
+          allRoles: draft.allRoles,
+          onCreateCustomRole: draft.handleCreateCustomRole,
+          onDeleteCustomRole: draft.handleDeleteCustomRole,
+          getSubscriptionTierForAgent: draft.getSubscriptionTierForAgent,
+          getDynamicModelsForAgent: draft.getDynamicModelsForAgent,
+        }}
       />
 
       <DiscussionConfirmModals

@@ -18,6 +18,7 @@ export interface ModelEffortSideBySidePickerProps {
   thinkingEnabled?: boolean;
   onToggleThinking?: () => void;
   subscriptionTier?: string;
+  dynamicModels?: string[];
   compact?: boolean;
   disabled?: boolean;
   className?: string;
@@ -32,25 +33,30 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
   thinkingEnabled = true,
   onToggleThinking,
   subscriptionTier,
+  dynamicModels,
   compact = false,
   disabled = false,
   className = '',
 }) => {
   const [isCustomMode, setIsCustomMode] = useState<boolean>(() => {
     if (!selectedModel) return false;
-    const available = getAvailableModelsForAgent(agentId, subscriptionTier);
+    const available = getAvailableModelsForAgent(
+      agentId,
+      subscriptionTier,
+      dynamicModels
+    );
     return !available.some((m) => m.id === selectedModel);
   });
   const [customInputVal, setCustomInputVal] = useState<string>(selectedModel || '');
 
   const availableModels: ModelCatalogEntry[] = useMemo(() => {
-    return getAvailableModelsForAgent(agentId, subscriptionTier);
-  }, [agentId, subscriptionTier]);
+    return getAvailableModelsForAgent(agentId, subscriptionTier, dynamicModels);
+  }, [agentId, subscriptionTier, dynamicModels]);
 
   const effectiveModel = useMemo(() => {
     if (selectedModel && selectedModel.trim().length > 0) return selectedModel;
-    return getDefaultModelForAgent(agentId);
-  }, [selectedModel, agentId]);
+    return getDefaultModelForAgent(agentId, subscriptionTier);
+  }, [selectedModel, agentId, subscriptionTier]);
 
   const reasoningSupported = useMemo(() => {
     return isReasoningModel(effectiveModel);

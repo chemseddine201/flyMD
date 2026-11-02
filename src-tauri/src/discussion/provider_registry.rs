@@ -1,7 +1,9 @@
-//! Registry and factory for discussion inference providers (CLI subprocesses, HTTP LLMs, Ollama, and Mock engines).
+//! Registry and factory for discussion inference providers (discovered user-subscription CLI agents,
+//! custom agents, HTTP LLMs, Ollama local daemon, and offline simulator).
 
 use super::runner::{CliProvider, CliType, DiscussionProvider, HttpProvider, MockProvider};
 use super::types::DiscussionConfig;
+use crate::agents::discovery::discover_agent_profiles;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,11 +43,34 @@ pub struct AvailableProviderInfo {
     pub supports_thinking: bool,
     #[serde(rename = "supportsEffort", default)]
     pub supports_effort: bool,
+    #[serde(rename = "authStatus", default)]
+    pub auth_status: String,
+    #[serde(
+        rename = "subscriptionTier",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub subscription_tier: Option<String>,
+    #[serde(
+        rename = "accountLabel",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub account_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
+    #[serde(
+        rename = "accentColor",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub accent_color: Option<String>,
+    #[serde(rename = "isCustom", default)]
+    pub is_custom: bool,
 }
 
-/// Composite lookup key (`provider_id::model_id`) so multiple participants sharing a provider
-/// (e.g. two Ollama or HTTP agents running different models) never overwrite each other's model,
-/// while two participants using the exact same model share the exact same `Arc<dyn DiscussionProvider>`.
+/// Composite lookup key (`provider_id::model_id`) so multiple participants or rounds sharing a provider
+/// with different models never overwrite each other's model configuration.
 pub fn provider_lookup_key(provider_id: &str, model_id: &str) -> String {
     let m = model_id.trim();
     if m.is_empty() || m == "default" {
@@ -69,18 +94,29 @@ pub fn build_provider_map(
 
     let settings = store.map(|s| s.get_settings());
     let creds = store.map(|s| s.get_agent_credentials()).unwrap_or_default();
+    let discovered_profiles = discover_agent_profiles(&creds);
 
-    for p in &config.participants {
+    // Register providers across BOTH base `participants` AND every round slot in `round_schedule`
+    let all_participants = config.all_scheduled_participants();
+
+    for p in &all_participants {
         let composite_key = provider_lookup_key(&p.provider_id, &p.model_id);
         if map.contains_key(&composite_key) {
             continue;
         }
 
-        let provider_arc: Arc<dyn DiscussionProvider> = match p.provider_id.as_str() {
+        let norm_provider = if p.provider_id == "gemini-antigravity" {
+            "antigravity"
+        } else {
+            p.provider_id.as_str()
+        };
+
+        let provider_arc: Arc<dyn DiscussionProvider> = match norm_provider {
             "claude-code" => {
                 let custom_bin = creds
                     .get("claude-code")
                     .and_then(|c| c.custom_binary_path.as_ref())
+                    .filter(|s| !s.trim().is_empty())
                     .map(PathBuf::from);
                 let exe = custom_bin.or_else(|| resolve_executable("claude"));
                 if let Some(exe_path) = exe {
@@ -90,15 +126,18 @@ pub fn build_provider_map(
                         session_sandbox.clone(),
                     ))
                 } else {
-                    Arc::new(MockProvider::new("claude-code"))
+                    Arc::new(MockProvider::new(&p.provider_id))
                 }
             }
-            "gemini-antigravity" => {
+            "antigravity" => {
                 let custom_bin = creds
                     .get("antigravity")
                     .and_then(|c| c.custom_binary_path.as_ref())
+                    .filter(|s| !s.trim().is_empty())
                     .map(PathBuf::from);
-                let exe = custom_bin.or_else(|| resolve_executable("agy"));
+                let exe = custom_bin
+                    .or_else(|| resolve_executable("agy"))
+                    .or_else(|| resolve_executable("antigravity"));
                 if let Some(exe_path) = exe {
                     Arc::new(CliProvider::new(
                         CliType::AntigravityGemini,
@@ -106,7 +145,59 @@ pub fn build_provider_map(
                         session_sandbox.clone(),
                     ))
                 } else {
-                    Arc::new(MockProvider::new("gemini-antigravity"))
+                    Arc::new(MockProvider::new(&p.provider_id))
+                }
+            }
+            "opencode" => {
+                let custom_bin = creds
+                    .get("opencode")
+                    .and_then(|c| c.custom_binary_path.as_ref())
+                    .filter(|s| !s.trim().is_empty())
+                    .map(PathBuf::from);
+                let exe = custom_bin.or_else(|| resolve_executable("opencode"));
+                if let Some(exe_path) = exe {
+                    Arc::new(CliProvider::new(
+                        CliType::OpenCode,
+                        exe_path,
+                        session_sandbox.clone(),
+                    ))
+                } else {
+                    Arc::new(MockProvider::new("opencode"))
+                }
+            }
+            "codex" => {
+                let custom_bin = creds
+                    .get("codex")
+                    .and_then(|c| c.custom_binary_path.as_ref())
+                    .filter(|s| !s.trim().is_empty())
+                    .map(PathBuf::from);
+                let exe = custom_bin.or_else(|| resolve_executable("codex"));
+                if let Some(exe_path) = exe {
+                    Arc::new(CliProvider::new(
+                        CliType::Codex,
+                        exe_path,
+                        session_sandbox.clone(),
+                    ))
+                } else if let Some(api_key) = creds
+                    .get("codex")
+                    .and_then(|c| c.api_key.clone())
+                    .filter(|k| !k.trim().is_empty())
+                {
+                    let model = if !p.model_id.is_empty() && p.model_id != "default" {
+                        p.model_id.clone()
+                    } else {
+                        "o3-mini".to_string()
+                    };
+                    Arc::new(HttpProvider::new(
+                        "codex",
+                        client.clone(),
+                        "https://api.openai.com/v1",
+                        Some(api_key),
+                        &model,
+                        false,
+                    ))
+                } else {
+                    Arc::new(MockProvider::new("codex"))
                 }
             }
             "ollama" => {
@@ -122,7 +213,7 @@ pub fn build_provider_map(
                         .as_ref()
                         .map(|s| s.ollama_model.clone())
                         .filter(|m| !m.trim().is_empty())
-                        .unwrap_or_else(|| "qwen2.5:3b".to_string())
+                        .unwrap_or_else(|| "qwen2.5-coder:32b".to_string())
                 };
                 Arc::new(HttpProvider::new(
                     &p.provider_id,
@@ -133,10 +224,11 @@ pub fn build_provider_map(
                     true,
                 ))
             }
-            "deepseek" | "kimi" | "http-llm" => {
-                let (default_endpoint, default_model) = match p.provider_id.as_str() {
+            "deepseek" | "kimi" | "http-llm" | "openai" => {
+                let (default_endpoint, default_model) = match norm_provider {
                     "deepseek" => ("https://api.deepseek.com", "deepseek-reasoner"),
                     "kimi" => ("https://api.moonshot.cn/v1", "moonshot-v1-8k"),
+                    "openai" => ("https://api.openai.com/v1", "o3-mini"),
                     _ => (
                         settings
                             .as_ref()
@@ -152,7 +244,7 @@ pub fn build_provider_map(
                 };
 
                 let api_key = creds
-                    .get(&p.provider_id)
+                    .get(norm_provider)
                     .and_then(|c| c.api_key.clone())
                     .or_else(|| {
                         settings
@@ -176,7 +268,54 @@ pub fn build_provider_map(
                     false,
                 ))
             }
-            _ => Arc::new(MockProvider::new(&p.provider_id)),
+            other_id => {
+                // Check discovered builtin/custom agent profiles (e.g. cursor, zcode, or user custom agents)
+                let cred_opt = creds.get(other_id);
+                let profile_opt = discovered_profiles.iter().find(|pr| pr.id == other_id);
+                let detected_bin = cred_opt
+                    .and_then(|c| c.custom_binary_path.as_ref())
+                    .filter(|s| !s.trim().is_empty())
+                    .map(PathBuf::from)
+                    .or_else(|| {
+                        profile_opt
+                            .and_then(|pr| pr.detected_binary_path.as_ref())
+                            .map(PathBuf::from)
+                    });
+
+                if let Some(exe_path) = detected_bin {
+                    Arc::new(CliProvider::new(
+                        CliType::GenericCli {
+                            agent_id: other_id.to_string(),
+                            custom_args: cred_opt.and_then(|c| c.custom_args.clone()),
+                        },
+                        exe_path,
+                        session_sandbox.clone(),
+                    ))
+                } else if let (Some(endpoint), Some(api_key)) = (
+                    cred_opt
+                        .and_then(|c| c.custom_web_url.as_deref())
+                        .filter(|u| u.starts_with("http") && u.contains("/v1")),
+                    cred_opt
+                        .and_then(|c| c.api_key.clone())
+                        .filter(|k| !k.trim().is_empty()),
+                ) {
+                    let model = if !p.model_id.is_empty() && p.model_id != "default" {
+                        p.model_id.clone()
+                    } else {
+                        "gpt-4o".to_string()
+                    };
+                    Arc::new(HttpProvider::new(
+                        other_id,
+                        client.clone(),
+                        endpoint,
+                        Some(api_key),
+                        &model,
+                        false,
+                    ))
+                } else {
+                    Arc::new(MockProvider::new(other_id))
+                }
+            }
         };
 
         map.insert(composite_key, provider_arc.clone());
@@ -186,99 +325,180 @@ pub fn build_provider_map(
     map
 }
 
+/// Dynamically discovers all user-subscribed & installed agents, custom user agents,
+/// local Ollama daemons, and configured API endpoints — eliminating static hardcoded provider lists.
 pub fn detect_available_providers(store: &crate::store::AppStore) -> Vec<AvailableProviderInfo> {
     let settings = store.get_settings();
     let creds = store.get_agent_credentials();
+    let discovered_agents = discover_agent_profiles(&creds);
 
-    let claude_available = creds
-        .get("claude-code")
-        .and_then(|c| c.custom_binary_path.as_ref())
-        .map(PathBuf::from)
-        .map(|p| p.exists())
-        .unwrap_or_else(|| resolve_executable("claude").is_some());
+    let mut providers: Vec<AvailableProviderInfo> = Vec::new();
 
-    let gemini_available = creds
-        .get("antigravity")
-        .and_then(|c| c.custom_binary_path.as_ref())
-        .map(PathBuf::from)
-        .map(|p| p.exists())
-        .unwrap_or_else(|| resolve_executable("agy").is_some());
+    // 1. Dynamically populate from discovered user agents & subscriptions
+    for profile in discovered_agents {
+        if !profile.enabled {
+            continue;
+        }
 
+        let is_authed_or_ready = matches!(
+            profile.auth_status.as_str(),
+            "connected" | "api-key-ready" | "web-connected" | "ready"
+        ) || profile.detected_binary_path.is_some();
+
+        let available = profile.installed && is_authed_or_ready;
+
+        let default_model = profile
+            .default_model_id
+            .clone()
+            .unwrap_or_else(|| "claude-3-7-sonnet".to_string());
+
+        let tier_badge = profile
+            .subscription_tier
+            .as_deref()
+            .map(|t| format!(" [{}]", t.to_uppercase()))
+            .unwrap_or_default();
+
+        providers.push(AvailableProviderInfo {
+            id: profile.id.clone(),
+            name: format!("{}{}", profile.name, tier_badge),
+            provider_type: if profile.is_custom {
+                "custom".to_string()
+            } else {
+                "cli".to_string()
+            },
+            available,
+            description: profile.description.clone(),
+            default_model,
+            supports_thinking: profile.supports_thinking.unwrap_or(true),
+            supports_effort: profile.supports_effort.unwrap_or(false),
+            auth_status: profile.auth_status.clone(),
+            subscription_tier: profile.subscription_tier.clone(),
+            account_label: profile.connected_account_label.clone(),
+            vendor: Some(profile.vendor.clone()),
+            accent_color: Some(profile.accent_color.clone()),
+            is_custom: profile.is_custom,
+        });
+    }
+
+    // 2. Local Ollama runtime (dynamic probe against configured daemon URL)
     let ollama_configured = !settings.ollama_url.trim().is_empty()
         && check_tcp_port_alive(&settings.ollama_url, 11434);
-    let http_configured = !settings.llm_config.endpoint_url.trim().is_empty();
-    let deepseek_has_key = creds.get("deepseek").and_then(|c| c.api_key.as_ref()).is_some()
-        || settings.llm_config.api_key.as_ref().map(|k| !k.trim().is_empty()).unwrap_or(false);
-
-    vec![
-        AvailableProviderInfo {
-            id: "mock".to_string(),
-            name: "Adaptive Domain Simulator (Local)".to_string(),
-            provider_type: "simulator".to_string(),
-            available: true,
-            description: "Zero API cost local analyzer that evaluates architecture and generates multi-step reasoning.".to_string(),
-            default_model: "domain-reasoner-v1".to_string(),
-            supports_thinking: true,
-            supports_effort: false,
-        },
-        AvailableProviderInfo {
+    if ollama_configured || !settings.ollama_model.trim().is_empty() {
+        providers.push(AvailableProviderInfo {
             id: "ollama".to_string(),
-            name: "Ollama Local Engine".to_string(),
+            name: "Ollama Local Engine [LOCAL]".to_string(),
             provider_type: "ollama".to_string(),
             available: ollama_configured,
             description: format!("Local Ollama daemon at {}", settings.ollama_url),
-            default_model: if !settings.ollama_model.is_empty() {
+            default_model: if !settings.ollama_model.trim().is_empty() {
                 settings.ollama_model.clone()
             } else {
-                "qwen2.5:3b".to_string()
+                "qwen2.5-coder:32b".to_string()
             },
             supports_thinking: true,
             supports_effort: false,
-        },
-        AvailableProviderInfo {
+            auth_status: if ollama_configured {
+                "connected".to_string()
+            } else {
+                "not-installed".to_string()
+            },
+            subscription_tier: Some("local".to_string()),
+            account_label: Some("Local GPU / CPU Runtime".to_string()),
+            vendor: Some("Ollama".to_string()),
+            accent_color: Some("#fbbf24".to_string()),
+            is_custom: false,
+        });
+    }
+
+    // 3. DeepSeek Direct API (included dynamically when API credentials exist)
+    let deepseek_cred = creds.get("deepseek");
+    let deepseek_has_key = deepseek_cred
+        .and_then(|c| c.api_key.as_ref())
+        .map(|k| !k.trim().is_empty())
+        .unwrap_or(false)
+        || std::env::var("DEEPSEEK_API_KEY")
+            .ok()
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false);
+    if deepseek_has_key {
+        let tier = deepseek_cred
+            .and_then(|c| c.subscription_tier.clone())
+            .unwrap_or_else(|| "api".to_string());
+        let model = deepseek_cred
+            .and_then(|c| c.selected_model.clone())
+            .filter(|m| !m.trim().is_empty())
+            .unwrap_or_else(|| "deepseek-reasoner".to_string());
+        providers.push(AvailableProviderInfo {
             id: "deepseek".to_string(),
-            name: "DeepSeek Reasoning (R1)".to_string(),
+            name: format!("DeepSeek Reasoning [{}]", tier.to_uppercase()),
             provider_type: "http".to_string(),
-            available: deepseek_has_key,
-            description: "Native reasoning engine with chain-of-thought tokens.".to_string(),
-            default_model: "deepseek-reasoner".to_string(),
+            available: true,
+            description: "Native DeepSeek R1 / V3 API with chain-of-thought reasoning.".to_string(),
+            default_model: model,
             supports_thinking: true,
             supports_effort: false,
-        },
-        AvailableProviderInfo {
+            auth_status: "api-key-ready".to_string(),
+            subscription_tier: Some(tier),
+            account_label: Some("DeepSeek API".to_string()),
+            vendor: Some("DeepSeek".to_string()),
+            accent_color: Some("#6366f1".to_string()),
+            is_custom: false,
+        });
+    }
+
+    // 4. Configured Custom OpenAI-compatible HTTP Endpoint
+    let http_configured = !settings.llm_config.endpoint_url.trim().is_empty()
+        && settings
+            .llm_config
+            .api_key
+            .as_ref()
+            .map(|k| !k.trim().is_empty())
+            .unwrap_or(false);
+    if http_configured {
+        providers.push(AvailableProviderInfo {
             id: "http-llm".to_string(),
-            name: "Custom LLM / OpenAI API".to_string(),
+            name: "Configured OpenAI / HTTP API [API]".to_string(),
             provider_type: "http".to_string(),
-            available: http_configured,
+            available: true,
             description: format!("Configured endpoint at {}", settings.llm_config.endpoint_url),
-            default_model: if !settings.llm_config.model.is_empty() {
+            default_model: if !settings.llm_config.model.trim().is_empty() {
                 settings.llm_config.model.clone()
             } else {
                 "gpt-4o".to_string()
             },
             supports_thinking: true,
             supports_effort: false,
-        },
-        AvailableProviderInfo {
-            id: "claude-code".to_string(),
-            name: "Claude Code CLI".to_string(),
-            provider_type: "cli".to_string(),
-            available: claude_available,
-            description: "Anthropic Claude Code CLI in plan/read-only mode.".to_string(),
-            default_model: "claude-3-7-sonnet".to_string(),
-            supports_thinking: true,
-            supports_effort: true,
-        },
-        AvailableProviderInfo {
-            id: "gemini-antigravity".to_string(),
-            name: "Antigravity Gemini CLI (agy)".to_string(),
-            provider_type: "cli".to_string(),
-            available: gemini_available,
-            description: "Google Antigravity CLI sandbox runner.".to_string(),
-            default_model: "gemini-2.5-pro".to_string(),
-            supports_thinking: true,
-            supports_effort: true,
-        },
-    ]
-}
+            auth_status: "api-key-ready".to_string(),
+            subscription_tier: Some("api".to_string()),
+            account_label: Some("Direct API Endpoint".to_string()),
+            vendor: Some("OpenAI Compatible".to_string()),
+            accent_color: Some("#22c55e".to_string()),
+            is_custom: false,
+        });
+    }
 
+    // Sort so active/available user-subscribed agents always appear first!
+    providers.sort_by(|a, b| b.available.cmp(&a.available).then_with(|| a.name.cmp(&b.name)));
+
+    // 5. Offline Simulator fallback at the end (clearly typed as simulator)
+    providers.push(AvailableProviderInfo {
+        id: "mock".to_string(),
+        name: "Offline Domain Simulator (Zero-Quota Fallback)".to_string(),
+        provider_type: "simulator".to_string(),
+        available: true,
+        description:
+            "Zero-quota local simulator for testing multi-round choreography without consuming subscription queries."
+                .to_string(),
+        default_model: "adaptive-domain-simulator".to_string(),
+        supports_thinking: true,
+        supports_effort: false,
+        auth_status: "local-simulator".to_string(),
+        subscription_tier: Some("simulator".to_string()),
+        account_label: Some("Built-in Offline Simulator".to_string()),
+        vendor: Some("FlyMD Local".to_string()),
+        accent_color: Some("#94a3b8".to_string()),
+        is_custom: false,
+    });
+
+    providers
+}

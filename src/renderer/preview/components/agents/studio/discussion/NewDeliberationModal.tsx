@@ -19,23 +19,53 @@ import {
   Shield,
   Layers,
   Info,
+  Repeat,
 } from 'lucide-react';
 import {
   DiscussionParticipant,
   AgentEffortLevel,
   SkillDescriptor,
+  AvailableProviderInfo,
+  CustomRoleDefinition,
+  DebateRepeaterMode,
+  DiscussionRoundPlan,
 } from '../../../../../../shared/types';
 import { ModelEffortSideBySidePicker } from '../../common/ModelEffortSideBySidePicker';
 import {
   DeliberationPreset,
   ACTION_CATALOG,
 } from '../../../../services/deliberationPresetRepository';
+import { DebateRoundRepeaterBuilder } from './DebateRoundRepeaterBuilder';
+import { NewDebateModeTab } from './useNewDeliberationDraft';
+import { getDefaultModelForAgent } from '../../../../../../shared/constants/models';
 
 export interface AvailableProviderOption {
   id: string;
   name: string;
   model: string;
   available: boolean;
+}
+
+/** Live subscription, multi-engine, role-library and round-repeater wiring. */
+export interface RepeaterAndSubscriptionProps {
+  dynamicProviders: AvailableProviderInfo[];
+  selectedEngines: string[];
+  onToggleSelectedEngine: (engineId: string) => void;
+  onSelectAllReadyEngines: () => void;
+  isRefreshingSubscriptions: boolean;
+  onRefreshSubscriptions: () => void;
+  onOpenManageAccounts?: () => void;
+  repeaterMode: DebateRepeaterMode;
+  onChangeRepeaterMode: (mode: DebateRepeaterMode) => void;
+  maxRounds: number;
+  roundSchedule: DiscussionRoundPlan[];
+  onChangeRoundSchedule: (schedule: DiscussionRoundPlan[]) => void;
+  onAutoBuildRoundSchedule: (targetMode?: 'cycle' | 'per_round') => void;
+  allRoles: CustomRoleDefinition[];
+  onCreateCustomRole: (role: Omit<CustomRoleDefinition, 'id' | 'isBuiltIn'>) => void;
+  onDeleteCustomRole: (roleId: string) => void;
+  getSubscriptionTierForAgent: (agentOrProviderId: string) => string | undefined;
+  getDynamicModelsForAgent: (agentOrProviderId: string) => string[];
 }
 
 export interface NewDeliberationModalProps {
@@ -56,8 +86,8 @@ export interface NewDeliberationModalProps {
   setTurnTimeoutInput: (v: string) => void;
   setTurnTimeoutSecs: (v: number) => void;
 
-  newDebateMode: 'preset' | 'actions' | 'custom';
-  setNewDebateMode: (v: 'preset' | 'actions' | 'custom') => void;
+  newDebateMode: NewDebateModeTab;
+  setNewDebateMode: (v: NewDebateModeTab) => void;
   enableStepModeInNew: boolean;
   setEnableStepModeInNew: (v: boolean) => void;
 
@@ -81,8 +111,10 @@ export interface NewDeliberationModalProps {
   onAddParticipant: () => void;
   onRemoveParticipant: (idx: number) => void;
 
-  availableProviders: AvailableProviderOption[];
-  presetEngine: string;
+  /** @deprecated Engines now come from live subscription discovery (`repeater.dynamicProviders`). */
+  availableProviders?: AvailableProviderOption[];
+  /** Last explicitly chosen lead engine (kept for backward compatibility). */
+  presetEngine?: string;
   setPresetEngine: (v: string) => void;
   presetEffortLevel: AgentEffortLevel;
   setPresetEffortLevel: (v: AgentEffortLevel) => void;
@@ -99,6 +131,8 @@ export interface NewDeliberationModalProps {
   onSkillsDirChange?: (v: string) => void;
   tokenBudgetCapInput?: string;
   setTokenBudgetCapInput?: (v: string) => void;
+
+  repeater: RepeaterAndSubscriptionProps;
 }
 
 const COLOR_PALETTE = ['#38bdf8', '#818cf8', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#a855f7'];
@@ -138,8 +172,6 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   onUpdateParticipant,
   onAddParticipant,
   onRemoveParticipant,
-  availableProviders,
-  presetEngine,
   setPresetEngine,
   presetEffortLevel,
   setPresetEffortLevel,
@@ -155,8 +187,14 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   onSkillsDirChange,
   tokenBudgetCapInput = '50000',
   setTokenBudgetCapInput,
+  repeater,
 }) => {
   if (!isOpen) return null;
+
+  const engineOptions = repeater.dynamicProviders;
+  const roleOptions = repeater.allRoles;
+  const findRoleFor = (role: string) =>
+    roleOptions.find((r) => r.roleKey === role || r.name === role);
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
@@ -224,6 +262,26 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    setNewDebateMode('repeater');
+                    if (repeater.repeaterMode === 'off') {
+                      repeater.onChangeRepeaterMode('cycle');
+                      if (repeater.roundSchedule.length === 0) {
+                        repeater.onAutoBuildRoundSchedule('cycle');
+                      }
+                    }
+                  }}
+                  className={`px-3 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
+                    newDebateMode === 'repeater'
+                      ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Repeat size={11} />
+                  <span>Multi-Engine Round Repeater</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     setNewDebateMode('actions');
                     setEditingPreset(null);
                   }}
@@ -250,23 +308,53 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
               </div>
             </div>
 
-            {/* Connected Engines Indicator */}
-            {availableProviders.some((ap) => ap.available) && (
-              <div className="mb-3 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles size={12} className="text-emerald-400" />
-                  <span>
-                    <strong>Detected AI Engines:</strong>{' '}
-                    {availableProviders
-                      .filter((ap) => ap.available)
+            {/* Connected Engines Indicator (live subscription discovery) */}
+            {engineOptions.some((ap) => ap.available && ap.id !== 'mock') && (
+              <div className="mb-3 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Sparkles size={12} className="text-emerald-400 shrink-0" />
+                  <span className="truncate">
+                    <strong>Connected Subscription Engines:</strong>{' '}
+                    {engineOptions
+                      .filter((ap) => ap.available && ap.id !== 'mock')
                       .map((ap) => `${ap.name} (${ap.model})`)
                       .join(', ')}
                   </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={repeater.onRefreshSubscriptions}
+                  className="text-emerald-300 hover:text-emerald-200 font-semibold shrink-0"
+                  title="Re-scan subscriptions"
+                >
+                  {repeater.isRefreshingSubscriptions ? 'Refreshing…' : 'Refresh'}
+                </button>
               </div>
             )}
 
-            {newDebateMode === 'preset' ? (
+            {newDebateMode === 'repeater' ? (
+              <DebateRoundRepeaterBuilder
+                dynamicProviders={repeater.dynamicProviders}
+                selectedEngines={repeater.selectedEngines}
+                onToggleSelectedEngine={repeater.onToggleSelectedEngine}
+                onSelectAllReadyEngines={repeater.onSelectAllReadyEngines}
+                isRefreshingSubscriptions={repeater.isRefreshingSubscriptions}
+                onRefreshSubscriptions={repeater.onRefreshSubscriptions}
+                onOpenManageAccounts={repeater.onOpenManageAccounts}
+                repeaterMode={repeater.repeaterMode}
+                onChangeRepeaterMode={repeater.onChangeRepeaterMode}
+                maxRounds={repeater.maxRounds}
+                roundSchedule={repeater.roundSchedule}
+                onChangeRoundSchedule={repeater.onChangeRoundSchedule}
+                onAutoBuildRoundSchedule={repeater.onAutoBuildRoundSchedule}
+                allRoles={repeater.allRoles}
+                onCreateCustomRole={repeater.onCreateCustomRole}
+                onDeleteCustomRole={repeater.onDeleteCustomRole}
+                detectedSkills={detectedSkills}
+                getSubscriptionTierForAgent={repeater.getSubscriptionTierForAgent}
+                getDynamicModelsForAgent={repeater.getDynamicModelsForAgent}
+              />
+            ) : newDebateMode === 'preset' ? (
               <div className="space-y-3">
                 {/* Preset Engine Switcher */}
                 <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -276,31 +364,56 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                     </div>
                     <div className="min-w-0">
                       <div className="font-bold text-slate-100 flex items-center gap-2 truncate">
-                        <span>Preset AI Engine</span>
+                        <span>Preset AI Engines</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/20 font-medium hidden sm:inline">
-                          Shared across all agents
+                          {repeater.selectedEngines.length > 1
+                            ? `${repeater.selectedEngines.length} engines rotated across agents`
+                            : 'Shared across all agents'}
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-                        Frontier agent or fast built-in reasoning engine
+                        Pick one or more of your connected subscription engines
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-                    <select
-                      value={presetEngine}
-                      onChange={(e) => setPresetEngine(e.target.value)}
-                      className="w-full sm:w-auto min-w-0 sm:max-w-[320px] shrink-0 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500 font-medium truncate shadow-inner cursor-pointer"
-                    >
-                      <option value="mock">⚡ Built-in Adaptive Domain Simulator (Fast)</option>
-                      {availableProviders
-                        .filter((ap) => ap.id !== 'mock')
-                        .map((p) => (
-                          <option key={p.id} value={p.id} disabled={!p.available}>
-                            {p.name} {p.available ? `(${p.model})` : '(Not Detected)'}
-                          </option>
-                        ))}
-                    </select>
+                    <div className="flex flex-wrap gap-1.5 max-w-full sm:max-w-[420px]">
+                      {engineOptions.map((p) => {
+                        const active = repeater.selectedEngines.includes(p.id);
+                        const selectable = p.available || p.id === 'mock';
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            disabled={!selectable && !active}
+                            onClick={() => {
+                              repeater.onToggleSelectedEngine(p.id);
+                              setPresetEngine(p.id);
+                            }}
+                            title={
+                              selectable
+                                ? `${p.name} — ${p.model}`
+                                : `${p.name} (not connected)`
+                            }
+                            className={`px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 transition ${
+                              active
+                                ? 'bg-sky-500/20 border-sky-500/50 text-sky-200'
+                                : selectable
+                                ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                                : 'bg-slate-950/40 border-slate-800/50 text-slate-600 cursor-not-allowed'
+                            }`}
+                          >
+                            {active && <Check size={10} />}
+                            <span className="truncate max-w-[160px]">{p.name}</span>
+                          </button>
+                        );
+                      })}
+                      {engineOptions.length === 0 && (
+                        <span className="text-[11px] text-amber-300">
+                          No engines detected yet. Use Refresh or connect a subscription.
+                        </span>
+                      )}
+                    </div>
 
                     {/* Preset Shared Effort Dropdown */}
                     <select
@@ -458,10 +571,18 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                           onClick={() => {
                             const nextIdx = editingPreset.participants.length + 1;
                             const color = COLOR_PALETTE[(nextIdx - 1) % COLOR_PALETTE.length];
+                            const leadEngine =
+                              repeater.selectedEngines[0] || engineOptions[0]?.id || 'mock';
+                            const leadModel =
+                              engineOptions.find((ep) => ep.id === leadEngine)?.model ||
+                              getDefaultModelForAgent(
+                                leadEngine,
+                                repeater.getSubscriptionTierForAgent(leadEngine)
+                              );
                             const newAgent: DiscussionParticipant = {
                               agentId: `agent-custom-${Date.now()}`,
-                              providerId: 'mock',
-                              modelId: 'custom-expert-v1',
+                              providerId: leadEngine,
+                              modelId: leadModel,
                               displayName: `Specialist ${nextIdx}`,
                               role: 'custom',
                               roleDescription: 'Custom inquiry focus and domain analysis.',
@@ -511,20 +632,29 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                                   className="w-44 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-100 font-bold focus:outline-none focus:border-sky-500"
                                 />
                                 <select
-                                  value={p.role}
+                                  value={findRoleFor(p.role)?.id || '__current__'}
                                   onChange={(e) => {
+                                    const picked = roleOptions.find((r) => r.id === e.target.value);
+                                    if (!picked) return;
                                     const copy = [...editingPreset.participants];
-                                    copy[pIdx] = { ...copy[pIdx], role: e.target.value as any };
+                                    copy[pIdx] = {
+                                      ...copy[pIdx],
+                                      role: picked.roleKey,
+                                      roleDescription: copy[pIdx].roleDescription || picked.experienceProfile,
+                                      avatarColor: picked.avatarColor,
+                                    };
                                     setEditingPreset({ ...editingPreset, participants: copy });
                                   }}
                                   className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-300 font-medium focus:outline-none focus:border-sky-500 cursor-pointer"
                                 >
-                                  <option value="architect">Architect</option>
-                                  <option value="critic">Critic / Adversary</option>
-                                  <option value="implementer">Implementer</option>
-                                  <option value="auditor">Auditor</option>
-                                  <option value="user">User Proxy</option>
-                                  <option value="custom">Custom Specialist</option>
+                                  {roleOptions.map((r) => (
+                                    <option key={r.id} value={r.id}>
+                                      {r.name}
+                                    </option>
+                                  ))}
+                                  {!findRoleFor(p.role) && (
+                                    <option value="__current__">{p.role || 'Custom Specialist'}</option>
+                                  )}
                                 </select>
                               </div>
                               {editingPreset.participants.length > 2 && (
@@ -722,49 +852,62 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                             className="w-28 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200"
                           />
                           <select
-                            value={p.role}
-                            onChange={(e) => onUpdateParticipant(idx, { role: e.target.value as any })}
-                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs"
+                            value={findRoleFor(p.role)?.id || '__current__'}
+                            onChange={(e) => {
+                              const picked = roleOptions.find((r) => r.id === e.target.value);
+                              if (!picked) return;
+                              onUpdateParticipant(idx, {
+                                role: picked.roleKey,
+                                roleDescription: picked.experienceProfile,
+                                avatarColor: picked.avatarColor,
+                                assignedSkillUris:
+                                  picked.assignedSkillUris.length > 0
+                                    ? picked.assignedSkillUris
+                                    : p.assignedSkillUris,
+                              });
+                            }}
+                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs max-w-[180px]"
+                            title="Specialist role (built-in + your custom roles)"
                           >
-                            <option value="architect">Architect</option>
-                            <option value="critic">Critic</option>
-                            <option value="auditor">Auditor</option>
-                            <option value="implementer">Implementer</option>
-                            <option value="researcher">Researcher</option>
-                            <option value="security-specialist">Security Specialist</option>
+                            {roleOptions.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.name}
+                              </option>
+                            ))}
+                            {!findRoleFor(p.role) && (
+                              <option value="__current__">{p.role || 'Custom Specialist'}</option>
+                            )}
                           </select>
                           <select
                             value={p.providerId}
                             onChange={(e) => {
                               const provId = e.target.value;
-                              const matched = availableProviders.find((ap) => ap.id === provId);
+                              const matched = engineOptions.find((ap) => ap.id === provId);
                               onUpdateParticipant(idx, {
                                 providerId: provId,
-                                modelId: matched?.model || p.modelId,
+                                modelId:
+                                  matched?.model ||
+                                  getDefaultModelForAgent(
+                                    provId,
+                                    repeater.getSubscriptionTierForAgent(provId)
+                                  ),
                               });
                             }}
-                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs"
+                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs flex-1 min-w-0"
+                            title="Subscription engine for this agent"
                           >
-                            <option value="mock">Local Reasoner (Simulated)</option>
-                            {availableProviders.map((ap) => (
-                              <option key={ap.id} value={ap.id}>
-                                {ap.name} {ap.available ? '✓ Ready' : '(Not configured)'}
+                            {engineOptions.map((ap) => (
+                              <option
+                                key={ap.id}
+                                value={ap.id}
+                                disabled={!ap.available && ap.id !== 'mock' && ap.id !== p.providerId}
+                              >
+                                {ap.name}{' '}
+                                {ap.available || ap.id === 'mock' ? '✓ Ready' : '(Not connected)'}
                               </option>
                             ))}
-                            {!availableProviders.some((ap) => ap.id === 'ollama') && (
-                              <option value="ollama">Ollama</option>
-                            )}
-                            {!availableProviders.some((ap) => ap.id === 'claude-code') && (
-                              <option value="claude-code">Claude Code CLI</option>
-                            )}
-                            {!availableProviders.some((ap) => ap.id === 'gemini-antigravity') && (
-                              <option value="gemini-antigravity">Gemini CLI</option>
-                            )}
-                            {!availableProviders.some((ap) => ap.id === 'deepseek') && (
-                              <option value="deepseek">DeepSeek</option>
-                            )}
-                            {!availableProviders.some((ap) => ap.id === 'http-llm') && (
-                              <option value="http-llm">OpenAI / HTTP</option>
+                            {!engineOptions.some((ap) => ap.id === p.providerId) && (
+                              <option value={p.providerId}>{p.providerId} (unavailable)</option>
                             )}
                           </select>
                           <button
@@ -782,6 +925,8 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                         <div className="pt-1.5 border-t border-slate-800/60">
                           <ModelEffortSideBySidePicker
                             agentId={p.providerId || p.agentId}
+                            subscriptionTier={repeater.getSubscriptionTierForAgent(p.providerId)}
+                            dynamicModels={repeater.getDynamicModelsForAgent(p.providerId)}
                             selectedModel={p.modelId}
                             onChangeModel={(m) => onUpdateParticipant(idx, { modelId: m })}
                             effortLevel={p.effortLevel || 'medium'}

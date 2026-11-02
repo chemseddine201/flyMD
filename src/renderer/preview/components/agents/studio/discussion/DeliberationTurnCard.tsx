@@ -115,6 +115,7 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
     const isHuman =
       msg.messageKind === 'user_intervention' ||
       msg.authorAgentId === 'human-user';
+    const isSkippedConsensus = msg.messageKind === 'skipped_consensus';
 
     const snippet = useMemo(() => getMessageSnippet(msg.content), [msg.content]);
 
@@ -124,9 +125,30 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
     );
 
     const renderedMarkdownHtml = useMemo(() => {
-      if (!isTurnExpanded) return '';
+      if (!isTurnExpanded || isSkippedConsensus) return '';
       return markdownService.render(cleanDiscussionMarkdown(msg.content));
-    }, [isTurnExpanded, msg.content]);
+    }, [isTurnExpanded, isSkippedConsensus, msg.content]);
+
+    if (isSkippedConsensus) {
+      return (
+        <div
+          aria-disabled="true"
+          className="rounded-xl border border-amber-500/25 bg-slate-950/60 p-3 flex flex-wrap items-center justify-between gap-2 opacity-80 select-none"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-bold uppercase">
+              Ignored Step
+            </span>
+            <span className="text-xs font-bold text-slate-300 truncate">
+              {msg.authorDisplayName || msg.authorAgentId} ({msg.authorRole})
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-400">
+            Skipped (successive summary consensus already reached • 0 queries)
+          </span>
+        </div>
+      );
+    }
 
     return (
       <div

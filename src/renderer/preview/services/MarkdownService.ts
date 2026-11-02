@@ -72,9 +72,9 @@ export class MarkdownService {
     // 5. Run Marked compiler
     const rawHtml = this.marked.parse(protectedText) as string;
 
-    // 6. Sanitize with DOMPurify
+    // 6. Sanitize with DOMPurify (preserving collapsible <details>/<summary> and KaTeX math tags)
     return DOMPurify.sanitize(rawHtml, {
-      ADD_TAGS: ['semantics', 'annotation', 'annotation-xml'],
+      ADD_TAGS: ['details', 'summary', 'semantics', 'annotation', 'annotation-xml'],
       ADD_ATTR: ['display', 'xmlns'],
     });
   }

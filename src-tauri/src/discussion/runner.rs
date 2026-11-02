@@ -233,7 +233,7 @@ async fn emit_split(sink: &Option<Box<dyn StreamSink>>, think: &str, answer: &st
 
 #[async_trait]
 pub trait DiscussionProvider: Send + Sync {
-    fn provider_id(&self) -> &'static str;
+    fn provider_id(&self) -> &str;
     fn context_window_limit(&self) -> u32;
 
     async fn execute_turn(
@@ -264,10 +264,16 @@ pub fn check_denylist_violation(text: &str) -> Option<&'static str> {
 /// Terminates an entire Windows process tree (including grandchild processes like node.exe/python.exe) (TC-10).
 pub use crate::common::process::kill_process_tree;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CliType {
     ClaudeCode,
     AntigravityGemini,
+    OpenCode,
+    Codex,
+    GenericCli {
+        agent_id: String,
+        custom_args: Option<String>,
+    },
 }
 
 /// Production CLI Adapter: invokes external agent CLIs in strict read-only / plan-only sandbox.
@@ -280,9 +286,11 @@ pub struct CliProvider {
 
 impl CliProvider {
     pub fn new(cli_type: CliType, executable_path: PathBuf, sandbox_dir: PathBuf) -> Self {
-        let context_limit = match cli_type {
+        let context_limit = match &cli_type {
             CliType::ClaudeCode => 64000,
             CliType::AntigravityGemini => 128000,
+            CliType::OpenCode | CliType::Codex => 64000,
+            CliType::GenericCli { .. } => 32000,
         };
         Self {
             cli_type,
@@ -308,14 +316,14 @@ impl CliProvider {
 
         let sanitized_model = model_id.and_then(|m| {
             let t = m.trim();
-            if t.is_empty() {
+            if t.is_empty() || t == "default" {
                 None
             } else {
                 Some(t)
             }
         });
 
-        match self.cli_type {
+        match &self.cli_type {
             CliType::ClaudeCode => {
                 let mut args = vec![
                     "-p".to_string(),
@@ -359,16 +367,57 @@ impl CliProvider {
                 }
                 args
             }
+            CliType::OpenCode => {
+                let mut args = vec!["run".to_string(), prompt.to_string()];
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
+                }
+                args
+            }
+            CliType::Codex => {
+                let mut args = vec![
+                    "--quiet".to_string(),
+                    "--approval-mode".to_string(),
+                    "suggest".to_string(),
+                ];
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
+                }
+                args.push(prompt.to_string());
+                args
+            }
+            CliType::GenericCli { custom_args, .. } => {
+                let mut args = Vec::new();
+                if let Some(extra) = custom_args {
+                    for part in extra.split_whitespace() {
+                        if !part.is_empty() {
+                            args.push(part.to_string());
+                        }
+                    }
+                }
+                args.push("-p".to_string());
+                args.push(prompt.to_string());
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
+                }
+                args
+            }
         }
     }
 }
 
 #[async_trait]
 impl DiscussionProvider for CliProvider {
-    fn provider_id(&self) -> &'static str {
-        match self.cli_type {
+    fn provider_id(&self) -> &str {
+        match &self.cli_type {
             CliType::ClaudeCode => "claude-code",
-            CliType::AntigravityGemini => "gemini-antigravity",
+            CliType::AntigravityGemini => "antigravity",
+            CliType::OpenCode => "opencode",
+            CliType::Codex => "codex",
+            CliType::GenericCli { agent_id, .. } => agent_id.as_str(),
         }
     }
 
@@ -426,7 +475,17 @@ impl DiscussionProvider for CliProvider {
         // Ensure sandbox dir exists
         let _ = std::fs::create_dir_all(&self.sandbox_dir);
 
-        let mut cmd = Command::new(&self.executable_path);
+        let exe_str = self.executable_path.to_string_lossy().to_string();
+        let exe_lower = exe_str.to_lowercase();
+        let is_batch = exe_lower.ends_with(".cmd") || exe_lower.ends_with(".bat");
+
+        let mut cmd = if is_batch {
+            let mut c = Command::new("cmd.exe");
+            c.args(["/C", &exe_str]);
+            c
+        } else {
+            Command::new(&self.executable_path)
+        };
         cmd.args(&args)
             .current_dir(&self.sandbox_dir)
             .stdout(Stdio::piped())
@@ -516,10 +575,17 @@ impl DiscussionProvider for CliProvider {
                         total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
                     },
                     duration_ms: elapsed,
-                    model_id: match self.cli_type {
-                        CliType::ClaudeCode => "claude-code-cli".to_string(),
-                        CliType::AntigravityGemini => "antigravity-agy-cli".to_string(),
-                    },
+                    model_id: request
+                        .model_id
+                        .clone()
+                        .filter(|m| !m.trim().is_empty())
+                        .unwrap_or_else(|| match &self.cli_type {
+                            CliType::ClaudeCode => "claude-code-cli".to_string(),
+                            CliType::AntigravityGemini => "antigravity-agy-cli".to_string(),
+                            CliType::OpenCode => "opencode-cli".to_string(),
+                            CliType::Codex => "codex-cli".to_string(),
+                            CliType::GenericCli { agent_id, .. } => format!("{}-cli", agent_id),
+                        }),
                     context_truncated: false,
                     thinking,
                     simulated: false,
@@ -572,8 +638,8 @@ impl HttpProvider {
 
 #[async_trait]
 impl DiscussionProvider for HttpProvider {
-    fn provider_id(&self) -> &'static str {
-        "http-llm"
+    fn provider_id(&self) -> &str {
+        &self.provider_name
     }
 
     fn context_window_limit(&self) -> u32 {
@@ -833,8 +899,8 @@ impl MockProvider {
 
 #[async_trait]
 impl DiscussionProvider for MockProvider {
-    fn provider_id(&self) -> &'static str {
-        "mock"
+    fn provider_id(&self) -> &str {
+        &self.provider_name
     }
 
     fn context_window_limit(&self) -> u32 {

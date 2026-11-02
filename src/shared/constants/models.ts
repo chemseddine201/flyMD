@@ -41,6 +41,21 @@ export const SUBSCRIPTION_TIERS: Record<string, SubscriptionTierDefinition[]> = 
     { id: 'team', label: 'ChatGPT Team / Pro', description: 'High limits on o1 and full reasoning models' },
     { id: 'api', label: 'OpenAI Developer API (Tier 1-5)', description: 'Direct developer API access pay-as-you-go' },
   ],
+  'codex': [
+    { id: 'free', label: 'OpenAI Free', description: 'Standard GPT-4o-mini access' },
+    { id: 'plus', label: 'ChatGPT Plus ($20/mo)', description: 'Access to o3-mini, o1, GPT-4o in Codex CLI' },
+    { id: 'team', label: 'ChatGPT Team / Pro', description: 'High limits on full reasoning models' },
+    { id: 'api', label: 'OpenAI Developer API', description: 'Pay-as-you-go OPENAI_API_KEY access' },
+  ],
+  'cursor': [
+    { id: 'free', label: 'Cursor Hobby (Free)', description: 'Limited completions and fast model requests' },
+    { id: 'pro', label: 'Cursor Pro ($20/mo)', description: '500 fast frontier requests (Claude 3.7, Gemini 2.5, o3-mini)' },
+    { id: 'business', label: 'Cursor Business', description: 'Team quota & centralized enterprise billing' },
+  ],
+  'zcode': [
+    { id: 'free', label: 'Zed Free Tier', description: 'Basic hosted assistant quota' },
+    { id: 'pro', label: 'Zed Pro / BYOK API', description: 'Full Claude Sonnet 3.7 & custom API key models' },
+  ],
   'opencode': [
     { id: 'open', label: 'Standard Open Source / CLI', description: 'Configurable multi-model gateway' },
   ],
@@ -317,49 +332,126 @@ export function isReasoningModel(modelId?: string): boolean {
   );
 }
 
+const TIER_RANK_BY_NAME: Record<string, number> = {
+  free: 0,
+  hobby: 0,
+  pro: 1,
+  plus: 1,
+  advanced: 1,
+  open: 2,
+  local: 2,
+  custom: 2,
+  team: 2,
+  business: 2,
+  max: 3,
+  vertex: 3,
+  api: 3,
+};
+
+function isModelEntitledForTier(
+  model: ModelCatalogEntry,
+  subscriptionTier?: string
+): boolean {
+  if (!subscriptionTier || !model.minTier) return true;
+  const userRank = TIER_RANK_BY_NAME[subscriptionTier.toLowerCase()];
+  const minRank = TIER_RANK_BY_NAME[model.minTier.toLowerCase()];
+  if (userRank === undefined || minRank === undefined) return true;
+  return userRank >= minRank;
+}
+
 /**
- * Returns available model options for a specific agent or provider id, optionally taking
- * subscription tier into account.
+ * Returns available model options for a specific agent or provider id, strictly respecting
+ * the user's configured subscription tier and merging any live-discovered runtime models
+ * (e.g. Ollama `/api/tags` models or user-saved custom model slugs).
  */
 export function getAvailableModelsForAgent(
   agentOrProviderId: string,
-  _subscriptionTier?: string
+  subscriptionTier?: string,
+  dynamicRuntimeModels?: string[]
 ): ModelCatalogEntry[] {
   const norm = agentOrProviderId.toLowerCase();
   const matched = MODEL_CATALOG.filter((m) =>
     m.providerIds.some(
       (pid) =>
         pid.toLowerCase() === norm ||
-        (norm.includes('claude') && pid === 'claude-code') ||
-        (norm.includes('gemini') && pid === 'antigravity') ||
-        (norm.includes('open') && pid === 'opencode') ||
+        ((norm.includes('claude') || norm === 'zcode' || norm === 'cursor') &&
+          pid === 'claude-code') ||
+        ((norm.includes('gemini') || norm.includes('antigravity') || norm === 'cursor') &&
+          pid === 'antigravity') ||
+        ((norm.includes('open') || norm === 'codex' || norm === 'http-llm' || norm === 'cursor') &&
+          pid === 'opencode') ||
+        (norm.includes('deepseek') && pid === 'deepseek') ||
         (norm.includes('ollama') && pid === 'ollama')
     )
   );
 
-  return matched.length > 0 ? matched : MODEL_CATALOG;
+  const baseList = matched.length > 0 ? matched : MODEL_CATALOG;
+  const entitled = baseList.filter((m) =>
+    isModelEntitledForTier(m, subscriptionTier)
+  );
+  const catalogEntries = entitled.length > 0 ? entitled : baseList.slice(-1);
+
+  if (!dynamicRuntimeModels || dynamicRuntimeModels.length === 0) {
+    return catalogEntries;
+  }
+
+  const seen = new Set(catalogEntries.map((m) => m.id.toLowerCase()));
+  const dynamicEntries: ModelCatalogEntry[] = [];
+  for (const rawModel of dynamicRuntimeModels) {
+    const slug = rawModel.trim();
+    if (!slug || seen.has(slug.toLowerCase())) continue;
+    seen.add(slug.toLowerCase());
+    const reasoning = isReasoningModel(slug);
+    dynamicEntries.push({
+      id: slug,
+      displayName: `${slug} (Live Detected)`,
+      family: norm.includes('ollama') ? 'ollama' : 'other',
+      providerIds: [agentOrProviderId],
+      category: reasoning ? 'reasoning' : norm.includes('ollama') ? 'local' : 'balanced',
+      supportsReasoning: reasoning,
+      supportedEffortLevels: reasoning
+        ? ['low', 'medium', 'high']
+        : ['low', 'medium'],
+      defaultEffortLevel: 'medium',
+      supportsThinkingToggle: reasoning,
+      contextWindowTokens: 32000,
+      description: `Live discovered model on ${agentOrProviderId}`,
+    });
+  }
+
+  return [...dynamicEntries, ...catalogEntries];
 }
 
 /**
- * Returns the default model ID for an agent based on its capabilities.
+ * Returns the default model ID for an agent respecting the user's subscription tier.
  */
-export function getDefaultModelForAgent(agentId: string): string {
+export function getDefaultModelForAgent(
+  agentId: string,
+  subscriptionTier?: string
+): string {
+  const isFree = subscriptionTier?.toLowerCase() === 'free';
   switch (agentId.toLowerCase()) {
     case 'claude-code':
-      return 'claude-3-7-sonnet';
+    case 'zcode':
+      return isFree ? 'claude-3-5-sonnet' : 'claude-3-7-sonnet';
     case 'antigravity':
     case 'gemini-antigravity':
-      return 'gemini-2.5-pro';
+      return isFree ? 'gemini-2.5-flash' : 'gemini-2.5-pro';
+    case 'codex':
     case 'opencode':
-      return 'o3-mini';
     case 'openai':
-      return 'o3-mini';
+    case 'http-llm':
+      return isFree ? 'gpt-4o-mini' : 'o3-mini';
     case 'deepseek':
       return 'deepseek-reasoner';
     case 'ollama':
       return 'qwen2.5-coder:32b';
-    default:
-      return 'claude-3-7-sonnet';
+    case 'mock':
+      return 'adaptive-domain-simulator';
+    default: {
+      const entitled = getAvailableModelsForAgent(agentId, subscriptionTier);
+      return entitled[0]?.id || 'claude-3-7-sonnet';
+    }
   }
 }
 

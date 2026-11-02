@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   Users,
@@ -8,15 +8,18 @@ import {
   FileText,
   Sparkles,
   Brain,
+  RefreshCw,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
 import { AgentId, AgentTaskIntent, AgentEffortLevel } from '../../../../shared/types';
+import { useSubscriptionAgents } from '../../hooks/useSubscriptionAgents';
+
+const READY_AUTH_STATES = ['connected', 'api-key-ready', 'web-connected', 'ready'];
 
 export const CouncilModal: React.FC = () => {
   const showCouncilModal = usePreviewStore((s) => s.showCouncilModal);
   const setShowCouncilModal = usePreviewStore((s) => s.setShowCouncilModal);
-  const agentProfiles = usePreviewStore((s) => s.agentProfiles);
   const setAgentTasks = usePreviewStore((s) => s.setAgentTasks);
   const setAgentCheckpoints = usePreviewStore((s) => s.setAgentCheckpoints);
   const setViewMode = usePreviewStore((s) => s.setViewMode);
@@ -24,11 +27,15 @@ export const CouncilModal: React.FC = () => {
   const folderPath = usePreviewStore((s) => s.folderPath);
   const supervisionConfig = usePreviewStore((s) => s.supervisionConfig);
 
-  const [selectedAgents, setSelectedAgents] = useState<AgentId[]>([
-    'antigravity',
-    'claude-code',
-    'opencode',
-  ]);
+  const {
+    enabledAgentProfiles,
+    isRefreshing,
+    refreshSubscriptionAgents,
+    getSubscriptionTierForAgent,
+  } = useSubscriptionAgents(false);
+
+  const [selectedAgents, setSelectedAgents] = useState<AgentId[]>([]);
+  const userTouchedSelection = useRef(false);
   const [intent, setIntent] = useState<AgentTaskIntent>('review');
   const [customPrompt, setCustomPrompt] = useState('');
   const [safeParallelMode, setSafeParallelMode] = useState(true);
@@ -36,12 +43,31 @@ export const CouncilModal: React.FC = () => {
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
   const [broadcasting, setBroadcasting] = useState(false);
 
+  // Re-scan subscriptions each time the council opens
+  useEffect(() => {
+    if (showCouncilModal) {
+      userTouchedSelection.current = false;
+      refreshSubscriptionAgents();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCouncilModal]);
+
+  // Default the council to every connected subscription agent (until the user edits the selection)
+  useEffect(() => {
+    if (!showCouncilModal || userTouchedSelection.current) return;
+    const connected = enabledAgentProfiles
+      .filter((a) => a.installed && READY_AUTH_STATES.includes(a.authStatus))
+      .map((a) => a.id);
+    const fallback = enabledAgentProfiles.slice(0, 2).map((a) => a.id);
+    setSelectedAgents(connected.length > 0 ? connected : fallback);
+  }, [showCouncilModal, enabledAgentProfiles]);
+
   if (!showCouncilModal) return null;
 
-  const enabledProfiles = agentProfiles.filter((a) => a.enabled);
-  const visibleAgents = enabledProfiles.length > 0 ? enabledProfiles : agentProfiles;
+  const visibleAgents = enabledAgentProfiles;
 
   const toggleAgent = (agentId: AgentId) => {
+    userTouchedSelection.current = true;
     setSelectedAgents((prev) =>
       prev.includes(agentId)
         ? prev.filter((id) => id !== agentId)
@@ -137,12 +163,29 @@ export const CouncilModal: React.FC = () => {
 
           {/* Select Council Members */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-              1. Select Council Members (2 or more recommended)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
+                1. Select Council Members (2 or more recommended)
+              </label>
+              <button
+                type="button"
+                onClick={() => refreshSubscriptionAgents()}
+                disabled={isRefreshing}
+                className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-semibold"
+              >
+                <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
+                Refresh Subscriptions
+              </button>
+            </div>
+            {visibleAgents.length === 0 && (
+              <div className="text-[11px] text-amber-300 mb-2">
+                No agents discovered yet. Connect a subscription in Manage Logins, then refresh.
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {visibleAgents.map((agent) => {
                 const isSelected = selectedAgents.includes(agent.id);
+                const tier = getSubscriptionTierForAgent(agent.id);
                 return (
                   <button
                     key={agent.id}
@@ -166,6 +209,11 @@ export const CouncilModal: React.FC = () => {
                         {agent.isCustom && (
                           <span className="text-[9px] font-bold uppercase px-1 rounded bg-violet-500/25 text-violet-300">
                             Custom
+                          </span>
+                        )}
+                        {tier && (
+                          <span className="text-[9px] font-bold uppercase px-1 rounded bg-sky-500/20 text-sky-300">
+                            {tier}
                           </span>
                         )}
                       </div>

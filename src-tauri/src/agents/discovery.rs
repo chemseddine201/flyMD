@@ -228,8 +228,59 @@ pub fn discover_agent_profiles(
 
         let is_disabled = user_cred.map(|c| c.disabled).unwrap_or(false);
 
-        let supports_effort = id == "claude-code" || id == "antigravity";
-        let supports_thinking = id == "claude-code" || id == "antigravity";
+        let supports_effort = matches!(id, "claude-code" | "antigravity" | "codex" | "opencode");
+        let supports_thinking = matches!(id, "claude-code" | "antigravity" | "codex" | "opencode");
+
+        let resolved_subscription_tier = user_cred
+            .and_then(|c| c.subscription_tier.clone())
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                if has_api_key {
+                    Some(if id == "antigravity" { "vertex".to_string() } else { "api".to_string() })
+                } else if oauth_verified {
+                    Some(match id {
+                        "claude-code" => "pro".to_string(),
+                        "antigravity" => "advanced".to_string(),
+                        "codex" => "plus".to_string(),
+                        _ => "open".to_string(),
+                    })
+                } else if web_session_verified {
+                    Some("free".to_string())
+                } else {
+                    None
+                }
+            });
+
+        let resolved_default_model = user_cred
+            .and_then(|c| c.selected_model.clone())
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                Some(match id {
+                    "claude-code" => {
+                        if resolved_subscription_tier.as_deref() == Some("free") {
+                            "claude-3-5-sonnet".to_string()
+                        } else {
+                            "claude-3-7-sonnet".to_string()
+                        }
+                    }
+                    "antigravity" => {
+                        if resolved_subscription_tier.as_deref() == Some("free") {
+                            "gemini-2.5-flash".to_string()
+                        } else {
+                            "gemini-2.5-pro".to_string()
+                        }
+                    }
+                    "codex" | "opencode" | "cursor" => {
+                        if resolved_subscription_tier.as_deref() == Some("free") {
+                            "gpt-4o-mini".to_string()
+                        } else {
+                            "o3-mini".to_string()
+                        }
+                    }
+                    "zcode" => "claude-3-5-sonnet".to_string(),
+                    _ => "claude-3-7-sonnet".to_string(),
+                })
+            });
 
         profiles.push(AgentProfile {
             id: id.to_string(),
@@ -256,6 +307,8 @@ pub fn discover_agent_profiles(
             is_custom: false,
             supports_effort: Some(supports_effort),
             supports_thinking: Some(supports_thinking),
+            default_model_id: resolved_default_model,
+            subscription_tier: resolved_subscription_tier,
         });
     }
 
@@ -347,8 +400,18 @@ pub fn discover_agent_profiles(
             artifact_watch_paths: Vec::new(),
             enabled: !cred.disabled,
             is_custom: true,
-            supports_effort: Some(false),
-            supports_thinking: Some(false),
+            supports_effort: Some(cred.default_effort_level.is_some()),
+            supports_thinking: Some(cred.default_thinking_enabled.unwrap_or(true)),
+            default_model_id: cred
+                .selected_model
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| Some("custom-agent-default".to_string())),
+            subscription_tier: cred
+                .subscription_tier
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| Some(if has_key { "api".to_string() } else { "custom".to_string() })),
         });
     }
 

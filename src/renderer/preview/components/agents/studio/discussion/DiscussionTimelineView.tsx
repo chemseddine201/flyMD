@@ -26,6 +26,8 @@ export interface DiscussionRoundGroup {
   totalTokens: number;
   isCurrent: boolean;
   isDone: boolean;
+  isIgnored?: boolean;
+  convergedFromRound?: number;
 }
 
 export interface DiscussionTimelineViewProps {
@@ -91,6 +93,31 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
           )}
 
           {roundGroups.map((group) => {
+            if (group.isIgnored) {
+              const refRound =
+                group.convergedFromRound ||
+                activeMeta.convergedAtRound ||
+                Math.max(1, group.round - 1);
+              return (
+                <div
+                  key={group.round}
+                  aria-disabled="true"
+                  className="rounded-2xl border border-amber-500/25 bg-slate-900/30 px-4 py-3 flex flex-wrap items-center justify-between gap-2 opacity-75 select-none cursor-not-allowed"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400/70" />
+                    <h3 className="text-xs font-bold text-slate-300">
+                      Round {group.round} — Duplicated / Ignored (Same as Round{' '}
+                      {refRound} Debate Round)
+                    </h3>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-bold uppercase">
+                    Ignored • 0 Queries
+                  </span>
+                </div>
+              );
+            }
+
             const isExpanded = expandedRounds[group.round] ?? true;
             const roundMessages = group.messages;
             const isRoundStreaming =

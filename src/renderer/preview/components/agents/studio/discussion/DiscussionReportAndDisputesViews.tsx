@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
   FileText,
   Check,
@@ -10,8 +10,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { DiscussionMetadata } from '../../../../../../shared/types';
-import { markdownService } from '../../../../services/MarkdownService';
-import { cleanDiscussionMarkdown } from '../../../../services/deliberationPresetRepository';
+import { CollapsibleReportRoundsView } from './CollapsibleReportRoundsView';
 
 export interface DiscussionReportViewProps {
   activeReportMarkdown: string | null;
@@ -35,11 +34,6 @@ export const DiscussionReportView: React.FC<DiscussionReportViewProps> = React.m
     onOpenReportInTab,
     onReloadReport,
   }) => {
-    const renderedReportHtml = useMemo(() => {
-      if (!activeReportMarkdown) return '';
-      return markdownService.render(cleanDiscussionMarkdown(activeReportMarkdown));
-    }, [activeReportMarkdown]);
-
     return (
       <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
         <div className="flex items-center justify-between p-3.5 bg-slate-900 rounded-xl border border-slate-800 shadow-sm">
@@ -83,13 +77,9 @@ export const DiscussionReportView: React.FC<DiscussionReportViewProps> = React.m
 
         {activeReportMarkdown ? (
           <div className="p-8 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-2xl">
-            <div
-              className="markdown-body text-slate-200 leading-relaxed transition-all"
-              style={{
-                fontSize: `${(14 * turnZoom) / 100}px`,
-                lineHeight: 1.65,
-              }}
-              dangerouslySetInnerHTML={{ __html: renderedReportHtml }}
+            <CollapsibleReportRoundsView
+              reportMarkdown={activeReportMarkdown}
+              turnZoom={turnZoom}
             />
           </div>
         ) : (

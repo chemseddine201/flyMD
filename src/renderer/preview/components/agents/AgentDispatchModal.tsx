@@ -20,12 +20,14 @@ import {
   Terminal,
   Plus,
   Brain,
+  RefreshCw,
 } from 'lucide-react';
 import { usePreviewStore } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
 import { AgentId, AgentTaskIntent, AgentEffortLevel } from '../../../../shared/types';
 import { ModelEffortSideBySidePicker } from './common/ModelEffortSideBySidePicker';
 import { getDefaultModelForAgent } from '../../../../shared/constants/models';
+import { useSubscriptionAgents } from '../../hooks/useSubscriptionAgents';
 
 export const AgentDispatchModal: React.FC = () => {
   const dispatchDraft = usePreviewStore((s) => s.dispatchDraft);
@@ -38,7 +40,17 @@ export const AgentDispatchModal: React.FC = () => {
   const supervisionConfig = usePreviewStore((s) => s.supervisionConfig);
   const setViewMode = usePreviewStore((s) => s.setViewMode);
 
-  const [targetAgentId, setTargetAgentId] = useState<AgentId>('claude-code');
+  const {
+    enabledAgentProfiles,
+    preferredDefaultAgentId,
+    isRefreshing: isRefreshingSubscriptions,
+    refreshSubscriptionAgents,
+    getSubscriptionTierForAgent,
+    getDynamicModelsForAgent,
+    credentials,
+  } = useSubscriptionAgents(false);
+
+  const [targetAgentId, setTargetAgentId] = useState<AgentId>('');
   const [intent, setIntent] = useState<AgentTaskIntent>('build');
   const [customPrompt, setCustomPrompt] = useState('');
   const [createSafetyCheckpoint, setCreateSafetyCheckpoint] = useState(true);
@@ -51,10 +63,14 @@ export const AgentDispatchModal: React.FC = () => {
   const [executionMode, setExecutionMode] = useState<'in-app' | 'web'>('in-app');
   const [effortLevel, setEffortLevel] = useState<AgentEffortLevel>('medium');
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
-  const [selectedModel, setSelectedModel] = useState<string>(() =>
-    getDefaultModelForAgent('claude-code')
-  );
+  const [selectedModel, setSelectedModel] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+
+  /** Resolve the user's subscription-aware model for an agent (saved selection → tier default). */
+  const resolveModelForAgent = (agentId: string): string =>
+    credentials[agentId]?.selectedModel ||
+    getDynamicModelsForAgent(agentId)[0] ||
+    getDefaultModelForAgent(agentId, getSubscriptionTierForAgent(agentId));
 
   const checklistItems = useMemo(() => {
     if (!dispatchDraft?.markdownContent) return [];
@@ -76,10 +92,30 @@ export const AgentDispatchModal: React.FC = () => {
     return items;
   }, [dispatchDraft?.markdownContent]);
 
+  // Re-scan live subscription agents whenever the dispatch modal opens
+  useEffect(() => {
+    if (dispatchDraft?.isOpen) {
+      refreshSubscriptionAgents();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatchDraft?.isOpen]);
+
+  // When discovery finishes after opening, upgrade an unresolved/unknown target to the preferred connected agent
+  useEffect(() => {
+    if (!dispatchDraft?.isOpen || dispatchDraft.targetAgentId) return;
+    const known = enabledAgentProfiles.some((a) => a.id === targetAgentId);
+    if ((!targetAgentId || !known) && preferredDefaultAgentId) {
+      setTargetAgentId(preferredDefaultAgentId);
+      setSelectedModel(resolveModelForAgent(preferredDefaultAgentId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferredDefaultAgentId, enabledAgentProfiles, dispatchDraft?.isOpen]);
+
   useEffect(() => {
     if (dispatchDraft) {
-      const targetId = dispatchDraft.targetAgentId || 'claude-code';
+      const targetId = dispatchDraft.targetAgentId || preferredDefaultAgentId;
       setTargetAgentId(targetId);
+      setSelectedModel(resolveModelForAgent(targetId));
       setNextAgentInChain(dispatchDraft.nextAgentInChain || '');
       setExecutionMode('in-app');
       const initialSelected: Record<number, boolean> = {};
@@ -96,9 +132,7 @@ export const AgentDispatchModal: React.FC = () => {
   if (!dispatchDraft || !dispatchDraft.isOpen) return null;
 
   const visibleAgents =
-    agentProfiles.filter((a) => a.enabled).length > 0
-      ? agentProfiles.filter((a) => a.enabled)
-      : agentProfiles;
+    enabledAgentProfiles.length > 0 ? enabledAgentProfiles : agentProfiles;
 
   const targetAgent =
     visibleAgents.find((a) => a.id === targetAgentId) ||
@@ -246,25 +280,41 @@ export const AgentDispatchModal: React.FC = () => {
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                 1. Choose Which Agent Receives This File
               </label>
-              <button
-                type="button"
-                onClick={() => {
-                  closeDispatchModal();
-                  setShowAgentAccountsModal(true);
-                }}
-                className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold"
-              >
-                <Plus size={12} /> Add Custom Agent / Manage Logins
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => refreshSubscriptionAgents()}
+                  disabled={isRefreshingSubscriptions}
+                  className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-semibold"
+                  title="Re-scan installed agents, logins and subscription tiers"
+                >
+                  <RefreshCw size={11} className={isRefreshingSubscriptions ? 'animate-spin' : ''} />
+                  Refresh Subscriptions
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeDispatchModal();
+                    setShowAgentAccountsModal(true);
+                  }}
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold"
+                >
+                  <Plus size={12} /> Add Custom Agent / Manage Logins
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {visibleAgents.map((agent) => {
                 const isSelected = agent.id === targetAgentId;
+                const tier = getSubscriptionTierForAgent(agent.id);
                 return (
                   <button
                     key={agent.id}
                     type="button"
-                    onClick={() => setTargetAgentId(agent.id)}
+                    onClick={() => {
+                      setTargetAgentId(agent.id);
+                      setSelectedModel(resolveModelForAgent(agent.id));
+                    }}
                     className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
                       isSelected
                         ? 'bg-slate-800/90 border-sky-400 shadow-sm ring-1 ring-sky-400/40'
@@ -283,6 +333,11 @@ export const AgentDispatchModal: React.FC = () => {
                         {agent.isCustom && (
                           <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300">
                             Custom
+                          </span>
+                        )}
+                        {tier && (
+                          <span className="text-[9px] px-1 rounded bg-sky-500/20 text-sky-300 font-bold uppercase">
+                            {tier}
                           </span>
                         )}
                       </div>
@@ -448,6 +503,8 @@ export const AgentDispatchModal: React.FC = () => {
             </label>
             <ModelEffortSideBySidePicker
               agentId={targetAgentId}
+              subscriptionTier={getSubscriptionTierForAgent(targetAgentId)}
+              dynamicModels={getDynamicModelsForAgent(targetAgentId)}
               selectedModel={selectedModel}
               onChangeModel={setSelectedModel}
               effortLevel={effortLevel}

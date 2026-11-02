@@ -493,8 +493,16 @@ export const PreviewApp: React.FC = () => {
         onCloseTabsToRight={(id) => store.closeTabsToRight(id)}
         onNewTab={() => store.addTab()}
         onAssignTabToAgent={(tab) => {
+          // Resolve the first enabled + connected subscription agent instead of a hardcoded default.
+          // An empty id lets AgentDispatchModal pick the live preferred agent after discovery.
+          const readyStates = ['connected', 'api-key-ready', 'web-connected', 'ready'];
+          const enabled = store.agentProfiles.filter((a) => a.enabled);
+          const preferred =
+            enabled.find((a) => a.installed && readyStates.includes(a.authStatus)) ||
+            enabled.find((a) => a.installed) ||
+            enabled[0];
           store.openDispatchModal({
-            targetAgentId: 'claude-code',
+            targetAgentId: preferred?.id || '',
             sourceFilePath: tab.filePath,
             sourceFileName: tab.fileName,
             markdownContent: tab.content,

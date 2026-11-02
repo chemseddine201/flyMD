@@ -1,9 +1,12 @@
 //! Discussion Orchestrator: 8-state discussion lifecycle, barrier synchronization,
 //! checkpointing, and deterministic multi-turn debate coordinator.
 
-use super::provider_registry::provider_lookup_key;
+use super::convergence::{
+    evaluate_round_boundary_convergence, evaluate_turn_convergence, ConvergenceVerdict,
+};
 use super::epistemic::evaluate_debate_epistemic_policy;
 use super::memory::MemoryManager;
+use super::provider_registry::provider_lookup_key;
 use super::runner::{DiscussionProvider, ProviderError, StreamSink, TurnRequest, TurnResponse};
 use super::storage::{
     append_transcript_message, atomic_write_json, load_metadata, read_transcript_with_recovery,
@@ -11,8 +14,8 @@ use super::storage::{
 };
 use super::types::{
     now_ms, AgentRole, DisagreementStatus, DiscussionConfig, DiscussionMessage,
-    DiscussionMessageKind, DiscussionMetadata, DiscussionParticipant, DiscussionStatus, TokenUsage,
-    CURRENT_SCHEMA_VERSION,
+    DiscussionMessageKind, DiscussionMetadata, DiscussionParticipant, DiscussionStatus,
+    RoundExecutionRecord, RoundExecutionStatus, TokenUsage, CURRENT_SCHEMA_VERSION,
 };
 use crate::projects::cache::{
     load_cognitive_packet, parse_handoff_blocks_from_markdown,
@@ -94,6 +97,14 @@ pub enum DiscussionEvent {
         session_id: String,
         total_tokens: u32,
         cap: u32,
+    },
+    ConvergenceReached {
+        session_id: String,
+        converged_round: u32,
+        reference_round: u32,
+        matched_agents: Vec<String>,
+        skipped_rounds: Vec<u32>,
+        reason: String,
     },
 }
 
@@ -226,6 +237,9 @@ impl DiscussionOrchestrator {
             active_disagreements_count: 0,
             decisions_count: 0,
             latest_report_version: 0,
+            converged_at_round: None,
+            convergence_reason: None,
+            round_ledger: Vec::new(),
         };
 
         save_metadata(&session_dir, &metadata)?;
@@ -587,8 +601,8 @@ impl DiscussionOrchestrator {
         self.pause_flag.store(false, Ordering::SeqCst);
         self.cancel_flag.store(false, Ordering::SeqCst);
 
-        let active_participants: Vec<DiscussionParticipant> = self.config.participants.clone();
-        if active_participants.is_empty() {
+        let all_scheduled = self.config.all_scheduled_participants();
+        if all_scheduled.is_empty() {
             let err = "Cannot run discussion: no participants configured".to_string();
             self.metadata.error_message = Some(err.clone());
             self.transition_status(DiscussionStatus::Failed)?;
@@ -596,9 +610,13 @@ impl DiscussionOrchestrator {
             return Err(err);
         }
 
-        // Main Round Deliberation Loop
+        // Main Round Deliberation Loop (supports Multi-Engine Round Repeater + Early Convergence)
         while self.metadata.current_round <= self.config.max_rounds {
             let current_round = self.metadata.current_round;
+            let (round_title, _round_objective, round_slots) =
+                self.config.resolve_round_plan(current_round);
+            let active_participants: Vec<DiscussionParticipant> =
+                round_slots.iter().map(|(p, _)| p.clone()).collect();
 
             // Check cancellation / pause between rounds
             if self.cancel_flag.load(Ordering::Relaxed) {
@@ -628,6 +646,14 @@ impl DiscussionOrchestrator {
                 .iter()
                 .all(|p| spoken_agent_ids.contains(&p.agent_id));
             if all_agents_spoken {
+                self.upsert_round_ledger_record(RoundExecutionRecord {
+                    round_number: current_round,
+                    title: round_title.clone(),
+                    status: RoundExecutionStatus::Executed,
+                    converged_from_round: None,
+                    reason: None,
+                    skipped_agent_names: Vec::new(),
+                });
                 if current_round >= self.config.max_rounds {
                     return self.finalize_and_generate_report();
                 } else {
@@ -649,7 +675,7 @@ impl DiscussionOrchestrator {
             // All agents in this round are evaluated against the immutable transcript snapshot
             // up to the preceding round, guaranteeing non-bias from response arrival order.
             let mut turn_index = spoken_agent_ids.len() as u32;
-            for participant in &active_participants {
+            for (slot_idx, (participant, round_directive)) in round_slots.iter().enumerate() {
                 // If this agent already completed their turn in this round, skip
                 if spoken_agent_ids.contains(&participant.agent_id) {
                     continue;
@@ -669,8 +695,17 @@ impl DiscussionOrchestrator {
                     return Ok(DiscussionStatus::Paused);
                 }
 
+                let disputes_before = self.metadata.active_disagreements_count;
                 turn_index += 1;
-                if let Err(e) = self.execute_agent_turn(participant, current_round, turn_index).await {
+                if let Err(e) = self
+                    .execute_agent_turn_with_directive(
+                        participant,
+                        current_round,
+                        turn_index,
+                        round_directive.as_deref(),
+                    )
+                    .await
+                {
                     let err_str = e.to_string();
                     self.metadata.error_message = Some(err_str.clone());
                     let _ = self.transition_status(DiscussionStatus::Failed);
@@ -681,6 +716,36 @@ impl DiscussionOrchestrator {
                     });
                     let _ = save_metadata(&self.session_dir, &self.metadata);
                     return Err(err_str);
+                }
+
+                let new_unresolved_dispute_added =
+                    self.metadata.active_disagreements_count > disputes_before;
+
+                // Evaluate Early Convergence right after turn commits (saves remaining steps & remaining rounds)
+                let (updated_transcript, _) = read_transcript_with_recovery(&self.session_dir)?;
+                if let Some(verdict) = evaluate_turn_convergence(
+                    &updated_transcript,
+                    current_round,
+                    new_unresolved_dispute_added,
+                ) {
+                    let remaining_in_round: Vec<DiscussionParticipant> = round_slots
+                        .iter()
+                        .skip(slot_idx + 1)
+                        .map(|(p, _)| p.clone())
+                        .filter(|p| !spoken_agent_ids.contains(&p.agent_id))
+                        .collect();
+
+                    // Only short-circuit if there are remaining steps in this round OR remaining rounds to save
+                    if !remaining_in_round.is_empty() || current_round < self.config.max_rounds {
+                        return self.handle_early_convergence_termination(
+                            current_round,
+                            &round_title,
+                            turn_index,
+                            &remaining_in_round,
+                            &active_participants,
+                            verdict,
+                        );
+                    }
                 }
 
                 // Check if session token budget cap is breached at turn boundary
@@ -715,12 +780,39 @@ impl DiscussionOrchestrator {
                 }
             }
 
-            // Round completed successfully! Freeze immutable round ledger for subsequent prefix KV cache hits.
+            // Round completed successfully! Record in round ledger and freeze immutable round digest.
+            self.upsert_round_ledger_record(RoundExecutionRecord {
+                round_number: current_round,
+                title: round_title.clone(),
+                status: RoundExecutionStatus::Executed,
+                converged_from_round: None,
+                reason: None,
+                skipped_agent_names: Vec::new(),
+            });
             let _ = self.memory.get_or_freeze_round_digest(current_round);
             self.notify(DiscussionEvent::RoundCompleted {
                 session_id: self.config.session_id.clone(),
                 round: current_round,
             });
+
+            // Check Inter-Round Boundary Convergence before advancing to next round
+            if current_round < self.config.max_rounds {
+                let (post_round_transcript, _) = read_transcript_with_recovery(&self.session_dir)?;
+                if let Some(verdict) = evaluate_round_boundary_convergence(
+                    &post_round_transcript,
+                    current_round,
+                    false,
+                ) {
+                    return self.handle_early_convergence_termination(
+                        current_round,
+                        &round_title,
+                        turn_index,
+                        &[],
+                        &active_participants,
+                        verdict,
+                    );
+                }
+            }
 
             // 1. Ensure active disputes reflect parsed peer contradictions (fallback only if models emitted none):
             if current_round == 2 {
@@ -788,6 +880,152 @@ impl DiscussionOrchestrator {
                 save_metadata(&self.session_dir, &self.metadata)?;
             }
         }
+
+        self.finalize_and_generate_report()
+    }
+
+    fn upsert_round_ledger_record(&mut self, record: RoundExecutionRecord) {
+        if let Some(existing) = self
+            .metadata
+            .round_ledger
+            .iter_mut()
+            .find(|r| r.round_number == record.round_number)
+        {
+            *existing = record;
+        } else {
+            self.metadata.round_ledger.push(record);
+            self.metadata
+                .round_ledger
+                .sort_by_key(|r| r.round_number);
+        }
+    }
+
+    fn handle_early_convergence_termination(
+        &mut self,
+        converged_round: u32,
+        round_title: &str,
+        mut last_turn_index: u32,
+        remaining_in_round: &[DiscussionParticipant],
+        active_participants: &[DiscussionParticipant],
+        verdict: ConvergenceVerdict,
+    ) -> Result<DiscussionStatus, String> {
+        let mut skipped_in_round_names = Vec::new();
+
+        // 1. Explicitly record any escaped steps in `converged_round` as Ignored (`SkippedConsensus`, 0 queries)
+        for rem_p in remaining_in_round {
+            last_turn_index += 1;
+            skipped_in_round_names.push(rem_p.display_name.clone());
+            let skip_msg = DiscussionMessage {
+                id: format!(
+                    "skip-r{}-{}-{}",
+                    converged_round,
+                    rem_p.agent_id,
+                    now_ms()
+                ),
+                session_id: self.config.session_id.clone(),
+                round_number: converged_round,
+                turn_index: last_turn_index,
+                author_agent_id: rem_p.agent_id.clone(),
+                author_role: rem_p.role.as_str().to_string(),
+                author_provider: rem_p.provider_id.clone(),
+                message_kind: DiscussionMessageKind::SkippedConsensus,
+                target_peer_ids: Vec::new(),
+                content: format!(
+                    "> **[Ignored Step — Duplicate Summary Consensus]**\n> Step skipped for **{}** (`{}`) to save queries because successive agents already converged on the same summary ({})",
+                    rem_p.display_name,
+                    rem_p.role.as_str(),
+                    verdict.reason
+                ),
+                timestamp: now_ms(),
+                token_usage: Some(TokenUsage::default()),
+                duration_ms: 0,
+                truncated: false,
+                thinking_content: None,
+                action_name: Some("Ignored (Converged)".to_string()),
+                model_id: Some(rem_p.model_id.clone()),
+                simulated: true,
+                author_display_name: Some(rem_p.display_name.clone()),
+            };
+            append_transcript_message(&self.session_dir, &skip_msg)?;
+            self.metadata.total_messages += 1;
+        }
+
+        // 2. Record `converged_round` in round_ledger
+        let converged_status = if skipped_in_round_names.is_empty() {
+            RoundExecutionStatus::Executed
+        } else {
+            RoundExecutionStatus::ConvergedEarly
+        };
+        self.upsert_round_ledger_record(RoundExecutionRecord {
+            round_number: converged_round,
+            title: round_title.to_string(),
+            status: converged_status,
+            converged_from_round: Some(verdict.reference_round),
+            reason: Some(verdict.reason.clone()),
+            skipped_agent_names: skipped_in_round_names,
+        });
+
+        let _ = self.memory.get_or_freeze_round_digest(converged_round);
+        self.notify(DiscussionEvent::RoundCompleted {
+            session_id: self.config.session_id.clone(),
+            round: converged_round,
+        });
+
+        // 3. Mark all subsequent rounds `(converged_round + 1)..=max_rounds` as Ignored / Duplicated (0 queries!)
+        let mut skipped_rounds = Vec::new();
+        for skipped_r in (converged_round + 1)..=self.config.max_rounds {
+            skipped_rounds.push(skipped_r);
+            let (skipped_title, _, skipped_slots) = self.config.resolve_round_plan(skipped_r);
+            let skipped_agents: Vec<String> = skipped_slots
+                .into_iter()
+                .map(|(p, _)| p.display_name)
+                .collect();
+            self.upsert_round_ledger_record(RoundExecutionRecord {
+                round_number: skipped_r,
+                title: skipped_title,
+                status: RoundExecutionStatus::IgnoredConsensus,
+                converged_from_round: Some(converged_round),
+                reason: Some(format!(
+                    "Duplicated / Ignored — Same debate summary already settled in Round {}.",
+                    converged_round
+                )),
+                skipped_agent_names: skipped_agents,
+            });
+        }
+
+        self.metadata.converged_at_round = Some(converged_round);
+        self.metadata.convergence_reason = Some(verdict.reason.clone());
+        self.metadata.updated_at = now_ms();
+
+        // Ensure decision ledger records consensus if none emitted yet
+        if self.memory.load_decisions().is_empty() {
+            let agreed_by: Vec<String> = active_participants
+                .iter()
+                .map(|p| p.agent_id.clone())
+                .collect();
+            let _ = self.memory.record_decision(
+                &format!("Early Consensus Summary: {}", self.config.topic),
+                &verdict.reason,
+                &format!(
+                    "Successive summary convergence verified at Round {} of {}.",
+                    converged_round, self.config.max_rounds
+                ),
+                agreed_by,
+                converged_round,
+                vec![format!("round-{}", converged_round)],
+            );
+        }
+
+        save_metadata(&self.session_dir, &self.metadata)?;
+
+        self.notify(DiscussionEvent::ConvergenceReached {
+            session_id: self.config.session_id.clone(),
+            converged_round,
+            reference_round: verdict.reference_round,
+            matched_agents: verdict.matched_agents,
+            skipped_rounds,
+            reason: verdict.reason,
+        });
 
         self.finalize_and_generate_report()
     }
@@ -1076,19 +1314,28 @@ impl DiscussionOrchestrator {
         Ok(message)
     }
 
-    async fn execute_agent_turn(
+    async fn execute_agent_turn_with_directive(
         &mut self,
         participant: &DiscussionParticipant,
         round: u32,
         turn_index: u32,
+        round_directive: Option<&str>,
     ) -> Result<(), String> {
         let action_name = participant.custom_action.as_ref().map(|a| a.name.clone());
-        let action_query = participant.custom_query.clone().or_else(|| {
+        let base_query = participant.custom_query.clone().or_else(|| {
             participant
                 .custom_action
                 .as_ref()
                 .map(|a| a.prompt_directive.clone())
         });
+        let action_query = match (round_directive.map(str::trim).filter(|s| !s.is_empty()), base_query) {
+            (Some(rd), Some(bq)) if rd != bq => Some(format!(
+                "Round {} Specialist Focus: {}\nRole Standing Directive: {}",
+                round, rd, bq
+            )),
+            (Some(rd), _) => Some(rd.to_string()),
+            (None, bq) => bq,
+        };
 
         self.notify(DiscussionEvent::TurnStarted {
             session_id: self.config.session_id.clone(),
@@ -1253,6 +1500,7 @@ mod tests {
             custom_skills_dir: None,
             include_default_skills: true,
             token_budget_cap: None,
+            ..Default::default()
         }
     }
 
@@ -1440,6 +1688,178 @@ mod tests {
 
         assert_eq!(status, DiscussionStatus::Paused);
         assert!(orchestrator.metadata.total_tokens >= 100);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_10_round_debate_stops_early_at_round_4_and_marks_rounds_5_to_10_ignored() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_conv10_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let mut config = build_test_config(&temp_dir);
+        config.max_rounds = 10;
+
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(MockProvider::new("mock")));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config, providers).unwrap();
+        let status = orchestrator.run_discussion().await.unwrap();
+
+        assert_eq!(status, DiscussionStatus::AwaitingReview);
+        // Round 3 settles consensus; in Round 4, once the first 2 agents confirm the settled Round 3 summary,
+        // Agent 3 in Round 4 AND Rounds 5..=10 are immediately skipped to save queries!
+        assert_eq!(orchestrator.metadata.converged_at_round, Some(4));
+
+        let ignored_rounds: Vec<u32> = orchestrator
+            .metadata
+            .round_ledger
+            .iter()
+            .filter(|r| r.status == RoundExecutionStatus::IgnoredConsensus)
+            .map(|r| r.round_number)
+            .collect();
+        assert_eq!(ignored_rounds, vec![5, 6, 7, 8, 9, 10]);
+
+        let (transcript, _) = read_transcript_with_recovery(&orchestrator.session_dir).unwrap();
+        // Verify the escaped 3rd step in Round 4 was recorded as SkippedConsensus (Ignored) with 0 queries
+        assert!(transcript
+            .iter()
+            .any(|m| m.round_number == 4 && m.message_kind == DiscussionMessageKind::SkippedConsensus));
+        // Verify zero turns were ever executed for Rounds 5..10
+        assert!(transcript.iter().all(|m| m.round_number <= 4));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    fn repeater_participant(
+        agent_id: &str,
+        provider_id: &str,
+        display_name: &str,
+        role: AgentRole,
+    ) -> DiscussionParticipant {
+        DiscussionParticipant {
+            agent_id: agent_id.to_string(),
+            provider_id: provider_id.to_string(),
+            model_id: format!("{}-model", provider_id),
+            display_name: display_name.to_string(),
+            role,
+            role_description: format!("{} with deep domain experience.", display_name),
+            avatar_color: "#a78bfa".to_string(),
+            assigned_skill_uris: Vec::new(),
+            context_budget_tokens: 16000,
+            custom_action: None,
+            custom_query: None,
+            thinking_enabled: true,
+            effort_level: Some("high".to_string()),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_multi_engine_round_repeater_executes_distinct_engines_and_custom_roles_per_round() {
+        use crate::discussion::types::{DiscussionRoundPlan, DiscussionRoundSlot};
+        use std::collections::HashSet;
+
+        let temp_dir = std::env::temp_dir().join(format!("flymd_repeater_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let mut config = build_test_config(&temp_dir);
+        config.max_rounds = 2;
+        config.selected_engines = vec![
+            "engine-alpha".to_string(),
+            "engine-beta".to_string(),
+            "engine-gamma".to_string(),
+        ];
+        config.repeater_mode = Some("per_round".to_string());
+        config.round_schedule = vec![
+            DiscussionRoundPlan {
+                round_number: 1,
+                title: "Round 1: Architecture & Cost Discovery".to_string(),
+                objective: Some("Decompose the system and estimate operating cost.".to_string()),
+                slots: vec![
+                    DiscussionRoundSlot {
+                        slot_id: "r1-s1".to_string(),
+                        participant: repeater_participant(
+                            "r1-architect",
+                            "engine-alpha",
+                            "Principal Architect",
+                            AgentRole::Architect,
+                        ),
+                        round_directive: Some("Propose the modular blueprint.".to_string()),
+                    },
+                    DiscussionRoundSlot {
+                        slot_id: "r1-s2".to_string(),
+                        participant: repeater_participant(
+                            "r1-finops",
+                            "engine-beta",
+                            "FinOps Cost Auditor",
+                            AgentRole::Custom("FinOps Cost Auditor".to_string()),
+                        ),
+                        round_directive: Some("Audit the cost profile of the blueprint.".to_string()),
+                    },
+                ],
+            },
+            DiscussionRoundPlan {
+                round_number: 2,
+                title: "Round 2: Regulatory & Adversarial Review".to_string(),
+                objective: None,
+                slots: vec![
+                    DiscussionRoundSlot {
+                        slot_id: "r2-s1".to_string(),
+                        participant: repeater_participant(
+                            "r2-counsel",
+                            "engine-gamma",
+                            "Regulatory Counsel",
+                            AgentRole::Custom("Regulatory Counsel".to_string()),
+                        ),
+                        round_directive: Some("Check compliance exposure.".to_string()),
+                    },
+                    DiscussionRoundSlot {
+                        slot_id: "r2-s2".to_string(),
+                        participant: repeater_participant(
+                            "r2-critic",
+                            "engine-alpha",
+                            "Adversarial Critic",
+                            AgentRole::Critic,
+                        ),
+                        round_directive: None,
+                    },
+                ],
+            },
+        ];
+
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        for engine in ["engine-alpha", "engine-beta", "engine-gamma"] {
+            providers.insert(engine.to_string(), Arc::new(MockProvider::new(engine)));
+        }
+
+        let mut orchestrator = DiscussionOrchestrator::new(config, providers).unwrap();
+        let status = orchestrator.run_discussion().await.unwrap();
+        assert_eq!(status, DiscussionStatus::AwaitingReview);
+
+        let (transcript, _) = read_transcript_with_recovery(&orchestrator.session_dir).unwrap();
+        let agent_turns = |round: u32| -> Vec<&DiscussionMessage> {
+            transcript
+                .iter()
+                .filter(|m| m.round_number == round && m.author_agent_id != "human-user")
+                .filter(|m| m.message_kind != DiscussionMessageKind::UserIntervention)
+                .collect()
+        };
+
+        let r1 = agent_turns(1);
+        let r1_providers: HashSet<&str> = r1.iter().map(|m| m.author_provider.as_str()).collect();
+        assert_eq!(
+            r1_providers,
+            HashSet::from(["engine-alpha", "engine-beta"]),
+            "Round 1 must run exactly the engines scheduled for Round 1"
+        );
+        assert!(r1.iter().any(|m| m.author_role == "FinOps Cost Auditor"));
+
+        let r2 = agent_turns(2);
+        assert!(!r2.is_empty(), "Round 2 must execute its own scheduled slots");
+        assert!(r2.iter().all(|m| m.author_provider != "engine-beta"));
+        assert!(r2
+            .iter()
+            .any(|m| m.author_provider == "engine-gamma" && m.author_role == "Regulatory Counsel"));
 
         let _ = fs::remove_dir_all(&temp_dir);
     }
