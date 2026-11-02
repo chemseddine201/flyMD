@@ -245,9 +245,13 @@ export function useSubscriptionAgents(autoFetchOnMount = true) {
       if (provDefault && provDefault.trim() && provDefault !== 'default') {
         list.push(provDefault.trim());
       }
-      return list;
+      const profDefault = profilesById.get(norm)?.defaultModelId;
+      if (profDefault && profDefault.trim() && profDefault !== 'default') {
+        list.push(profDefault.trim());
+      }
+      return Array.from(new Set(list));
     },
-    [credentials, liveOllamaModels, providersById]
+    [credentials, liveOllamaModels, providersById, profilesById]
   );
 
   return {

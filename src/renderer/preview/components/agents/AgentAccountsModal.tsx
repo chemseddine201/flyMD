@@ -853,7 +853,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     </label>
                     <ModelEffortSideBySidePicker
                       agentId={selectedProfile.id}
-                      selectedModel={currentCred.selectedModel}
+                      selectedModel={currentCred.selectedModel || selectedProfile.defaultModelId}
                       onChangeModel={(m) => updateCredField({ selectedModel: m })}
                       effortLevel={currentCred.defaultEffortLevel || 'medium'}
                       onChangeEffortLevel={(eff) => updateCredField({ defaultEffortLevel: eff })}
@@ -863,7 +863,8 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                           defaultThinkingEnabled: !(currentCred.defaultThinkingEnabled ?? true),
                         })
                       }
-                      subscriptionTier={currentCred.subscriptionTier}
+                      subscriptionTier={currentCred.subscriptionTier || selectedProfile.subscriptionTier}
+                      dynamicModels={selectedProfile.defaultModelId ? [selectedProfile.defaultModelId] : undefined}
                       compact={false}
                     />
                   </div>

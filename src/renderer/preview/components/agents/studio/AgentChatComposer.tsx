@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useImperativeHandle } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useImperativeHandle } from 'react';
 import {
   Sparkles,
   FileCheck2,
@@ -21,6 +21,7 @@ import {
   STARTER_CUSTOM_PIPELINE_ACTIONS,
 } from '../../../../../shared/constants';
 import { ModelEffortSideBySidePicker } from '../common/ModelEffortSideBySidePicker';
+import { getDefaultModelForAgent } from '../../../../../shared/constants/models';
 
 export interface ChatImageAttachment {
   id: string;
@@ -106,6 +107,13 @@ export const AgentChatComposer = React.memo(
     agentsById?.get(selectedAgentId) ||
     allAgents.find((a) => a.id === selectedAgentId) ||
     visibleAgents[0];
+
+  useEffect(() => {
+    const targetModel =
+      activeAgent?.defaultModelId ||
+      getDefaultModelForAgent(selectedAgentId, activeAgent?.subscriptionTier);
+    setComposerModel(targetModel);
+  }, [selectedAgentId, activeAgent?.defaultModelId, activeAgent?.subscriptionTier]);
 
   const addImageFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -323,6 +331,12 @@ export const AgentChatComposer = React.memo(
           {/* Side-by-Side Model & Effort Matrix */}
           <ModelEffortSideBySidePicker
             agentId={selectedAgentId}
+            subscriptionTier={activeAgent?.subscriptionTier}
+            dynamicModels={
+              activeAgent?.defaultModelId
+                ? [activeAgent.defaultModelId]
+                : undefined
+            }
             selectedModel={composerModel}
             onChangeModel={setComposerModel}
             effortLevel={composerEffort}

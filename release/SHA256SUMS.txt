@@ -1,4 +1,3 @@
-9ad8911681cafd07b02ccfcbc24db4e78c272cdc4d15523201bc6d5cf5b0a8cf *FlyMD_2.3.0_x64-portable.exe
-9ad8911681cafd07b02ccfcbc24db4e78c272cdc4d15523201bc6d5cf5b0a8cf *FlyMD_2.3.0_x64-portable-latest.exe
-28c3a572afd9f3c8372ea5cc69daabd887adb93266132ec4bded0a3ae033fc3f *FlyMD 2.3.0.exe
-859adbb7890324da3f5f706da0b0aec4a45a339352a6511781baf11e53ac2c87 *FlyMD Setup 2.3.0.exe
+fe0cfb135cb8c200d01b145519a49aab781feedc7870d4ada56f332d392c2d63 *FlyMD_2.3.0_x64-portable.exe
+983dabd29f987a80f410d378f9e3824d44af7f644fa23168ca80c9daf42f40ba *FlyMD 2.3.0.exe
+6fe14b5b826ed82a3a89023f85248076ea1ec87b298917911ea2e9627ee24ac1 *FlyMD Setup 2.3.0.exe

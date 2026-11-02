@@ -874,6 +874,17 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                   <div className="mt-1.5 pt-1.5 border-t border-slate-800/60">
                     <ModelEffortSideBySidePicker
                       agentId={effectiveAgentId}
+                      subscriptionTier={
+                        fallbackAllAgentsMap.get(effectiveAgentId)?.subscriptionTier
+                      }
+                      dynamicModels={
+                        fallbackAllAgentsMap.get(effectiveAgentId)?.defaultModelId
+                          ? [
+                              fallbackAllAgentsMap.get(effectiveAgentId)!
+                                .defaultModelId!,
+                            ]
+                          : undefined
+                      }
                       selectedModel={step.modelId}
                       onChangeModel={(newModel) => {
                         confirmOrExecuteModification(() => {

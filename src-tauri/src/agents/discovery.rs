@@ -55,6 +55,105 @@ pub fn check_agent_home_markers(agent_id: &str) -> (bool, bool) {
     }
 }
 
+/// Inspects agent credentials and configuration files to extract active subscription tier,
+/// configured default model, and connected account identity.
+pub fn detect_agent_subscription_and_model(
+    agent_id: &str,
+) -> (Option<String>, Option<String>, Option<String>) {
+    let Some(home) = get_user_home_dir() else {
+        return (None, None, None);
+    };
+
+    match agent_id {
+        "claude-code" => {
+            let mut detected_tier = None;
+            let mut detected_model = None;
+            let mut detected_account = None;
+
+            // 1. Try ~/.claude/.credentials.json for subscription type & org
+            let cred_path = home.join(".claude").join(".credentials.json");
+            if let Ok(content) = std::fs::read_to_string(&cred_path) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(oauth) = v.get("claudeAiOauth") {
+                        if let Some(st) = oauth.get("subscriptionType").and_then(|s| s.as_str()) {
+                            detected_tier = Some(st.to_string());
+                        }
+                    }
+                    if let Some(org) = v.get("organizationUuid").and_then(|s| s.as_str()) {
+                        let prefix = if org.len() > 8 { &org[..8] } else { org };
+                        detected_account = Some(format!("Claude Org ({})", prefix));
+                    }
+                }
+            }
+
+            // 2. Try ~/.claude/settings.json for configured default models (e.g. claude-opus-5-5)
+            let settings_path = home.join(".claude").join("settings.json");
+            if let Ok(content) = std::fs::read_to_string(&settings_path) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(ms) = v.get("modelSettings").and_then(|m| m.as_object()) {
+                        for key in ms.keys() {
+                            if key.contains("opus") || key.contains("sonnet") || key.contains("claude") {
+                                detected_model = Some(key.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fallback: If on pro/team tier and no model explicitly configured in settings, default to frontier opus
+            if detected_model.is_none() {
+                if let Some(ref tier) = detected_tier {
+                    if tier == "pro" || tier == "team" || tier == "max" {
+                        detected_model = Some("claude-opus-5-5".to_string());
+                    }
+                }
+            }
+
+            (detected_tier, detected_model, detected_account)
+        }
+        "antigravity" => {
+            let mut detected_tier = None;
+            let mut detected_model = None;
+            let mut detected_account = None;
+
+            let gemini_dir = home.join(".gemini");
+            let accounts_path = gemini_dir.join("google_accounts.json");
+            if let Ok(content) = std::fs::read_to_string(&accounts_path) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(active) = v.get("active").and_then(|s| s.as_str()) {
+                        if !active.trim().is_empty() {
+                            detected_account = Some(active.to_string());
+                            detected_tier = Some("advanced".to_string());
+                            detected_model = Some("gemini-4-argon".to_string());
+                        }
+                    }
+                }
+            }
+
+            if detected_tier.is_none() && gemini_dir.join("antigravity").exists() {
+                detected_tier = Some("advanced".to_string());
+                detected_model = Some("gemini-4-argon".to_string());
+            }
+
+            (detected_tier, detected_model, detected_account)
+        }
+        "cursor" => {
+            (Some("pro".to_string()), Some("claude-opus-5-5".to_string()), None)
+        }
+        "codex" => {
+            (Some("plus".to_string()), Some("o3-mini".to_string()), None)
+        }
+        "zcode" => {
+            (Some("pro".to_string()), Some("claude-opus-5-5".to_string()), None)
+        }
+        "opencode" => {
+            (Some("open".to_string()), Some("claude-opus-5-5".to_string()), None)
+        }
+        _ => (None, None, None),
+    }
+}
+
 /// Scans and returns all builtin and user-custom agent profiles with live auth and binary status.
 pub fn discover_agent_profiles(
     creds: &HashMap<String, AgentCredentialConfig>,
@@ -231,9 +330,16 @@ pub fn discover_agent_profiles(
         let supports_effort = matches!(id, "claude-code" | "antigravity" | "codex" | "opencode");
         let supports_thinking = matches!(id, "claude-code" | "antigravity" | "codex" | "opencode");
 
+        let (dyn_tier, dyn_model, dyn_account) = detect_agent_subscription_and_model(id);
+
+        let resolved_account_label = user_cred
+            .and_then(|c| c.connected_account_label.clone())
+            .or(dyn_account);
+
         let resolved_subscription_tier = user_cred
             .and_then(|c| c.subscription_tier.clone())
             .filter(|s| !s.trim().is_empty())
+            .or(dyn_tier)
             .or_else(|| {
                 if has_api_key {
                     Some(if id == "antigravity" { "vertex".to_string() } else { "api".to_string() })
@@ -254,31 +360,33 @@ pub fn discover_agent_profiles(
         let resolved_default_model = user_cred
             .and_then(|c| c.selected_model.clone())
             .filter(|s| !s.trim().is_empty())
+            .or(dyn_model)
             .or_else(|| {
                 Some(match id {
                     "claude-code" => {
                         if resolved_subscription_tier.as_deref() == Some("free") {
                             "claude-3-5-sonnet".to_string()
                         } else {
-                            "claude-3-7-sonnet".to_string()
+                            "claude-opus-5-5".to_string()
                         }
                     }
                     "antigravity" => {
                         if resolved_subscription_tier.as_deref() == Some("free") {
                             "gemini-2.5-flash".to_string()
                         } else {
-                            "gemini-2.5-pro".to_string()
+                            "gemini-4-argon".to_string()
                         }
                     }
-                    "codex" | "opencode" | "cursor" => {
+                    "codex" => {
                         if resolved_subscription_tier.as_deref() == Some("free") {
                             "gpt-4o-mini".to_string()
                         } else {
                             "o3-mini".to_string()
                         }
                     }
-                    "zcode" => "claude-3-5-sonnet".to_string(),
-                    _ => "claude-3-7-sonnet".to_string(),
+                    "opencode" => "claude-opus-5-5".to_string(),
+                    "cursor" | "zcode" => "claude-opus-5-5".to_string(),
+                    _ => "claude-opus-5-5".to_string(),
                 })
             });
 
@@ -301,7 +409,7 @@ pub fn discover_agent_profiles(
             env_key_name: env_key.map(|s| s.to_string()),
             has_api_key,
             web_auth_connected: web_session_verified,
-            connected_account_label: user_cred.and_then(|c| c.connected_account_label.clone()),
+            connected_account_label: resolved_account_label,
             artifact_watch_paths: watch_paths.iter().map(|s| s.to_string()).collect(),
             enabled: !is_disabled,
             is_custom: false,

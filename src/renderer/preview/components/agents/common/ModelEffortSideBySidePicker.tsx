@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Brain, Cpu, Sparkles, Zap, ChevronDown, Check } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Brain, Cpu, Sparkles, Zap, ChevronDown, Check, X } from 'lucide-react';
 import { AgentEffortLevel } from '../../../../../shared/types';
 import {
   EFFORT_DESCRIPTIONS,
@@ -38,25 +38,48 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
   disabled = false,
   className = '',
 }) => {
-  const [isCustomMode, setIsCustomMode] = useState<boolean>(() => {
-    if (!selectedModel) return false;
-    const available = getAvailableModelsForAgent(
-      agentId,
-      subscriptionTier,
-      dynamicModels
-    );
-    return !available.some((m) => m.id === selectedModel);
-  });
+  const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
   const [customInputVal, setCustomInputVal] = useState<string>(selectedModel || '');
 
-  const availableModels: ModelCatalogEntry[] = useMemo(() => {
-    return getAvailableModelsForAgent(agentId, subscriptionTier, dynamicModels);
-  }, [agentId, subscriptionTier, dynamicModels]);
+  useEffect(() => {
+    if (selectedModel && selectedModel.trim().length > 0) {
+      setCustomInputVal(selectedModel.trim());
+    }
+  }, [selectedModel]);
 
   const effectiveModel = useMemo(() => {
-    if (selectedModel && selectedModel.trim().length > 0) return selectedModel;
+    if (selectedModel && selectedModel.trim().length > 0) return selectedModel.trim();
     return getDefaultModelForAgent(agentId, subscriptionTier);
   }, [selectedModel, agentId, subscriptionTier]);
+
+  const availableModels: ModelCatalogEntry[] = useMemo(() => {
+    const list = getAvailableModelsForAgent(agentId, subscriptionTier, dynamicModels);
+    if (
+      effectiveModel &&
+      !list.some((m) => m.id.toLowerCase() === effectiveModel.toLowerCase())
+    ) {
+      const reasoning = isReasoningModel(effectiveModel);
+      return [
+        {
+          id: effectiveModel,
+          displayName: `${effectiveModel} [ACTIVE]`,
+          family: 'other',
+          providerIds: [agentId],
+          category: reasoning ? 'reasoning' : 'flagship',
+          supportsReasoning: reasoning,
+          supportedEffortLevels: reasoning
+            ? ['low', 'medium', 'high', 'xhigh', 'max']
+            : ['low', 'medium', 'high'],
+          defaultEffortLevel: 'medium',
+          supportsThinkingToggle: reasoning,
+          contextWindowTokens: 200000,
+          description: `Active model selection (${effectiveModel})`,
+        },
+        ...list,
+      ];
+    }
+    return list;
+  }, [agentId, subscriptionTier, dynamicModels, effectiveModel]);
 
   const reasoningSupported = useMemo(() => {
     return isReasoningModel(effectiveModel);
@@ -97,15 +120,25 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
         <div className="flex items-center gap-1 min-w-[140px]">
           <Cpu className="w-3.5 h-3.5 text-blue-400 shrink-0" />
           {isCustomMode ? (
-            <input
-              type="text"
-              value={customInputVal}
-              onChange={(e) => setCustomInputVal(e.target.value)}
-              onBlur={handleCustomBlur}
-              placeholder="model-slug..."
-              className="w-28 bg-neutral-950 border border-blue-500/50 rounded px-1.5 py-0.5 text-xs text-neutral-200 focus:outline-none"
-              autoFocus
-            />
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={customInputVal}
+                onChange={(e) => setCustomInputVal(e.target.value)}
+                onBlur={handleCustomBlur}
+                placeholder="model-slug..."
+                className="w-24 bg-neutral-950 border border-blue-500/50 rounded px-1.5 py-0.5 text-xs text-neutral-200 focus:outline-none"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setIsCustomMode(false)}
+                title="Back to dropdown options"
+                className="text-[11px] text-neutral-400 hover:text-white p-0.5"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
           ) : (
             <select
               value={effectiveModel}
