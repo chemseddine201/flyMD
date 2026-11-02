@@ -371,6 +371,8 @@ mod tests {
             }],
             active_skill_uris: Vec::new(),
             step_mode: false,
+            custom_skills_dir: None,
+            include_default_skills: true,
         };
 
         let mut metadata = DiscussionMetadata {
@@ -462,6 +464,8 @@ mod tests {
             }],
             active_skill_uris: Vec::new(),
             step_mode: false,
+            custom_skills_dir: None,
+            include_default_skills: true,
         };
 
         // Exact message structure from FLY5 where byte index 237 landed mid-character inside 'ى' (0xD9 0x89)

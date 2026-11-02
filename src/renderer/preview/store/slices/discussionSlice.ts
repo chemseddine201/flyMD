@@ -5,6 +5,7 @@ import {
   DiscussionMessage,
   DiscussionStreamEvent,
   AvailableProviderInfo,
+  SkillDescriptor,
 } from '../../../../shared/types';
 
 export interface DiscussionSlice {
@@ -20,6 +21,18 @@ export interface DiscussionSlice {
   isDiscussionRunning: boolean;
   discussionError: string | null;
   isStepMode: boolean;
+  customSkillsDir: string | null;
+  includeDefaultSkills: boolean;
+  availableSkills: SkillDescriptor[];
+
+  setCustomSkillsDir: (dir: string | null) => void;
+  setIncludeDefaultSkills: (inc: boolean) => void;
+  scanCustomSkills: (dirPath: string) => Promise<SkillDescriptor[]>;
+  loadAvailableSkills: (
+    workspacePath: string,
+    customSkillsDir?: string | null,
+    includeDefaultSkills?: boolean
+  ) => Promise<SkillDescriptor[]>;
 
   loadDiscussions: (workspacePath: string) => Promise<void>;
   selectDiscussion: (workspacePath: string, sessionId: string) => Promise<void>;
@@ -96,6 +109,45 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
   isDiscussionRunning: false,
   discussionError: null,
   isStepMode: false,
+  customSkillsDir: null,
+  includeDefaultSkills: true,
+  availableSkills: [],
+
+  setCustomSkillsDir: (dir: string | null) => set({ customSkillsDir: dir }),
+  setIncludeDefaultSkills: (inc: boolean) => set({ includeDefaultSkills: inc }),
+
+  scanCustomSkills: async (dirPath: string) => {
+    if (!window.electronAPI?.scanCustomSkillsDir) return [];
+    try {
+      const skills = await window.electronAPI.scanCustomSkillsDir(dirPath);
+      return skills || [];
+    } catch (e: any) {
+      console.warn('[DiscussionSlice] Failed to scan custom skills dir:', e);
+      return [];
+    }
+  },
+
+  loadAvailableSkills: async (
+    workspacePath: string,
+    customSkillsDir?: string | null,
+    includeDefaultSkills?: boolean
+  ) => {
+    if (!window.electronAPI?.getAvailableSkills) return [];
+    try {
+      const skills = await window.electronAPI.getAvailableSkills(
+        workspacePath,
+        customSkillsDir !== undefined ? customSkillsDir : get().customSkillsDir,
+        includeDefaultSkills !== undefined
+          ? includeDefaultSkills
+          : get().includeDefaultSkills
+      );
+      set({ availableSkills: skills || [] });
+      return skills || [];
+    } catch (e: any) {
+      console.warn('[DiscussionSlice] Failed to load available skills:', e);
+      return [];
+    }
+  },
 
   loadDiscussions: async (workspacePath: string) => {
     if (!window.electronAPI?.listDiscussions) return;

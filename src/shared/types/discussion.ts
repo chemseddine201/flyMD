@@ -112,6 +112,27 @@ export interface DecisionItem {
   evidenceCitations?: string[];
 }
 
+export type SkillLifecycleState =
+  | 'discovered'
+  | 'enabled'
+  | { natively_loaded: 'verified' | 'unknown' }
+  | 'injected'
+  | 'actually_used';
+
+export interface SkillDescriptor {
+  uri: string;
+  name: string;
+  description: string;
+  version: string;
+  author: string;
+  compatibility: string[];
+  tags: string[];
+  replaces: string[];
+  markdownBody: string;
+  sourcePath: string;
+  state: SkillLifecycleState | string;
+}
+
 export interface DiscussionConfig {
   schemaVersion: number;
   sessionId: string;
@@ -123,6 +144,8 @@ export interface DiscussionConfig {
   participants: DiscussionParticipant[];
   activeSkillUris?: string[];
   stepMode?: boolean;
+  customSkillsDir?: string | null;
+  includeDefaultSkills?: boolean;
 }
 
 export interface DiscussionMetadata {

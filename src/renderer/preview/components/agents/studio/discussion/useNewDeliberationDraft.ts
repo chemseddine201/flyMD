@@ -4,6 +4,7 @@ import {
   DiscussionParticipant,
   AvailableProviderInfo,
   AgentEffortLevel,
+  SkillDescriptor,
 } from '../../../../../../shared/types';
 import {
   DeliberationPreset,
@@ -54,6 +55,45 @@ export function useNewDeliberationDraft({
   const [presetThinkingEnabled, setPresetThinkingEnabled] =
     useState<boolean>(true);
   const [enableStepModeInNew, setEnableStepModeInNew] = useState(false);
+  const [customSkillsDir, setCustomSkillsDir] = useState<string>('');
+  const [includeDefaultSkills, setIncludeDefaultSkills] = useState<boolean>(true);
+  const [detectedSkills, setDetectedSkills] = useState<SkillDescriptor[]>([]);
+  const [isScanningSkills, setIsScanningSkills] = useState<boolean>(false);
+
+  const handleBrowseSkillsDir = useCallback(async () => {
+    if (window.electronAPI?.openFolderDialog) {
+      const selected = await window.electronAPI.openFolderDialog();
+      if (selected) {
+        setCustomSkillsDir(selected);
+        setIsScanningSkills(true);
+        try {
+          if (window.electronAPI.scanCustomSkillsDir) {
+            const skills = await window.electronAPI.scanCustomSkillsDir(selected);
+            setDetectedSkills(skills || []);
+          }
+        } finally {
+          setIsScanningSkills(false);
+        }
+      }
+    }
+  }, []);
+
+  const handleSkillsDirChange = useCallback(async (dirPath: string) => {
+    setCustomSkillsDir(dirPath);
+    if (!dirPath.trim()) {
+      setDetectedSkills([]);
+      return;
+    }
+    if (window.electronAPI?.scanCustomSkillsDir) {
+      try {
+        const skills = await window.electronAPI.scanCustomSkillsDir(dirPath.trim());
+        setDetectedSkills(skills || []);
+      } catch {
+        setDetectedSkills([]);
+      }
+    }
+  }, []);
+
   const [customParticipants, setCustomParticipants] = useState<
     DiscussionParticipant[]
   >(
@@ -352,8 +392,10 @@ export function useNewDeliberationDraft({
         Math.max(15, parseInt(turnTimeoutInput, 10) || turnTimeoutSecs || 120)
       ),
       participants: sanitizedParticipants,
-      activeSkillUris: [],
+      activeSkillUris: detectedSkills.map((s) => s.uri),
       stepMode: enableStepModeInNew,
+      customSkillsDir: customSkillsDir.trim() || undefined,
+      includeDefaultSkills,
     };
 
     setShowNewModal(false);
@@ -377,6 +419,9 @@ export function useNewDeliberationDraft({
     turnTimeoutInput,
     turnTimeoutSecs,
     enableStepModeInNew,
+    customSkillsDir,
+    includeDefaultSkills,
+    detectedSkills,
     startNewDiscussion,
   ]);
 
@@ -408,6 +453,14 @@ export function useNewDeliberationDraft({
     setPresetThinkingEnabled,
     enableStepModeInNew,
     setEnableStepModeInNew,
+    customSkillsDir,
+    setCustomSkillsDir,
+    includeDefaultSkills,
+    setIncludeDefaultSkills,
+    detectedSkills,
+    isScanningSkills,
+    handleBrowseSkillsDir,
+    handleSkillsDirChange,
     customParticipants,
     customParticipantsById,
     handleSelectPreset,

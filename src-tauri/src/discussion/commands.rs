@@ -8,6 +8,7 @@ use super::orchestrator::DiscussionOrchestrator;
 use super::provider_registry::{
     build_provider_map, detect_available_providers, AvailableProviderInfo,
 };
+use super::skills::{SkillDescriptor, SkillsManager};
 use super::storage::read_transcript_with_recovery;
 use super::types::{DiscussionConfig, DiscussionMessage, DiscussionMetadata};
 use std::fs;
@@ -108,6 +109,8 @@ pub async fn cmd_resume_discussion(
                     participants: Vec::new(),
                     active_skill_uris: Vec::new(),
                     step_mode: false,
+                    custom_skills_dir: None,
+                    include_default_skills: true,
                 });
             let providers =
                 build_provider_map(&persisted_config, manager.client.clone(), Some(&store));
@@ -453,6 +456,35 @@ pub async fn cmd_dispatch_targeted_action(
         .await
 }
 
+#[tauri::command]
+pub fn cmd_scan_custom_skills_dir(path: String) -> Result<Vec<SkillDescriptor>, String> {
+    let p = Path::new(&path);
+    if !p.exists() || !p.is_dir() {
+        return Err(format!(
+            "Custom skills directory not found or is not a directory: {}",
+            path
+        ));
+    }
+    let mut mgr = SkillsManager::new();
+    let discovered = mgr.discover_custom_skills(p, None);
+    Ok(discovered)
+}
+
+#[tauri::command]
+pub fn cmd_get_available_skills(
+    workspace_path: String,
+    custom_skills_dir: Option<String>,
+    include_default_skills: Option<bool>,
+) -> Result<Vec<SkillDescriptor>, String> {
+    let mut mgr = SkillsManager::new();
+    let skills = mgr.discover_all_skills(
+        &workspace_path,
+        custom_skills_dir.as_deref(),
+        include_default_skills.unwrap_or(true),
+    );
+    Ok(skills)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,6 +526,8 @@ mod tests {
             }],
             active_skill_uris: Vec::new(),
             step_mode: false,
+            custom_skills_dir: None,
+            include_default_skills: true,
         };
         crate::discussion::storage::atomic_write_json(&temp_dir.join("config.json"), &config).unwrap();
 

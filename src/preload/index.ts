@@ -18,6 +18,7 @@ import {
   DiscussionMetadata,
   DiscussionMessage,
   AvailableProviderInfo,
+  SkillDescriptor,
   ProjectNode,
   ProjectTreeNode,
   CreateProjectRequest,
@@ -239,6 +240,14 @@ const electronAPI = {
     actionQuery?: string
   ): Promise<DiscussionMessage> =>
     ipcRenderer.invoke('discussion:dispatch-targeted-action', sessionId, agentId, actionName, actionQuery),
+  scanCustomSkillsDir: (path: string): Promise<SkillDescriptor[]> =>
+    ipcRenderer.invoke('discussion:scan-custom-skills-dir', path),
+  getAvailableSkills: (
+    workspacePath: string,
+    customSkillsDir?: string | null,
+    includeDefaultSkills?: boolean
+  ): Promise<SkillDescriptor[]> =>
+    ipcRenderer.invoke('discussion:get-available-skills', workspacePath, customSkillsDir, includeDefaultSkills),
   getAvailableProviders: (): Promise<AvailableProviderInfo[]> =>
     ipcRenderer.invoke('discussion:get-available-providers'),
   onDiscussionEvent: (callback: (event: any) => void) => {

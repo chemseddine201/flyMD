@@ -256,6 +256,14 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         setPresetEffortLevel={draft.setPresetEffortLevel}
         presetThinkingEnabled={draft.presetThinkingEnabled}
         setPresetThinkingEnabled={draft.setPresetThinkingEnabled}
+        customSkillsDir={draft.customSkillsDir}
+        setCustomSkillsDir={draft.setCustomSkillsDir}
+        includeDefaultSkills={draft.includeDefaultSkills}
+        setIncludeDefaultSkills={draft.setIncludeDefaultSkills}
+        detectedSkills={draft.detectedSkills}
+        isScanningSkills={draft.isScanningSkills}
+        onBrowseSkillsDir={draft.handleBrowseSkillsDir}
+        onSkillsDirChange={draft.handleSkillsDirChange}
       />
 
       <DiscussionConfirmModals

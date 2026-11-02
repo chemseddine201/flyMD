@@ -14,10 +14,16 @@ import {
   ToggleLeft,
   ToggleRight,
   CopyPlus,
+  Folder,
+  FolderOpen,
+  Shield,
+  Layers,
+  Info,
 } from 'lucide-react';
 import {
   DiscussionParticipant,
   AgentEffortLevel,
+  SkillDescriptor,
 } from '../../../../../../shared/types';
 import { ModelEffortSideBySidePicker } from '../../common/ModelEffortSideBySidePicker';
 import {
@@ -82,6 +88,15 @@ export interface NewDeliberationModalProps {
   setPresetEffortLevel: (v: AgentEffortLevel) => void;
   presetThinkingEnabled: boolean;
   setPresetThinkingEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+
+  customSkillsDir?: string;
+  setCustomSkillsDir?: (v: string) => void;
+  includeDefaultSkills?: boolean;
+  setIncludeDefaultSkills?: (v: boolean) => void;
+  detectedSkills?: SkillDescriptor[];
+  isScanningSkills?: boolean;
+  onBrowseSkillsDir?: () => void;
+  onSkillsDirChange?: (v: string) => void;
 }
 
 const COLOR_PALETTE = ['#38bdf8', '#818cf8', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#a855f7'];
@@ -128,6 +143,14 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   setPresetEffortLevel,
   presetThinkingEnabled,
   setPresetThinkingEnabled,
+  customSkillsDir = '',
+  setCustomSkillsDir,
+  includeDefaultSkills = true,
+  setIncludeDefaultSkills,
+  detectedSkills = [],
+  isScanningSkills = false,
+  onBrowseSkillsDir,
+  onSkillsDirChange,
 }) => {
   if (!isOpen) return null;
 
@@ -916,6 +939,110 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                   Step-by-Step Mode (Pause after each turn)
                 </label>
               </div>
+            </div>
+          </div>
+
+          {/* Custom Skills Injection & Tool Isolation */}
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-sky-400" />
+                <span className="text-xs font-bold text-slate-200">Custom Skills & Domain Knowledge</span>
+              </div>
+              <span className="text-[10px] text-slate-400">Optional linked folder with SKILL.md competencies</span>
+            </div>
+
+            <div className="flex gap-2 items-center">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={customSkillsDir}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (setCustomSkillsDir) setCustomSkillsDir(val);
+                    if (onSkillsDirChange) onSkillsDirChange(val);
+                  }}
+                  placeholder="Link custom skills directory (e.g. C:\my-skills or .flymd/skills)"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 px-2.5 text-slate-200 text-xs focus:outline-none focus:border-sky-500 placeholder-slate-600"
+                />
+              </div>
+              {onBrowseSkillsDir && (
+                <button
+                  type="button"
+                  onClick={onBrowseSkillsDir}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 border border-slate-700/60 transition-colors"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Browse</span>
+                </button>
+              )}
+            </div>
+
+            {/* Live Detected Skills Badges */}
+            {detectedSkills && detectedSkills.length > 0 && (
+              <div className="space-y-1.5 bg-slate-900/50 rounded-lg p-2 border border-slate-800/60">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>
+                    {detectedSkills.length} Custom Skill{detectedSkills.length > 1 ? 's' : ''} Detected
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {detectedSkills.map((s) => (
+                    <span
+                      key={s.uri}
+                      title={s.description || s.uri}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-sky-950/70 text-sky-300 border border-sky-800/60 font-mono"
+                    >
+                      {s.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isScanningSkills && (
+              <div className="text-[11px] text-sky-400 flex items-center gap-1.5 italic">
+                <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
+                Scanning custom skills directory...
+              </div>
+            )}
+
+            {/* Interactive Tool Inclusion / Isolation Choice */}
+            <div className="pt-1 border-t border-slate-800/60 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  id="includeDefaultSkillsCheck"
+                  checked={includeDefaultSkills}
+                  onChange={(e) =>
+                    setIncludeDefaultSkills && setIncludeDefaultSkills(e.target.checked)
+                  }
+                  className="rounded bg-slate-900 border-slate-800 text-sky-500 focus:ring-0 cursor-pointer w-4 h-4 mt-0.5"
+                />
+                <div>
+                  <label
+                    htmlFor="includeDefaultSkillsCheck"
+                    className="text-slate-200 text-xs font-medium cursor-pointer select-none"
+                  >
+                    Include Default Built-in Tool Skills alongside Custom Skills
+                  </label>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {includeDefaultSkills
+                      ? 'Shared Mode: Default methodology guidelines are active. Custom skills override matching names.'
+                      : 'Isolated Mode: Agents run strictly in domain isolation. Default built-in tool prompts are excluded.'}
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border select-none shrink-0 ${
+                  includeDefaultSkills
+                    ? 'bg-emerald-950/50 text-emerald-400 border-emerald-800/60'
+                    : 'bg-amber-950/50 text-amber-400 border-amber-800/60'
+                }`}
+              >
+                {includeDefaultSkills ? 'Shared Tools' : 'Isolated Domain'}
+              </span>
             </div>
           </div>
         </div>

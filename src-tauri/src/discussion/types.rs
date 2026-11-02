@@ -278,6 +278,10 @@ pub struct DiscussionConfig {
     pub active_skill_uris: Vec<String>,
     #[serde(rename = "stepMode", default)]
     pub step_mode: bool,
+    #[serde(rename = "customSkillsDir", default, skip_serializing_if = "Option::is_none")]
+    pub custom_skills_dir: Option<String>,
+    #[serde(rename = "includeDefaultSkills", default = "default_true")]
+    pub include_default_skills: bool,
 }
 
 fn default_schema_version() -> u32 {

@@ -177,6 +177,7 @@ pub struct DiscussionOrchestrator {
     pub metadata: DiscussionMetadata,
     pub session_dir: PathBuf,
     pub memory: MemoryManager,
+    pub skills_manager: super::skills::SkillsManager,
     providers: HashMap<String, Arc<dyn DiscussionProvider>>,
     cancel_flag: Arc<AtomicBool>,
     pause_flag: Arc<AtomicBool>,
@@ -226,6 +227,13 @@ impl DiscussionOrchestrator {
 
         let memory = MemoryManager::new(session_dir.clone());
 
+        let mut skills_manager = super::skills::SkillsManager::new();
+        skills_manager.discover_all_skills(
+            &config.workspace_path,
+            config.custom_skills_dir.as_deref(),
+            config.include_default_skills,
+        );
+
         let step_mode = config.step_mode;
 
         Ok(Self {
@@ -233,6 +241,7 @@ impl DiscussionOrchestrator {
             metadata,
             session_dir,
             memory,
+            skills_manager,
             providers,
             cancel_flag: Arc::new(AtomicBool::new(false)),
             pause_flag: Arc::new(AtomicBool::new(false)),
@@ -298,11 +307,19 @@ impl DiscussionOrchestrator {
 
         let step_mode = config.step_mode;
 
+        let mut skills_manager = super::skills::SkillsManager::new();
+        skills_manager.discover_all_skills(
+            &config.workspace_path,
+            config.custom_skills_dir.as_deref(),
+            config.include_default_skills,
+        );
+
         Ok(Self {
             config,
             metadata,
             session_dir,
             memory,
+            skills_manager,
             providers,
             cancel_flag: Arc::new(AtomicBool::new(false)),
             pause_flag: Arc::new(AtomicBool::new(false)),
@@ -903,7 +920,7 @@ impl DiscussionOrchestrator {
             &active_dispute_topics,
         );
 
-        let (frames, truncated) = self
+        let (mut frames, truncated) = self
             .memory
             .assemble_prefix_pinned_frames(
                 participant,
@@ -917,6 +934,22 @@ impl DiscussionOrchestrator {
                 action_query.as_deref(),
             )
             .map_err(|e| format!("Failed to assemble context frames: {}", e))?;
+
+        // Resolve active skills for this participant according to isolation policy
+        let participant_skills = self.skills_manager.resolve_skills_for_participant(
+            &participant.agent_id,
+            &participant.provider_id,
+            &participant.model_id,
+            &participant.assigned_skill_uris,
+            self.config.include_default_skills,
+        );
+        let skills_prompt_block =
+            super::skills::SkillsManager::format_prompt_block(&participant_skills);
+        if !skills_prompt_block.is_empty() {
+            if let Some(last_frame) = frames.last_mut() {
+                last_frame.content.push_str(&skills_prompt_block);
+            }
+        }
 
         let system_prompt = frames
             .first()
@@ -1198,6 +1231,8 @@ mod tests {
             ],
             active_skill_uris: Vec::new(),
             step_mode: false,
+            custom_skills_dir: None,
+            include_default_skills: true,
         }
     }
 

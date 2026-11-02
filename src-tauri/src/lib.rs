@@ -324,6 +324,8 @@ pub fn run() {
             cmd_clear_all_discussions,
             cmd_set_discussion_step_mode,
             cmd_dispatch_targeted_action,
+            cmd_scan_custom_skills_dir,
+            cmd_get_available_skills,
             cmd_get_available_providers,
             cmd_get_cwd,
             cmd_list_projects,

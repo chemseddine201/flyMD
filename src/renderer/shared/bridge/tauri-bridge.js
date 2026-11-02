@@ -329,6 +329,16 @@
         actionQuery: actionQuery || '',
       });
     },
+    scanCustomSkillsDir: function (path) {
+      return invoke('cmd_scan_custom_skills_dir', { path: path });
+    },
+    getAvailableSkills: function (workspacePath, customSkillsDir, includeDefaultSkills) {
+      return invoke('cmd_get_available_skills', {
+        workspacePath: workspacePath,
+        customSkillsDir: customSkillsDir || null,
+        includeDefaultSkills: typeof includeDefaultSkills === 'boolean' ? includeDefaultSkills : null,
+      });
+    },
     getAvailableProviders: function () {
       return invoke('cmd_get_available_providers');
     },
