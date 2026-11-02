@@ -1,71 +1,71 @@
-# FlyMD v2.1.0 — Per-Agent Effort & Thinking Controls, Interactive Memory Cleanup, and Deliberation Lifecycle Hardening 🚀
+# FlyMD v2.2.0 — Token Telemetry & Quota HUD, Custom Skills Injection, Smart Deliverable Naming, and Dual-Engine Architecture 🚀
 
-**FlyMD v2.1.0** is a major stable release introducing granular per-agent reasoning effort and thinking mode controls, interactive workspace memory reset and project deletion dialogs with configurable checkboxes, and extensive lifecycle hardening for multi-agent deliberations and autonomous pipelines.
+**FlyMD v2.2.0** is a major stable release featuring real-time token telemetry with explicit reasoning token breakdowns, boundary-level quota governance guards, dynamic custom skills injection with an interactive tool isolation switch, context-aware multilingual deliverable naming, and subscription-aware side-by-side model and effort controls.
 
 ---
 
 ## 🆕 Major New Features
 
-### 1. Granular Per-Agent Reasoning Effort & Thinking Controls
-- **Flexible Effort Selectors (`low`, `medium`, `high`)**:
-  - Control reasoning token budgets across pipeline steps, deliberation participants, and direct agent dispatches.
-  - Optimize token expenditure: use `low` effort for formatting and mechanical translation, `medium` for routine code generation, and `high` for deep architectural refactoring or security auditing.
-- **Thinking Mode (Chain-of-Thought) Toggle**:
-  - Enable or disable full thinking visibility on supported reasoning models (DeepSeek R1, Claude 3.7 Sonnet, Gemini 2.0 Flash Thinking).
-- **Safe Fallback & Automatic Error Recovery**:
-  - Automatically defaults to `medium` when interacting with models or providers that lack custom reasoning effort parameters.
-  - If a provider endpoint rejects unsupported reasoning parameters, FlyMD automatically strips the reasoning configuration and retries seamlessly without failing the step.
+### 1. Token Usage Telemetry & Quota Governance HUD
+- **Explicit Reasoning Token Measurement**:
+  - Full telemetry separation: Prompt Tokens, Completion Tokens, and Reasoning/Thinking Tokens (Chain of Thought) across all CLI agents, HTTP providers, cognitive handoffs, and deliberation turns.
+  - Transparent badges on every task and turn card showing exact token allocations (e.g. `12,450 tokens (🧠 3,200 reasoning)`).
+- **Studio Token Quota HUD**:
+  - Live status indicator with adaptive coloring:
+    - **Sky (< 80%)**: Normal healthy burn rate.
+    - **Amber (80% – 99%)**: Soft warning threshold.
+    - **Rose (>= 100%)**: Quota cap breached.
+  - Interactive popover with detailed Prompt vs Completion vs Reasoning metrics, workspace cumulative token counter, budget presets (Unlimited, 25k, 50k, 100k, 250k), and policy toggles.
+- **Safe Boundary Quota Guards (Zero OS Process Manipulation)**:
+  - Enforces budget caps safely at turn and step boundaries where markdown deliverables and ledgers have already been written to disk cleanly.
+  - Pauses execution and provides an interactive step card to **Override Quota & Proceed** or adjust budgets without risking file truncation.
 
-### 2. Interactive Workspace Memory Reset Modal
-- **Fine-Grained Reset Dialog**:
-  - Provides an intuitive modal with default-checked checkboxes allowing users to selectively clear:
-    - Active multi-agent debate sessions & historical transcripts.
-    - 12-section evidence reports and synthesis markdown deliverables.
-    - Pipeline execution state and step run history.
-    - Cross-model cognitive handoffs, SHA-256 digests, and cached index envelopes.
-- **Automated Tab Lifecycle Management**:
-  - Automatically identifies and closes workspace editor tabs associated with cleared discussions and reports.
+### 2. Custom Skills Injection & User Directory Linking
+- **Configurable Skills Folder Linking**:
+  - Point FlyMD deliberations to external directories containing `SKILL.md` or standalone markdown competencies.
+  - Recursive directory scanner parsing YAML frontmatter tags, versions, descriptions, and replacement declarations.
+- **Interactive Tool Isolation Switch**:
+  - Dedicated toggle: *"Include Default Built-in Tool Skills alongside Custom Skills"*.
+  - **Shared Mode**: Custom skills augment standard built-in competencies, overriding matching names or explicit `replaces` tags.
+  - **Isolated Mode**: Deliberations run in strict domain isolation, omitting general built-in tools.
+- **Precedence Hierarchy**:
+  - `agent:` (0) > `custom:` (1) > `master:` (2) > `global:` (3).
 
-### 3. Interactive Project & Sub-Project Deletion Modal
-- **Granular Deletion Controls**:
-  - Dedicated interactive modal for deleting projects and nested sub-projects.
-  - Default-checked checkboxes for removing associated `.flymd` memory, cognitive caches, logs, and transcripts, with an optional toggle for deleting physical workspace files.
+### 3. Context-Aware Smart Deliverable File Naming
+- **Semantic File Pattern**:
+  - Replaces generic filenames (`IMPLEMENTATION_PLAN.md`, `final-report-v1.md`) with structured contextual slugs: `[Project]_[SubProject]_[Topic]_[Kind].md`.
+- **Multilingual Arabic-to-English Transliteration**:
+  - Translates Arabic semantic keywords and phonemes into clean, filesystem-safe ASCII slugs.
+- **Anti-Collision Sequencing**:
+  - Automatically appends `-v2.md`, `-v3.md` if an identically-named file already exists on disk.
 
----
-
-## 🛠️ Deliberation & Pipeline Lifecycle Hardening
-
-### 1. Multi-Agent Deliberation Lifecycle & Stalling Elimination
-- **Phase 3 Stalling Root-Cause Fix**:
-  - Resolved visual desynchronization where deliberations settled on disk but remained locked in `RUNNING` status on the main header.
-- **Sequence-Guarded Store Synchronization (`activeSyncSequence`)**:
-  - Replaced uncoordinated parallel IPC calls with an atomic sequence guard that automatically discards out-of-order promise resolutions during intense model token streaming.
-- **In-Memory Supervisor Eviction**:
-  - `spawn_supervised_discussion_run` now promptly evicts terminal sessions (`AwaitingReview`, `Completed`, `Failed`, `Cancelled`) from `active_map`, preventing memory leaks and stale state locks.
-- **Reconciliation Heartbeat Guard**:
-  - Added an active 2.5-second heartbeat timer in `DiscussionStudio.tsx` to verify backend metadata while running, ensuring 100% UI alignment even if an IPC push event is delayed or dropped.
-
-### 2. Pipeline Execution Guards & Companion Asset Protection
-- **Settlement Detector Code-File Guard**:
-  - Requires substantive code file modifications on disk before settling code-generating steps (`build` and `fix-bugs`), preventing tasks from terminating prematurely on markdown reports alone.
-- **Companion Asset Overwrite Protection**:
-  - Existing code files (`app.js`, `styles.css`) are preserved and never overwritten with generic stubs.
-- **Cryptographic Workspace Verification**:
-  - Embedded FIPS 180-4 SHA-256 pre-execution and post-execution workspace digests in `fix-bugs` to verify genuine alterations on disk.
+### 4. Subscription-Aware Model Selection & Side-by-Side Effort Matrix
+- **Tiered Model Catalog**:
+  - Pre-configured catalogs for Claude (Pro/Team/Max), OpenAI, Gemini, DeepSeek, and local Ollama.
+- **Side-by-Side Model & Effort Matrix**:
+  - Integrated picker dynamically adapting available effort tiers (`low`, `medium`, `high`, `xhigh`, `max`) and thinking toggles according to the exact capabilities of the selected model.
 
 ---
 
-## 📦 Downloads & Assets (v2.1.0 Stable)
+## 🛠️ Architecture Hardening & Code Splitting
 
-| File | Description | Size | SHA-256 Checksum |
-| :--- | :--- | :--- | :--- |
-| **`FlyMD_2.1.0_x64-portable.exe`** | Ultra-Lightweight Tauri v2 Native Binary | **14.90 MB** | `1b60a7e8f2aeb00cd01a64b2bc056f10c32b7d121b5b97cf0532cd86b83a462f` |
-| **`FlyMD_2.1.0_x64-portable-latest.exe`** | Latest Portable Release Shortcut | **14.90 MB** | `1b60a7e8f2aeb00cd01a64b2bc056f10c32b7d121b5b97cf0532cd86b83a462f` |
-| **`SHA256SUMS.txt`** | Checksum verification file | < 1 KB | `1b60a7e8f2aeb00cd01a64b2bc056f10c32b7d121b5b97cf0532cd86b83a462f` |
+- **Full SRP Refactoring**:
+  - Decomposed monolithic controllers into single-responsibility custom hooks and pure presenters.
+  - Memoized $O(1)$ selectors and $O(\Delta)$ delta log streaming cursor.
+- **UTF-8 Multibyte Crash Immunity**:
+  - Safe slicing for multibyte Arabic UTF-8 strings ensuring zero panics across log tails, synthesis reports, and file names.
+- **Dual Executable Releases**:
+  - **FlyMD_2.2.0_x64-portable.exe**: Ultra-lightweight native Tauri v2 standalone executable (~15.7 MB).
+  - **FlyMD Setup 2.2.0.exe**: Complete Windows NSIS installer (~70.7 MB).
+  - **FlyMD 2.2.0.exe**: Standalone portable Electron executable (~70.3 MB).
 
 ---
 
-## 💻 System Requirements
-- Windows 10 or Windows 11 (64-bit)
-- WebView2 Runtime (pre-installed on Windows 10/11)
-- ~35 MB RAM idle footprint
+## 📦 Binary Checksums (SHA-256)
+
+```
+0e863cfcc94304303ccaa7068fdff7e580c3e4256a74bad6c93af8d4aa6ef0e5 *FlyMD_2.2.0_x64-portable.exe
+0e863cfcc94304303ccaa7068fdff7e580c3e4256a74bad6c93af8d4aa6ef0e5 *FlyMD_2.2.0_x64-portable-latest.exe
+040a50520503cdc2054b4d2a22d5e2513e09e0ca8e8069c3fee99e1f51fcc4d0 *FlyMD 2.2.0.exe
+1795509b5ae0a7768f0671697d7325a72ff24df41eb4b871624b36192069e543 *FlyMD Setup 2.2.0.exe
+```

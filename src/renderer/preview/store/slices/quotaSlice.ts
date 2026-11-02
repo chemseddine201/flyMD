@@ -151,3 +151,4 @@ export const createQuotaSlice: StateCreator<QuotaSlice, [], [], QuotaSlice> = (
     return { percent, isSoftWarning, isBreached };
   },
 });
+

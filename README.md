@@ -1,4 +1,4 @@
-# FlyMD v2.1 🪶
+# FlyMD v2.2 🪶
 
 [English](#-english) • [العربية](#-العربية)
 
@@ -8,7 +8,7 @@
 
 > **Ultra-lightweight Tauri v2 + Rust Markdown Supervisor, Native Multi-Agent Studio, Evidence-Graded Debate Engine & Role-Aware Epistemic Cache Handoff Hub.**
 
-[![Version: 2.1.0](https://img.shields.io/badge/Version-2.1.0-purple.svg)](CHANGELOG.md)
+[![Version: 2.2.0](https://img.shields.io/badge/Version-2.2.0-purple.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Framework: Tauri v2](https://img.shields.io/badge/Runtime-Tauri_v2_(Rust)-orange.svg)](https://tauri.app)
 [![Multi-Agent Studio](https://img.shields.io/badge/Multi--Agent-Studio_%26_Debate_Hub-6366f1.svg)](#-whats-new-in-flymd-v210)
@@ -30,7 +30,28 @@ Modern AI-assisted engineering relies on multiple coding agents and models (Clau
 
 ---
 
-## 🚀 What's New in FlyMD v2.1.0 (Stable)
+## 🚀 What's New in FlyMD v2.2.0 (Stable)
+
+### 1. Token Usage Telemetry & Quota Governance HUD
+- **Explicit Reasoning Token Telemetry**: Real-time breakdown of Prompt, Completion, and Reasoning/Thinking tokens across every agent task, cognitive handoff, and deliberation turn card.
+- **Studio Token Quota HUD**: Status indicator with adaptive threshold coloring (Sky < 80%, Amber 80–99%, Rose >= 100%), session budget presets (Unlimited, 25k, 50k, 100k, 250k), and boundary pause policy toggles.
+- **Safe Boundary Quota Guards**: Safe pause at step/turn boundaries when budgets are exceeded, allowing users to override and continue without risking mid-write file truncation or using OS process monitors.
+
+### 2. Custom Skills Injection & Tool Isolation Switch
+- **Connect Arbitrary Skills Folders**: Point FlyMD deliberations to external directories containing `SKILL.md` or standalone markdown competencies.
+- **Interactive Tool Isolation Switch**: Choose between Shared Mode (custom skills augment built-ins) and Isolated Mode (strict domain isolation).
+
+### 3. Context-Aware Smart Deliverable File Naming
+- **Semantic Auto-Naming**: Generates structured deliverable filenames `[Project]_[SubProject]_[Topic]_[Kind].md` replacing generic plan/report names.
+- **Multilingual Arabic-to-English Transliteration**: Translates Arabic project and topic titles into clean, filesystem-safe ASCII slugs with collision-free `-v2.md`, `-v3.md` sequencing.
+
+### 4. Subscription-Aware Model Selection & Dynamic Effort Matrix
+- **Tiered Model Catalog**: Tailored presets for Claude (Pro/Team/Max), OpenAI, Gemini, DeepSeek, and local Ollama catalogs.
+- **Side-by-Side Model & Effort Matrix**: Dynamic UI adapting available effort levels (`low`, `medium`, `high`, `xhigh`, `max`) and thinking toggles according to the exact model selected.
+
+---
+
+## 🛠️ Previous Features in FlyMD v2.1.0
 
 ### 1. Per-Agent Reasoning Effort & Thinking Controls
 - **Granular Effort Levels**: Choose `low`, `medium`, or `high` reasoning effort per pipeline step, per debate participant, and direct agent dispatch. Save tokens on simple generation tasks or deploy high-intensity reasoning for complex architecture and debugging.
