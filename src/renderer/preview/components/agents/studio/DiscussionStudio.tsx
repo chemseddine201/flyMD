@@ -268,6 +268,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         onSkillsDirChange={draft.handleSkillsDirChange}
         tokenBudgetCapInput={draft.tokenBudgetCapInput}
         setTokenBudgetCapInput={draft.setTokenBudgetCapInput}
+        showCustomRolesModal={draft.showCustomRolesModal}
+        setShowCustomRolesModal={draft.setShowCustomRolesModal}
         repeater={{
           dynamicProviders: draft.dynamicProviders,
           selectedEngines: draft.selectedEngines,

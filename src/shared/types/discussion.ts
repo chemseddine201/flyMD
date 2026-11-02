@@ -88,7 +88,7 @@ export interface RoundExecutionRecord {
   skippedAgentNames: string[];
 }
 
-export type DebateRepeaterMode = 'off' | 'cycle' | 'per_round';
+export type DebateRepeaterMode = 'off' | 'cycle' | 'per_round' | 'per_agent';
 
 export interface CustomRoleDefinition {
   id: string;

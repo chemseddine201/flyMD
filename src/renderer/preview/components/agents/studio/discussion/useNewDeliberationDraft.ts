@@ -24,7 +24,7 @@ import { selectParticipantsById, usePreviewStore, PreviewStoreState } from '../.
 import { useSubscriptionAgents } from '../../../../hooks/useSubscriptionAgents';
 import { getDefaultModelForAgent } from '../../../../../../shared/constants/models';
 
-export type NewDebateModeTab = 'preset' | 'repeater' | 'actions' | 'custom';
+export type NewDebateModeTab = 'preset' | 'repeater' | 'custom';
 
 export interface UseNewDeliberationDraftParams {
   resolvedWorkspace: string;
@@ -44,6 +44,7 @@ export function useNewDeliberationDraft({
   startNewDiscussion,
 }: UseNewDeliberationDraftParams) {
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showCustomRolesModal, setShowCustomRolesModal] = useState(false);
   const setShowAgentAccountsModal = usePreviewStore(
     (s: PreviewStoreState) => s.setShowAgentAccountsModal
   );
@@ -378,7 +379,7 @@ export function useNewDeliberationDraft({
       if (e) e.stopPropagation();
       setIsCreatingNewPreset(false);
       setEditingPreset(JSON.parse(JSON.stringify(preset)));
-      setNewDebateMode('actions');
+      setShowCustomRolesModal(true);
     },
     []
   );
@@ -447,7 +448,7 @@ export function useNewDeliberationDraft({
     };
     setIsCreatingNewPreset(true);
     setEditingPreset(newPreset);
-    setNewDebateMode('actions');
+    setShowCustomRolesModal(true);
   }, [
     preferredDefaultAgentId,
     getSubscriptionTierForAgent,
@@ -581,11 +582,6 @@ export function useNewDeliberationDraft({
       newIdea.trim() ||
       `In-depth multi-perspective evaluation and decision analysis for: ${topicToUse}`;
 
-    const effectiveMaxRounds = Math.min(
-      10,
-      Math.max(1, parseInt(maxRoundsInput, 10) || maxRounds || 3)
-    );
-
     const currentPreset =
       presetsById.get(selectedPreset) ||
       presets[0] ||
@@ -596,10 +592,22 @@ export function useNewDeliberationDraft({
         ? selectedEngines
         : [presetEngine || preferredDefaultAgentId || 'mock'];
 
-    // Round Repeater / Per-Round Split applies only when launched from the Repeater tab with an active mode
+    // In Multi-Agent Round Repeater: max rounds = round schedule length.
+    // In Custom Team: max rounds = custom participants length (1 dedicated round per agent).
+    // In Preset Team: max rounds = preset participants length (1 dedicated round per agent).
     const effectiveRepeaterMode: DebateRepeaterMode =
-      newDebateMode === 'repeater' ? repeaterMode : 'off';
-    const useRepeaterSchedule = effectiveRepeaterMode !== 'off';
+      newDebateMode === 'repeater' ? repeaterMode : 'per_agent';
+    const useRepeaterSchedule =
+      newDebateMode === 'repeater' && effectiveRepeaterMode !== 'off';
+
+    const effectiveMaxRounds =
+      newDebateMode === 'repeater' && useRepeaterSchedule
+        ? roundSchedule.length > 0
+          ? roundSchedule.length
+          : Math.min(10, Math.max(1, selectedEngines.length || 3))
+        : newDebateMode === 'custom'
+        ? Math.max(1, customParticipants.length)
+        : Math.max(1, currentPreset.participants.length);
 
     let finalRoundSchedule: DiscussionRoundPlan[] | undefined;
     if (useRepeaterSchedule) {
@@ -607,9 +615,7 @@ export function useNewDeliberationDraft({
         roundSchedule.length > 0
           ? roundSchedule
           : buildRoundPlans(
-              effectiveRepeaterMode === 'per_round'
-                ? effectiveMaxRounds
-                : Math.min(effectiveMaxRounds, 2),
+              effectiveMaxRounds,
               activeEnginePool,
               allRoles
             );
@@ -860,5 +866,7 @@ export function useNewDeliberationDraft({
     handleUpdateParticipant,
     handleRemoveParticipant,
     handleLaunchNewDiscussion,
+    showCustomRolesModal,
+    setShowCustomRolesModal,
   };
 }

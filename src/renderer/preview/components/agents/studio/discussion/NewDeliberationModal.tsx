@@ -1,25 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Sparkles,
   Sliders,
   Settings,
-  Cpu,
-  Brain,
-  Check,
-  Edit3,
   Bot,
   Trash2,
   Plus,
-  RotateCcw,
+  Repeat,
+  Layers,
+  FolderOpen,
+  ShieldCheck,
+  X,
   ToggleLeft,
   ToggleRight,
-  CopyPlus,
-  Folder,
-  FolderOpen,
-  Shield,
-  Layers,
   Info,
-  Repeat,
+  Clock,
+  Coins,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   DiscussionParticipant,
@@ -36,6 +33,7 @@ import {
   ACTION_CATALOG,
 } from '../../../../services/deliberationPresetRepository';
 import { DebateRoundRepeaterBuilder } from './DebateRoundRepeaterBuilder';
+import { CustomActionsAndRolesModal } from './CustomActionsAndRolesModal';
 import { NewDebateModeTab } from './useNewDeliberationDraft';
 import { getDefaultModelForAgent } from '../../../../../../shared/constants/models';
 
@@ -111,9 +109,7 @@ export interface NewDeliberationModalProps {
   onAddParticipant: () => void;
   onRemoveParticipant: (idx: number) => void;
 
-  /** @deprecated Engines now come from live subscription discovery (`repeater.dynamicProviders`). */
   availableProviders?: AvailableProviderOption[];
-  /** Last explicitly chosen lead engine (kept for backward compatibility). */
   presetEngine?: string;
   setPresetEngine: (v: string) => void;
   presetEffortLevel: AgentEffortLevel;
@@ -132,10 +128,11 @@ export interface NewDeliberationModalProps {
   tokenBudgetCapInput?: string;
   setTokenBudgetCapInput?: (v: string) => void;
 
+  showCustomRolesModal?: boolean;
+  setShowCustomRolesModal?: (v: boolean) => void;
+
   repeater: RepeaterAndSubscriptionProps;
 }
-
-const COLOR_PALETTE = ['#38bdf8', '#818cf8', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#a855f7'];
 
 export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   isOpen,
@@ -145,9 +142,6 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   setNewTopic,
   newIdea,
   setNewIdea,
-  maxRoundsInput,
-  setMaxRoundsInput,
-  setMaxRounds,
   turnTimeoutInput,
   setTurnTimeoutInput,
   setTurnTimeoutSecs,
@@ -172,6 +166,7 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   onUpdateParticipant,
   onAddParticipant,
   onRemoveParticipant,
+  presetEngine,
   setPresetEngine,
   presetEffortLevel,
   setPresetEffortLevel,
@@ -187,1054 +182,640 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   onSkillsDirChange,
   tokenBudgetCapInput = '50000',
   setTokenBudgetCapInput,
+  showCustomRolesModal = false,
+  setShowCustomRolesModal,
   repeater,
 }) => {
+  const [internalShowRolesModal, setInternalShowRolesModal] = useState(false);
+
   if (!isOpen) return null;
+
+  const isRolesModalOpen =
+    showCustomRolesModal !== undefined ? showCustomRolesModal : internalShowRolesModal;
+  const setIsRolesModalOpen = (open: boolean) => {
+    if (setShowCustomRolesModal) {
+      setShowCustomRolesModal(open);
+    } else {
+      setInternalShowRolesModal(open);
+    }
+  };
 
   const engineOptions = repeater.dynamicProviders;
   const roleOptions = repeater.allRoles;
   const findRoleFor = (role: string) =>
     roleOptions.find((r) => r.roleKey === role || r.name === role);
 
+  const selectedPresetObj = presets.find((p) => p.id === selectedPreset) || presets[0];
+
+  const calculatedRounds =
+    newDebateMode === 'repeater'
+      ? repeater.roundSchedule.length || 2
+      : newDebateMode === 'custom'
+      ? customParticipants.length
+      : selectedPresetObj?.participants.length || 3;
+
   return (
-    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-      <div className="w-full max-w-4xl lg:max-w-5xl bg-slate-900 border border-slate-800/90 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden transition-all duration-200">
-        {/* Modal Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-sky-400" />
-            <h3 className="text-sm font-bold text-slate-100">
-              Configure Multi-Agent Deliberation
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 text-base"
-          >
-            &times;
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="p-5 space-y-4 overflow-y-auto text-xs">
-          <div>
-            <label className="block text-slate-300 font-semibold mb-1">Discussion Topic</label>
-            <input
-              type="text"
-              value={newTopic}
-              onChange={(e) => setNewTopic(e.target.value)}
-              placeholder="e.g. Market Expansion Strategy, Scientific Methodology Review, Product Architecture, Novel Plot Outline..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500 transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-300 font-semibold mb-1">Proposal, Objectives &amp; Constraints</label>
-            <textarea
-              rows={3}
-              value={newIdea}
-              onChange={(e) => setNewIdea(e.target.value)}
-              placeholder="Describe the core proposition, context, challenges, constraints, or specific angles to evaluate..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-sky-500 leading-relaxed transition-colors"
-            />
-          </div>
-
-          {/* Mode Selection Tab: Preset vs Custom Actions vs Custom Team */}
-          <div className="border border-slate-800 rounded-xl p-3.5 bg-slate-950/60">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
-              <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <Sliders size={13} className="text-sky-400" />
-                <span>Agent Team &amp; Action Presets</span>
+    <>
+      <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 md:p-[19px] animate-fadeIn">
+        <div className="w-full max-w-4xl md:max-w-5xl lg:max-w-6xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden transition-all duration-200">
+          {/* Modal Header with Dedicated Roles Library Button */}
+          <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/80">
+            <div className="flex items-center gap-2.5">
+              <Sparkles size={18} className="text-sky-500 dark:text-sky-400" />
+              <div>
+                <h3 className="text-sm md:text-base font-bold text-slate-900 dark:text-slate-100">
+                  Configure Multi-Agent Epistemic Deliberation
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  1 dedicated round per specialist agent with early convergence quota protection.
+                </p>
               </div>
-              <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setNewDebateMode('preset')}
-                  className={`px-3 py-1 rounded text-[11px] font-semibold transition-all ${
-                    newDebateMode === 'preset'
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Presets ({presets.filter((p) => p.enabled).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewDebateMode('repeater');
-                    if (repeater.repeaterMode === 'off') {
-                      repeater.onChangeRepeaterMode('cycle');
-                      if (repeater.roundSchedule.length === 0) {
-                        repeater.onAutoBuildRoundSchedule('cycle');
-                      }
-                    }
-                  }}
-                  className={`px-3 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
-                    newDebateMode === 'repeater'
-                      ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Repeat size={11} />
-                  <span>Multi-Engine Round Repeater</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewDebateMode('actions');
-                    setEditingPreset(null);
-                  }}
-                  className={`px-3 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
-                    newDebateMode === 'actions'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Settings size={11} />
-                  <span>Custom Actions &amp; Roles</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewDebateMode('custom')}
-                  className={`px-3 py-1 rounded text-[11px] font-semibold transition-all ${
-                    newDebateMode === 'custom'
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Custom Team ({customParticipants.length})
-                </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsRolesModalOpen(true)}
+                className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                title="Open dedicated Roles Library & Presets Manager"
+              >
+                <Settings size={13} />
+                <span>Manage Roles &amp; Presets</span>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Body */}
+          <div className="p-4 sm:p-5 md:p-[19px] space-y-4 md:space-y-5 overflow-y-auto text-xs bg-slate-50/30 dark:bg-slate-950/30">
+            {/* Section 1: Discussion Topic & Objective */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">
+                  Discussion Topic
+                </label>
+                <input
+                  type="text"
+                  value={newTopic}
+                  onChange={(e) => setNewTopic(e.target.value)}
+                  placeholder="e.g. Microkernel Security Architecture, Trade-off Matrix, Database Sharding..."
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-sky-500 transition-colors shadow-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">
+                  Proposal, Objectives &amp; Invariants
+                </label>
+                <textarea
+                  rows={2}
+                  value={newIdea}
+                  onChange={(e) => setNewIdea(e.target.value)}
+                  placeholder="Describe key requirements, edge-cases, trade-offs, or constraints to evaluate..."
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-sky-500 leading-relaxed transition-colors shadow-xs"
+                />
               </div>
             </div>
 
-            {/* Connected Engines Indicator (live subscription discovery) */}
-            {engineOptions.some((ap) => ap.available && ap.id !== 'mock') && (
-              <div className="mb-3 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <Sparkles size={12} className="text-emerald-400 shrink-0" />
-                  <span className="truncate">
-                    <strong>Connected Subscription Engines:</strong>{' '}
-                    {engineOptions
-                      .filter((ap) => ap.available && ap.id !== 'mock')
-                      .map((ap) => `${ap.name} (${ap.model})`)
-                      .join(', ')}
+            {/* Section 2: Custom Skills & Domain Knowledge (PLACED UPFRONT AT INCEPTION) */}
+            <div className="bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3.5 md:p-4 space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-sky-500 dark:text-sky-400" />
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-200">
+                    Custom Skills &amp; Domain Knowledge (Upfront Inception)
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={repeater.onRefreshSubscriptions}
-                  className="text-emerald-300 hover:text-emerald-200 font-semibold shrink-0"
-                  title="Re-scan subscriptions"
-                >
-                  {repeater.isRefreshingSubscriptions ? 'Refreshing…' : 'Refresh'}
-                </button>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Optional linked directory with domain <code className="text-sky-600 dark:text-sky-300">SKILL.md</code> competencies
+                </span>
               </div>
-            )}
 
-            {newDebateMode === 'repeater' ? (
-              <DebateRoundRepeaterBuilder
-                dynamicProviders={repeater.dynamicProviders}
-                selectedEngines={repeater.selectedEngines}
-                onToggleSelectedEngine={repeater.onToggleSelectedEngine}
-                onSelectAllReadyEngines={repeater.onSelectAllReadyEngines}
-                isRefreshingSubscriptions={repeater.isRefreshingSubscriptions}
-                onRefreshSubscriptions={repeater.onRefreshSubscriptions}
-                onOpenManageAccounts={repeater.onOpenManageAccounts}
-                repeaterMode={repeater.repeaterMode}
-                onChangeRepeaterMode={repeater.onChangeRepeaterMode}
-                maxRounds={repeater.maxRounds}
-                roundSchedule={repeater.roundSchedule}
-                onChangeRoundSchedule={repeater.onChangeRoundSchedule}
-                onAutoBuildRoundSchedule={repeater.onAutoBuildRoundSchedule}
-                allRoles={repeater.allRoles}
-                onCreateCustomRole={repeater.onCreateCustomRole}
-                onDeleteCustomRole={repeater.onDeleteCustomRole}
-                detectedSkills={detectedSkills}
-                getSubscriptionTierForAgent={repeater.getSubscriptionTierForAgent}
-                getDynamicModelsForAgent={repeater.getDynamicModelsForAgent}
-              />
-            ) : newDebateMode === 'preset' ? (
-              <div className="space-y-3">
-                {/* Preset Engine Switcher */}
-                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0">
-                      <Cpu size={15} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-bold text-slate-100 flex items-center gap-2 truncate">
-                        <span>Preset AI Engines</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/20 font-medium hidden sm:inline">
-                          {repeater.selectedEngines.length > 1
-                            ? `${repeater.selectedEngines.length} engines rotated across agents`
-                            : 'Shared across all agents'}
-                        </span>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={customSkillsDir}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (setCustomSkillsDir) setCustomSkillsDir(val);
+                      if (onSkillsDirChange) onSkillsDirChange(val);
+                    }}
+                    placeholder="Link custom skills folder (e.g. G:\xampp-httpdocs\vrsily2\skills or .flymd/skills)"
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg py-1.5 px-2.5 text-slate-900 dark:text-slate-200 text-xs focus:outline-none focus:border-sky-500 placeholder-slate-400 dark:placeholder-slate-600 shadow-xs"
+                  />
+                </div>
+                {onBrowseSkillsDir && (
+                  <button
+                    type="button"
+                    onClick={onBrowseSkillsDir}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-sky-500" />
+                    <span>Browse</span>
+                  </button>
+                )}
+              </div>
+
+              {detectedSkills.length > 0 && (
+                <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800/60">
+                  <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                    Detected Custom Skills ({detectedSkills.length}):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                    {detectedSkills.map((sk) => (
+                      <div
+                        key={sk.uri}
+                        className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center gap-1"
+                        title={sk.description}
+                      >
+                        <span className="font-semibold">{sk.name}</span>
+                        {sk.replaces && sk.replaces.length > 0 && (
+                          <span className="text-[9px] bg-emerald-500/20 px-1 rounded text-emerald-600 dark:text-emerald-300 font-mono">
+                            OVERRIDE
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-                        Pick one or more of your connected subscription engines
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-                    <div className="flex flex-wrap gap-1.5 max-w-full sm:max-w-[420px]">
-                      {engineOptions.map((p) => {
-                        const active = repeater.selectedEngines.includes(p.id);
-                        const selectable = p.available || p.id === 'mock';
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            disabled={!selectable && !active}
-                            onClick={() => {
-                              repeater.onToggleSelectedEngine(p.id);
-                              setPresetEngine(p.id);
-                            }}
-                            title={
-                              selectable
-                                ? `${p.name} — ${p.model}`
-                                : `${p.name} (not connected)`
-                            }
-                            className={`px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 transition ${
-                              active
-                                ? 'bg-sky-500/20 border-sky-500/50 text-sky-200'
-                                : selectable
-                                ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                                : 'bg-slate-950/40 border-slate-800/50 text-slate-600 cursor-not-allowed'
-                            }`}
-                          >
-                            {active && <Check size={10} />}
-                            <span className="truncate max-w-[160px]">{p.name}</span>
-                          </button>
-                        );
-                      })}
-                      {engineOptions.length === 0 && (
-                        <span className="text-[11px] text-amber-300">
-                          No engines detected yet. Use Refresh or connect a subscription.
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Preset Shared Effort Dropdown */}
-                    <select
-                      value={presetEffortLevel}
-                      onChange={(e) =>
-                        setPresetEffortLevel(e.target.value as AgentEffortLevel)
-                      }
-                      className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-sky-300 text-xs font-bold focus:outline-none focus:border-sky-500 cursor-pointer shadow-inner"
-                      title="Shared reasoning effort level across all preset participants"
-                    >
-                      <option value="low">Low Effort</option>
-                      <option value="medium">Med Effort (Default)</option>
-                      <option value="high">High Effort</option>
-                      <option value="xhigh">X-High Effort</option>
-                      <option value="max">Max Effort</option>
-                    </select>
-
-                    {/* Preset Thinking Mode Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => setPresetThinkingEnabled((prev) => !prev)}
-                      className={`px-2.5 py-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-inner ${
-                        presetThinkingEnabled
-                          ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 line-through'
-                      }`}
-                      title={
-                        presetThinkingEnabled
-                          ? 'Thinking Mode: ON (Click to disable and save tokens)'
-                          : 'Thinking Mode: OFF (Click to enable)'
-                      }
-                    >
-                      <Brain
-                        size={12}
-                        className={
-                          presetThinkingEnabled
-                            ? 'text-indigo-400'
-                            : 'text-slate-500'
-                        }
-                      />
-                      <span>{presetThinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}</span>
-                    </button>
+                    ))}
                   </div>
                 </div>
+              )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {presets
-                    .filter((p) => p.enabled)
-                    .map((preset) => {
-                      const isSelected = selectedPreset === preset.id;
+              {isScanningSkills && (
+                <div className="text-[11px] text-sky-600 dark:text-sky-400 flex items-center gap-1.5 italic">
+                  <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
+                  Scanning custom skills directory...
+                </div>
+              )}
+
+              {/* Tool Inclusion / Isolation Choice */}
+              <div className="pt-1 border-t border-slate-100 dark:border-slate-800/60 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    id="includeDefaultSkillsCheck"
+                    checked={includeDefaultSkills}
+                    onChange={(e) => setIncludeDefaultSkills && setIncludeDefaultSkills(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 dark:border-slate-700 text-sky-500 focus:ring-0 cursor-pointer"
+                  />
+                  <div>
+                    <label
+                      htmlFor="includeDefaultSkillsCheck"
+                      className="text-slate-800 dark:text-slate-200 text-xs font-medium cursor-pointer select-none"
+                    >
+                      Include Default Built-in Tool Skills alongside Custom Skills
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {includeDefaultSkills
+                        ? 'Shared Mode: Default methodology guidelines are active. Custom skills override matching names.'
+                        : 'Isolated Mode: Agents run strictly in domain isolation. Default built-in tool prompts are excluded.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Mode Selection Tab (Preset vs Repeater vs Custom Team) */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 md:p-4 bg-white dark:bg-slate-950/60 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
+                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Sliders size={13} className="text-sky-500 dark:text-sky-400" />
+                  <span>Agent Team &amp; Deliberation Mode</span>
+                </div>
+                <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setNewDebateMode('preset')}
+                    className={`px-3 py-1 rounded text-[11px] font-semibold transition-all ${
+                      newDebateMode === 'preset'
+                        ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30 shadow-xs'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Presets ({presets.filter((p) => p.enabled).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDebateMode('repeater');
+                      if (repeater.repeaterMode === 'off') {
+                        repeater.onChangeRepeaterMode('per_round');
+                        if (repeater.roundSchedule.length === 0) {
+                          repeater.onAutoBuildRoundSchedule('per_round');
+                        }
+                      }
+                    }}
+                    className={`px-3 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
+                      newDebateMode === 'repeater'
+                        ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30 shadow-xs'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <Repeat size={11} />
+                    <span>Multi-Engine Round Repeater</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewDebateMode('custom')}
+                    className={`px-3 py-1 rounded text-[11px] font-semibold transition-all ${
+                      newDebateMode === 'custom'
+                        ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30 shadow-xs'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Custom Team ({customParticipants.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Mode Body */}
+              {newDebateMode === 'preset' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {presets
+                      .filter((p) => p.enabled)
+                      .map((preset) => {
+                        const isSelected = selectedPreset === preset.id;
+                        return (
+                          <div
+                            key={preset.id}
+                            onClick={() => onSelectPreset(preset.id)}
+                            className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                              isSelected
+                                ? 'bg-sky-500/10 border-sky-500/60 shadow-sm'
+                                : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
+                                {preset.name}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                {preset.participants.length} rounds
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mb-2">
+                              {preset.description}
+                            </p>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {preset.participants.map((part, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                                >
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{ backgroundColor: part.avatarColor || '#38bdf8' }}
+                                  />
+                                  {part.displayName}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              ) : newDebateMode === 'repeater' ? (
+                /* Multi-Engine Round Repeater */
+                <DebateRoundRepeaterBuilder
+                  dynamicProviders={repeater.dynamicProviders}
+                  selectedEngines={repeater.selectedEngines}
+                  onToggleSelectedEngine={repeater.onToggleSelectedEngine}
+                  onSelectAllReadyEngines={repeater.onSelectAllReadyEngines}
+                  isRefreshingSubscriptions={repeater.isRefreshingSubscriptions}
+                  onRefreshSubscriptions={repeater.onRefreshSubscriptions}
+                  repeaterMode={repeater.repeaterMode}
+                  onChangeRepeaterMode={repeater.onChangeRepeaterMode}
+                  maxRounds={calculatedRounds}
+                  roundSchedule={repeater.roundSchedule}
+                  onChangeRoundSchedule={repeater.onChangeRoundSchedule}
+                  onAutoBuildRoundSchedule={repeater.onAutoBuildRoundSchedule}
+                  allRoles={repeater.allRoles}
+                  onCreateCustomRole={repeater.onCreateCustomRole}
+                  onDeleteCustomRole={repeater.onDeleteCustomRole}
+                  getSubscriptionTierForAgent={repeater.getSubscriptionTierForAgent}
+                  getDynamicModelsForAgent={repeater.getDynamicModelsForAgent}
+                  onOpenManageAccounts={repeater.onOpenManageAccounts}
+                />
+              ) : (
+                /* Custom Team Editor */
+                <div className="space-y-3">
+                  <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                    {customParticipants.map((p, idx) => {
+                      const selectedActionId = p.customAction?.id || 'standard';
                       return (
                         <div
-                          key={preset.id}
-                          onClick={() => onSelectPreset(preset.id)}
-                          className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                            isSelected
-                              ? 'bg-sky-500/15 border-sky-500/50 text-slate-100 shadow-sm'
-                              : 'bg-slate-900/60 border-slate-800 hover:bg-slate-900 text-slate-300'
-                          }`}
+                          key={p.agentId || idx}
+                          className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2 text-xs shadow-xs"
                         >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span className="truncate">{preset.name}</span>
-                            {isSelected && <Check size={13} className="text-sky-400 shrink-0" />}
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={p.avatarColor || '#38bdf8'}
+                              onChange={(e) => onUpdateParticipant(idx, { avatarColor: e.target.value })}
+                              className="w-6 h-6 rounded border-0 cursor-pointer bg-transparent shrink-0"
+                              title="Avatar color"
+                            />
+                            <input
+                              type="text"
+                              value={p.displayName}
+                              onChange={(e) => onUpdateParticipant(idx, { displayName: e.target.value })}
+                              placeholder="Agent Name"
+                              className="w-28 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1 text-slate-900 dark:text-slate-200"
+                            />
+                            <select
+                              value={p.role}
+                              onChange={(e) => {
+                                const picked = roleOptions.find(
+                                  (r) => r.roleKey === e.target.value || r.id === e.target.value
+                                );
+                                if (!picked) return;
+                                onUpdateParticipant(idx, {
+                                  role: picked.roleKey,
+                                  roleDescription: picked.experienceProfile,
+                                  avatarColor: picked.avatarColor,
+                                });
+                              }}
+                              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1 text-slate-700 dark:text-slate-200 text-xs max-w-[180px]"
+                            >
+                              {roleOptions.map((r) => (
+                                <option key={r.id} value={r.roleKey}>
+                                  {r.name}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={p.providerId}
+                              onChange={(e) => {
+                                const provId = e.target.value;
+                                const matched = engineOptions.find((ap) => ap.id === provId);
+                                onUpdateParticipant(idx, {
+                                  providerId: provId,
+                                  modelId:
+                                    matched?.model ||
+                                    getDefaultModelForAgent(
+                                      provId,
+                                      repeater.getSubscriptionTierForAgent(provId)
+                                    ),
+                                });
+                              }}
+                              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1 text-slate-700 dark:text-slate-200 text-xs flex-1 min-w-0"
+                            >
+                              {engineOptions.map((ap) => (
+                                <option
+                                  key={ap.id}
+                                  value={ap.id}
+                                  disabled={!ap.available && ap.id !== 'mock' && ap.id !== p.providerId}
+                                >
+                                  {ap.name}{' '}
+                                  {ap.available || ap.id === 'mock' ? '✓ Ready' : '(Not connected)'}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={customParticipants.length <= 2}
+                              onClick={() => onRemoveParticipant(idx)}
+                              className="p-1 text-slate-400 hover:text-rose-500 disabled:opacity-20 shrink-0"
+                              title="Remove agent"
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
-                          <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                            {preset.description}
+
+                          <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800/60">
+                            <ModelEffortSideBySidePicker
+                              agentId={p.providerId || p.agentId}
+                              subscriptionTier={repeater.getSubscriptionTierForAgent(p.providerId)}
+                              dynamicModels={repeater.getDynamicModelsForAgent(p.providerId)}
+                              selectedModel={p.modelId}
+                              onChangeModel={(m) => onUpdateParticipant(idx, { modelId: m })}
+                              effortLevel={p.effortLevel || 'medium'}
+                              onChangeEffortLevel={(eff) => onUpdateParticipant(idx, { effortLevel: eff })}
+                              thinkingEnabled={p.thinkingEnabled ?? true}
+                              onToggleThinking={() =>
+                                onUpdateParticipant(idx, {
+                                  thinkingEnabled: !(p.thinkingEnabled ?? true),
+                                })
+                              }
+                              compact={true}
+                            />
                           </div>
-                          <div className="text-[10px] text-slate-500 mt-2 flex items-center justify-between">
-                            <span>{preset.participants.length} participating agents</span>
-                            <span className="text-indigo-400 flex items-center gap-1">
-                              <Brain size={10} />
-                              <span>Thinking On</span>
+
+                          <div className="flex items-center gap-2 pt-1 border-t border-slate-200 dark:border-slate-800/60">
+                            <span className="text-[11px] font-semibold text-sky-600 dark:text-sky-400 shrink-0">
+                              Action Directive:
                             </span>
+                            <select
+                              value={selectedActionId}
+                              onChange={(e) => {
+                                const actId = e.target.value;
+                                const found = ACTION_CATALOG.find((ac) => ac.id === actId);
+                                if (found && found.id !== 'standard') {
+                                  onUpdateParticipant(idx, {
+                                    customAction: {
+                                      id: found.id,
+                                      name: found.name,
+                                      description: found.description,
+                                      promptDirective: found.promptDirective,
+                                    },
+                                  });
+                                } else {
+                                  onUpdateParticipant(idx, { customAction: undefined });
+                                }
+                              }}
+                              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1 text-slate-700 dark:text-slate-200 text-xs flex-1"
+                            >
+                              {ACTION_CATALOG.map((ac) => (
+                                <option key={ac.id} value={ac.id}>
+                                  {ac.name} — {ac.description}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              value={p.customQuery || ''}
+                              onChange={(e) => onUpdateParticipant(idx, { customQuery: e.target.value })}
+                              placeholder="Specific inquiry or directive for this agent..."
+                              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2.5 py-1 text-[11px] text-slate-800 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                            />
                           </div>
                         </div>
                       );
                     })}
-                </div>
-
-                <div className="flex justify-end pt-1">
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setNewDebateMode('actions');
-                      setEditingPreset(null);
-                    }}
-                    className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-medium"
+                    onClick={onAddParticipant}
+                    className="w-full py-1.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-sky-500 text-slate-600 dark:text-slate-400 hover:text-sky-600 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
                   >
-                    <Settings size={12} />
-                    <span>Manage, customize roles &amp; queries, or add new action presets &rarr;</span>
+                    <Plus size={13} />
+                    <span>Add Participating Agent</span>
                   </button>
                 </div>
-              </div>
-            ) : newDebateMode === 'actions' ? (
-              <div className="space-y-3">
-                {editingPreset ? (
-                  <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <div className="flex items-center gap-2">
-                        <Edit3 size={15} className="text-amber-400" />
-                        <h4 className="text-xs font-bold text-slate-100">
-                          {isCreatingNewPreset ? 'Create New Action Preset' : `Edit Preset: ${editingPreset.name}`}
-                        </h4>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditingPreset(null)}
-                          className="px-3 py-1 rounded text-slate-400 hover:text-slate-200 text-xs font-semibold"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onSaveEditingPreset}
-                          className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-sm"
-                        >
-                          Save Preset
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-slate-300 font-semibold mb-1 text-[11px]">Preset Name</label>
-                        <input
-                          type="text"
-                          value={editingPreset.name}
-                          onChange={(e) => setEditingPreset({ ...editingPreset, name: e.target.value })}
-                          placeholder="e.g. Market Strategy & Execution Risk, System Architecture, Policy Review..."
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-300 font-semibold mb-1 text-[11px]">Description</label>
-                        <input
-                          type="text"
-                          value={editingPreset.description}
-                          onChange={(e) => setEditingPreset({ ...editingPreset, description: e.target.value })}
-                          placeholder="Short description of this deliberation focus"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Participating Agent Roles in this Preset */}
-                    <div className="space-y-3 pt-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                          <Bot size={13} className="text-sky-400" />
-                          Agent Roles &amp; Custom Queries ({editingPreset.participants.length})
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const nextIdx = editingPreset.participants.length + 1;
-                            const color = COLOR_PALETTE[(nextIdx - 1) % COLOR_PALETTE.length];
-                            const leadEngine =
-                              repeater.selectedEngines[0] || engineOptions[0]?.id || 'mock';
-                            const leadModel =
-                              engineOptions.find((ep) => ep.id === leadEngine)?.model ||
-                              getDefaultModelForAgent(
-                                leadEngine,
-                                repeater.getSubscriptionTierForAgent(leadEngine)
-                              );
-                            const newAgent: DiscussionParticipant = {
-                              agentId: `agent-custom-${Date.now()}`,
-                              providerId: leadEngine,
-                              modelId: leadModel,
-                              displayName: `Specialist ${nextIdx}`,
-                              role: 'custom',
-                              roleDescription: 'Custom inquiry focus and domain analysis.',
-                              avatarColor: color,
-                              assignedSkillUris: [],
-                              contextBudgetTokens: 16000,
-                              thinkingEnabled: true,
-                              customAction: {
-                                id: `action-${Date.now()}`,
-                                name: 'Specialized Inquiry',
-                                description: 'Custom domain inquiry',
-                                promptDirective: 'Evaluate specific failure modes and validation criteria.',
-                              },
-                            };
-                            setEditingPreset({
-                              ...editingPreset,
-                              participants: [...editingPreset.participants, newAgent],
-                            });
-                          }}
-                          className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-semibold"
-                        >
-                          <Plus size={12} /> Add Agent Role
-                        </button>
-                      </div>
-
-                      <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                        {editingPreset.participants.map((p, pIdx) => (
-                          <div
-                            key={p.agentId || pIdx}
-                            className="p-3 rounded-lg bg-slate-950/80 border border-slate-800 space-y-2 text-xs"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 flex-1">
-                                <span
-                                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                                  style={{ backgroundColor: p.avatarColor || '#38bdf8' }}
-                                />
-                                <input
-                                  type="text"
-                                  value={p.displayName}
-                                  onChange={(e) => {
-                                    const copy = [...editingPreset.participants];
-                                    copy[pIdx] = { ...copy[pIdx], displayName: e.target.value };
-                                    setEditingPreset({ ...editingPreset, participants: copy });
-                                  }}
-                                  placeholder="Agent Display Name"
-                                  className="w-44 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-100 font-bold focus:outline-none focus:border-sky-500"
-                                />
-                                <select
-                                  value={findRoleFor(p.role)?.id || '__current__'}
-                                  onChange={(e) => {
-                                    const picked = roleOptions.find((r) => r.id === e.target.value);
-                                    if (!picked) return;
-                                    const copy = [...editingPreset.participants];
-                                    copy[pIdx] = {
-                                      ...copy[pIdx],
-                                      role: picked.roleKey,
-                                      roleDescription: copy[pIdx].roleDescription || picked.experienceProfile,
-                                      avatarColor: picked.avatarColor,
-                                    };
-                                    setEditingPreset({ ...editingPreset, participants: copy });
-                                  }}
-                                  className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-300 font-medium focus:outline-none focus:border-sky-500 cursor-pointer"
-                                >
-                                  {roleOptions.map((r) => (
-                                    <option key={r.id} value={r.id}>
-                                      {r.name}
-                                    </option>
-                                  ))}
-                                  {!findRoleFor(p.role) && (
-                                    <option value="__current__">{p.role || 'Custom Specialist'}</option>
-                                  )}
-                                </select>
-                              </div>
-                              {editingPreset.participants.length > 2 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const copy = editingPreset.participants.filter((_, idx) => idx !== pIdx);
-                                    setEditingPreset({ ...editingPreset, participants: copy });
-                                  }}
-                                  className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                                  title="Remove agent role"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              )}
-                            </div>
-
-                            <div>
-                              <input
-                                type="text"
-                                value={p.roleDescription || ''}
-                                onChange={(e) => {
-                                  const copy = [...editingPreset.participants];
-                                  copy[pIdx] = { ...copy[pIdx], roleDescription: e.target.value };
-                                  setEditingPreset({ ...editingPreset, participants: copy });
-                                }}
-                                placeholder="Role description (e.g. Focus on market risks, feasibility, or quality standards)"
-                                className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-300 focus:outline-none focus:border-sky-500 text-[11px]"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] text-amber-400 font-semibold mb-1">
-                                Custom Prompt Directive / Invariant Query for this Agent:
-                              </label>
-                              <textarea
-                                rows={2}
-                                value={p.customAction?.promptDirective || ''}
-                                onChange={(e) => {
-                                  const copy = [...editingPreset.participants];
-                                  copy[pIdx] = {
-                                    ...copy[pIdx],
-                                    customAction: {
-                                      id: copy[pIdx].customAction?.id || `action-${Date.now()}`,
-                                      name: copy[pIdx].displayName,
-                                      description: copy[pIdx].roleDescription || '',
-                                      promptDirective: e.target.value,
-                                    },
-                                  };
-                                  setEditingPreset({ ...editingPreset, participants: copy });
-                                }}
-                                placeholder="e.g. Evaluate core assumptions, analyze edge cases, and scrutinize deliverables against key objectives."
-                                className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-slate-200 text-xs focus:outline-none focus:border-amber-500/70 leading-relaxed font-mono"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-slate-800">
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-                          <Settings size={14} className="text-amber-400" />
-                          Deliberation Action Presets &amp; Role Library
-                        </h4>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Enable, disable, customize, or define specialized multi-agent inquiry roles.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={onResetPresetsToDefaults}
-                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 transition-colors"
-                          title="Restore default deliberation presets"
-                        >
-                          <RotateCcw size={11} />
-                          <span>Restore Defaults</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onStartCreatePreset}
-                          className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1 transition-all shadow-sm"
-                        >
-                          <Plus size={13} />
-                          <span>+ Add Custom Action Preset</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                      {presets.map((preset) => (
-                        <div
-                          key={preset.id}
-                          className={`p-3 rounded-xl border transition-all ${
-                            preset.enabled
-                              ? 'bg-slate-900/90 border-slate-800'
-                              : 'bg-slate-950/60 border-slate-800/60 opacity-60'
-                          }`}
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div className="min-w-0 flex items-start gap-2.5">
-                              <button
-                                type="button"
-                                onClick={(e) => onTogglePresetEnabled(preset.id, e)}
-                                className={`p-1 rounded transition-colors mt-0.5 ${
-                                  preset.enabled
-                                    ? 'text-emerald-400 hover:text-emerald-300'
-                                    : 'text-slate-600 hover:text-slate-400'
-                                }`}
-                                title={preset.enabled ? 'Click to disable preset' : 'Click to enable preset'}
-                              >
-                                {preset.enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-                              </button>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-xs text-slate-100">{preset.name}</span>
-                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
-                                    {preset.participants.length} agents
-                                  </span>
-                                  {preset.isBuiltIn && (
-                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                                      Built-in
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[11px] text-slate-400 mt-0.5">{preset.description}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                              <button
-                                type="button"
-                                onClick={(e) => onStartEditPreset(preset, e)}
-                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 transition-colors"
-                                title="Edit roles and custom queries"
-                              >
-                                <Edit3 size={11} className="text-amber-400" />
-                                <span>Edit</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => onDuplicatePreset(preset, e)}
-                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
-                                title="Duplicate preset"
-                              >
-                                <CopyPlus size={12} />
-                              </button>
-                              {presets.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => onDeletePreset(preset.id, e)}
-                                  className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors"
-                                  title="Delete preset"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Custom Team Editor with Custom Actions & Query Builders */
-              <div className="space-y-3">
-                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                  {customParticipants.map((p, idx) => {
-                    const selectedActionId = p.customAction?.id || 'standard';
-                    return (
-                      <div
-                        key={p.agentId || idx}
-                        className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 text-xs"
-                      >
-                        {/* Row 1: Identity, Role, Provider, Model */}
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={p.avatarColor || '#38bdf8'}
-                            onChange={(e) => onUpdateParticipant(idx, { avatarColor: e.target.value })}
-                            className="w-6 h-6 rounded border-0 cursor-pointer bg-transparent shrink-0"
-                            title="Avatar color"
-                          />
-                          <input
-                            type="text"
-                            value={p.displayName}
-                            onChange={(e) => onUpdateParticipant(idx, { displayName: e.target.value })}
-                            placeholder="Agent Name"
-                            className="w-28 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200"
-                          />
-                          <select
-                            value={findRoleFor(p.role)?.id || '__current__'}
-                            onChange={(e) => {
-                              const picked = roleOptions.find((r) => r.id === e.target.value);
-                              if (!picked) return;
-                              onUpdateParticipant(idx, {
-                                role: picked.roleKey,
-                                roleDescription: picked.experienceProfile,
-                                avatarColor: picked.avatarColor,
-                                assignedSkillUris:
-                                  picked.assignedSkillUris.length > 0
-                                    ? picked.assignedSkillUris
-                                    : p.assignedSkillUris,
-                              });
-                            }}
-                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs max-w-[180px]"
-                            title="Specialist role (built-in + your custom roles)"
-                          >
-                            {roleOptions.map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {r.name}
-                              </option>
-                            ))}
-                            {!findRoleFor(p.role) && (
-                              <option value="__current__">{p.role || 'Custom Specialist'}</option>
-                            )}
-                          </select>
-                          <select
-                            value={p.providerId}
-                            onChange={(e) => {
-                              const provId = e.target.value;
-                              const matched = engineOptions.find((ap) => ap.id === provId);
-                              onUpdateParticipant(idx, {
-                                providerId: provId,
-                                modelId:
-                                  matched?.model ||
-                                  getDefaultModelForAgent(
-                                    provId,
-                                    repeater.getSubscriptionTierForAgent(provId)
-                                  ),
-                              });
-                            }}
-                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs flex-1 min-w-0"
-                            title="Subscription engine for this agent"
-                          >
-                            {engineOptions.map((ap) => (
-                              <option
-                                key={ap.id}
-                                value={ap.id}
-                                disabled={!ap.available && ap.id !== 'mock' && ap.id !== p.providerId}
-                              >
-                                {ap.name}{' '}
-                                {ap.available || ap.id === 'mock' ? '✓ Ready' : '(Not connected)'}
-                              </option>
-                            ))}
-                            {!engineOptions.some((ap) => ap.id === p.providerId) && (
-                              <option value={p.providerId}>{p.providerId} (unavailable)</option>
-                            )}
-                          </select>
-                          <button
-                            type="button"
-                            disabled={customParticipants.length <= 2}
-                            onClick={() => onRemoveParticipant(idx)}
-                            className="p-1 text-slate-500 hover:text-rose-400 disabled:opacity-20 shrink-0"
-                            title="Remove agent"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-
-                        {/* Row 2: Side-by-Side Model & Effort Matrix */}
-                        <div className="pt-1.5 border-t border-slate-800/60">
-                          <ModelEffortSideBySidePicker
-                            agentId={p.providerId || p.agentId}
-                            subscriptionTier={repeater.getSubscriptionTierForAgent(p.providerId)}
-                            dynamicModels={repeater.getDynamicModelsForAgent(p.providerId)}
-                            selectedModel={p.modelId}
-                            onChangeModel={(m) => onUpdateParticipant(idx, { modelId: m })}
-                            effortLevel={p.effortLevel || 'medium'}
-                            onChangeEffortLevel={(eff) => onUpdateParticipant(idx, { effortLevel: eff })}
-                            thinkingEnabled={p.thinkingEnabled ?? true}
-                            onToggleThinking={() =>
-                              onUpdateParticipant(idx, {
-                                thinkingEnabled: !(p.thinkingEnabled ?? true),
-                              })
-                            }
-                            compact={true}
-                          />
-                        </div>
-
-                        {/* Row 3: Custom Action Directive */}
-                        <div className="flex items-center gap-2 pt-1.5 border-t border-slate-800/60">
-                          <span className="text-[11px] font-semibold text-sky-400 shrink-0">Custom Action:</span>
-                          <select
-                            value={selectedActionId}
-                            onChange={(e) => {
-                              const actId = e.target.value;
-                              const found = ACTION_CATALOG.find((ac) => ac.id === actId);
-                              if (found && found.id !== 'standard') {
-                                onUpdateParticipant(idx, {
-                                  customAction: {
-                                    id: found.id,
-                                    name: found.name,
-                                    description: found.description,
-                                    promptDirective: found.promptDirective,
-                                  },
-                                });
-                              } else {
-                                onUpdateParticipant(idx, { customAction: undefined });
-                              }
-                            }}
-                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs flex-1"
-                          >
-                            {ACTION_CATALOG.map((ac) => (
-                              <option key={ac.id} value={ac.id}>
-                                {ac.name} — {ac.description}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Row 3: Optional Freeform Query Directive for this Agent */}
-                        <div className="pt-0.5">
-                          <input
-                            type="text"
-                            value={p.customQuery || ''}
-                            onChange={(e) => onUpdateParticipant(idx, { customQuery: e.target.value })}
-                            placeholder="Specific inquiry or directive for this agent (e.g. 'Focus on SQLite journal crash recovery')..."
-                            className="w-full bg-slate-950 border border-slate-800/80 rounded px-2.5 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  onClick={onAddParticipant}
-                  className="w-full py-1.5 rounded-lg border border-dashed border-slate-700 hover:border-sky-500 text-slate-400 hover:text-sky-400 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Plus size={13} />
-                  <span>Add Participating Agent</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Rounds, Timeout, Token Budget, and Execution Mode */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-slate-300 font-semibold text-xs">Deliberation Rounds</label>
-                <span className="text-[10px] text-slate-500">1 - 10</span>
-              </div>
-              <input
-                type="number"
-                value={maxRoundsInput}
-                onChange={(e) => {
-                  setMaxRoundsInput(e.target.value);
-                  const parsed = parseInt(e.target.value, 10);
-                  if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
-                    setMaxRounds(parsed);
-                  }
-                }}
-                onBlur={() => {
-                  const parsed = parseInt(maxRoundsInput, 10);
-                  if (isNaN(parsed) || parsed < 1) {
-                    setMaxRoundsInput('1');
-                    setMaxRounds(1);
-                  } else if (parsed > 10) {
-                    setMaxRoundsInput('10');
-                    setMaxRounds(10);
-                  } else {
-                    setMaxRoundsInput(String(parsed));
-                    setMaxRounds(parsed);
-                  }
-                }}
-                placeholder="3"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-slate-300 font-semibold text-xs">Turn Timeout (s)</label>
-                <span className="text-[10px] text-slate-500">15s - 600s</span>
-              </div>
-              <input
-                type="number"
-                value={turnTimeoutInput}
-                onChange={(e) => {
-                  setTurnTimeoutInput(e.target.value);
-                  const parsed = parseInt(e.target.value, 10);
-                  if (!isNaN(parsed) && parsed >= 15 && parsed <= 600) {
-                    setTurnTimeoutSecs(parsed);
-                  }
-                }}
-                onBlur={() => {
-                  const parsed = parseInt(turnTimeoutInput, 10);
-                  if (isNaN(parsed) || parsed < 15) {
-                    setTurnTimeoutInput('15');
-                    setTurnTimeoutSecs(15);
-                  } else if (parsed > 600) {
-                    setTurnTimeoutInput('600');
-                    setTurnTimeoutSecs(600);
-                  } else {
-                    setTurnTimeoutInput(String(parsed));
-                    setTurnTimeoutSecs(parsed);
-                  }
-                }}
-                placeholder="120"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
-              />
-              {Number(turnTimeoutInput) < 15 && turnTimeoutInput !== '' && (
-                <div className="text-[10px] text-amber-400 mt-1">
-                  * Min 15s (will adjust on blur)
-                </div>
-              )}
-              {Number(turnTimeoutInput) > 600 && (
-                <div className="text-[10px] text-amber-400 mt-1">
-                  * Max 600s (will adjust on blur)
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-slate-300 font-semibold text-xs">Token Budget Cap</label>
-                <span className="text-[10px] text-slate-500">Optional</span>
-              </div>
-              <input
-                type="number"
-                value={tokenBudgetCapInput}
-                onChange={(e) => {
-                  if (setTokenBudgetCapInput) {
-                    setTokenBudgetCapInput(e.target.value);
-                  }
-                }}
-                placeholder="50000 (blank = ∞)"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
-              />
-              <div className="text-[10px] text-slate-500 mt-1">
-                Auto-pauses at turn boundary if reached
-              </div>
-            </div>
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1 text-xs">Initial Execution</label>
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="stepModeCheck"
-                  checked={enableStepModeInNew}
-                  onChange={(e) => setEnableStepModeInNew(e.target.checked)}
-                  className="rounded bg-slate-950 border-slate-800 text-sky-500 focus:ring-0 cursor-pointer w-4 h-4"
-                />
-                <label htmlFor="stepModeCheck" className="text-slate-300 text-xs cursor-pointer select-none">
-                  Step-by-Step Mode (Pause after each turn)
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Custom Skills Injection & Tool Isolation */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-sky-400" />
-                <span className="text-xs font-bold text-slate-200">Custom Skills & Domain Knowledge</span>
-              </div>
-              <span className="text-[10px] text-slate-400">Optional linked folder with SKILL.md competencies</span>
-            </div>
-
-            <div className="flex gap-2 items-center">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={customSkillsDir}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (setCustomSkillsDir) setCustomSkillsDir(val);
-                    if (onSkillsDirChange) onSkillsDirChange(val);
-                  }}
-                  placeholder="Link custom skills directory (e.g. C:\my-skills or .flymd/skills)"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 px-2.5 text-slate-200 text-xs focus:outline-none focus:border-sky-500 placeholder-slate-600"
-                />
-              </div>
-              {onBrowseSkillsDir && (
-                <button
-                  type="button"
-                  onClick={onBrowseSkillsDir}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 border border-slate-700/60 transition-colors"
-                >
-                  <FolderOpen className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Browse</span>
-                </button>
               )}
             </div>
 
-            {/* Live Detected Skills Badges */}
-            {detectedSkills && detectedSkills.length > 0 && (
-              <div className="space-y-1.5 bg-slate-900/50 rounded-lg p-2 border border-slate-800/60">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>
-                    {detectedSkills.length} Custom Skill{detectedSkills.length > 1 ? 's' : ''} Detected
+            {/* Section 4: Execution Parameters (AUTO-DERIVED ROUNDS, TIMEOUT, TOKEN BUDGET, STEP MODE) */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+              {/* Auto-derived Structured Rounds (Replaces manual rounds counter) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center gap-1">
+                    <Repeat size={12} className="text-sky-500 dark:text-sky-400" />
+                    Structured Rounds
+                  </label>
+                  <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400">1 per Agent</span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 text-xs font-semibold flex items-center justify-between">
+                  <span className="truncate">
+                    {newDebateMode === 'repeater'
+                      ? `${repeater.roundSchedule.length || 2} Repeater Rounds`
+                      : newDebateMode === 'custom'
+                      ? `${customParticipants.length} Dedicated Agent Rounds`
+                      : `${selectedPresetObj?.participants.length || 3} Preset Agent Rounds`}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono shrink-0 ml-1">
+                    AUTO
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {detectedSkills.map((s) => (
-                    <span
-                      key={s.uri}
-                      title={s.description || s.uri}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-sky-950/70 text-sky-300 border border-sky-800/60 font-mono"
-                    >
-                      {s.name}
-                    </span>
-                  ))}
-                </div>
               </div>
-            )}
 
-            {isScanningSkills && (
-              <div className="text-[11px] text-sky-400 flex items-center gap-1.5 italic">
-                <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
-                Scanning custom skills directory...
-              </div>
-            )}
-
-            {/* Interactive Tool Inclusion / Isolation Choice */}
-            <div className="pt-1 border-t border-slate-800/60 flex items-start justify-between gap-3">
-              <div className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  id="includeDefaultSkillsCheck"
-                  checked={includeDefaultSkills}
-                  onChange={(e) =>
-                    setIncludeDefaultSkills && setIncludeDefaultSkills(e.target.checked)
-                  }
-                  className="rounded bg-slate-900 border-slate-800 text-sky-500 focus:ring-0 cursor-pointer w-4 h-4 mt-0.5"
-                />
-                <div>
-                  <label
-                    htmlFor="includeDefaultSkillsCheck"
-                    className="text-slate-200 text-xs font-medium cursor-pointer select-none"
-                  >
-                    Include Default Built-in Tool Skills alongside Custom Skills
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center gap-1">
+                    <Clock size={12} className="text-amber-500" />
+                    Turn Timeout
                   </label>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    {includeDefaultSkills
-                      ? 'Shared Mode: Default methodology guidelines are active. Custom skills override matching names.'
-                      : 'Isolated Mode: Agents run strictly in domain isolation. Default built-in tool prompts are excluded.'}
-                  </p>
+                  <span className="text-[10px] text-slate-500">15s - 600s</span>
                 </div>
+                <input
+                  type="number"
+                  value={turnTimeoutInput}
+                  onChange={(e) => {
+                    setTurnTimeoutInput(e.target.value);
+                    const parsed = parseInt(e.target.value, 10);
+                    if (!isNaN(parsed) && parsed >= 15 && parsed <= 600) {
+                      setTurnTimeoutSecs(parsed);
+                    }
+                  }}
+                  onBlur={() => {
+                    const parsed = parseInt(turnTimeoutInput, 10);
+                    if (isNaN(parsed) || parsed < 15) {
+                      setTurnTimeoutInput('15');
+                      setTurnTimeoutSecs(15);
+                    } else if (parsed > 600) {
+                      setTurnTimeoutInput('600');
+                      setTurnTimeoutSecs(600);
+                    } else {
+                      setTurnTimeoutInput(String(parsed));
+                      setTurnTimeoutSecs(parsed);
+                    }
+                  }}
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 text-xs focus:outline-none focus:border-sky-500"
+                />
               </div>
-              <span
-                className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border select-none shrink-0 ${
-                  includeDefaultSkills
-                    ? 'bg-emerald-950/50 text-emerald-400 border-emerald-800/60'
-                    : 'bg-amber-950/50 text-amber-400 border-amber-800/60'
-                }`}
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center gap-1">
+                    <Coins size={12} className="text-emerald-500" />
+                    Token Budget Cap
+                  </label>
+                  <span className="text-[10px] text-slate-500">Tokens</span>
+                </div>
+                <input
+                  type="number"
+                  value={tokenBudgetCapInput}
+                  onChange={(e) => setTokenBudgetCapInput && setTokenBudgetCapInput(e.target.value)}
+                  placeholder="e.g. 50000"
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 text-xs focus:outline-none focus:border-sky-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center gap-1">
+                    <CheckCircle2 size={12} className="text-violet-500" />
+                    Step Approval Mode
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEnableStepModeInNew(!enableStepModeInNew)}
+                  className={`w-full p-2.5 rounded-lg border text-xs font-semibold flex items-center justify-between transition-colors ${
+                    enableStepModeInNew
+                      ? 'bg-violet-500/15 border-violet-500/50 text-violet-700 dark:text-violet-300'
+                      : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <span>{enableStepModeInNew ? 'Interactive Approval' : 'Autonomous Run'}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800">
+                    {enableStepModeInNew ? 'PAUSE' : 'AUTO'}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Modal Footer */}
+          <div className="p-4 md:p-5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/80">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              ⚡ Deliberation runs in isolated workspace sandboxes with verifiable cognitive checkpoints.
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
               >
-                {includeDefaultSkills ? 'Shared Tools' : 'Isolated Domain'}
-              </span>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onLaunch}
+                className="px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+              >
+                <Sparkles size={14} />
+                <span>Launch {calculatedRounds}-Round Deliberation</span>
+              </button>
             </div>
           </div>
         </div>
-
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-slate-800 flex justify-end gap-2 bg-slate-900/60">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 text-xs font-semibold"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onLaunch}
-            className="px-4 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold transition-colors shadow-sm"
-          >
-            Launch Deliberation
-          </button>
-        </div>
       </div>
-    </div>
+
+      {/* Standalone Decoupled Custom Actions & Roles Modal */}
+      <CustomActionsAndRolesModal
+        isOpen={isRolesModalOpen}
+        onClose={() => setIsRolesModalOpen(false)}
+        presets={presets}
+        allRoles={roleOptions}
+        dynamicProviders={repeater.dynamicProviders}
+        selectedEngines={repeater.selectedEngines}
+        editingPreset={editingPreset}
+        isCreatingNewPreset={isCreatingNewPreset}
+        setEditingPreset={setEditingPreset}
+        onSaveEditingPreset={onSaveEditingPreset}
+        onStartCreatePreset={onStartCreatePreset}
+        onStartEditPreset={onStartEditPreset}
+        onDuplicatePreset={onDuplicatePreset}
+        onDeletePreset={onDeletePreset}
+        onTogglePresetEnabled={onTogglePresetEnabled}
+        onResetPresetsToDefaults={onResetPresetsToDefaults}
+        onCreateCustomRole={repeater.onCreateCustomRole}
+        onDeleteCustomRole={repeater.onDeleteCustomRole}
+        getSubscriptionTierForAgent={repeater.getSubscriptionTierForAgent}
+      />
+    </>
   );
 };
-

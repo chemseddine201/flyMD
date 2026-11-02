@@ -205,9 +205,16 @@ pub struct DiscussionOrchestrator {
 impl DiscussionOrchestrator {
     /// Creates a new Discussion Orchestrator, initializes session directory and persists initial config and metadata.
     pub fn new(
-        config: DiscussionConfig,
+        mut config: DiscussionConfig,
         providers: HashMap<String, Arc<dyn DiscussionProvider>>,
     ) -> Result<Self, String> {
+        // Auto-align max_rounds with explicit round schedule length or per-agent participant count
+        if !config.round_schedule.is_empty() && (config.repeater_mode.as_deref() == Some("per_round") || config.max_rounds == 0) {
+            config.max_rounds = config.round_schedule.len() as u32;
+        } else if config.repeater_mode.as_deref() == Some("per_agent") && !config.participants.is_empty() {
+            config.max_rounds = config.participants.len() as u32;
+        }
+
         let session_dir = PathBuf::from(&config.workspace_path)
             .join(".flymd")
             .join("discussions")

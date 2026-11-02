@@ -406,6 +406,14 @@ impl DiscussionConfig {
                     .collect();
                 return (title, plan.objective.clone(), slots);
             }
+        } else if mode == "per_agent" && !self.participants.is_empty() {
+            let idx = (round.saturating_sub(1) as usize) % self.participants.len();
+            let p = self.participants[idx].clone();
+            let directive = p.custom_query.clone().or_else(|| {
+                Some(format!("Apply specialized domain experience as {}.", p.display_name))
+            });
+            let agent_title = format!("Round {}: {} Deliberation", round, p.display_name);
+            return (agent_title, None, vec![(p, directive)]);
         }
 
         let fallback_slots = self
@@ -610,5 +618,66 @@ mod tests {
         assert_eq!(r4_title, "Phase B: Threat Audit");
         assert_eq!(r4_slots[0].0.provider_id, "antigravity");
         assert_eq!(cfg.all_scheduled_participants().len(), 2);
+    }
+
+    #[test]
+    fn test_per_agent_round_schedule_resolution() {
+        let p1 = DiscussionParticipant {
+            agent_id: "lead-architect".to_string(),
+            provider_id: "claude-code".to_string(),
+            model_id: "claude-opus-5-5".to_string(),
+            display_name: "Lead Architect".to_string(),
+            role: AgentRole::Architect,
+            role_description: "Decomposition and invariants".to_string(),
+            avatar_color: "#38bdf8".to_string(),
+            assigned_skill_uris: vec![],
+            context_budget_tokens: 24000,
+            custom_action: None,
+            custom_query: Some("Propose architecture invariants".to_string()),
+            thinking_enabled: true,
+            effort_level: Some("high".to_string()),
+        };
+        let p2 = DiscussionParticipant {
+            agent_id: "security-auditor".to_string(),
+            provider_id: "antigravity".to_string(),
+            model_id: "gemini-4-argon".to_string(),
+            display_name: "Security Auditor".to_string(),
+            role: AgentRole::Critic,
+            role_description: "Threat models and attack vectors".to_string(),
+            avatar_color: "#ef4444".to_string(),
+            assigned_skill_uris: vec![],
+            context_budget_tokens: 24000,
+            custom_action: None,
+            custom_query: Some("Probe exploit surfaces".to_string()),
+            thinking_enabled: true,
+            effort_level: Some("high".to_string()),
+        };
+
+        let cfg = DiscussionConfig {
+            schema_version: 1,
+            session_id: "s-per-agent".to_string(),
+            topic: "Zero-Trust Architecture".to_string(),
+            user_idea: "Design access control".to_string(),
+            workspace_path: ".".to_string(),
+            max_rounds: 2,
+            turn_timeout_secs: 60,
+            participants: vec![p1, p2],
+            repeater_mode: Some("per_agent".to_string()),
+            ..Default::default()
+        };
+
+        // Round 1 must map to p1
+        let (r1_title, _, r1_slots) = cfg.resolve_round_plan(1);
+        assert_eq!(r1_slots.len(), 1);
+        assert_eq!(r1_slots[0].0.agent_id, "lead-architect");
+        assert_eq!(r1_slots[0].1.as_deref(), Some("Propose architecture invariants"));
+        assert!(r1_title.contains("Lead Architect"));
+
+        // Round 2 must map to p2
+        let (r2_title, _, r2_slots) = cfg.resolve_round_plan(2);
+        assert_eq!(r2_slots.len(), 1);
+        assert_eq!(r2_slots[0].0.agent_id, "security-auditor");
+        assert_eq!(r2_slots[0].1.as_deref(), Some("Probe exploit surfaces"));
+        assert!(r2_title.contains("Security Auditor"));
     }
 }

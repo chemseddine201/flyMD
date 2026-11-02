@@ -22,24 +22,24 @@
   --link-color: #58a6ff;
 }
 
-[data-theme="github-light"], [data-theme="light"] {
+[data-theme="github-light"], [data-theme="light"], [data-theme="clean-white"] {
   --bg-canvas: #ffffff;
-  --bg-surface: #f6f8fa;
-  --bg-surface-hover: #eaeef2;
-  --border-default: #d0d7de;
-  --border-subtle: #e1e4e8;
-  --text-primary: #1f2328;
-  --text-secondary: #656d76;
-  --text-muted: #8c959f;
+  --bg-surface: #f9f9f9;
+  --bg-surface-hover: #f1f5f9;
+  --border-default: #e2e8f0;
+  --border-subtle: #edf2f7;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
   --accent-primary: #0969da;
   --accent-hover: #218bff;
-  --code-bg: #f6f8fa;
-  --code-border: #d0d7de;
-  --quote-bg: rgba(9, 105, 218, 0.06);
+  --code-bg: #f8fafc;
+  --code-border: #e2e8f0;
+  --quote-bg: rgba(9, 105, 218, 0.05);
   --quote-border: #0969da;
-  --table-border: #d0d7de;
-  --table-header-bg: #f6f8fa;
-  --table-stripe: #f6f8fa;
+  --table-border: #e2e8f0;
+  --table-header-bg: #f8fafc;
+  --table-stripe: #f9f9f9;
   --link-color: #0969da;
 }
 
