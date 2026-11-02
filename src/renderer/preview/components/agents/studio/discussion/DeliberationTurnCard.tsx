@@ -208,8 +208,23 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
 
           <div className="flex items-center gap-3 shrink-0 text-[11px] text-slate-400">
             {msg.tokenUsage && (
-              <span className="font-mono text-slate-500 hidden sm:inline">
+              <span
+                className="font-mono text-slate-500 hidden sm:inline"
+                title={`Prompt: ${msg.tokenUsage.promptTokens.toLocaleString()} | Completion: ${msg.tokenUsage.completionTokens.toLocaleString()}${
+                  msg.tokenUsage.reasoningTokens
+                    ? ` | Reasoning: ${msg.tokenUsage.reasoningTokens.toLocaleString()}`
+                    : ''
+                }`}
+              >
                 {msg.tokenUsage.totalTokens.toLocaleString()} tokens
+                {Boolean(
+                  msg.tokenUsage.reasoningTokens &&
+                    msg.tokenUsage.reasoningTokens > 0
+                ) && (
+                  <span className="text-indigo-400 ml-1 text-[10px]">
+                    (🧠 {msg.tokenUsage.reasoningTokens?.toLocaleString()})
+                  </span>
+                )}
               </span>
             )}
             <button type="button" className="text-slate-400 hover:text-slate-200">

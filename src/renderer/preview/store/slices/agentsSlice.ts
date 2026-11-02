@@ -31,6 +31,7 @@ export interface WaitingStepApprovalState {
   nextIntent: string;
   completedTaskId: string;
   filesCreatedCount: number;
+  quotaBreached?: boolean;
 }
 
 export interface AssignedReportDocState {

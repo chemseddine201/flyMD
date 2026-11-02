@@ -504,15 +504,16 @@ impl DiscussionProvider for CliProvider {
             Ok(Ok((output, thinking))) => {
                 let elapsed = start.elapsed().as_millis() as u64;
                 let prompt_tokens = estimate_tokens(&full_prompt);
-                let completion_tokens = estimate_tokens(&output)
-                    + thinking.as_deref().map(estimate_tokens).unwrap_or(0);
+                let reasoning_tokens = thinking.as_deref().map(estimate_tokens).unwrap_or(0);
+                let completion_tokens = estimate_tokens(&output);
 
                 Ok(TurnResponse {
                     raw_markdown: output,
                     usage: TokenUsage {
                         prompt_tokens,
                         completion_tokens,
-                        total_tokens: prompt_tokens + completion_tokens,
+                        reasoning_tokens,
+                        total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
                     },
                     duration_ms: elapsed,
                     model_id: match self.cli_type {
@@ -790,15 +791,17 @@ impl DiscussionProvider for HttpProvider {
                     .sum()
             }
         });
+        let reasoning_tokens = estimate_tokens(&thinking);
         let completion_tokens = reported_completion
-            .unwrap_or_else(|| estimate_tokens(&answer) + estimate_tokens(&thinking));
+            .unwrap_or_else(|| estimate_tokens(&answer));
 
         Ok(TurnResponse {
             raw_markdown: answer,
             usage: TokenUsage {
                 prompt_tokens,
                 completion_tokens,
-                total_tokens: prompt_tokens + completion_tokens,
+                reasoning_tokens,
+                total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
             },
             duration_ms: elapsed,
             model_id: self.model_name.clone(),
@@ -1068,13 +1071,19 @@ impl DiscussionProvider for MockProvider {
         let elapsed = start.elapsed().as_millis() as u64;
         let char_count = response_body.chars().count();
         let tokens = ((char_count as f64) / 3.8).ceil() as u32;
+        let reasoning_tokens = if request.thinking_enabled {
+            ((thinking_body.chars().count() as f64) / 3.8).ceil() as u32
+        } else {
+            0
+        };
 
         Ok(TurnResponse {
             raw_markdown: response_body,
             usage: TokenUsage {
                 prompt_tokens: 350,
                 completion_tokens: tokens,
-                total_tokens: 350 + tokens,
+                reasoning_tokens,
+                total_tokens: 350 + tokens + reasoning_tokens,
             },
             duration_ms: elapsed,
             model_id: "adaptive-domain-simulator".to_string(),
@@ -1349,5 +1358,39 @@ mod tests {
             "ephemeral"
         );
         assert_eq!(a_arr[2]["content"], "DYNAMIC_CRITIC_TAIL");
+    }
+
+    #[tokio::test]
+    async fn test_token_usage_breakdown_with_reasoning_tokens() {
+        let provider = MockProvider::new("test-mock");
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+
+        let req = TurnRequest {
+            session_id: "test-tokens".to_string(),
+            round_number: 1,
+            agent_id: "agent-test".to_string(),
+            role: AgentRole::Architect,
+            system_prompt: "Sys".to_string(),
+            user_prompt: "User".to_string(),
+            messages: vec![],
+            context_summary: String::new(),
+            timeout_secs: 5,
+            topic: "Test Topic".to_string(),
+            user_idea: "Test Idea".to_string(),
+            action_name: None,
+            action_query: None,
+            thinking_enabled: true,
+            effort_level: Some("high".to_string()),
+            model_id: None,
+        };
+
+        let resp = provider.execute_turn(req, cancel_flag, None).await.unwrap();
+        assert!(resp.usage.prompt_tokens > 0);
+        assert!(resp.usage.completion_tokens > 0);
+        assert!(resp.usage.reasoning_tokens > 0);
+        assert_eq!(
+            resp.usage.total_tokens,
+            resp.usage.prompt_tokens + resp.usage.completion_tokens + resp.usage.reasoning_tokens
+        );
     }
 }

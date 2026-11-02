@@ -116,6 +116,26 @@ pub fn finalize_task(
         if let Some(err) = error {
             t.error = Some(err);
         }
+
+        // Compute and persist fine-grained token usage telemetry if not already set
+        if t.token_usage.is_none() {
+            let prompt_chars = t.custom_prompt.as_deref().map(|p| p.chars().count()).unwrap_or(300)
+                + t.file_path.chars().count();
+            let prompt_tokens = ((prompt_chars as f64) / 3.8).ceil() as u32;
+
+            let resp_chars = t.response_markdown.as_deref().map(|r| r.chars().count()).unwrap_or(0);
+            let completion_tokens = ((resp_chars as f64) / 3.8).ceil() as u32;
+
+            let reasoning_chars: usize = t.thinking_trace.iter().map(|s| s.chars().count()).sum();
+            let reasoning_tokens = ((reasoning_chars as f64) / 3.8).ceil() as u32;
+
+            t.token_usage = Some(crate::discussion::types::TokenUsage {
+                prompt_tokens,
+                completion_tokens,
+                reasoning_tokens,
+                total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
+            });
+        }
     }) {
         app.emit("agent:tasks-updated", &all_tasks).ok();
     }

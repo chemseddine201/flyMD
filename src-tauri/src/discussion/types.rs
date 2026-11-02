@@ -106,12 +106,14 @@ impl AgentRole {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct TokenUsage {
     #[serde(rename = "promptTokens", default)]
     pub prompt_tokens: u32,
     #[serde(rename = "completionTokens", default)]
     pub completion_tokens: u32,
+    #[serde(rename = "reasoningTokens", default)]
+    pub reasoning_tokens: u32,
     #[serde(rename = "totalTokens", default)]
     pub total_tokens: u32,
 }
@@ -282,6 +284,8 @@ pub struct DiscussionConfig {
     pub custom_skills_dir: Option<String>,
     #[serde(rename = "includeDefaultSkills", default = "default_true")]
     pub include_default_skills: bool,
+    #[serde(rename = "tokenBudgetCap", default, skip_serializing_if = "Option::is_none")]
+    pub token_budget_cap: Option<u32>,
 }
 
 fn default_schema_version() -> u32 {

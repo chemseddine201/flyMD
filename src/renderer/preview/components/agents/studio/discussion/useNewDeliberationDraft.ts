@@ -59,6 +59,7 @@ export function useNewDeliberationDraft({
   const [includeDefaultSkills, setIncludeDefaultSkills] = useState<boolean>(true);
   const [detectedSkills, setDetectedSkills] = useState<SkillDescriptor[]>([]);
   const [isScanningSkills, setIsScanningSkills] = useState<boolean>(false);
+  const [tokenBudgetCapInput, setTokenBudgetCapInput] = useState<string>('50000');
 
   const handleBrowseSkillsDir = useCallback(async () => {
     if (window.electronAPI?.openFolderDialog) {
@@ -396,6 +397,11 @@ export function useNewDeliberationDraft({
       stepMode: enableStepModeInNew,
       customSkillsDir: customSkillsDir.trim() || undefined,
       includeDefaultSkills,
+      tokenBudgetCap:
+        !isNaN(parseInt(tokenBudgetCapInput, 10)) &&
+        parseInt(tokenBudgetCapInput, 10) > 0
+          ? parseInt(tokenBudgetCapInput, 10)
+          : undefined,
     };
 
     setShowNewModal(false);
@@ -422,6 +428,7 @@ export function useNewDeliberationDraft({
     customSkillsDir,
     includeDefaultSkills,
     detectedSkills,
+    tokenBudgetCapInput,
     startNewDiscussion,
   ]);
 
@@ -457,6 +464,8 @@ export function useNewDeliberationDraft({
     setCustomSkillsDir,
     includeDefaultSkills,
     setIncludeDefaultSkills,
+    tokenBudgetCapInput,
+    setTokenBudgetCapInput,
     detectedSkills,
     isScanningSkills,
     handleBrowseSkillsDir,

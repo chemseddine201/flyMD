@@ -90,6 +90,11 @@ pub enum DiscussionEvent {
         round: u32,
         content: String,
     },
+    QuotaLimitReached {
+        session_id: String,
+        total_tokens: u32,
+        cap: u32,
+    },
 }
 
 /// Sink for discussion events (e.g. Tauri window broadcast or test receiver).
@@ -678,6 +683,20 @@ impl DiscussionOrchestrator {
                     return Err(err_str);
                 }
 
+                // Check if session token budget cap is breached at turn boundary
+                if let Some(cap) = self.config.token_budget_cap {
+                    if cap > 0 && self.metadata.total_tokens >= cap {
+                        self.notify(DiscussionEvent::QuotaLimitReached {
+                            session_id: self.config.session_id.clone(),
+                            total_tokens: self.metadata.total_tokens,
+                            cap,
+                        });
+                        self.transition_status(DiscussionStatus::Paused)?;
+                        self.release_lock();
+                        return Ok(DiscussionStatus::Paused);
+                    }
+                }
+
                 // If in step-by-step mode, pause after executing this turn so human can review/intervene
                 if self.step_mode {
                     let is_last_turn_of_final_round = current_round >= self.config.max_rounds
@@ -1233,6 +1252,7 @@ mod tests {
             step_mode: false,
             custom_skills_dir: None,
             include_default_skills: true,
+            token_budget_cap: None,
         }
     }
 
@@ -1399,6 +1419,27 @@ mod tests {
         let (transcript, _) = read_transcript_with_recovery(&orchestrator.session_dir).unwrap();
         assert_eq!(transcript.len(), 1);
         assert_eq!(transcript[0].author_agent_id, "agent-critic");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_discussion_orchestrator_pauses_on_budget_cap_breach() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_quota_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let mut config = build_test_config(&temp_dir);
+        // Set a small token budget cap that will be exceeded on turn 1
+        config.token_budget_cap = Some(100);
+
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(MockProvider::new("mock")));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config, providers).unwrap();
+        let status = orchestrator.run_discussion().await.unwrap();
+
+        assert_eq!(status, DiscussionStatus::Paused);
+        assert!(orchestrator.metadata.total_tokens >= 100);
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

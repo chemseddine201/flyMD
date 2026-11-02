@@ -24,6 +24,7 @@ import {
   AlertCircle,
   RotateCcw,
   Play,
+  Zap,
 } from 'lucide-react';
 import {
   AgentId,
@@ -385,6 +386,20 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {selectedTask.tokenUsage && (
+                    <span
+                      className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1"
+                      title={`Prompt: ${selectedTask.tokenUsage.promptTokens.toLocaleString()} | Completion: ${selectedTask.tokenUsage.completionTokens.toLocaleString()} | Reasoning: ${selectedTask.tokenUsage.reasoningTokens.toLocaleString()}`}
+                    >
+                      <Zap size={10} className="text-sky-400" />
+                      <span>{selectedTask.tokenUsage.totalTokens.toLocaleString()} tok</span>
+                      {selectedTask.tokenUsage.reasoningTokens > 0 && (
+                        <span className="text-indigo-400">
+                          (🧠 {selectedTask.tokenUsage.reasoningTokens.toLocaleString()})
+                        </span>
+                      )}
+                    </span>
+                  )}
                   {selectedTask.status === 'running' ? (
                     <>
                       <span className="text-[11px] font-bold text-sky-300 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30">

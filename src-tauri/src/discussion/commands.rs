@@ -111,6 +111,7 @@ pub async fn cmd_resume_discussion(
                     step_mode: false,
                     custom_skills_dir: None,
                     include_default_skills: true,
+                    token_budget_cap: None,
                 });
             let providers =
                 build_provider_map(&persisted_config, manager.client.clone(), Some(&store));
@@ -528,6 +529,7 @@ mod tests {
             step_mode: false,
             custom_skills_dir: None,
             include_default_skills: true,
+            token_budget_cap: None,
         };
         crate::discussion::storage::atomic_write_json(&temp_dir.join("config.json"), &config).unwrap();
 

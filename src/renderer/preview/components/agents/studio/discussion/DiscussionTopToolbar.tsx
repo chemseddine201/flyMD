@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { DiscussionMetadata } from '../../../../../../shared/types';
 import { renderDiscussionStatusBadge } from '../../../../utils/discussionTextUtils';
+import { TokenQuotaHUD } from '../../common/TokenQuotaHUD';
 
 export type DiscussionStageViewTab = 'timeline' | 'report' | 'disputes';
 
@@ -103,6 +104,8 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <TokenQuotaHUD />
+
             <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
               <button
                 type="button"

@@ -13,6 +13,7 @@ import {
   Brain,
 } from 'lucide-react';
 import { ProjectNode, ScannedMdFile } from '../../../../../shared/types';
+import { TokenQuotaHUD } from '../common/TokenQuotaHUD';
 
 export type AgentLifecycleStage = 'debate' | 'report' | 'pipeline';
 
@@ -177,6 +178,8 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          <TokenQuotaHUD />
+
           <button
             type="button"
             onClick={onOpenAdvancedDispatchModal}

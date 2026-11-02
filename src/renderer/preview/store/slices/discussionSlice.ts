@@ -404,6 +404,23 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         }
         break;
       }
+      case 'QuotaLimitReached': {
+        const total = payload.total_tokens ?? payload.totalTokens;
+        const cap = payload.token_budget_cap ?? payload.tokenBudgetCap;
+        set((state) => ({
+          isDiscussionRunning: false,
+          streamingChunks: {},
+          streamingThinking: {},
+          discussionError: `Token quota budget reached (${total?.toLocaleString()} / ${cap?.toLocaleString()} tokens). Paused at safe turn boundary.`,
+          activeDiscussionMeta: state.activeDiscussionMeta
+            ? { ...state.activeDiscussionMeta, status: 'paused' }
+            : null,
+        }));
+        if (workspace && sessionId && window.electronAPI) {
+          syncDiscussionFromBackend(set, get, workspace, sessionId, 'paused');
+        }
+        break;
+      }
       case 'GuidanceInjected': {
         if (workspace && sessionId && window.electronAPI) {
           syncDiscussionFromBackend(set, get, workspace, sessionId);
@@ -440,6 +457,15 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
           delete nextThinking[key];
           return { streamingChunks: nextChunks, streamingThinking: nextThinking };
         });
+
+        if (payload?.usage && (get() as any).recordTokenUsage) {
+          (get() as any).recordTokenUsage({
+            promptTokens: payload.usage.prompt_tokens ?? payload.usage.promptTokens,
+            completionTokens: payload.usage.completion_tokens ?? payload.usage.completionTokens,
+            reasoningTokens: payload.usage.reasoning_tokens ?? payload.usage.reasoningTokens,
+            totalTokens: payload.usage.total_tokens ?? payload.usage.totalTokens,
+          });
+        }
 
         // Sequence-guarded sync from backend
         if (workspace && sessionId && window.electronAPI) {

@@ -97,6 +97,8 @@ export interface NewDeliberationModalProps {
   isScanningSkills?: boolean;
   onBrowseSkillsDir?: () => void;
   onSkillsDirChange?: (v: string) => void;
+  tokenBudgetCapInput?: string;
+  setTokenBudgetCapInput?: (v: string) => void;
 }
 
 const COLOR_PALETTE = ['#38bdf8', '#818cf8', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#a855f7'];
@@ -151,6 +153,8 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   isScanningSkills = false,
   onBrowseSkillsDir,
   onSkillsDirChange,
+  tokenBudgetCapInput = '50000',
+  setTokenBudgetCapInput,
 }) => {
   if (!isOpen) return null;
 
@@ -849,8 +853,8 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
             )}
           </div>
 
-          {/* Rounds, Timeout, and Execution Mode */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          {/* Rounds, Timeout, Token Budget, and Execution Mode */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-slate-300 font-semibold text-xs">Deliberation Rounds</label>
@@ -924,6 +928,26 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                   * Max 600s (will adjust on blur)
                 </div>
               )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-300 font-semibold text-xs">Token Budget Cap</label>
+                <span className="text-[10px] text-slate-500">Optional</span>
+              </div>
+              <input
+                type="number"
+                value={tokenBudgetCapInput}
+                onChange={(e) => {
+                  if (setTokenBudgetCapInput) {
+                    setTokenBudgetCapInput(e.target.value);
+                  }
+                }}
+                placeholder="50000 (blank = ∞)"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs focus:outline-none focus:border-sky-500"
+              />
+              <div className="text-[10px] text-slate-500 mt-1">
+                Auto-pauses at turn boundary if reached
+              </div>
             </div>
             <div>
               <label className="block text-slate-300 font-semibold mb-1 text-xs">Initial Execution</label>

@@ -472,6 +472,7 @@ mod tests {
             effort_level: Some("medium".to_string()),
             thinking_enabled: Some(true),
             model_id: None,
+            token_usage: None,
         }
     }
 

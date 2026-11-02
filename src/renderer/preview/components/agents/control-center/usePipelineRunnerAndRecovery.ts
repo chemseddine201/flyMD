@@ -372,6 +372,10 @@ export function usePipelineRunnerAndRecovery({
             );
             if (isPipelineCancelledRef.current || !completed) break;
 
+            if (completed.tokenUsage) {
+              usePreviewStore.getState().recordTokenUsage(completed.tokenUsage);
+            }
+
             if (completed.status === 'completed') {
               updatePipelineStepInStore(pipeline.id, idx, {
                 status: 'completed',
@@ -450,9 +454,15 @@ export function usePipelineRunnerAndRecovery({
           const nextStepAfter =
             livePipeAfter.steps[idx + 1] || pipeline.steps[idx + 1];
 
+          const quotaStatus = usePreviewStore.getState().getQuotaStatus();
+          const quotaCfg = usePreviewStore.getState().tokenQuotaConfig;
+          const quotaBreached = quotaCfg.enabled && quotaStatus.isBreached;
+          const shouldPauseForQuota =
+            quotaBreached && quotaCfg.breachAction === 'pause_at_boundary';
+
           if (
             idx + 1 < pipeline.steps.length &&
-            workflowExecutionMode === 'manual' &&
+            (workflowExecutionMode === 'manual' || shouldPauseForQuota) &&
             previousTask
           ) {
             const nextAgent = nextStepAfter?.agentId
@@ -472,6 +482,7 @@ export function usePipelineRunnerAndRecovery({
               nextIntent: nextStepAfter?.intent || 'next step',
               completedTaskId: previousTask.id,
               filesCreatedCount: touchedFiles,
+              quotaBreached,
             });
 
             await new Promise<void>((resolve) => {

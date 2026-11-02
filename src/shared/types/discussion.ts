@@ -38,6 +38,7 @@ export interface AvailableProviderInfo {
 export interface DiscussionTokenUsage {
   promptTokens: number;
   completionTokens: number;
+  reasoningTokens?: number;
   totalTokens: number;
 }
 
@@ -146,6 +147,7 @@ export interface DiscussionConfig {
   stepMode?: boolean;
   customSkillsDir?: string | null;
   includeDefaultSkills?: boolean;
+  tokenBudgetCap?: number | null;
 }
 
 export interface DiscussionMetadata {

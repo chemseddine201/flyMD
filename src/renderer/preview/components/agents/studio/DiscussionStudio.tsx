@@ -264,6 +264,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         isScanningSkills={draft.isScanningSkills}
         onBrowseSkillsDir={draft.handleBrowseSkillsDir}
         onSkillsDirChange={draft.handleSkillsDirChange}
+        tokenBudgetCapInput={draft.tokenBudgetCapInput}
+        setTokenBudgetCapInput={draft.setTokenBudgetCapInput}
       />
 
       <DiscussionConfirmModals

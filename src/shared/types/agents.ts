@@ -229,6 +229,13 @@ export interface AgentErrorDiagnostic {
   timestamp: number;
 }
 
+export interface AgentTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+}
+
 export interface AgentTaskRecord {
   id: string;
   targetAgentId: AgentId;
@@ -269,6 +276,7 @@ export interface AgentTaskRecord {
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
   modelId?: string;
+  tokenUsage?: AgentTokenUsage;
 }
 
 export interface AgentCheckpoint {

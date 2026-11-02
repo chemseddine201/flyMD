@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::discussion::types::TokenUsage;
+
 /// Returns current timestamp in milliseconds since Unix epoch.
 pub fn now_ms() -> i64 {
     crate::common::time::now_ms()
@@ -234,6 +236,8 @@ pub struct AgentTaskRequest {
     pub thinking_enabled: Option<bool>,
     #[serde(rename = "modelId", default)]
     pub model_id: Option<String>,
+    #[serde(rename = "tokenUsage", default, skip_serializing_if = "Option::is_none")]
+    pub token_usage: Option<TokenUsage>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -333,6 +337,8 @@ pub struct AgentTaskRecord {
     pub thinking_enabled: Option<bool>,
     #[serde(rename = "modelId", default)]
     pub model_id: Option<String>,
+    #[serde(rename = "tokenUsage", default, skip_serializing_if = "Option::is_none")]
+    pub token_usage: Option<TokenUsage>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

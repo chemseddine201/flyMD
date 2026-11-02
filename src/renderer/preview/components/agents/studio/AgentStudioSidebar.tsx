@@ -87,6 +87,7 @@ interface AgentStudioSidebarProps {
     nextIntent: string;
     completedTaskId: string;
     filesCreatedCount: number;
+    quotaBreached?: boolean;
   } | null;
   onProceedNextWorkflowStep?: () => void;
   onDropFileOnAgent: (
@@ -960,34 +961,67 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             })}
           </div>
 
-          {/* Manual Mode Step Approval Action Card */}
+          {/* Step Approval & Quota Boundary Action Card */}
           {waitingForStepApproval && onProceedNextWorkflowStep && (
-            <div className="mt-2.5 p-2.5 rounded-xl border border-amber-500/50 bg-amber-950/40 text-amber-200 space-y-1.5 shadow-md animate-fadeIn">
+            <div
+              className={`mt-2.5 p-2.5 rounded-xl border ${
+                waitingForStepApproval.quotaBreached
+                  ? 'border-rose-500/60 bg-rose-950/40 text-rose-200'
+                  : 'border-amber-500/50 bg-amber-950/40 text-amber-200'
+              } space-y-1.5 shadow-md animate-fadeIn`}
+            >
               <div className="flex items-center justify-between text-[11px] font-bold">
                 <span className="flex items-center gap-1 text-emerald-400">
                   <CheckCircle2 size={12} />
                   Step {waitingForStepApproval.completedStepIdx + 1} Complete
                 </span>
-                {waitingForStepApproval.filesCreatedCount > 0 && (
-                  <span className="text-[9px] text-amber-300 font-mono">
-                    {waitingForStepApproval.filesCreatedCount} file
-                    {waitingForStepApproval.filesCreatedCount > 1 ? 's' : ''} generated
+                {waitingForStepApproval.quotaBreached ? (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold uppercase tracking-wider">
+                    Quota Cap Reached
                   </span>
+                ) : (
+                  waitingForStepApproval.filesCreatedCount > 0 && (
+                    <span className="text-[9px] text-amber-300 font-mono">
+                      {waitingForStepApproval.filesCreatedCount} file
+                      {waitingForStepApproval.filesCreatedCount > 1 ? 's' : ''} generated
+                    </span>
+                  )
                 )}
               </div>
               <div className="text-[10px] text-zinc-300 leading-tight">
-                Ready for{' '}
-                <span className="font-semibold text-white">
-                  @{waitingForStepApproval.nextAgentName}
-                </span>{' '}
-                ({waitingForStepApproval.nextIntent.toUpperCase()})
+                {waitingForStepApproval.quotaBreached ? (
+                  <span>
+                    Token quota limit exceeded. Safely paused at step boundary before running{' '}
+                    <span className="font-semibold text-white">
+                      @{waitingForStepApproval.nextAgentName}
+                    </span>
+                    .
+                  </span>
+                ) : (
+                  <span>
+                    Ready for{' '}
+                    <span className="font-semibold text-white">
+                      @{waitingForStepApproval.nextAgentName}
+                    </span>{' '}
+                    ({waitingForStepApproval.nextIntent.toUpperCase()})
+                  </span>
+                )}
               </div>
               <button
                 type="button"
                 onClick={onProceedNextWorkflowStep}
-                className="w-full mt-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 shadow transition-colors cursor-pointer"
+                className={`w-full mt-1 py-1.5 px-3 rounded-lg ${
+                  waitingForStepApproval.quotaBreached
+                    ? 'bg-rose-600 hover:bg-rose-500'
+                    : 'bg-emerald-600 hover:bg-emerald-500'
+                } text-white font-bold text-xs flex items-center justify-center gap-1 shadow transition-colors cursor-pointer`}
               >
-                <span>Proceed to Step {waitingForStepApproval.nextStepIdx + 1} &gt;</span>
+                <span>
+                  {waitingForStepApproval.quotaBreached
+                    ? 'Override Quota & Proceed to Step'
+                    : 'Proceed to Step'}{' '}
+                  {waitingForStepApproval.nextStepIdx + 1} &gt;
+                </span>
               </button>
             </div>
           )}
