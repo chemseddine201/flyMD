@@ -1,5 +1,6 @@
 //! Intent instructions, role boundaries, and CLI prompt construction.
 
+use crate::common::{compose_smart_deliverable_name, DeliverableNamingContext};
 use std::path::Path;
 
 pub fn intent_instructions(intent: &str, custom_prompt: Option<&str>) -> String {
@@ -27,8 +28,19 @@ pub fn intent_instructions(intent: &str, custom_prompt: Option<&str>) -> String 
 
 /// Resolves the canonical target `.md` filename in the workspace for a `refine-plan` step.
 pub fn resolve_plan_markdown_filename(file_name: &str) -> String {
+    resolve_plan_markdown_filename_with_context(file_name, None, None)
+}
+
+/// Resolves a context-aware target `.md` filename in the workspace for a `refine-plan` step.
+pub fn resolve_plan_markdown_filename_with_context(
+    file_name: &str,
+    topic_or_prompt: Option<&str>,
+    project_name: Option<&str>,
+) -> String {
     let trimmed = file_name.trim();
     if trimmed.to_lowercase().ends_with(".md")
+        && !trimmed.eq_ignore_ascii_case("plan.md")
+        && !trimmed.eq_ignore_ascii_case("implementation_plan.md")
         && !trimmed.starts_with("Entire Project")
         && !trimmed.starts_with("Untitled")
         && !trimmed.contains('/')
@@ -36,7 +48,14 @@ pub fn resolve_plan_markdown_filename(file_name: &str) -> String {
     {
         trimmed.to_string()
     } else {
-        "IMPLEMENTATION_PLAN.md".to_string()
+        let ctx = DeliverableNamingContext {
+            project_name,
+            subproject_name: None,
+            topic_or_prompt,
+            intent_or_kind: "plan",
+            fallback_name: Some("IMPLEMENTATION_PLAN.md"),
+        };
+        compose_smart_deliverable_name(&ctx)
     }
 }
 
@@ -51,7 +70,15 @@ pub fn build_cli_prompt_for_intent(
 ) -> String {
     match intent {
         "refine-plan" => {
-            let target_plan_file = resolve_plan_markdown_filename(file_name);
+            let target_plan_file = resolve_plan_markdown_filename_with_context(
+                file_name,
+                if custom_directive.trim().is_empty() {
+                    None
+                } else {
+                    Some(custom_directive)
+                },
+                None,
+            );
             let target_plan_path = Path::new(exec_dir).join(&target_plan_file);
             format!(
                 "PLANNING & ARCHITECTURE SPECIFICATION MODE ONLY (Intent: `refine-plan`).\n\

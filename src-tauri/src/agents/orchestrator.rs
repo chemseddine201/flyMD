@@ -231,8 +231,16 @@ impl AgentOrchestrator {
         };
 
         let handoff_file = handoffs_dir.join(format!("{}-{}.md", task_id, req.target_agent_id));
-        let report_file =
-            reports_dir.join(format!("report-{}-{}.md", task_id, req.target_agent_id));
+        let smart_stem = crate::common::slugify_semantic_title(
+            req.custom_prompt.as_deref().unwrap_or(&req.file_name),
+            30,
+        );
+        let report_filename = if smart_stem.is_empty() {
+            format!("report-{}-{}.md", task_id, req.target_agent_id)
+        } else {
+            format!("report-{}-{}-{}.md", task_id, req.target_agent_id, smart_stem)
+        };
+        let report_file = reports_dir.join(report_filename);
 
         let existing_tasks = self.store.get_agent_tasks();
         let pkg = assemble_task_handoff_package(&req, &effective_ws, &existing_tasks);

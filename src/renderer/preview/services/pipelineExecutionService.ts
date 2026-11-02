@@ -9,6 +9,7 @@ import {
 } from '../../../shared/types';
 import { usePreviewStore } from '../store';
 import { selectTasksById } from '../store/selectors/agentSelectors';
+import { composeSmartDeliverableName } from '../utils/smartNaming';
 
 export interface RecoveryModalDecision {
   action: 'continue_from_breakpoint' | 'revert_and_retry' | 'pause';
@@ -206,7 +207,12 @@ export async function resolveUpstreamPlanFromDisk(
   previousTask: AgentTaskRecord | null,
   resolvedWorkspace: string,
   initialDocName: string,
-  isFirstStep: boolean
+  isFirstStep: boolean,
+  namingContext?: {
+    projectName?: string | null;
+    promptText?: string | null;
+    intent?: string;
+  }
 ): Promise<{
   upstreamPlanMarkdown: string | undefined;
   resolvedPlanFilePath: string | undefined;
@@ -222,11 +228,18 @@ export async function resolveUpstreamPlanFromDisk(
       previousTask.verificationReport?.checkedFiles?.find((f) =>
         f.toLowerCase().endsWith('.md')
       );
+    const smartCandidateName = composeSmartDeliverableName({
+      projectName: namingContext?.projectName,
+      topicOrPrompt: namingContext?.promptText || previousTask.customPrompt,
+      intentOrKind: namingContext?.intent || 'plan',
+      fallbackName: 'IMPLEMENTATION_PLAN.md',
+    });
     const candidateMdNames = [
       checkedMdFile,
       previousTask.fileName?.toLowerCase().endsWith('.md')
         ? previousTask.fileName
         : undefined,
+      smartCandidateName,
       initialDocName,
       'IMPLEMENTATION_PLAN.md',
     ].filter(Boolean) as string[];

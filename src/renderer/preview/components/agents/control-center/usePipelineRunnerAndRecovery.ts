@@ -25,6 +25,7 @@ import {
   composeEpistemicStepPayload,
   waitForTaskFinished,
 } from '../../../services/pipelineExecutionService';
+import { composeSmartDeliverableName } from '../../../utils/smartNaming';
 import { PendingRecoveryPromptData } from '../modals/PipelineRecoveryModal';
 import { CompletedPipelineSummary } from './PipelineStatusBanners';
 
@@ -226,14 +227,26 @@ export function usePipelineRunnerAndRecovery({
                 ? currentAssignedReport
                 : null;
 
+            const activeProject = usePreviewStore.getState().activeProject;
             const initialDocContent =
               assignedReport?.reportMarkdown || activeTab?.content || '';
             const initialDocName = assignedReport
-              ? `${assignedReport.pipelineName.replace(
-                  /[^a-zA-Z0-9_\-\u0600-\u06FF]/g,
-                  '_'
-                )}_Contract.md`
-              : activeTab?.fileName || 'IMPLEMENTATION_PLAN.md';
+              ? composeSmartDeliverableName({
+                  projectName: activeProject?.name,
+                  topicOrPrompt: assignedReport.pipelineName,
+                  intentOrKind: 'contract',
+                  fallbackName: `${assignedReport.pipelineName.replace(
+                    /[^a-zA-Z0-9_\-\u0600-\u06FF]/g,
+                    '_'
+                  )}_Contract.md`,
+                })
+              : activeTab?.fileName ||
+                composeSmartDeliverableName({
+                  projectName: activeProject?.name,
+                  topicOrPrompt: pipeline.name,
+                  intentOrKind: currentStep.intent || 'plan',
+                  fallbackName: 'IMPLEMENTATION_PLAN.md',
+                });
 
             const customAct = resolveCustomAction(currentStep.customActionId);
             const priorTask =
@@ -271,7 +284,12 @@ export function usePipelineRunnerAndRecovery({
               previousTask,
               resolvedWorkspace,
               initialDocName,
-              isFirstStep
+              isFirstStep,
+              {
+                projectName: activeProject?.name,
+                promptText,
+                intent: currentStep.intent,
+              }
             );
 
             const stepMarkdownContent = composeEpistemicStepPayload(

@@ -362,3 +362,4 @@ export function getDefaultModelForAgent(agentId: string): string {
       return 'claude-3-7-sonnet';
   }
 }
+

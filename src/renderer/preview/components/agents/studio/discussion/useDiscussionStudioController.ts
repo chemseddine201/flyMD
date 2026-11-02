@@ -7,6 +7,7 @@ import {
 } from '../../../../../../shared/types';
 import { PRESET_TEMPLATES } from '../../../../services/deliberationPresetRepository';
 import { ROUND_METADATA_BY_NUMBER } from '../../../../utils/discussionTextUtils';
+import { slugifySemanticTitle } from '../../../../utils/smartNaming';
 import { DiscussionStageViewTab } from './DiscussionTopToolbar';
 import { ParticipantAgentOption } from './CouncilInterventionBar';
 import { DiscussionRoundGroup } from './DiscussionTimelineView';
@@ -424,8 +425,11 @@ export function useDiscussionStudioController({
     if (!activeSessionId || !resolvedWorkspace) return;
     const version =
       activeReportVersion || activeMeta?.latestReportVersion || 1;
-    const reportPath = `${resolvedWorkspace}/.flymd/discussions/${activeSessionId}/reports/final-report-v${version}.md`;
-    const docName = `Discussion Report (v${version}) - ${activeSessionId}.md`;
+    const topicSlug = activeMeta?.topic ? slugifySemanticTitle(activeMeta.topic, 35) : '';
+    const docName = topicSlug
+      ? `${topicSlug}_ConsensusReport-v${version}.md`
+      : `ConsensusReport-v${version}_${activeSessionId}.md`;
+    const reportPath = `${resolvedWorkspace}/.flymd/discussions/${activeSessionId}/reports/${docName}`;
 
     openFileInTab(
       {
@@ -443,6 +447,7 @@ export function useDiscussionStudioController({
     resolvedWorkspace,
     activeReportVersion,
     activeMeta?.latestReportVersion,
+    activeMeta?.topic,
     openFileInTab,
     activeReportMarkdown,
     setViewMode,

@@ -7,6 +7,7 @@ import {
 import { STARTER_CUSTOM_PIPELINE_ACTIONS } from '../../../../../shared/constants';
 import { usePreviewStore } from '../../../store';
 import { globalPipelineRuntime } from '../../../services/pipelineExecutionService';
+import { composeSmartDeliverableName } from '../../../utils/smartNaming';
 import { CompletedPipelineSummary } from './PipelineStatusBanners';
 import { PendingRecoveryPromptData } from '../modals/PipelineRecoveryModal';
 
@@ -46,6 +47,7 @@ export function useStudioWorkspaceActions({
   const setWaitingForStepApproval = usePreviewStore((s) => s.setWaitingForStepApproval);
   const setAssignedReportDoc = usePreviewStore((s) => s.setAssignedReportDoc);
   const setLifecycleStage = usePreviewStore((s) => s.setAgentLifecycleStage);
+  const activeProject = usePreviewStore((s) => s.activeProject);
 
   const [selectedSourceFile, setSelectedSourceFile] = useState<string>('');
   const [workspaceFocusMode, setWorkspaceFocusMode] = useState<'workspace' | 'file'>('workspace');
@@ -247,7 +249,12 @@ export function useStudioWorkspaceActions({
       }
       return {
         filePath: activeTab?.filePath || '',
-        fileName: activeTab?.fileName || 'Workspace-Specification.md',
+        fileName:
+          activeTab?.fileName ||
+          composeSmartDeliverableName({
+            projectName: activeProject?.name,
+            fallbackName: 'Workspace-Specification.md',
+          }),
         markdownContent:
           activeTab?.content ||
           '# Project Specification\n\n- [ ] Define core architecture\n- [ ] Implement feature modules\n- [ ] Verify and test\n',
@@ -260,6 +267,7 @@ export function useStudioWorkspaceActions({
       folderFiles,
       focusFilePath,
       selectedSourceFile,
+      activeProject,
     ]
   );
 
@@ -285,10 +293,20 @@ export function useStudioWorkspaceActions({
       }
 
       if (markdownFallback) {
+        const smartFallbackName =
+          titleFallback ||
+          composeSmartDeliverableName({
+            projectName: activeProject?.name,
+            topicOrPrompt: markdownFallback.slice(0, 150),
+            intentOrKind: 'report',
+            fallbackName: 'Agent-Report.md',
+          });
         openFileInTab(
           {
-            path: filePath || `agent-report-${Date.now()}.md`,
-            name: titleFallback || 'Agent-Report.md',
+            path:
+              filePath ||
+              `${smartFallbackName.replace(/\.md$/, '')}-${Date.now()}.md`,
+            name: smartFallbackName,
             content: markdownFallback,
             lastModified: Date.now(),
           },
@@ -297,7 +315,7 @@ export function useStudioWorkspaceActions({
         setViewMode('preview');
       }
     },
-    [openFileInTab, setViewMode]
+    [openFileInTab, setViewMode, activeProject]
   );
 
   const handleApplyToActiveTab = useCallback(
@@ -307,10 +325,16 @@ export function useStudioWorkspaceActions({
         updateActiveContent(markdownContent);
         setViewMode('split');
       } else {
+        const smartDocName = composeSmartDeliverableName({
+          projectName: activeProject?.name,
+          topicOrPrompt: markdownContent.slice(0, 150),
+          intentOrKind: 'plan',
+          fallbackName: 'Refined-Plan.md',
+        });
         openFileInTab(
           {
             path: `applied-plan-${Date.now()}.md`,
-            name: 'Refined-Plan.md',
+            name: smartDocName,
             content: markdownContent,
             lastModified: Date.now(),
           },
@@ -319,7 +343,7 @@ export function useStudioWorkspaceActions({
         setViewMode('preview');
       }
     },
-    [activeTab, updateActiveContent, setViewMode, openFileInTab]
+    [activeTab, updateActiveContent, setViewMode, openFileInTab, activeProject]
   );
 
   const handleOpenSharedMemory = useCallback(async () => {

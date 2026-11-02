@@ -308,6 +308,16 @@ impl ReportGenerator {
         let latest_path = reports_dir.join("final-report-latest.md");
         atomic_write_file(&latest_path, scrubbed_report.as_bytes())?;
 
+        // Context-aware smart deliverable alias: reports/{Topic}_ConsensusReport-v{}.md
+        let smart_title_slug = crate::common::slugify_semantic_title(&config.topic, 35);
+        let smart_filename = if smart_title_slug.is_empty() {
+            format!("ConsensusReport-v{}.md", version)
+        } else {
+            format!("{}_ConsensusReport-v{}.md", smart_title_slug, version)
+        };
+        let smart_report_path = reports_dir.join(&smart_filename);
+        let _ = atomic_write_file(&smart_report_path, scrubbed_report.as_bytes());
+
         // Update metadata
         metadata.latest_report_version = version;
         metadata.updated_at = now_ms();
