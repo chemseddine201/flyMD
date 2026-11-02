@@ -289,19 +289,19 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   return (
     <aside
       style={{ width: `${sidebarWidth}px` }}
-      className="relative shrink-0 h-full border-r border-slate-800/90 bg-slate-900/75 flex flex-col overflow-hidden select-none"
+      className="relative shrink-0 h-full border-r border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-900/75 flex flex-col overflow-hidden select-none transition-colors duration-150"
     >
       {/* Section 1: Enabled Agents Roster */}
-      <div className="p-3.5 border-b border-slate-800/90">
+      <div className="p-3.5 border-b border-slate-200 dark:border-slate-800/90">
         <div className="flex items-center justify-between mb-2.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <Bot size={13} className="text-sky-400" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <Bot size={13} className="text-sky-600 dark:text-sky-400" />
             Enabled Agents ({visibleAgents.length})
           </span>
           <button
             type="button"
             onClick={onOpenAccountsModal}
-            className="flex items-center gap-1 text-[10px] text-sky-400 hover:text-sky-300 font-medium px-2 py-0.5 rounded-md hover:bg-slate-800 transition-colors"
+            className="flex items-center gap-1 text-[10px] text-sky-600 dark:text-sky-400 hover:text-sky-500 dark:hover:text-sky-300 font-medium px-2 py-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <Plus size={10} /> Connect / Enable
           </button>

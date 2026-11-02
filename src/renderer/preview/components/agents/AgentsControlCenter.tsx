@@ -48,7 +48,7 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = (props) =
         '';
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden">
+    <div className="flex-1 h-full flex flex-col bg-[#f9f9f9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
       <StudioTopHeaderBar
         resolvedWorkspace={ctrl.resolvedWorkspace}
         showProjectTree={ctrl.showProjectTree}

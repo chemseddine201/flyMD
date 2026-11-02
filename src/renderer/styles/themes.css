@@ -22,7 +22,11 @@
   --link-color: #58a6ff;
 }
 
-[data-theme="github-light"], [data-theme="light"], [data-theme="clean-white"] {
+html.light,
+body.light,
+[data-theme="github-light"],
+[data-theme="light"],
+[data-theme="clean-white"] {
   --bg-canvas: #ffffff;
   --bg-surface: #f9f9f9;
   --bg-surface-hover: #f1f5f9;

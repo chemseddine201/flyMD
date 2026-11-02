@@ -71,7 +71,7 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
         targetedAgentId;
 
       return (
-        <div className="shrink-0 border-t border-slate-800 bg-slate-900/95 backdrop-blur-sm">
+        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm transition-colors duration-150">
           {showTargetedDispatch && (
             <div className="p-3 bg-purple-950/20 border-b border-purple-500/30 animate-fadeIn">
               <div className="max-w-4xl mx-auto space-y-2">
@@ -238,7 +238,7 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                   }
                 }}
                 placeholder="Intervene or steer council... (e.g. 'Prioritize feasibility', 'Explore alternative angles', press Enter)"
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
+                className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3.5 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
               />
               <button
                 type="button"

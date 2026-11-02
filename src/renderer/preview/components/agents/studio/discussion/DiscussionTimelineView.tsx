@@ -76,15 +76,15 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
       return (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
           {transcriptCount === 0 && !isRunning && (
-            <div className="p-8 text-center text-slate-500 bg-slate-900/30 rounded-xl border border-slate-800/60">
+            <div className="p-8 text-center text-slate-500 bg-slate-100 dark:bg-slate-900/30 rounded-xl border border-slate-200 dark:border-slate-800/60 transition-colors">
               <Bot
                 size={32}
-                className="mx-auto mb-2 text-sky-400 opacity-60 animate-bounce"
+                className="mx-auto mb-2 text-sky-500 dark:text-sky-400 opacity-60 animate-bounce"
               />
-              <h4 className="text-sm font-semibold text-slate-300">
+              <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-300">
                 Agents are ready to deliberate
               </h4>
-              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+              <p className="text-xs text-slate-600 dark:text-slate-500 mt-1 max-w-md mx-auto">
                 Deterministic barrier synchronization ensures all agents analyze
                 the problem before evaluating counter-proposals. Click Resume or
                 Next Turn to begin.
@@ -102,16 +102,16 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
                 <div
                   key={group.round}
                   aria-disabled="true"
-                  className="rounded-2xl border border-amber-500/25 bg-slate-900/30 px-4 py-3 flex flex-wrap items-center justify-between gap-2 opacity-75 select-none cursor-not-allowed"
+                  className="rounded-2xl border border-amber-500/25 bg-amber-500/5 dark:bg-slate-900/30 px-4 py-3 flex flex-wrap items-center justify-between gap-2 opacity-75 select-none cursor-not-allowed"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400/70" />
-                    <h3 className="text-xs font-bold text-slate-300">
+                    <span className="w-2 h-2 rounded-full bg-amber-500/70" />
+                    <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">
                       Round {group.round} — Duplicated / Ignored (Same as Round{' '}
                       {refRound} Debate Round)
                     </h3>
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-bold uppercase">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-bold uppercase">
                     Ignored • 0 Queries
                   </span>
                 </div>
@@ -134,16 +134,16 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
             return (
               <div
                 key={group.round}
-                className="rounded-2xl border border-slate-800/90 bg-slate-900/40 overflow-hidden shadow-sm transition-all"
+                className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-900/40 overflow-hidden shadow-xs transition-all"
               >
                 <div
                   onClick={() => onToggleRound(group.round)}
-                  className="px-4 py-3 bg-slate-900/90 hover:bg-slate-900 cursor-pointer flex items-center justify-between border-b border-slate-800/80 select-none transition-colors"
+                  className="px-4 py-3 bg-slate-50 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-900 cursor-pointer flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 select-none transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      className="text-slate-400 hover:text-slate-200 transition-transform"
+                      className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-transform"
                     >
                       {isExpanded ? (
                         <ChevronDown size={15} />
@@ -156,25 +156,25 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
                       <span
                         className={`w-2 h-2 rounded-full ${
                           group.isDone
-                            ? 'bg-emerald-400'
+                            ? 'bg-emerald-500 dark:bg-emerald-400'
                             : group.isCurrent && isRunning
                             ? 'bg-amber-400 animate-ping'
-                            : 'bg-slate-600'
+                            : 'bg-slate-400 dark:bg-slate-600'
                         }`}
                       />
-                      <h3 className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                      <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                         <span>{group.title}</span>
                       </h3>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 text-[11px] text-slate-400">
-                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
+                  <div className="flex items-center gap-2.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
                       {roundMessages.length}{' '}
                       {roundMessages.length === 1 ? 'turn' : 'turns'}
                     </span>
                     {group.totalTokens > 0 && (
-                      <span className="font-mono text-slate-500">
+                      <span className="font-mono text-slate-400 dark:text-slate-500">
                         {group.totalTokens.toLocaleString()} tokens
                       </span>
                     )}
@@ -182,7 +182,7 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
                 </div>
 
                 {isExpanded && (
-                  <div className="p-3.5 space-y-3 bg-slate-950/40">
+                  <div className="p-3.5 space-y-3 bg-slate-50/50 dark:bg-slate-950/40">
                     {roundMessages.length === 0 && !isRoundStreaming ? (
                       <div className="p-4 text-center text-slate-600 text-xs italic">
                         Waiting for phase deliberation to dispatch...

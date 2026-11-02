@@ -52,7 +52,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
   const { draft } = ctrl;
 
   return (
-    <div className="flex-1 h-full w-full min-h-0 flex overflow-hidden bg-slate-950 text-slate-200 font-sans">
+    <div className="flex-1 h-full w-full min-h-0 flex overflow-hidden bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-200 font-sans transition-colors duration-150">
       <DiscussionSessionSidebar
         discussions={ctrl.discussions}
         activeSessionId={ctrl.activeSessionId}
@@ -68,7 +68,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         getStatusBadge={renderDiscussionStatusBadge}
       />
 
-      <div className="flex-1 h-full flex flex-col min-w-0 min-h-0 overflow-hidden bg-slate-950">
+      <div className="flex-1 h-full flex flex-col min-w-0 min-h-0 overflow-hidden bg-[#f9f9f9] dark:bg-slate-950">
         {ctrl.tabFocusNotification && (
           <div className="px-4 py-2 bg-emerald-500/20 border-b border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center justify-between animate-fadeIn">
             <div className="flex items-center gap-2">
@@ -195,11 +195,11 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
-            <MessageSquare size={40} className="text-slate-700 mb-3" />
-            <h3 className="text-base font-bold text-slate-300 mb-1">
+            <MessageSquare size={40} className="text-slate-400 dark:text-slate-700 mb-3" />
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-300 mb-1">
               Multi-Agent Discussion Studio
             </h3>
-            <p className="text-xs text-slate-500 max-w-md mb-6 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-500 max-w-md mb-6 leading-relaxed">
               Coordinate multi-agent deliberations and structured debates across
               any domain with strict process isolation, deterministic
               synchronization, human-in-the-loop steering, and evidence grading.

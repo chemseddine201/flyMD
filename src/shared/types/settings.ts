@@ -2,6 +2,7 @@ import { LLMConfig } from './llm';
 import { TextDirection } from '../utils/direction';
 
 export type AppTheme =
+  | 'system'
   | 'dark'
   | 'light'
   | 'tokyo-night'

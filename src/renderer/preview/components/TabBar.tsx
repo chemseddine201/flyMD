@@ -177,12 +177,12 @@ export const TabBar: React.FC<TabBarProps> = ({
   };
 
   return (
-    <div className="h-11 w-full flex items-center bg-slate-950/90 border-b border-slate-800 text-xs select-none shrink-0 px-2 gap-1.5 relative">
+    <div className="h-11 w-full flex items-center bg-slate-100/90 dark:bg-slate-950/90 border-b border-slate-200 dark:border-slate-800 text-xs select-none shrink-0 px-2 gap-1.5 relative transition-colors duration-150">
       {tabs.length > 5 && (
         <button
           onClick={handleScrollLeft}
           title="Scroll tabs left"
-          className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 rounded transition shrink-0"
+          className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800/60 rounded transition shrink-0"
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
@@ -194,7 +194,6 @@ export const TabBar: React.FC<TabBarProps> = ({
         className="flex items-center gap-1.5 flex-1 overflow-x-auto py-1 scroll-smooth"
         style={{
           scrollbarWidth: 'thin',
-          scrollbarColor: '#334155 #0f172a',
         }}
       >
         {tabs.length === 0 ? (
@@ -230,16 +229,16 @@ export const TabBar: React.FC<TabBarProps> = ({
                 title={tab.filePath || 'Untitled (Right-click for options)'}
                 className={`group relative flex items-center gap-2.5 h-[34px] px-3.5 rounded-lg max-w-[220px] min-w-[120px] cursor-pointer transition-all duration-150 border shrink-0 ${
                   isActive
-                    ? 'bg-slate-800/95 text-slate-100 border-sky-500/50 shadow-md shadow-sky-950/40'
-                    : 'bg-slate-900/70 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 border-slate-800/90'
+                    ? 'bg-white dark:bg-slate-800/95 text-slate-900 dark:text-slate-100 border-sky-500/50 shadow-sm'
+                    : 'bg-slate-200/50 dark:bg-slate-900/70 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/70 border-slate-300/80 dark:border-slate-800/90'
                 }`}
               >
                 <div className="relative shrink-0">
-                  <FileText className={`w-3.5 h-3.5 ${isActive ? 'text-sky-400' : 'text-slate-500'}`} />
+                  <FileText className={`w-3.5 h-3.5 ${isActive ? 'text-sky-500 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}`} />
                   {tab.isNew && (
                     <span
                       title="New file (click to clear in 5s)"
-                      className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-slate-900 shadow-sm shadow-emerald-400"
+                      className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-white dark:ring-slate-900 shadow-xs shadow-emerald-400"
                     />
                   )}
                 </div>
@@ -249,13 +248,13 @@ export const TabBar: React.FC<TabBarProps> = ({
                 </span>
 
                 {tab.isNew && colorBlindSafe && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0 uppercase tracking-wider">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40 shrink-0 uppercase tracking-wider">
                     NEW
                   </span>
                 )}
 
                 {tab.isDirty && (
-                  <span title="Unsaved changes" className="shrink-0 text-amber-400">
+                  <span title="Unsaved changes" className="shrink-0 text-amber-500">
                     <Circle className="w-2 h-2 fill-current" />
                   </span>
                 )}
@@ -266,7 +265,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                     onCloseTab(tab.id, e);
                   }}
                   title="Close tab (Ctrl+W)"
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-700/70 transition shrink-0 ml-0.5"
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-rose-500 hover:bg-slate-200 dark:hover:bg-slate-700/70 transition shrink-0 ml-0.5"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -280,7 +279,7 @@ export const TabBar: React.FC<TabBarProps> = ({
         <button
           onClick={handleScrollRight}
           title="Scroll tabs right"
-          className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 rounded transition shrink-0"
+          className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800/60 rounded transition shrink-0"
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
@@ -289,7 +288,7 @@ export const TabBar: React.FC<TabBarProps> = ({
       <button
         onClick={onNewTab}
         title="New Tab (Ctrl+N)"
-        className="p-1.5 rounded-lg text-slate-400 hover:text-sky-300 hover:bg-slate-800 transition shrink-0 ml-1 border border-slate-800/80 hover:border-sky-500/30"
+        className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition shrink-0 ml-1 border border-slate-300 dark:border-slate-800/80 hover:border-sky-500/30"
       >
         <Plus className="w-4 h-4" />
       </button>
@@ -302,7 +301,7 @@ export const TabBar: React.FC<TabBarProps> = ({
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition shrink-0 ml-1.5 ${
             isAgentsMode
               ? 'bg-indigo-600 border-indigo-400 text-white shadow-sm'
-              : 'bg-slate-900 border-slate-800 text-indigo-300 hover:text-white hover:bg-slate-800'
+              : 'bg-slate-200 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-white hover:bg-slate-300 dark:hover:bg-slate-800'
           }`}
         >
           <Bot className="w-3.5 h-3.5" />

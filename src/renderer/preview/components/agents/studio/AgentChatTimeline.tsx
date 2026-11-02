@@ -238,7 +238,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
           composerRef.current?.appendImageFiles(e.dataTransfer.files);
         }
       }}
-      className={`flex-1 h-full flex flex-col bg-slate-950 overflow-hidden transition-colors ${
+      className={`flex-1 h-full flex flex-col bg-[#f9f9f9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-150 ${
         isTimelineDragOver ? 'ring-2 ring-inset ring-sky-500/60 bg-sky-950/15' : ''
       }`}
     >
@@ -246,17 +246,17 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
         {!selectedTask ? (
           /* Empty State: Quick Start Studio Welcome */
-          <div className="max-w-2xl mx-auto my-8 rounded-2xl border border-slate-800/90 bg-slate-900/60 p-6 text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 mx-auto">
+          <div className="max-w-2xl mx-auto my-8 rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-900/60 p-6 text-center space-y-4 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-600 dark:text-sky-400 mx-auto">
               <Bot size={26} />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-white">
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                 In-App Multi-Agent Chat &amp; Live Progress Studio
               </h2>
-              <p className="text-xs text-slate-400 mt-1 max-w-lg mx-auto leading-relaxed">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-lg mx-auto leading-relaxed">
                 Assign Markdown specifications, watch live reasoning &amp; step progress, and chain tasks between{' '}
-                <strong className="text-slate-200">
+                <strong className="text-slate-800 dark:text-slate-200">
                   Antigravity, Claude Code, OpenCode, Cursor, Codex, ZCode
                 </strong>{' '}
                 or your own Custom Agents — all directly inside FlyMD.
@@ -781,7 +781,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
       </div>
 
       {/* Bottom Interactive Chat Composer Bar */}
-      <div className="border-t border-slate-800/90 bg-slate-900/95 p-3.5 space-y-2.5">
+      <div className="border-t border-slate-200 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 p-3.5 space-y-2.5 transition-colors duration-150">
         {/* Workflow Active Execution / Approval Guard Notification Banner */}
         {isPipelineActive && !isPausedForApproval && (
           <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-indigo-950/70 border border-indigo-500/50 text-indigo-200 text-xs shadow-inner">

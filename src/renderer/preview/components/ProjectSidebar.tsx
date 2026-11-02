@@ -91,12 +91,12 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   );
 
   return (
-    <div className="w-72 h-full flex flex-col bg-slate-900/95 border-r border-slate-800 text-xs select-none shrink-0 overflow-hidden">
-      <div className="p-3 bg-slate-950/80 border-b border-slate-800 space-y-2">
+    <div className="w-72 h-full flex flex-col bg-white dark:bg-slate-900/95 border-r border-slate-200 dark:border-slate-800 text-xs select-none shrink-0 overflow-hidden text-slate-800 dark:text-slate-200 transition-colors duration-150">
+      <div className="p-3 bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <FolderTree className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="font-bold text-slate-100 truncate text-[12px]" title={folderPath}>
+            <FolderTree className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
+            <span className="font-bold text-slate-900 dark:text-slate-100 truncate text-[12px]" title={folderPath}>
               {folderName}
             </span>
           </div>
@@ -105,21 +105,21 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             <button
               onClick={onRefreshFolder}
               title="Rescan folder"
-              className="p-1 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+              className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onOpenSupervisionSettings}
               title="Supervision settings"
-              className="p-1 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+              className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onCloseSidebar}
               title="Close sidebar"
-              className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition"
+              className="p-1 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
             >
               <X className="w-3.5 h-3.5" />
             </button>

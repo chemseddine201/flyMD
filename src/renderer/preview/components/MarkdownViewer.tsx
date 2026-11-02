@@ -62,7 +62,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
       import('mermaid').then(({ default: mermaid }) => {
         mermaid.initialize({
           startOnLoad: false,
-          theme: theme === 'light' ? 'default' : 'dark',
+          theme: (theme === 'light' || (theme === 'system' && !document.documentElement.classList.contains('dark'))) ? 'default' : 'dark',
           securityLevel: 'loose',
         });
         mermaidCodes.forEach(async (codeElement, idx) => {
@@ -167,6 +167,8 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
 
   const getThemeClass = () => {
     switch (theme) {
+      case 'system':
+        return 'bg-white dark:bg-[#0d1117] text-slate-900 dark:text-[#e6edf3]';
       case 'light':
         return 'bg-white text-slate-900';
       case 'tokyo-night':

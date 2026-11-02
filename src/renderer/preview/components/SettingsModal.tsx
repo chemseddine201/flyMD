@@ -163,8 +163,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={(e) => setFormData({ ...formData, theme: e.target.value as AppTheme })}
                 className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-sky-500"
               >
+                <option value="system">System Default (Auto Light / Dark)</option>
                 <option value="dark">GitHub Dark (Default)</option>
-                <option value="light">GitHub Light</option>
+                <option value="light">Clean Light (#ffffff / #f9f9f9)</option>
                 <option value="tokyo-night">Tokyo Night (Deep Indigo)</option>
                 <option value="catppuccin">Catppuccin Mocha (Soft Pastel)</option>
                 <option value="dracula">Dracula (Vampire Purple)</option>

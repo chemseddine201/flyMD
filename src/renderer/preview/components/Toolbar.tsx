@@ -71,7 +71,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onToggleOutline,
 }) => {
   return (
-    <div className="w-full flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-3 py-1.5 min-h-[40px] bg-slate-900 border-b border-slate-800 text-xs shrink-0 select-none relative z-40 transition-all duration-150">
+    <div className="w-full flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-3 py-1.5 min-h-[40px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-xs shrink-0 select-none relative z-40 transition-all duration-150">
       {/* Left: Document Operations, Dedicated File View Types & Formatting */}
       <div className="flex flex-wrap items-center gap-1.5 shrink-0">
         <FileActionsGroup
@@ -87,7 +87,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           onQuickCopy={onQuickCopy}
         />
 
-        <div className="h-4 w-px bg-slate-800 mx-0.5" />
+        <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
         {/* ViewModeSwitch now strictly contains the 4 document view types */}
         <ViewModeSwitch
@@ -97,7 +97,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         {viewMode !== 'preview' && viewMode !== 'agents' && (
           <>
-            <div className="h-4 w-px bg-slate-800 mx-0.5" />
+            <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
             <MarkdownFormattingGroup
               onFormat={onFormat}
               onUndo={onUndo}
@@ -117,12 +117,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${
             viewMode === 'agents'
               ? 'bg-indigo-600 border-indigo-400 text-white shadow-indigo-600/30 ring-1 ring-indigo-400/50'
-              : 'bg-indigo-950/40 border-indigo-500/40 text-indigo-300 hover:bg-indigo-900/60 hover:text-white hover:border-indigo-400'
+              : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 hover:text-indigo-900 dark:hover:text-white hover:border-indigo-400'
           }`}
         >
           <Bot className="w-3.5 h-3.5" />
           <span>Agents Studio</span>
-          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 font-mono">
+          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-700 dark:text-indigo-200 border border-indigo-400/30 font-mono">
             Hub
           </span>
         </button>

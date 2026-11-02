@@ -321,8 +321,44 @@ export const PreviewApp: React.FC = () => {
   };
 
   useEffect(() => {
-    const theme = store.settings.theme || 'dark';
-    document.documentElement.setAttribute('data-theme', theme);
+    const rawTheme: AppTheme = (store.settings.theme as AppTheme) || 'system';
+
+    const resolveIsDark = (): boolean => {
+      if (rawTheme === 'system') {
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      return rawTheme !== 'light' && rawTheme !== 'sepia';
+    };
+
+    const applyTheme = () => {
+      const isDark = resolveIsDark();
+      const effectiveDataTheme =
+        rawTheme === 'system' ? (isDark ? 'dark' : 'light') : rawTheme;
+
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        document.body.classList.add('dark');
+        document.body.classList.remove('light');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        document.body.classList.remove('dark');
+        document.body.classList.add('light');
+      }
+      document.documentElement.setAttribute('data-theme', effectiveDataTheme);
+    };
+
+    applyTheme();
+
+    let cleanUpListener: (() => void) | undefined;
+    if (rawTheme === 'system' && window.matchMedia) {
+      const mql = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = () => applyTheme();
+      mql.addEventListener('change', listener);
+      cleanUpListener = () => mql.removeEventListener('change', listener);
+    }
+
     const a11y = store.settings.a11yConfig;
     if (a11y?.highContrast) {
       document.documentElement.setAttribute('data-a11y-high-contrast', 'true');
@@ -349,10 +385,15 @@ export const PreviewApp: React.FC = () => {
     } else {
       document.documentElement.removeAttribute('data-a11y-color-blind');
     }
+
+    return () => {
+      if (cleanUpListener) cleanUpListener();
+    };
   }, [store.settings.theme, store.settings.a11yConfig]);
 
   const handleToggleTheme = () => {
     const themes: AppTheme[] = [
+      'system',
       'dark',
       'light',
       'tokyo-night',
@@ -362,7 +403,7 @@ export const PreviewApp: React.FC = () => {
       'cyber',
       'high-contrast',
     ];
-    const curIdx = themes.indexOf(store.settings.theme as AppTheme);
+    const curIdx = themes.indexOf((store.settings.theme as AppTheme) || 'system');
     const nextTheme = themes[(curIdx + 1) % themes.length];
     window.electronAPI.saveSettings({ theme: nextTheme });
   };
