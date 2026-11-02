@@ -24,9 +24,13 @@
 
 html.light,
 body.light,
+html:not(.dark),
+body:not(.dark),
 [data-theme="github-light"],
 [data-theme="light"],
-[data-theme="clean-white"] {
+[data-theme="clean-white"],
+.theme-light,
+.theme-system:not(.dark) {
   --bg-canvas: #ffffff;
   --bg-surface: #f9f9f9;
   --bg-surface-hover: #f1f5f9;
@@ -223,4 +227,38 @@ body.light,
   outline: 2px solid var(--accent-primary) !important;
   outline-offset: 2px !important;
 }
+
+/* CodeMirror Editor Dual-Theme Elevation */
+html:not(.dark) .cm-editor,
+html.light .cm-editor,
+[data-theme="light"] .cm-editor,
+[data-theme="clean-white"] .cm-editor {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) .cm-gutters,
+html.light .cm-gutters,
+[data-theme="light"] .cm-gutters,
+[data-theme="clean-white"] .cm-gutters {
+  background-color: #f9f9f9 !important;
+  color: #64748b !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+html:not(.dark) .cm-activeLine,
+html.light .cm-activeLine,
+[data-theme="light"] .cm-activeLine,
+[data-theme="clean-white"] .cm-activeLine {
+  background-color: #f1f5f9 !important;
+}
+
+html:not(.dark) .cm-activeLineGutter,
+html.light .cm-activeLineGutter,
+[data-theme="light"] .cm-activeLineGutter,
+[data-theme="clean-white"] .cm-activeLineGutter {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
 

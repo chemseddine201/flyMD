@@ -325,15 +325,15 @@ export const PreviewApp: React.FC = () => {
 
     const resolveIsDark = (): boolean => {
       if (rawTheme === 'system') {
-        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        return Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
       }
-      return rawTheme !== 'light' && rawTheme !== 'sepia';
+      return rawTheme !== 'light' && rawTheme !== 'clean-white' && rawTheme !== 'sepia';
     };
 
     const applyTheme = () => {
       const isDark = resolveIsDark();
       const effectiveDataTheme =
-        rawTheme === 'system' ? (isDark ? 'dark' : 'light') : rawTheme;
+        rawTheme === 'system' ? (isDark ? 'dark' : 'light') : (rawTheme === 'clean-white' ? 'light' : rawTheme);
 
       if (isDark) {
         document.documentElement.classList.add('dark');
@@ -347,6 +347,7 @@ export const PreviewApp: React.FC = () => {
         document.body.classList.add('light');
       }
       document.documentElement.setAttribute('data-theme', effectiveDataTheme);
+      document.body.setAttribute('data-theme', effectiveDataTheme);
     };
 
     applyTheme();
@@ -396,6 +397,7 @@ export const PreviewApp: React.FC = () => {
       'system',
       'dark',
       'light',
+      'clean-white',
       'tokyo-night',
       'catppuccin',
       'dracula',
@@ -405,12 +407,14 @@ export const PreviewApp: React.FC = () => {
     ];
     const curIdx = themes.indexOf((store.settings.theme as AppTheme) || 'system');
     const nextTheme = themes[(curIdx + 1) % themes.length];
+    store.updateSettings({ theme: nextTheme });
     window.electronAPI.saveSettings({ theme: nextTheme });
   };
 
   const handleIncreaseFont = () => {
     const cur = store.settings.fontSize || 15;
     if (cur < 32) {
+      store.updateSettings({ fontSize: cur + 1 });
       window.electronAPI.saveSettings({ fontSize: cur + 1 });
     }
   };
@@ -418,30 +422,35 @@ export const PreviewApp: React.FC = () => {
   const handleDecreaseFont = () => {
     const cur = store.settings.fontSize || 15;
     if (cur > 11) {
+      store.updateSettings({ fontSize: cur - 1 });
       window.electronAPI.saveSettings({ fontSize: cur - 1 });
     }
   };
 
   const handleResetFont = () => {
+    store.updateSettings({ fontSize: 15 });
     window.electronAPI.saveSettings({ fontSize: 15 });
   };
 
   const handleChangeWidthMode = (mode: PreviewWidthMode) => {
+    store.updateSettings({ previewWidthMode: mode });
     window.electronAPI.saveSettings({ previewWidthMode: mode });
   };
 
   const handleUpdateA11yConfig = (patch: Partial<AccessibilityConfig>) => {
+    const nextA11y = {
+      ...(store.settings.a11yConfig || {
+        highContrast: false,
+        dyslexicFont: false,
+        largePrint: false,
+        reducedMotion: false,
+        colorBlindSafe: false,
+      }),
+      ...patch,
+    };
+    store.updateSettings({ a11yConfig: nextA11y });
     window.electronAPI.saveSettings({
-      a11yConfig: {
-        ...(store.settings.a11yConfig || {
-          highContrast: false,
-          dyslexicFont: false,
-          largePrint: false,
-          reducedMotion: false,
-          colorBlindSafe: false,
-        }),
-        ...patch,
-      },
+      a11yConfig: nextA11y,
     });
   };
 
@@ -718,7 +727,10 @@ export const PreviewApp: React.FC = () => {
         fileName={activeTab?.fileName || 'Document.md'}
         defaultModel={store.settings.llmConfig?.model || store.settings.ollamaModel}
         initialLlmConfig={store.settings.llmConfig}
-        onSaveSettings={(patch) => window.electronAPI.saveSettings(patch)}
+        onSaveSettings={(patch) => {
+          store.updateSettings(patch);
+          window.electronAPI.saveSettings(patch);
+        }}
         onOpenAsNewTab={store.openTranslationAsNewTab}
         onReplaceContent={store.updateActiveContent}
         onInsertBelow={(newText) => {
@@ -733,7 +745,10 @@ export const PreviewApp: React.FC = () => {
         isOpen={store.showSettings}
         onClose={() => store.setShowSettings(false)}
         settings={store.settings}
-        onSave={(patch) => window.electronAPI.saveSettings(patch)}
+        onSave={(patch) => {
+          store.updateSettings(patch);
+          window.electronAPI.saveSettings(patch);
+        }}
       />
 
       <AccessibilityModal

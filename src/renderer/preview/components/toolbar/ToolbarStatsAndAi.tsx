@@ -40,6 +40,7 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
       case 'system':
         return <Monitor className="w-3.5 h-3.5 text-sky-500" />;
       case 'light':
+      case 'clean-white':
         return <Sun className="w-3.5 h-3.5 text-amber-500" />;
       case 'tokyo-night':
         return <Moon className="w-3.5 h-3.5 text-indigo-400" />;

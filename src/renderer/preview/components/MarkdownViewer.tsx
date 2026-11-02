@@ -59,10 +59,13 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
 
     const mermaidCodes = viewerRef.current.querySelectorAll('pre code.language-mermaid');
     if (mermaidCodes.length > 0) {
+      const isDarkDoc = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+      const isLightEffective = theme === 'light' || theme === 'clean-white' || (theme === 'system' && !isDarkDoc);
+
       import('mermaid').then(({ default: mermaid }) => {
         mermaid.initialize({
           startOnLoad: false,
-          theme: (theme === 'light' || (theme === 'system' && !document.documentElement.classList.contains('dark'))) ? 'default' : 'dark',
+          theme: isLightEffective ? 'default' : 'dark',
           securityLevel: 'loose',
         });
         mermaidCodes.forEach(async (codeElement, idx) => {
@@ -165,11 +168,15 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
     });
   }, [renderedHtml, theme]);
 
+  const isDarkDoc = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const effectiveTheme = theme === 'system' ? (isDarkDoc ? 'dark' : 'light') : (theme === 'clean-white' ? 'light' : theme);
+
   const getThemeClass = () => {
     switch (theme) {
       case 'system':
         return 'bg-white dark:bg-[#0d1117] text-slate-900 dark:text-[#e6edf3]';
       case 'light':
+      case 'clean-white':
         return 'bg-white text-slate-900';
       case 'tokyo-night':
         return 'bg-[#1a1b26] text-[#c0caf5]';
@@ -205,7 +212,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
     <>
       <div
         ref={containerRef as any}
-        data-theme={theme}
+        data-theme={effectiveTheme}
         data-a11y-high-contrast={a11yConfig?.highContrast ? 'true' : 'false'}
         data-a11y-dyslexic={a11yConfig?.dyslexicFont ? 'true' : 'false'}
         data-a11y-large-print={a11yConfig?.largePrint ? 'true' : 'false'}

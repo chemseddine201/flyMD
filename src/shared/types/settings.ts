@@ -5,6 +5,7 @@ export type AppTheme =
   | 'system'
   | 'dark'
   | 'light'
+  | 'clean-white'
   | 'tokyo-night'
   | 'catppuccin'
   | 'dracula'

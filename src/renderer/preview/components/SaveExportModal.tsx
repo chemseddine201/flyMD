@@ -130,15 +130,15 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
       onKeyDown={handleKeyDown}
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150 select-none"
     >
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 text-xs">
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 text-xs">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 bg-slate-800/90 border-b border-slate-700/60">
+        <div className="flex items-center justify-between px-5 py-4 bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700/60">
           <div className="flex items-center gap-2.5">
             <div
               className={`p-2 rounded-xl ${
                 mode === 'save-as'
-                  ? 'bg-sky-500/20 text-sky-400'
-                  : 'bg-emerald-500/20 text-emerald-400'
+                  ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400'
+                  : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
               }`}
             >
               {mode === 'save-as' ? (
@@ -148,10 +148,10 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
               )}
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 {mode === 'save-as' ? 'Save Document As' : 'Export Document'}
               </h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 {mode === 'save-as'
                   ? 'Specify file name and extension to save to disk'
                   : 'Choose export format and file name'}
@@ -161,7 +161,7 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
           <button
             onClick={onClose}
             type="button"
-            className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition"
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/50 rounded-lg transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -171,20 +171,20 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* Filename Input */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-              <FolderInput className="w-3.5 h-3.5 text-sky-400" />
+            <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <FolderInput className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
               <span>File Name:</span>
             </label>
-            <div className="flex items-center rounded-xl bg-slate-950 border border-slate-700 focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500/50 overflow-hidden px-3 py-2 transition">
+            <div className="flex items-center rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500/50 overflow-hidden px-3 py-2 transition">
               <input
                 ref={inputRef}
                 type="text"
                 value={baseName}
                 onChange={(e) => setBaseName(e.target.value.replace(/[/\\?%*:|"<>]/g, ''))}
                 placeholder="Enter file name"
-                className="w-full bg-transparent text-slate-100 placeholder-slate-500 text-xs focus:outline-none"
+                className="w-full bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-xs focus:outline-none"
               />
-              <span className="text-xs font-mono font-semibold text-sky-400 pl-2 shrink-0">
+              <span className="text-xs font-mono font-semibold text-sky-600 dark:text-sky-400 pl-2 shrink-0">
                 {currentExt}
               </span>
             </div>
@@ -267,19 +267,19 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
           )}
 
           {/* Live Preview Box */}
-          <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800/80 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">Target File:</span>
-            <span className="text-xs font-mono font-semibold text-sky-300 truncate max-w-[320px]">
+          <div className="p-3 bg-slate-50 dark:bg-slate-950/80 rounded-xl border border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">Target File:</span>
+            <span className="text-xs font-mono font-semibold text-sky-700 dark:text-sky-300 truncate max-w-[320px]">
               {fullFileName}
             </span>
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition font-medium"
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition font-medium"
             >
               Cancel
             </button>
