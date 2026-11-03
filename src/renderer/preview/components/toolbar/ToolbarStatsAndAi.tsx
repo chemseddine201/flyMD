@@ -69,7 +69,7 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
       case 'sepia':
         return <Coffee className="w-3.5 h-3.5 text-amber-600" />;
       case 'high-contrast':
-        return <Eye className="w-3.5 h-3.5 text-yellow-400" />;
+        return <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-yellow-400" />;
       case 'dark':
       default:
         return <Moon className="w-3.5 h-3.5 text-sky-400" />;

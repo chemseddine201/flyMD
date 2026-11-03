@@ -30,21 +30,21 @@ const renderFileIcon = (fileName: string, isSelected: boolean) => {
   const ext = lower.split('.').pop() || '';
 
   if (ext === 'html' || ext === 'htm') {
-    return <Globe className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-300' : 'text-amber-400 group-hover:text-amber-300'}`} />;
+    return <Globe className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-700 dark:text-amber-300' : 'text-amber-600 dark:text-amber-400 group-hover:text-amber-700 dark:group-hover:text-amber-300'}`} />;
   }
   if (ext === 'css' || ext === 'scss' || ext === 'less') {
-    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-pink-300' : 'text-pink-400 group-hover:text-pink-300'}`} />;
+    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-pink-700 dark:text-pink-300' : 'text-pink-600 dark:text-pink-400 group-hover:text-pink-700 dark:group-hover:text-pink-300'}`} />;
   }
   if (ext === 'js' || ext === 'jsx' || ext === 'ts' || ext === 'tsx') {
-    return <Code className={`w-3.5 h-3.5 ${isSelected ? 'text-yellow-300' : 'text-yellow-400 group-hover:text-yellow-300'}`} />;
+    return <Code className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-700 dark:text-yellow-300' : 'text-amber-600 dark:text-yellow-400 group-hover:text-amber-700 dark:group-hover:text-yellow-300'}`} />;
   }
   if (ext === 'json' || ext === 'yaml' || ext === 'yml' || ext === 'toml' || ext === 'xml') {
-    return <Braces className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-300' : 'text-emerald-400 group-hover:text-emerald-300'}`} />;
+    return <Braces className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-700 dark:text-emerald-300' : 'text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300'}`} />;
   }
   if (ext === 'py' || ext === 'rs' || ext === 'go' || ext === 'php' || ext === 'sh') {
-    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-cyan-300' : 'text-cyan-400 group-hover:text-cyan-300'}`} />;
+    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-cyan-700 dark:text-cyan-300' : 'text-cyan-600 dark:text-cyan-400 group-hover:text-cyan-700 dark:group-hover:text-cyan-300'}`} />;
   }
-  return <FileText className={`w-3.5 h-3.5 ${isSelected ? 'text-sky-400' : 'text-slate-400 group-hover:text-sky-300'}`} />;
+  return <FileText className={`w-3.5 h-3.5 ${isSelected ? 'text-sky-600 dark:text-sky-400' : 'text-slate-600 dark:text-slate-400 group-hover:text-sky-600 dark:group-hover:text-sky-300'}`} />;
 };
 
 export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({

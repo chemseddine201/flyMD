@@ -261,23 +261,41 @@ html.light .cm-activeLineGutter,
   color: #0f172a !important;
 }
 
-/* White / Light Layout Global Contrast Guard for Pale Gray & Pastel Text */
+/* =========================================================================
+   COMPATIBLE COLOR SYSTEM: LIGHT-BACKGROUND DARKENING & DARK-BACKGROUND LIGHTENING
+   ========================================================================= */
+
+/* 1. LIGHT DESIGNS CONTRAST GUARD: Darken lighten/pastel text on light backgrounds */
 html:not(.dark) .text-slate-100,
 html.light .text-slate-100,
 [data-theme="light"] .text-slate-100,
 [data-theme="clean-white"] .text-slate-100,
+[data-theme="sepia"] .text-slate-100,
 html:not(.dark) .text-slate-200,
 html.light .text-slate-200,
 [data-theme="light"] .text-slate-200,
 [data-theme="clean-white"] .text-slate-200,
+[data-theme="sepia"] .text-slate-200,
 html:not(.dark) .text-neutral-100,
 html.light .text-neutral-100,
 [data-theme="light"] .text-neutral-100,
 [data-theme="clean-white"] .text-neutral-100,
+[data-theme="sepia"] .text-neutral-100,
 html:not(.dark) .text-neutral-200,
 html.light .text-neutral-200,
 [data-theme="light"] .text-neutral-200,
-[data-theme="clean-white"] .text-neutral-200 {
+[data-theme="clean-white"] .text-neutral-200,
+[data-theme="sepia"] .text-neutral-200,
+html:not(.dark) .text-zinc-100,
+html.light .text-zinc-100,
+[data-theme="light"] .text-zinc-100,
+[data-theme="clean-white"] .text-zinc-100,
+[data-theme="sepia"] .text-zinc-100,
+html:not(.dark) .text-zinc-200,
+html.light .text-zinc-200,
+[data-theme="light"] .text-zinc-200,
+[data-theme="clean-white"] .text-zinc-200,
+[data-theme="sepia"] .text-zinc-200 {
   color: #0f172a;
 }
 
@@ -285,10 +303,17 @@ html:not(.dark) .text-slate-300,
 html.light .text-slate-300,
 [data-theme="light"] .text-slate-300,
 [data-theme="clean-white"] .text-slate-300,
+[data-theme="sepia"] .text-slate-300,
 html:not(.dark) .text-neutral-300,
 html.light .text-neutral-300,
 [data-theme="light"] .text-neutral-300,
-[data-theme="clean-white"] .text-neutral-300 {
+[data-theme="clean-white"] .text-neutral-300,
+[data-theme="sepia"] .text-neutral-300,
+html:not(.dark) .text-zinc-300,
+html.light .text-zinc-300,
+[data-theme="light"] .text-zinc-300,
+[data-theme="clean-white"] .text-zinc-300,
+[data-theme="sepia"] .text-zinc-300 {
   color: #1e293b;
 }
 
@@ -296,78 +321,266 @@ html:not(.dark) .text-slate-400,
 html.light .text-slate-400,
 [data-theme="light"] .text-slate-400,
 [data-theme="clean-white"] .text-slate-400,
+[data-theme="sepia"] .text-slate-400,
 html:not(.dark) .text-neutral-400,
 html.light .text-neutral-400,
 [data-theme="light"] .text-neutral-400,
-[data-theme="clean-white"] .text-neutral-400 {
-  color: #475569;
+[data-theme="clean-white"] .text-neutral-400,
+[data-theme="sepia"] .text-neutral-400,
+html:not(.dark) .text-zinc-400,
+html.light .text-zinc-400,
+[data-theme="light"] .text-zinc-400,
+[data-theme="clean-white"] .text-zinc-400,
+[data-theme="sepia"] .text-zinc-400 {
+  color: #334155;
 }
 
 html:not(.dark) .text-slate-500,
 html.light .text-slate-500,
 [data-theme="light"] .text-slate-500,
 [data-theme="clean-white"] .text-slate-500,
+[data-theme="sepia"] .text-slate-500,
 html:not(.dark) .text-neutral-500,
 html.light .text-neutral-500,
 [data-theme="light"] .text-neutral-500,
-[data-theme="clean-white"] .text-neutral-500 {
-  color: #334155;
+[data-theme="clean-white"] .text-neutral-500,
+[data-theme="sepia"] .text-neutral-500,
+html:not(.dark) .text-zinc-500,
+html.light .text-zinc-500,
+[data-theme="light"] .text-zinc-500,
+[data-theme="clean-white"] .text-zinc-500,
+[data-theme="sepia"] .text-zinc-500 {
+  color: #475569;
 }
 
+/* Yellow & Amber on light surfaces: Darken to deep rich amber / warm brown */
+html:not(.dark) .text-yellow-100,
+html:not(.dark) .text-yellow-200,
+html:not(.dark) .text-yellow-300,
+html:not(.dark) .text-yellow-400,
+html:not(.dark) .text-yellow-500,
+html:not(.dark) [class*="text-yellow-"],
+html.light .text-yellow-100,
+html.light .text-yellow-200,
+html.light .text-yellow-300,
+html.light .text-yellow-400,
+html.light .text-yellow-500,
+html.light [class*="text-yellow-"],
+[data-theme="light"] .text-yellow-100,
+[data-theme="light"] .text-yellow-200,
+[data-theme="light"] .text-yellow-300,
+[data-theme="light"] .text-yellow-400,
+[data-theme="light"] [class*="text-yellow-"],
+[data-theme="clean-white"] .text-yellow-100,
+[data-theme="clean-white"] .text-yellow-200,
+[data-theme="clean-white"] .text-yellow-300,
+[data-theme="clean-white"] .text-yellow-400,
+[data-theme="clean-white"] [class*="text-yellow-"],
+[data-theme="sepia"] .text-yellow-100,
+[data-theme="sepia"] .text-yellow-200,
+[data-theme="sepia"] .text-yellow-300,
+[data-theme="sepia"] .text-yellow-400,
+[data-theme="sepia"] [class*="text-yellow-"],
+html:not(.dark) .text-amber-100,
+html:not(.dark) .text-amber-200,
+html:not(.dark) .text-amber-300,
+html:not(.dark) .text-amber-400,
+html:not(.dark) [class*="text-amber-2"],
+html:not(.dark) [class*="text-amber-3"],
+html.light .text-amber-100,
+html.light .text-amber-200,
+html.light .text-amber-300,
+html.light .text-amber-400,
+html.light [class*="text-amber-2"],
+html.light [class*="text-amber-3"],
+[data-theme="light"] .text-amber-100,
+[data-theme="light"] .text-amber-200,
+[data-theme="light"] .text-amber-300,
+[data-theme="light"] .text-amber-400,
+[data-theme="clean-white"] .text-amber-100,
+[data-theme="clean-white"] .text-amber-200,
+[data-theme="clean-white"] .text-amber-300,
+[data-theme="clean-white"] .text-amber-400,
+[data-theme="sepia"] .text-amber-100,
+[data-theme="sepia"] .text-amber-200,
+[data-theme="sepia"] .text-amber-300,
+[data-theme="sepia"] .text-amber-400 {
+  color: #92400e;
+}
+
+html:not(.dark) .text-rose-100,
 html:not(.dark) .text-rose-200,
 html:not(.dark) .text-rose-300,
+html.light .text-rose-100,
+html.light .text-rose-200,
+html.light .text-rose-300,
+[data-theme="light"] .text-rose-100,
 [data-theme="light"] .text-rose-200,
 [data-theme="light"] .text-rose-300,
+[data-theme="clean-white"] .text-rose-100,
 [data-theme="clean-white"] .text-rose-200,
-[data-theme="clean-white"] .text-rose-300 {
+[data-theme="clean-white"] .text-rose-300,
+[data-theme="sepia"] .text-rose-100,
+[data-theme="sepia"] .text-rose-200,
+[data-theme="sepia"] .text-rose-300 {
   color: #be123c;
 }
 
-html:not(.dark) .text-amber-200,
-html:not(.dark) .text-amber-300,
-[data-theme="light"] .text-amber-200,
-[data-theme="light"] .text-amber-300,
-[data-theme="clean-white"] .text-amber-200,
-[data-theme="clean-white"] .text-amber-300 {
-  color: #b45309;
-}
-
+html:not(.dark) .text-emerald-100,
 html:not(.dark) .text-emerald-200,
 html:not(.dark) .text-emerald-300,
+html.light .text-emerald-100,
+html.light .text-emerald-200,
+html.light .text-emerald-300,
+[data-theme="light"] .text-emerald-100,
 [data-theme="light"] .text-emerald-200,
 [data-theme="light"] .text-emerald-300,
+[data-theme="clean-white"] .text-emerald-100,
 [data-theme="clean-white"] .text-emerald-200,
-[data-theme="clean-white"] .text-emerald-300 {
+[data-theme="clean-white"] .text-emerald-300,
+[data-theme="sepia"] .text-emerald-100,
+[data-theme="sepia"] .text-emerald-200,
+[data-theme="sepia"] .text-emerald-300 {
   color: #047857;
 }
 
+html:not(.dark) .text-sky-100,
 html:not(.dark) .text-sky-200,
 html:not(.dark) .text-sky-300,
+html.light .text-sky-100,
+html.light .text-sky-200,
+html.light .text-sky-300,
+[data-theme="light"] .text-sky-100,
 [data-theme="light"] .text-sky-200,
 [data-theme="light"] .text-sky-300,
+[data-theme="clean-white"] .text-sky-100,
 [data-theme="clean-white"] .text-sky-200,
-[data-theme="clean-white"] .text-sky-300 {
+[data-theme="clean-white"] .text-sky-300,
+[data-theme="sepia"] .text-sky-100,
+[data-theme="sepia"] .text-sky-200,
+[data-theme="sepia"] .text-sky-300 {
   color: #0369a1;
 }
 
+html:not(.dark) .text-purple-100,
 html:not(.dark) .text-purple-200,
 html:not(.dark) .text-purple-300,
+html.light .text-purple-100,
+html.light .text-purple-200,
+html.light .text-purple-300,
+[data-theme="light"] .text-purple-100,
 [data-theme="light"] .text-purple-200,
 [data-theme="light"] .text-purple-300,
+[data-theme="clean-white"] .text-purple-100,
 [data-theme="clean-white"] .text-purple-200,
-[data-theme="clean-white"] .text-purple-300 {
+[data-theme="clean-white"] .text-purple-300,
+[data-theme="sepia"] .text-purple-100,
+[data-theme="sepia"] .text-purple-200,
+[data-theme="sepia"] .text-purple-300 {
   color: #6d28d9;
 }
 
+html:not(.dark) .text-indigo-100,
 html:not(.dark) .text-indigo-200,
 html:not(.dark) .text-indigo-300,
+html.light .text-indigo-100,
+html.light .text-indigo-200,
+html.light .text-indigo-300,
+[data-theme="light"] .text-indigo-100,
 [data-theme="light"] .text-indigo-200,
 [data-theme="light"] .text-indigo-300,
+[data-theme="clean-white"] .text-indigo-100,
 [data-theme="clean-white"] .text-indigo-200,
-[data-theme="clean-white"] .text-indigo-300 {
+[data-theme="clean-white"] .text-indigo-300,
+[data-theme="sepia"] .text-indigo-100,
+[data-theme="sepia"] .text-indigo-200,
+[data-theme="sepia"] .text-indigo-300 {
   color: #4338ca;
 }
 
+/* 2. DARKEN BACKGROUNDS LIGHTENING GUARD: Buttons and components with darken/saturated backgrounds MUST use lighten text across ALL themes */
+button[class*="bg-blue-"],
+button[class*="bg-indigo-"],
+button[class*="bg-purple-"],
+button[class*="bg-sky-6"],
+button[class*="bg-sky-7"],
+button[class*="bg-sky-8"],
+button[class*="bg-emerald-6"],
+button[class*="bg-emerald-7"],
+button[class*="bg-rose-6"],
+button[class*="bg-rose-7"],
+button[class*="bg-slate-7"],
+button[class*="bg-slate-8"],
+button[class*="bg-slate-9"],
+button[class*="bg-zinc-7"],
+button[class*="bg-zinc-8"],
+button[class*="bg-zinc-9"],
+button[class*="bg-neutral-7"],
+button[class*="bg-neutral-8"],
+button[class*="bg-neutral-9"],
+button[class*="bg-black"],
+button[class*="from-purple-"],
+button[class*="from-indigo-"],
+button[class*="from-blue-"],
+button[class*="from-sky-6"],
+[class*="from-purple-"][class*="to-indigo-"],
+[class*="from-indigo-"][class*="to-purple-"] {
+  color: #ffffff !important;
+}
+
+/* Ensure inner text elements inside darken-background buttons / pills stay pure white/lighten */
+button[class*="bg-blue-"] span,
+button[class*="bg-indigo-"] span,
+button[class*="bg-purple-"] span,
+button[class*="bg-sky-6"] span,
+button[class*="bg-sky-7"] span,
+button[class*="bg-sky-8"] span,
+button[class*="bg-emerald-6"] span,
+button[class*="bg-emerald-7"] span,
+button[class*="bg-rose-6"] span,
+button[class*="bg-rose-7"] span,
+button[class*="bg-slate-7"] span,
+button[class*="bg-slate-8"] span,
+button[class*="bg-slate-9"] span,
+button[class*="bg-zinc-7"] span,
+button[class*="bg-zinc-8"] span,
+button[class*="bg-zinc-9"] span,
+button[class*="bg-black"] span,
+button[class*="from-purple-"] span,
+button[class*="from-indigo-"] span,
+button[class*="from-blue-"] span,
+[class*="from-purple-"][class*="to-indigo-"] span,
+[class*="bg-blue-6"] span.text-white,
+[class*="bg-blue-7"] span.text-white,
+[class*="bg-indigo-6"] span.text-white,
+[class*="bg-indigo-7"] span.text-white,
+[class*="bg-purple-6"] span.text-white,
+[class*="bg-purple-7"] span.text-white,
+[class*="bg-slate-8"] span.text-white,
+[class*="bg-slate-9"] span.text-white,
+[class*="bg-zinc-8"] span.text-white,
+[class*="bg-zinc-9"] span.text-white,
+[class*="bg-black"] span.text-white,
+[class*="bg-blue-6"] .text-slate-100,
+[class*="bg-blue-6"] .text-slate-200,
+[class*="bg-indigo-6"] .text-slate-100,
+[class*="bg-indigo-6"] .text-slate-200,
+[class*="bg-purple-6"] .text-slate-100,
+[class*="bg-purple-6"] .text-slate-200,
+[class*="bg-slate-8"] .text-slate-100,
+[class*="bg-slate-8"] .text-slate-200,
+[class*="bg-slate-9"] .text-slate-100,
+[class*="bg-slate-9"] .text-slate-200,
+[class*="bg-zinc-8"] .text-slate-100,
+[class*="bg-zinc-8"] .text-slate-200,
+[class*="bg-zinc-9"] .text-slate-100,
+[class*="bg-zinc-9"] .text-slate-200,
+[class*="bg-black"] .text-slate-100,
+[class*="bg-black"] .text-slate-200 {
+  color: #ffffff !important;
+}
+
+/* 3. Markdown Document Body Base Text */
 html:not(.dark) .markdown-body,
 html.light .markdown-body,
 [data-theme="light"] .markdown-body,

@@ -335,7 +335,7 @@ export const PreviewApp: React.FC = () => {
     const applyTheme = () => {
       const isDark = resolveIsDark();
       const effectiveDataTheme =
-        rawTheme === 'system' ? (isDark ? 'dark' : 'light') : (rawTheme === 'clean-white' ? 'light' : rawTheme);
+        rawTheme === 'system' ? (isDark ? 'dark' : 'light') : rawTheme;
 
       if (isDark) {
         document.documentElement.classList.add('dark');

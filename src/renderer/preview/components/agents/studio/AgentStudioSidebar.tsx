@@ -763,7 +763,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     {/* Status Badges & Inline Resume/Retry Trigger */}
                     {isStepIncomplete && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/50 shrink-0">
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/40 shrink-0">
                           INCOMPLETE
                         </span>
                         {onRecoverPipelineStep && !isPipelineActivelyRunning && (
@@ -784,7 +784,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     )}
                     {isStepFailed && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/50 shrink-0">
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/40 shrink-0">
                           FAILED
                         </span>
                         {onRecoverPipelineStep && !isPipelineActivelyRunning && (
@@ -804,7 +804,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       </div>
                     )}
                     {!isStepIncomplete && !isStepFailed && isFinishedThisStep && (
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 shrink-0">
                         DONE
                       </span>
                     )}
@@ -817,7 +817,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       </span>
                     )}
                     {isWaitingThisStep && (
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/40 shrink-0">
                         PAUSED
                       </span>
                     )}
@@ -979,33 +979,33 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             <div
               className={`mt-2.5 p-2.5 rounded-xl border ${
                 waitingForStepApproval.quotaBreached
-                  ? 'border-rose-500/60 bg-rose-950/40 text-rose-200'
-                  : 'border-amber-500/50 bg-amber-950/40 text-amber-200'
+                  ? 'border-rose-500/40 bg-rose-50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200'
+                  : 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200'
               } space-y-1.5 shadow-md animate-fadeIn`}
             >
               <div className="flex items-center justify-between text-[11px] font-bold">
-                <span className="flex items-center gap-1 text-emerald-400">
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                   <CheckCircle2 size={12} />
                   Step {waitingForStepApproval.completedStepIdx + 1} Complete
                 </span>
                 {waitingForStepApproval.quotaBreached ? (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold uppercase tracking-wider">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30 font-bold uppercase tracking-wider">
                     Quota Cap Reached
                   </span>
                 ) : (
                   waitingForStepApproval.filesCreatedCount > 0 && (
-                    <span className="text-[9px] text-amber-300 font-mono">
+                    <span className="text-[9px] text-amber-800 dark:text-amber-300 font-mono">
                       {waitingForStepApproval.filesCreatedCount} file
                       {waitingForStepApproval.filesCreatedCount > 1 ? 's' : ''} generated
                     </span>
                   )
                 )}
               </div>
-              <div className="text-[10px] text-zinc-300 leading-tight">
+              <div className="text-[10px] text-zinc-600 dark:text-zinc-300 leading-tight">
                 {waitingForStepApproval.quotaBreached ? (
                   <span>
                     Token quota limit exceeded. Safely paused at step boundary before running{' '}
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-zinc-900 dark:text-white">
                       @{waitingForStepApproval.nextAgentName}
                     </span>
                     .
@@ -1013,7 +1013,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 ) : (
                   <span>
                     Ready for{' '}
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-zinc-900 dark:text-white">
                       @{waitingForStepApproval.nextAgentName}
                     </span>{' '}
                     ({waitingForStepApproval.nextIntent.toUpperCase()})

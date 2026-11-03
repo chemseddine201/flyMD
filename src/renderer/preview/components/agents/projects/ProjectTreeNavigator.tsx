@@ -427,25 +427,25 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
         );
       case 'debating':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-950/70 text-indigo-400 border border-indigo-700/60 animate-pulse">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border border-indigo-500/30 animate-pulse">
             <Activity className="w-2.5 h-2.5" /> Debating
           </span>
         );
       case 'report_ready':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-700/60">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-500/30">
             <FileText className="w-2.5 h-2.5" /> Report Ready
           </span>
         );
       case 'pipeline_running':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-600/60 animate-pulse">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 animate-pulse">
             <Play className="w-2.5 h-2.5 fill-current" /> Running
           </span>
         );
       case 'completed':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-600/60">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
             <CheckCircle2 className="w-2.5 h-2.5" /> Done
           </span>
         );

@@ -114,25 +114,25 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
     switch (kind) {
       case 'decision':
         return (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-950/70 text-blue-300 border border-blue-700/60">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/30">
             Decision
           </span>
         );
       case 'invariant':
         return (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-950/70 text-purple-300 border border-purple-700/60">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30">
             Invariant
           </span>
         );
       case 'deliverable':
         return (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-700/60">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
             Deliverable
           </span>
         );
       case 'audit_note':
         return (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-700/60">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
             Audit Note
           </span>
         );

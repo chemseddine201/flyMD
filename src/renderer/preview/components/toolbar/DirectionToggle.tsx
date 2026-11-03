@@ -24,12 +24,12 @@ export const DirectionToggle: React.FC<DirectionToggleProps> = ({
 
   const getIcon = () => {
     if (direction === 'auto') {
-      return <ArrowLeftRight className="w-3.5 h-3.5 text-sky-400" />;
+      return <ArrowLeftRight className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />;
     }
     if (direction === 'rtl') {
-      return <AlignRight className="w-3.5 h-3.5 text-amber-400" />;
+      return <AlignRight className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />;
     }
-    return <AlignLeft className="w-3.5 h-3.5 text-emerald-400" />;
+    return <AlignLeft className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />;
   };
 
   return (

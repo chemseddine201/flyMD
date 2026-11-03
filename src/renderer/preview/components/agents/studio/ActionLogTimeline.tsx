@@ -78,9 +78,9 @@ export const ActionLogTimeline: React.FC<ActionLogTimelineProps> = ({
 
     return (
       <div className="flex items-baseline gap-2 overflow-x-auto text-[11px] font-mono leading-relaxed">
-        <span className="text-zinc-500 select-none shrink-0">...\{workspaceBaseName} $</span>
-        <span className="text-amber-300 font-semibold shrink-0">{cmd}</span>
-        <span className="text-yellow-200/90">{rest}</span>
+        <span className="text-zinc-500 dark:text-zinc-400 select-none shrink-0">...\{workspaceBaseName} $</span>
+        <span className="text-amber-800 dark:text-amber-300 font-semibold shrink-0">{cmd}</span>
+        <span className="text-zinc-800 dark:text-zinc-200">{rest}</span>
       </div>
     );
   };
@@ -206,7 +206,7 @@ export const ActionLogTimeline: React.FC<ActionLogTimelineProps> = ({
 
                             {/* Command output */}
                             {action.output && (
-                              <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed overflow-x-auto whitespace-pre-wrap max-h-56 select-text text-[11px]">
+                              <div className="text-zinc-800 dark:text-zinc-200 leading-relaxed overflow-x-auto whitespace-pre-wrap max-h-56 select-text text-[11px]">
                                 {action.output}
                               </div>
                             )}
@@ -260,7 +260,7 @@ export const ActionLogTimeline: React.FC<ActionLogTimelineProps> = ({
                       <Copy size={12} />
                     </button>
                   </div>
-                  <div className="text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap text-[11px]">
+                  <div className="text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap text-[11px]">
                     {task.status === 'running'
                       ? 'Process actively executing task commands in workspace...'
                       : `Task completed successfully on workspace files.`}
@@ -281,9 +281,9 @@ export const ActionLogTimeline: React.FC<ActionLogTimelineProps> = ({
       {task.status === 'running' && (
         <div className="p-3 rounded-xl border border-sky-500/30 bg-sky-500/10 dark:bg-sky-950/20 flex items-center justify-between gap-3 shadow-sm animate-pulse">
           <div className="flex items-center gap-2.5 min-w-0">
-            <Loader2 size={14} className="text-sky-500 dark:text-sky-400 animate-spin shrink-0" />
+            <Loader2 size={14} className="text-sky-600 dark:text-sky-400 animate-spin shrink-0" />
             <div className="min-w-0">
-              <div className="text-xs font-semibold text-sky-800 dark:text-sky-200 truncate">
+              <div className="text-xs font-semibold text-sky-900 dark:text-sky-200 truncate">
                 {task.thinkingTrace && task.thinkingTrace.length > 0
                   ? task.thinkingTrace[task.thinkingTrace.length - 1]
                   : 'Workspace execution active...'}
@@ -295,7 +295,7 @@ export const ActionLogTimeline: React.FC<ActionLogTimelineProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className="font-mono text-xs font-bold text-sky-400 px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/40">
+            <span className="font-mono text-xs font-bold text-sky-800 dark:text-sky-300 px-2 py-0.5 rounded bg-sky-500/15 dark:bg-sky-500/20 border border-sky-500/30 dark:border-sky-500/40">
               {task.progressPercent ?? 60}%
             </span>
           </div>
