@@ -49,6 +49,15 @@ Modern AI-assisted engineering relies on multiple coding agents and models (Clau
 - **Debate Round Repeater & Per-Round Splits**: Cycle repeater mode and per-round split mode with 1-click auto-distribution of engines and roles.
 - **Unlimited Specialist Roles Library**: Built-in specialist roles plus full UI CRUD for user-defined custom roles with experience profiles, directives, and custom skill bindings.
 
+### 5. Full Dual-Theme Parity & UI Elevation
+- **Universal Theme Adaptation Across All 10 Themes**: Pure Clean White (`clean-white`), GitHub Light (`light`), Warm Sepia (`sepia`), Dark, Tokyo Night, Catppuccin Macchiato, Dracula Dark, Cyberpunk Neon, High Contrast (WCAG AAA), and System Default.
+- **Zero Dark Islands**: Agent Studio, Projects Tree, Live Progress Inspector, Chat Composer, Bottom Dock, and AI Translation Suite dynamically adopt pure clean white or dark theme palettes without hardcoded dark background locks.
+- **Immediate Theme Transition Indicator**: Responsive floating badge (`Applying [Theme Name]...` with spinner) provides instantaneous feedback on theme toggle alongside distinct Lucide icons for every theme.
+
+### 6. Streamlined Studio Navigation & Deliberation Focus
+- **Minimal Top Studio Controller**: Eliminated the redundant secondary toolbar button, keeping a single streamlined button on the top window title bar.
+- **Default Stage 1 (Debate) Focus**: Initial studio entrance automatically opens focused directly on Multi-Agent Deliberation & Debate rather than the pipeline executor.
+
 ---
 
 ## 🚀 What's New in FlyMD v2.2.0 (Stable)
@@ -316,7 +325,7 @@ Compiled release artifacts:
 - **المراقبة الحية والفتح التلقائي في الخلفية** مع شارة خضراء نابضة تختفي بعد 5 ثوانٍ من التفاعل.
 - **ثلاثة أوضاع تحرير وعرض**: المعاينة (Preview)، العرض المقسم (Split View مع CodeMirror 6)، والتحرير المرئي (WYSIWYG)، مع دعم معادلات KaTeX ومخططات Mermaid والاتجاه التلقائي للعربية (`Ctrl + Shift + D`).
 - **عارض مخططات Mermaid التفاعلي** بملء الشاشة مع التصدير المباشر إلى SVG و PNG.
-- **8 ثيمات مفتوحة المصدر وحزمة إمكانية الوصول البصرية** (WCAG AAA، خطوط عسر القراءة، تكبير 1.25x، تقليل الحركة).
+- **10 ثيمات مفتوحة المصدر مع تماثل لوني كامل** (Clean White, Light, Sepia, Dark, Tokyo Night, Catppuccin, Dracula, Cyberpunk, High Contrast WCAG AAA) واستجابة فورية لمؤشر التبديل مع تركيز تلقائي على مرحلة المناظرة.
 - **الترجمة المحلية عبر Ollama والودجت الدائري العائم (140px)** لسحب وإفلات الملفات بسرعة.
 
 ---
@@ -331,16 +340,16 @@ cd flyMD
 # تثبيت الاعتماديات
 npm install
 
-# تشغيل اختبارات Rust (38 اختباراً آلياً)
+# تشغيل اختبارات Rust (69 اختباراً آلياً)
 cargo test --manifest-path src-tauri/Cargo.toml
 
 # بناء النسخة الإنتاجية (ملف التثبيت + النسخة المحمولة)
 npm run tauri:build
 ```
 
-مخرجات البناء للإصدار الثاني:
-- **نسخة التثبيت الرسمية (NSIS Installer)**: `src-tauri/target/release/bundle/nsis/FlyMD_2.0.0_x64-setup.exe`
-- **النسخة المحمولة المباشرة (Portable)**: `src-tauri/target/release/fly-md-tauri.exe` (`FlyMD_2.0.0_x64-portable.exe`)
+مخرجات البناء للإصدار 2.3.0:
+- **نسخة التثبيت الرسمية (NSIS Installer)**: `release/FlyMD Setup 2.3.0.exe`
+- **النسخة المحمولة المباشرة (Portable)**: `release/FlyMD_2.3.0_x64-portable-latest.exe` (`FlyMD_2.3.0_x64-portable.exe`)
 
 ---
 

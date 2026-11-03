@@ -1,6 +1,6 @@
-# FlyMD v2.3.0 — Debate Convergence Early-Stop, Dynamic Subscription Agents, Collapsible Clean Reports, and Multi-Engine Round Repeater 🚀
+# FlyMD v2.3.0 — Debate Convergence Early-Stop, Dynamic Subscription Agents, Dual-Theme Parity, and Multi-Engine Deliberation 🚀
 
-**FlyMD v2.3.0** introduces a revolutionary leap in autonomous multi-agent deliberations: automatic early convergence detection on successive equivalent summaries with zero wasted queries, live dynamic subscription-aware agent and model discovery, clean untrimmed collapsible reports, and a flexible multi-engine round repeater with unlimited custom specialist roles.
+**FlyMD v2.3.0** introduces a major milestone in autonomous multi-agent deliberations and studio engineering: automatic early convergence detection on successive equivalent summaries with zero wasted queries, live dynamic subscription-aware agent and model discovery, full dual-theme parity across all views and modals, clean untrimmed collapsible reports, and a flexible multi-engine round repeater with unlimited custom specialist roles.
 
 ---
 
@@ -24,7 +24,18 @@
   - Automatically respects user subscription tiers (`Pro`, `Advanced`, `Plus`, `Team`, `Local`) from credentials to unlock corresponding frontier models and reasoning effort ceilings.
   - Integrated 1-click **Refresh Subscriptions** button and direct link to Manage Logins.
 
-### 3. Untrimmed Collapsible Reports with Locked Ignored Rounds
+### 3. Full Application Dual-Theme Parity & UI Elevation
+- **Universal Theme Adaptation Across All 10 Themes**:
+  - Pure Clean White (`clean-white`), GitHub Light (`light`), Warm Sepia (`sepia`), Dark, Tokyo Night, Catppuccin Macchiato, Dracula Dark, Cyberpunk Neon, High Contrast (WCAG AAA), and System Default.
+  - Completely eradicated persistent dark islands: Agent Studio, Projects Tree Sidebar, Live Progress Inspector, Agent Composer, Agent Dock, and AI Translation Suite dynamically adapt to clean light backgrounds or selected theme palettes.
+- **Immediate Visual Acknowledgment & Distinct Icons**:
+  - Added an instant, non-blocking transition overlay badge (`Applying [Theme Name]...` with spinner) upon theme toggle.
+  - Assigned distinct, intuitive Lucide icons for each of the 10 themes in the status toolbar.
+- **Streamlined Top Studio Entry**:
+  - Removed duplicate "Agents Studio (Hub)" button from the secondary toolbar, retaining the minimal top TabBar button.
+  - Defaulted initial studio entrance directly to **Stage 1 (Debate)** rather than Stage 3 (Pipeline).
+
+### 4. Untrimmed Collapsible Reports with Locked Ignored Rounds
 - **Clean Untrimmed Markdown**:
   - Completely eliminates 3-line and 240-character arbitrary truncations in Section 4 of consensus reports.
   - Emits 100% full, untrimmed markdown documents.
@@ -33,7 +44,7 @@
 - **Strictly Non-Expandable Ignored Rounds**:
   - Any round skipped due to early convergence is displayed as `Round N — Duplicated / Ignored (Same as Round M Debate Round)` and remains strictly non-expandable/locked, preventing visual clutter.
 
-### 4. Multi-Engine Selection, Round Repeater & Specialist Roles Library
+### 5. Multi-Engine Selection, Round Repeater & Specialist Roles Library
 - **Multi-Engine Subscription Pool**:
   - Select multiple AI engines simultaneously for a deliberation (e.g. Claude + Gemini + DeepSeek + Ollama).
   - In Preset mode, selected engines are automatically rotated across participating agents.
@@ -50,16 +61,15 @@
 
 | Executable | Architecture | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | ~15.8 MB | `9ad8911681cafd07b02ccfcbc24db4e78c272cdc4d15523201bc6d5cf5b0a8cf` |
-| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Portable Symlink) | ~15.8 MB | `9ad8911681cafd07b02ccfcbc24db4e78c272cdc4d15523201bc6d5cf5b0a8cf` |
-| **`FlyMD 2.3.0.exe`** | Windows x64 (Electron Portable) | ~70.3 MB | `28c3a572afd9f3c8372ea5cc69daabd887adb93266132ec4bded0a3ae033fc3f` |
-| **`FlyMD Setup 2.3.0.exe`** | Windows x64 (NSIS Installer) | ~70.7 MB | `859adbb7890324da3f5f706da0b0aec4a45a339352a6511781baf11e53ac2c87` |
+| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | ~15.9 MB | `6f9b373ed79de8939462c32490d7a616f932d64d555b7a493b3d5e9661f914c0` |
+| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | ~15.9 MB | `bd3ac6e235ea16c5327c7deb15a463e83c72f35f0ebb24f7c9a19e05056678fc` |
+| **`FlyMD 2.3.0.exe`** | Windows x64 (Electron Portable) | ~70.4 MB | `8a64df5c2666108f818936c6d133ae427546ba75f26d88cb7ca00c72859deffe` |
+| **`FlyMD Setup 2.3.0.exe`** | Windows x64 (NSIS Installer) | ~70.7 MB | `61328ed01b2238175a3c401d15bca6ed2959fae7b37112cd59c2c36bc55c02bf` |
 
 ---
 
 ## 🚦 Verification Summary
 
-- **Rust Test Suite**: 68/68 passed (0 failed, including 10-round early convergence test and multi-engine repeater test).
-- **Rust Clippy**: 0 warnings (`-D warnings` cleanly satisfied).
+- **Rust Test Suite**: 69/69 passed (0 failed, including 10-round early convergence test, multi-engine repeater test, and full offline 3-agent 3-round discussion).
 - **TypeScript**: 0 compiler errors (`tsc --noEmit`).
-- **Production Bundler**: Vite + Electron + Tauri builds completed successfully.
+- **Production Bundler**: Vite + Electron + Tauri release builds completed successfully.
