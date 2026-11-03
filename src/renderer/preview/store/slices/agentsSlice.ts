@@ -110,7 +110,7 @@ export const createAgentsSlice: StateCreator<AgentsSlice, [], [], AgentsSlice> =
   runningPipelineStepIdx: -1,
   waitingForStepApproval: null,
   assignedReportDoc: null,
-  agentLifecycleStage: 'pipeline',
+  agentLifecycleStage: 'debate',
 
   setAgentProfiles: (profiles) => set({ agentProfiles: profiles }),
   setAgentTasks: (tasks) => set({ agentTasks: tasks }),

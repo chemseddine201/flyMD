@@ -1,5 +1,4 @@
 import React from 'react';
-import { Bot } from 'lucide-react';
 import { AppSettings } from '../../../shared/types';
 import { ViewMode } from '../../../shared/constants';
 import { TextDirection } from '../../../shared/utils';
@@ -109,24 +108,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
       {/* Right: Standalone General Workspace Controller & Document Stats */}
       <div className="flex items-center gap-2.5 shrink-0">
-        {/* Dedicated Agents Studio General Controller Button */}
-        <button
-          type="button"
-          onClick={() => onChangeViewMode(viewMode === 'agents' ? 'wysiwyg' : 'agents')}
-          title="General Workspace Controller: Multi-Agent Studio & Discussion Hub"
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${
-            viewMode === 'agents'
-              ? 'bg-indigo-600 border-indigo-400 text-white shadow-indigo-600/30 ring-1 ring-indigo-400/50'
-              : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 hover:text-indigo-900 dark:hover:text-white hover:border-indigo-400'
-          }`}
-        >
-          <Bot className="w-3.5 h-3.5" />
-          <span>Agents Studio</span>
-          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-700 dark:text-indigo-200 border border-indigo-400/30 font-mono">
-            Hub
-          </span>
-        </button>
-
         <ToolbarStatsAndAi
           onOpenTranslate={onOpenTranslate}
           onOpenSettings={onOpenSettings}
