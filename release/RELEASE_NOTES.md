@@ -90,9 +90,9 @@
 
 | Executable | Architecture | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.1 MB | `76A98E8F01C9A0337012181AFB2CC77A413D8F42E94FD2212B5BD1F102D8A6AD` |
-| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.1 MB | `76A98E8F01C9A0337012181AFB2CC77A413D8F42E94FD2212B5BD1F102D8A6AD` |
-| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `41601C94185923513DBFCE3258BF6C763414AA2335459208E2981C45DB6B4BFB` |
+| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.1 MB | `B594E54F2D30334476893D2341494F8E9346F42BE8881D60325CAEA3A31F31A7` |
+| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.1 MB | `B594E54F2D30334476893D2341494F8E9346F42BE8881D60325CAEA3A31F31A7` |
+| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `9E17030CE31AF94BD3724339A2E145D37B3D71301F77C5518B714DF1A17A965E` |
 
 ---
 

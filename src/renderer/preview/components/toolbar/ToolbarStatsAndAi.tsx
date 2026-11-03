@@ -96,7 +96,7 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
         <Languages className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
       </button>
 
-      <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-950/60 rounded border border-slate-200 dark:border-slate-800/60">
+      <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-950/60 rounded border border-slate-300 dark:border-slate-800/60 font-medium">
         <span>{wordCount} <span className="hidden sm:inline">words</span><span className="sm:hidden">w</span></span>
         <span>•</span>
         <span>~{readingTimeMin}m <span className="hidden sm:inline">read</span></span>
@@ -105,7 +105,7 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
       <button
         onClick={onToggleTheme}
         title={`Current Theme: ${currentTheme}. Click to cycle.`}
-        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         {getThemeIcon()}
       </button>
@@ -114,7 +114,7 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
         <button
           onClick={onOpenAccessibility}
           title="Visual Accessibility Suite (High Contrast, Dyslexia Font, Large Print)"
-          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition"
+          className="p-1.5 text-slate-700 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
         >
           <Accessibility className="w-3.5 h-3.5" />
         </button>
@@ -123,7 +123,7 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
       <button
         onClick={onOpenSettings}
         title="FlyMD Settings"
-        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Settings className="w-3.5 h-3.5" />
       </button>
@@ -134,8 +134,8 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
           title={isOutlineOpen ? 'Hide Document Outline' : 'Show Document Outline'}
           className={`p-1.5 rounded transition flex items-center gap-1 ${
             isOutlineOpen
-              ? 'text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-500/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
+              ? 'text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-500/30'
+              : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
           <ListTree className="w-4 h-4" />

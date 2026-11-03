@@ -80,12 +80,12 @@ export const DiscussionSessionSidebar: React.FC<DiscussionSessionSidebarProps> =
         {filteredDiscussions.length === 0 ? (
           <div className="p-8 text-center text-slate-500 text-xs">
             <Layers size={28} className="mx-auto mb-2 text-slate-400 dark:text-slate-600 opacity-60" />
-            <p className="font-medium text-slate-600 dark:text-slate-400">No deliberations found</p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-600 mt-1">Start a structured debate with multiple AI models.</p>
+            <p className="font-semibold text-slate-800 dark:text-slate-200">No deliberations found</p>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Start a structured debate with multiple AI models.</p>
             <button
               type="button"
               onClick={onOpenNewModal}
-              className="mt-4 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-xs font-semibold transition-colors"
+              className="mt-4 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 dark:bg-sky-500/15 dark:hover:bg-sky-500/25 dark:text-sky-300 dark:border-sky-500/30 text-xs font-semibold transition-colors"
             >
               + Launch Deliberation
             </button>

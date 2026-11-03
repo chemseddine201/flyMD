@@ -201,12 +201,12 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
-            <MessageSquare size={40} className="text-slate-400 dark:text-slate-700 mb-3" />
-            <h3 className="text-base font-bold text-slate-800 dark:text-slate-300 mb-1">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600 dark:text-slate-400">
+            <MessageSquare size={40} className="text-sky-600 dark:text-sky-400 mb-3" />
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
               Multi-Agent Discussion Studio
             </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-500 max-w-md mb-6 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mb-6 leading-relaxed">
               Coordinate multi-agent deliberations and structured debates across
               any domain with strict process isolation, deterministic
               synchronization, human-in-the-loop steering, and evidence grading.
@@ -214,7 +214,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
             <button
               type="button"
               onClick={() => draft.setShowNewModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-sky-500/20"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all shadow-sm"
             >
               <Plus size={14} />
               <span>Launch New Deliberation</span>

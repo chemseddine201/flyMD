@@ -72,7 +72,7 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
           <h1 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white truncate">
             Agent Studio — Live Chat, Progress &amp; Multi-Agent Relay
           </h1>
-          <span className="hidden md:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+          <span className="hidden md:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30">
             In-App Native Studio
           </span>
 
@@ -83,46 +83,46 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
               onClick={onToggleProjectTree}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
                 showProjectTree
-                  ? 'bg-indigo-600/30 text-indigo-700 dark:text-indigo-300 border border-indigo-500/40 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800'
+                  ? 'bg-indigo-50 text-indigo-800 border border-indigo-300 dark:bg-indigo-950/70 dark:text-indigo-300 dark:border-indigo-700/60 shadow-xs'
+                  : 'text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white border border-slate-300 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
               title="Toggle Hierarchical Projects Tree Navigator"
             >
-              <FolderTree size={13} className="text-indigo-500 dark:text-indigo-400" />
+              <FolderTree size={13} className="text-indigo-600 dark:text-indigo-400" />
               <span>Projects</span>
             </button>
           )}
 
           {/* Active Project Indicator */}
           {activeProject && (
-            <div className="hidden xl:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-700/60 text-indigo-700 dark:text-indigo-300 text-[11px] max-w-[180px] truncate">
-              <Boxes size={12} className="shrink-0 text-indigo-500 dark:text-indigo-400" />
+            <div className="hidden xl:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-300 dark:border-indigo-700/60 text-indigo-800 dark:text-indigo-300 text-[11px] max-w-[180px] truncate">
+              <Boxes size={12} className="shrink-0 text-indigo-600 dark:text-indigo-400" />
               <span className="truncate">{activeProject.name}</span>
             </div>
           )}
 
           {/* 3-Stage Linear Lifecycle Switcher */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 ml-1">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-300 dark:border-slate-800 ml-1">
             <button
               type="button"
               onClick={() => onSelectLifecycleStage('debate')}
               className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
                 lifecycleStage === 'debate'
-                  ? 'bg-sky-500 text-slate-950 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/70'
               }`}
               title="1. Multi-Agent Deliberation & Architectural Debate"
             >
               <span>🗣️ 1. Debate</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-300" />
             </button>
             <button
               type="button"
               onClick={() => onSelectLifecycleStage('report')}
               className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
                 lifecycleStage === 'report'
-                  ? 'bg-sky-500 text-slate-950 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/70'
               }`}
               title="2. Synthesis Report & Operator Checkpoint Gate"
             >
@@ -133,8 +133,8 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
               onClick={() => onSelectLifecycleStage('pipeline')}
               className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1.5 ${
                 lifecycleStage === 'pipeline'
-                  ? 'bg-sky-500 text-slate-950 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/70'
               }`}
               title="3. Dedicated DAG Pipeline Execution & Process Isolation"
             >
@@ -183,7 +183,7 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
           <button
             type="button"
             onClick={onOpenAdvancedDispatchModal}
-            className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
+            className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
             title="Advanced Task Options (Checklist filter, Parallel Worktree, etc.)"
           >
             <SlidersHorizontal size={14} className="text-sky-600 dark:text-sky-400" />
@@ -192,7 +192,7 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
           <button
             type="button"
             onClick={onOpenCouncilBroadcastModal}
-            className="p-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-600 dark:text-amber-300 transition-colors"
+            className="p-2 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 border border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300 transition-colors"
             title="Council Broadcast (Multi-Agent Sync)"
           >
             <Users size={14} />
@@ -204,8 +204,8 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
               onClick={onToggleObservabilityHUD}
               className={`p-2 rounded-lg border transition-colors ${
                 showObservabilityHUD
-                  ? 'bg-purple-600/30 border-purple-500 text-purple-700 dark:text-purple-300'
-                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  ? 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-600/30 dark:border-purple-500 dark:text-purple-300'
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
               }`}
               title="Dual-Layer Memory & Observability HUD (Master Memory, Scoped Ledger, Evidence Receipts)"
             >
@@ -217,7 +217,7 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
             <button
               type="button"
               onClick={onOpenSharedMemory}
-              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
+              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
               title="Open Shared Memory (.flymd/MEMORY.md)"
             >
               <BrainCircuit size={14} className="text-amber-600 dark:text-amber-400" />
@@ -228,7 +228,7 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
             <button
               type="button"
               onClick={onRequestClearCacheModal}
-              className="p-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-600 dark:text-rose-300 transition-colors"
+              className="p-2 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 border border-rose-300 dark:border-rose-500/30 text-rose-800 dark:text-rose-300 transition-colors"
               title="Clear Memory & Cache (Handoffs, checkpoints, memory ledger)"
             >
               <Trash2 size={14} className="text-rose-600 dark:text-rose-400" />

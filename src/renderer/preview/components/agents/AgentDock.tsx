@@ -206,7 +206,7 @@ export const AgentDock: React.FC = () => {
                   ? 'scale-105 bg-sky-500/25 border-sky-400 text-slate-900 dark:text-white shadow-lg shadow-sky-500/20'
                   : isRunning
                   ? 'bg-slate-100 dark:bg-slate-900 border-sky-500/60 text-slate-900 dark:text-white'
-                  : 'bg-slate-100/80 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800/80'
+                  : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800 dark:bg-slate-900/80 dark:hover:bg-slate-800 dark:border-slate-800/90 dark:text-slate-200'
               }`}
             >
               {/* Status or Running Dot */}
@@ -241,7 +241,7 @@ export const AgentDock: React.FC = () => {
           type="button"
           onClick={() => setShowAgentAccountsModal(true)}
           title="Add a Custom Agent or manage shown agents"
-          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold shrink-0 transition-colors"
+          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-300 text-[11px] font-semibold shrink-0 transition-colors"
         >
           <Plus size={12} />
           <span className="hidden md:inline">Custom Agent</span>
@@ -256,7 +256,7 @@ export const AgentDock: React.FC = () => {
             disabled={restoringId === latestUnrestoredCheckpoint.id}
             onClick={handleQuickUndo}
             title={`Safety Time-Machine: Undo changes from "${latestUnrestoredCheckpoint.label}"`}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] font-semibold transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 dark:border-rose-500/30 dark:text-rose-300 text-[11px] font-semibold transition-colors"
           >
             <RotateCcw size={12} />
             <span className="hidden md:inline">
@@ -269,7 +269,7 @@ export const AgentDock: React.FC = () => {
           type="button"
           onClick={() => setShowCouncilModal(true)}
           title="Council of Agents: Broadcast current file to multiple agents simultaneously"
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-semibold transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:border-amber-500/30 dark:text-amber-300 text-[11px] font-semibold transition-colors"
         >
           <Users size={12} />
           <span className="hidden md:inline">Council</span>
@@ -291,7 +291,7 @@ export const AgentDock: React.FC = () => {
             setViewMode(viewMode === 'agents' ? 'preview' : 'agents')
           }
           title="Toggle Full Multi-Agent Supervisor Dashboard"
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 text-[11px] font-semibold transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-800 dark:bg-indigo-500/15 dark:hover:bg-indigo-500/25 dark:border-indigo-500/30 dark:text-indigo-300 text-[11px] font-semibold transition-colors"
         >
           <Activity size={12} />
           <span className="hidden lg:inline">Supervisor</span>
