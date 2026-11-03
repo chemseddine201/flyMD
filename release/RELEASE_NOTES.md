@@ -73,9 +73,9 @@
 - **Lockless Discussion Pause & Cancel IPC**:
   - Replaced Tokio orchestrator mutex bottlenecks with atomic `AtomicBool` flags (`SessionControls`).
   - Discussion pause and cancel requests respond instantaneously (< 1ms) without blocking Tauri IPC or the streaming UI.
-- **Strict Launch Validation for Deliberations**:
-  - Enforced required input validation for Discussion Topic, Proposal / Query, and Objectives / Invariants.
-  - Modal provides inline error highlights and disables launch until all mandatory fields are provided.
+- **Unified Deliberation Proposal & Target Objectives**:
+  - Joined the proposal, query, and target objectives into a unified, clean input area.
+  - Removed initial required text and error highlights on modal open, keeping inputs clean with launch button guards.
 - **Comprehensive Confirmation Dialogs**:
   - Added modal confirmation safeguards before deleting custom roles, presets, custom pipeline actions, task sessions, agent profiles, or recent file history.
 - **Full-Width Unsquished Timeline**:
@@ -87,11 +87,11 @@
 
 | Executable | Architecture | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.0 MB | `AD1873BFF2C167B6D86214CA87FC933F1DC82207CE28D68801D6F5693954C96B` |
-| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.0 MB | `AD1873BFF2C167B6D86214CA87FC933F1DC82207CE28D68801D6F5693954C96B` |
-| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `E0392084D82024D6BB0691275474345ED9EE0F023919CCECC9D5A2DEBB284052` |
-| **`FlyMD 2.3.0.exe`** | Windows x64 (Electron Portable) | 70.4 MB | `E0392084D82024D6BB0691275474345ED9EE0F023919CCECC9D5A2DEBB284052` |
-| **`FlyMD Setup 2.3.0.exe`** | Windows x64 (NSIS Installer) | 70.7 MB | `155C4F79A448F6D90A62BCB65BBC964F0E86E589D0D84AD80A675DB691D7C741` |
+| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.0 MB | `CEDEBCBA9F060152FBDA527257624D51562644475B3C349903ED96BCEA4C8A2E` |
+| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.0 MB | `CEDEBCBA9F060152FBDA527257624D51562644475B3C349903ED96BCEA4C8A2E` |
+| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `875B11F734365114D6BB41015FA82F84F0C1EA3360A7B9570984D64694390D76` |
+| **`FlyMD 2.3.0.exe`** | Windows x64 (Electron Portable) | 70.4 MB | `875B11F734365114D6BB41015FA82F84F0C1EA3360A7B9570984D64694390D76` |
+| **`FlyMD Setup 2.3.0.exe`** | Windows x64 (NSIS Installer) | 70.7 MB | `7468D6216A2D51A0CA54AC554F5B450B43A009C8734AE97AB40600B1DB33397E` |
 
 ---
 

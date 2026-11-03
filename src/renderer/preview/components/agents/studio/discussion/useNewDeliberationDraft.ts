@@ -577,19 +577,17 @@ export function useNewDeliberationDraft({
 
   const isTopicValid = newTopic.trim().length > 0;
   const isIdeaValid = newIdea.trim().length > 0;
-  const isObjectiveValid = newObjective.trim().length > 0;
-  const isFormValid = isTopicValid && isIdeaValid && isObjectiveValid;
+  const isFormValid = isTopicValid && isIdeaValid;
 
   const handleLaunchNewDiscussion = useCallback(async () => {
     const trimmedTopic = newTopic.trim();
     const trimmedIdea = newIdea.trim();
-    const trimmedObjective = newObjective.trim();
-    if (!resolvedWorkspace || !trimmedTopic || !trimmedIdea || !trimmedObjective) {
+    if (!resolvedWorkspace || !trimmedTopic || !trimmedIdea) {
       return;
     }
     const sessionId = `disc-${Date.now()}`;
     const topicToUse = trimmedTopic;
-    const ideaToUse = `${trimmedIdea}\n\n### Target Objectives & Invariants:\n${trimmedObjective}`;
+    const ideaToUse = trimmedIdea;
 
     const currentPreset =
       presetsById.get(selectedPreset) ||
@@ -822,7 +820,6 @@ export function useNewDeliberationDraft({
     setNewObjective,
     isTopicValid,
     isIdeaValid,
-    isObjectiveValid,
     isFormValid,
     maxRounds,
     maxRoundsInput,

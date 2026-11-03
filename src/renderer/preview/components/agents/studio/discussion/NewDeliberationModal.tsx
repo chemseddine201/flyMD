@@ -199,11 +199,11 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   const effectiveFormValid =
     isFormValid !== undefined
       ? isFormValid
-      : Boolean(newTopic.trim()) && Boolean(newIdea.trim()) && Boolean(newObjective.trim());
+      : Boolean(newTopic.trim()) && Boolean(newIdea.trim());
 
   const hasUnsavedDraft = useMemo(() => {
-    return Boolean(newTopic.trim() || newIdea.trim() || newObjective.trim());
-  }, [newTopic, newIdea, newObjective]);
+    return Boolean(newTopic.trim() || newIdea.trim());
+  }, [newTopic, newIdea]);
 
   const handleRequestClose = () => {
     if (hasUnsavedDraft) {
@@ -283,75 +283,32 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
 
           {/* Modal Body */}
           <div className="p-4 sm:p-5 md:p-[19px] space-y-4 md:space-y-5 overflow-y-auto text-xs bg-slate-50/30 dark:bg-slate-950/30">
-            {/* Section 1: Discussion Topic, Proposal & Objective (All Mandatory) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            {/* Section 1: Discussion Topic & Combined Proposal, Query & Target Objective */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs flex items-center justify-between">
-                  <span>Discussion Topic</span>
-                  <span className={`text-[10px] font-bold ${newTopic.trim() ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    * Required
-                  </span>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">
+                  Discussion Topic
                 </label>
                 <input
                   type="text"
                   value={newTopic}
                   onChange={(e) => setNewTopic(e.target.value)}
-                  placeholder="e.g. Microkernel Security Architecture, Trade-off Matrix..."
-                  className={`w-full bg-white dark:bg-slate-950 border rounded-lg p-2.5 text-slate-900 dark:text-slate-200 focus:outline-none transition-colors shadow-xs ${
-                    !newTopic.trim()
-                      ? 'border-amber-400 dark:border-amber-600/60 focus:border-rose-500'
-                      : 'border-slate-300 dark:border-slate-800 focus:border-sky-500'
-                  }`}
+                  placeholder="e.g. Microkernel Security Architecture, Trade-off Matrix, Database Sharding..."
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-sky-500 transition-colors shadow-xs"
                 />
-                {!newTopic.trim() && (
-                  <span className="text-[10px] text-rose-500 mt-0.5 block font-medium">Topic title is required</span>
-                )}
               </div>
 
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs flex items-center justify-between">
-                  <span>Proposal &amp; Query</span>
-                  <span className={`text-[10px] font-bold ${newIdea.trim() ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    * Required
-                  </span>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">
+                  Proposal, Query &amp; Target Objective
                 </label>
                 <textarea
                   rows={2}
                   value={newIdea}
                   onChange={(e) => setNewIdea(e.target.value)}
-                  placeholder="Describe key requirements, user query, or proposal..."
-                  className={`w-full bg-white dark:bg-slate-950 border rounded-lg p-2.5 text-slate-900 dark:text-slate-200 focus:outline-none leading-relaxed transition-colors shadow-xs ${
-                    !newIdea.trim()
-                      ? 'border-amber-400 dark:border-amber-600/60 focus:border-rose-500'
-                      : 'border-slate-300 dark:border-slate-800 focus:border-sky-500'
-                  }`}
+                  placeholder="Describe key requirements, user query, proposed approach, target objectives, invariants, or constraints..."
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-sky-500 leading-relaxed transition-colors shadow-xs"
                 />
-                {!newIdea.trim() && (
-                  <span className="text-[10px] text-rose-500 mt-0.5 block font-medium">Proposal / query is required</span>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs flex items-center justify-between">
-                  <span>Target Objective &amp; Invariants</span>
-                  <span className={`text-[10px] font-bold ${newObjective.trim() ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    * Required
-                  </span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={newObjective}
-                  onChange={(e) => setNewObjective && setNewObjective(e.target.value)}
-                  placeholder="Specific goals, invariants, and acceptance criteria..."
-                  className={`w-full bg-white dark:bg-slate-950 border rounded-lg p-2.5 text-slate-900 dark:text-slate-200 focus:outline-none leading-relaxed transition-colors shadow-xs ${
-                    !newObjective.trim()
-                      ? 'border-amber-400 dark:border-amber-600/60 focus:border-rose-500'
-                      : 'border-slate-300 dark:border-slate-800 focus:border-sky-500'
-                  }`}
-                />
-                {!newObjective.trim() && (
-                  <span className="text-[10px] text-rose-500 mt-0.5 block font-medium">Objective &amp; invariants are required</span>
-                )}
               </div>
             </div>
 
@@ -865,7 +822,7 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                 }`}
                 title={
                   !effectiveFormValid
-                    ? 'Discussion Topic, Proposal & Query, and Objective are all strictly required to launch a deliberation'
+                    ? 'Discussion Topic and Proposal / Target Objective are required to launch a deliberation'
                     : `Launch ${calculatedRounds}-Round Deliberation`
                 }
               >
