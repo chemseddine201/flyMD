@@ -326,6 +326,8 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = (props) =
         visibleAgents={ctrl.visibleAgents}
         recoveryAgentId={ctrl.recoveryAgentId}
         setRecoveryAgentId={ctrl.setRecoveryAgentId}
+        recoveryModelId={ctrl.recoveryModelId}
+        setRecoveryModelId={ctrl.setRecoveryModelId}
         recoveryEffortLevel={ctrl.recoveryEffortLevel}
         setRecoveryEffortLevel={ctrl.setRecoveryEffortLevel}
         recoveryThinkingEnabled={ctrl.recoveryThinkingEnabled}
@@ -343,7 +345,8 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = (props) =
             ctrl.recoveryAgentId || ctrl.pendingRecoveryPrompt.failedTask.targetAgentId,
             ctrl.recoveryExtraDirective.trim() || undefined,
             ctrl.recoveryEffortLevel,
-            ctrl.recoveryThinkingEnabled
+            ctrl.recoveryThinkingEnabled,
+            ctrl.recoveryModelId || undefined
           );
         }}
       />

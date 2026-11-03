@@ -14,6 +14,7 @@ import { composeSmartDeliverableName } from '../utils/smartNaming';
 export interface RecoveryModalDecision {
   action: 'continue_from_breakpoint' | 'revert_and_retry' | 'pause';
   overrideAgentId?: AgentId;
+  overrideModelId?: string;
   overrideEffortLevel?: AgentEffortLevel;
   overrideThinkingEnabled?: boolean;
   extraDirective?: string;

@@ -308,6 +308,7 @@ pub fn run() {
             cmd_clear_agent_task_logs,
             cmd_delete_agent_task,
             cmd_clear_workspace_cache,
+            cmd_fetch_agent_models,
             cmd_reveal_in_explorer,
             cmd_delete_file_path,
             cmd_open_external_path,

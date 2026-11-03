@@ -28,6 +28,7 @@ import {
 import { composeSmartDeliverableName } from '../../../utils/smartNaming';
 import { PendingRecoveryPromptData } from '../modals/PipelineRecoveryModal';
 import { CompletedPipelineSummary } from './PipelineStatusBanners';
+import { normalizeModelForAgent } from '../../../../../shared/constants/models';
 
 function updatePipelineStepInStore(
   pipelineId: string,
@@ -110,6 +111,7 @@ export function usePipelineRunnerAndRecovery({
   handleSendInAppChatTask,
 }: UsePipelineRunnerAndRecoveryParams) {
   const [recoveryAgentId, setRecoveryAgentId] = useState<AgentId>('');
+  const [recoveryModelId, setRecoveryModelId] = useState<string>('');
   const [recoveryEffortLevel, setRecoveryEffortLevel] =
     useState<AgentEffortLevel>('medium');
   const [recoveryThinkingEnabled, setRecoveryThinkingEnabled] =
@@ -125,6 +127,7 @@ export function usePipelineRunnerAndRecovery({
         mode: 'continue_from_breakpoint' | 'revert_and_retry';
         failedTask: AgentTaskRecord;
         overrideAgentId?: AgentId;
+        overrideModelId?: string;
         overrideEffortLevel?: AgentEffortLevel;
         overrideThinkingEnabled?: boolean;
         extraDirective?: string;
@@ -163,6 +166,7 @@ export function usePipelineRunnerAndRecovery({
                   mode: initialRecovery.mode,
                   failedTask: initialRecovery.failedTask,
                   overrideAgentId: initialRecovery.overrideAgentId,
+                  overrideModelId: initialRecovery.overrideModelId,
                   overrideEffortLevel: initialRecovery.overrideEffortLevel,
                   overrideThinkingEnabled:
                     initialRecovery.overrideThinkingEnabled,
@@ -184,12 +188,16 @@ export function usePipelineRunnerAndRecovery({
 
             if (
               activeRecoveryForStep?.overrideAgentId ||
+              activeRecoveryForStep?.overrideModelId ||
               activeRecoveryForStep?.overrideEffortLevel ||
               activeRecoveryForStep?.overrideThinkingEnabled !== undefined
             ) {
               updatePipelineStepInStore(pipeline.id, idx, {
                 ...(activeRecoveryForStep.overrideAgentId
                   ? { agentId: activeRecoveryForStep.overrideAgentId }
+                  : {}),
+                ...(activeRecoveryForStep.overrideModelId
+                  ? { modelId: activeRecoveryForStep.overrideModelId }
                   : {}),
                 ...(activeRecoveryForStep.overrideEffortLevel
                   ? { effortLevel: activeRecoveryForStep.overrideEffortLevel }
@@ -310,7 +318,9 @@ export function usePipelineRunnerAndRecovery({
             const dispatchedTask = await handleSendInAppChatTask(promptText, {
               agentId: effectiveStepAgentId,
               intent: currentStep.intent,
-              modelId: currentStep.modelId,
+              modelId:
+                activeRecoveryForStep?.overrideModelId ||
+                normalizeModelForAgent(effectiveStepAgentId, currentStep.modelId),
               effortLevel:
                 activeRecoveryForStep?.overrideEffortLevel ||
                 currentStep.effortLevel ||
@@ -402,6 +412,12 @@ export function usePipelineRunnerAndRecovery({
             if (completed.status === 'cancelled') break;
 
             setRecoveryAgentId(effectiveStepAgentId);
+            setRecoveryModelId(
+              normalizeModelForAgent(
+                effectiveStepAgentId,
+                completed.modelId || currentStep.modelId
+              )
+            );
             setRecoveryEffortLevel(
               (completed.effortLevel as AgentEffortLevel) ||
                 currentStep.effortLevel ||
@@ -439,6 +455,7 @@ export function usePipelineRunnerAndRecovery({
               mode: userDecision.action,
               failedTask: completed,
               overrideAgentId: userDecision.overrideAgentId,
+              overrideModelId: userDecision.overrideModelId,
               overrideEffortLevel: userDecision.overrideEffortLevel,
               overrideThinkingEnabled: userDecision.overrideThinkingEnabled,
               extraDirective: userDecision.extraDirective,
@@ -547,7 +564,8 @@ export function usePipelineRunnerAndRecovery({
       overrideAgentId?: AgentId,
       extraDirective?: string,
       overrideEffortLevel?: AgentEffortLevel,
-      overrideThinkingEnabled?: boolean
+      overrideThinkingEnabled?: boolean,
+      overrideModelId?: string
     ) => {
       if (globalPipelineRuntime.recoveryResolver) {
         const resolve = globalPipelineRuntime.recoveryResolver;
@@ -556,6 +574,7 @@ export function usePipelineRunnerAndRecovery({
         resolve({
           action: mode,
           overrideAgentId,
+          overrideModelId,
           overrideEffortLevel,
           overrideThinkingEnabled,
           extraDirective,
@@ -595,6 +614,7 @@ export function usePipelineRunnerAndRecovery({
           mode,
           failedTask,
           overrideAgentId,
+          overrideModelId,
           overrideEffortLevel,
           overrideThinkingEnabled,
           extraDirective,
@@ -619,6 +639,9 @@ export function usePipelineRunnerAndRecovery({
       await handleSendInAppChatTask(fullPrompt, {
         agentId: targetAg,
         intent: failedTask.intent,
+        modelId:
+          overrideModelId ||
+          normalizeModelForAgent(targetAg, failedTask.modelId),
         filePath: failedTask.filePath,
         fileName: failedTask.fileName,
         attemptCount: (failedTask.attemptCount || 0) + 1,
@@ -665,6 +688,7 @@ export function usePipelineRunnerAndRecovery({
 
       if (mode === 'ask') {
         setRecoveryAgentId(task.targetAgentId);
+        setRecoveryModelId(normalizeModelForAgent(task.targetAgentId, task.modelId));
         setRecoveryEffortLevel((task.effortLevel as AgentEffortLevel) || 'medium');
         setRecoveryThinkingEnabled(task.thinkingEnabled ?? true);
         setRecoveryExtraDirective('');
@@ -689,7 +713,8 @@ export function usePipelineRunnerAndRecovery({
         undefined,
         undefined,
         (task.effortLevel as AgentEffortLevel) || 'medium',
-        task.thinkingEnabled ?? true
+        task.thinkingEnabled ?? true,
+        normalizeModelForAgent(task.targetAgentId, task.modelId)
       );
     },
     [setSelectedTaskId, setPendingRecoveryPrompt, executeRecoveryDecision]
@@ -717,8 +742,12 @@ export function usePipelineRunnerAndRecovery({
         return;
       }
 
+      const resolvedAg = step?.agentId || targetTask.targetAgentId;
       setSelectedTaskId(targetTask.id);
-      setRecoveryAgentId(step?.agentId || targetTask.targetAgentId);
+      setRecoveryAgentId(resolvedAg);
+      setRecoveryModelId(
+        normalizeModelForAgent(resolvedAg, targetTask.modelId || step?.modelId)
+      );
       setRecoveryEffortLevel(
         (targetTask.effortLevel as AgentEffortLevel) ||
           step?.effortLevel ||
@@ -761,6 +790,8 @@ export function usePipelineRunnerAndRecovery({
     pendingRecoveryPrompt,
     recoveryAgentId,
     setRecoveryAgentId,
+    recoveryModelId,
+    setRecoveryModelId,
     recoveryEffortLevel,
     setRecoveryEffortLevel,
     recoveryThinkingEnabled,

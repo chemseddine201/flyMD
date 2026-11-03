@@ -128,12 +128,12 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
                 }}
                 className={`p-1.5 rounded transition-all ${
                   isStepMode
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
                 title="Step-by-Step Mode (Pauses at each turn barrier for human steering)"
               >
-                <Footprints size={14} className={isStepMode ? 'text-amber-400' : ''} />
+                <Footprints size={14} className={isStepMode ? 'text-amber-600 dark:text-amber-400' : ''} />
               </button>
             </div>
 
@@ -141,7 +141,7 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
               <button
                 type="button"
                 onClick={onPause}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs font-semibold transition-colors"
               >
                 <Pause size={12} />
                 <span>Pause</span>
@@ -166,8 +166,8 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
                       onClick={onResume}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                         activeMeta.status === 'failed'
-                          ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 shadow-sm'
-                          : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+                          ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/40 shadow-sm'
+                          : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40'
                       }`}
                       title={
                         activeMeta.status === 'failed'
@@ -190,7 +190,7 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
               <button
                 type="button"
                 onClick={onCancel}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-semibold transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/40 text-xs font-semibold transition-colors"
               >
                 <XCircle size={12} />
                 <span>Cancel</span>
@@ -258,8 +258,8 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
               onClick={() => onSelectTab('disputes')}
               className={`py-2 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
                 activeTab === 'disputes'
-                  ? 'border-amber-400 text-amber-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-amber-500 text-amber-700 dark:text-amber-400'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <ShieldAlert size={13} />
@@ -346,10 +346,10 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
         </div>
 
         {errorMessage && (
-          <div className="px-4 py-3 bg-rose-500/15 border-b border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-3 shadow-inner">
+          <div className="px-4 py-3 bg-rose-50 dark:bg-rose-500/15 border-b border-rose-300 dark:border-rose-500/30 text-rose-800 dark:text-rose-300 text-xs flex items-center justify-between gap-3 shadow-inner">
             <div className="flex items-center gap-2 min-w-0">
-              <ShieldAlert size={15} className="shrink-0 text-rose-400" />
-              <span className="font-mono text-[11px] leading-relaxed break-words">
+              <ShieldAlert size={15} className="shrink-0 text-rose-600 dark:text-rose-400" />
+              <span className="font-mono text-[11px] font-semibold leading-relaxed break-words">
                 {errorMessage}
               </span>
             </div>

@@ -72,21 +72,21 @@ export const getMessageSnippet = (content: string): string => {
 export const getRoleBadgeStyle = (role: string): string => {
   const r = (role || '').toLowerCase();
   if (r.includes('architect')) {
-    return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+    return 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30';
   }
   if (r.includes('critic') || r.includes('adversar')) {
-    return 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+    return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30';
   }
   if (r.includes('audit')) {
-    return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+    return 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30';
   }
   if (r.includes('implement')) {
-    return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+    return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
   }
   if (r.includes('user') || r.includes('human')) {
-    return 'bg-teal-500/25 text-teal-200 border-teal-500/40';
+    return 'bg-teal-500/15 text-teal-800 dark:text-teal-200 border-teal-500/40';
   }
-  return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
+  return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30';
 };
 
 export const renderDiscussionStatusBadge = (
@@ -95,49 +95,56 @@ export const renderDiscussionStatusBadge = (
   switch (status) {
     case 'running':
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 animate-pulse">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 animate-pulse">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400 animate-ping" />
           RUNNING
         </span>
       );
     case 'awaiting_review':
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 flex items-center gap-1">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 flex items-center gap-1">
           <Award size={10} />
           AWAITING REVIEW
         </span>
       );
     case 'completed':
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
           <CheckCircle size={10} />
           COMPLETED
         </span>
       );
     case 'paused':
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-500/20 text-slate-300 border border-slate-500/30 flex items-center gap-1">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1">
           <Pause size={10} />
           PAUSED
         </span>
       );
+    case 'failed':
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 flex items-center gap-1">
+          <AlertTriangle size={10} />
+          FAILED
+        </span>
+      );
     case 'cancelled':
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 flex items-center gap-1">
           <XCircle size={10} />
           CANCELLED
         </span>
       );
     case 'interrupted':
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30 flex items-center gap-1">
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500/15 text-orange-800 dark:text-orange-300 border border-orange-500/30 flex items-center gap-1">
           <AlertTriangle size={10} />
           INTERRUPTED
         </span>
       );
     default:
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400">
+        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
           {status || 'IDLE'}
         </span>
       );

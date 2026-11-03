@@ -354,17 +354,18 @@ impl CliProvider {
                     "plan".to_string(),
                     "--sandbox".to_string(),
                 ];
-                if let Some(m) = sanitized_model {
+                let (norm_model, norm_effort) =
+                    crate::agents::runner::cli_builder::normalize_antigravity_model_and_effort(
+                        sanitized_model,
+                        eff,
+                        thinking_enabled,
+                    );
+                if let Some(m) = norm_model {
                     args.push("--model".to_string());
-                    args.push(m.to_string());
+                    args.push(m);
                 }
-                if thinking_enabled {
-                    args.push("--effort".to_string());
-                    args.push(eff.to_string());
-                } else {
-                    args.push("--effort".to_string());
-                    args.push("low".to_string());
-                }
+                args.push("--effort".to_string());
+                args.push(norm_effort);
                 args
             }
             CliType::OpenCode => {
@@ -1343,7 +1344,7 @@ mod tests {
         let gemini_args_with_model = gemini_adapter.build_cli_args("Debate topic", Some("medium"), true, Some("gemini-2.5-pro"));
         assert_eq!(
             gemini_args_with_model,
-            vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--model", "gemini-2.5-pro", "--effort", "medium"]
+            vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--model", "gemini-4-argon", "--effort", "medium"]
         );
 
         let gemini_args_no_think = gemini_adapter.build_cli_args("Debate topic", Some("medium"), false, None);

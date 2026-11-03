@@ -220,6 +220,9 @@
     discoverAgents: function () {
       return invoke('cmd_discover_agents');
     },
+    fetchAgentModels: function (agentId) {
+      return invoke('cmd_fetch_agent_models', { agentId: agentId });
+    },
     saveAgentCredential: function (agentId, credential) {
       return invoke('cmd_save_agent_credential', { agentId: agentId, credential: credential });
     },

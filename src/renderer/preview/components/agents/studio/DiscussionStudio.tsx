@@ -136,6 +136,11 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                     ctrl.resumeCurrentDiscussion(resolvedWorkspace)
                   }
                   onGoToReport={ctrl.handleGoToReport}
+                  onOpenConfig={() => {
+                    if (ctrl.activeSessionId) {
+                      ctrl.handleInspectSession(ctrl.activeSessionId);
+                    }
+                  }}
                 />
               )}
 

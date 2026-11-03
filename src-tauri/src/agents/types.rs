@@ -400,3 +400,18 @@ pub struct CouncilBroadcastResponse {
     pub consensus: String,
     pub summary: String,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FetchedAgentModel {
+    pub id: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+    #[serde(rename = "supportsReasoning")]
+    pub supports_reasoning: bool,
+    #[serde(rename = "supportedEffortLevels")]
+    pub supported_effort_levels: Vec<String>,
+    #[serde(rename = "defaultEffortLevel")]
+    pub default_effort_level: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}

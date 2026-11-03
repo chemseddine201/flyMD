@@ -10,6 +10,7 @@ import {
   FileText,
   AlertTriangle,
   RotateCcw,
+  Sliders,
 } from 'lucide-react';
 import {
   DiscussionMetadata,
@@ -51,6 +52,7 @@ export interface DiscussionTimelineViewProps {
   onToggleTargetedDispatch: () => void;
   onResume: () => void;
   onGoToReport: () => void;
+  onOpenConfig?: () => void;
 }
 
 export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
@@ -74,6 +76,7 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
       onToggleTargetedDispatch,
       onResume,
       onGoToReport,
+      onOpenConfig,
     }) => {
       return (
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-6 space-y-4 w-full max-w-none mx-auto">
@@ -219,31 +222,42 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
           })}
 
           {activeMeta.status === 'failed' && (
-            <div className="p-4 rounded-xl bg-gradient-to-r from-rose-950/40 via-red-950/30 to-amber-950/20 border border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-fadeIn">
+            <div className="p-4 rounded-xl bg-rose-50 dark:bg-gradient-to-r dark:from-rose-950/40 dark:via-red-950/30 dark:to-amber-950/20 border border-rose-300 dark:border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-fadeIn">
               <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0 mt-0.5">
+                <div className="p-2 rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 shrink-0 mt-0.5">
                   <AlertTriangle size={18} />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-rose-200 flex items-center gap-2">
+                  <div className="text-xs font-bold text-rose-800 dark:text-rose-200 flex items-center gap-2">
                     <span>Agent Deliberation Turn Failed</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/40 font-mono">
                       Round {activeMeta.currentRound}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-300 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                  <div className="text-[11px] text-slate-700 dark:text-slate-300 mt-1 max-w-2xl leading-relaxed">
                     {activeMeta.errorMessage || 'An unexpected error or timeout interrupted turn execution.'}
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-1">
-                    Completed turns and ledger digests are safely preserved. Click below to re-execute the turn and continue deliberation.
+                  <div className="text-[10px] text-slate-600 dark:text-slate-400 mt-1">
+                    Completed turns and ledger digests are safely preserved. You can change the active model/effort or click Resume to retry.
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                {onOpenConfig && (
+                  <button
+                    type="button"
+                    onClick={onOpenConfig}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs font-semibold transition-all shadow-xs shrink-0"
+                    title="Change selected model or effort for this round"
+                  >
+                    <Sliders size={13} className="text-sky-600 dark:text-sky-400" />
+                    <span>Change Model / Config</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onResume}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-slate-950 text-xs font-bold transition-all shadow-md shrink-0"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 dark:bg-rose-500 dark:hover:bg-rose-400 text-white dark:text-slate-950 text-xs font-bold transition-all shadow-md shrink-0"
                   title="Retry failed turn and resume deliberation"
                 >
                   <RotateCcw size={13} />
@@ -254,28 +268,38 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
           )}
 
           {activeMeta.status === 'paused' && (
-            <div className="p-4 rounded-xl bg-amber-950/25 border border-amber-500/40 flex items-center justify-between gap-3 shadow-md animate-fadeIn">
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/25 border border-amber-300 dark:border-amber-500/40 flex items-center justify-between gap-3 shadow-md animate-fadeIn">
               <div className="flex items-center gap-2.5">
-                <Pause size={16} className="text-amber-400 shrink-0" />
+                <Pause size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
                 <div>
-                  <div className="text-xs font-bold text-amber-200 flex items-center gap-2">
+                  <div className="text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
                     <span>Deliberation Paused for Human Review</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/40 font-mono">
                       Round {activeMeta.currentRound}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
+                  <div className="text-[11px] text-slate-700 dark:text-slate-400 mt-0.5">
                     Review proposals, inject guidance below, direct targeted inquiries, or adjust upcoming round configuration before continuing.
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {onOpenConfig && (
+                  <button
+                    type="button"
+                    onClick={onOpenConfig}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs font-semibold transition-all shrink-0"
+                  >
+                    <Sliders size={13} className="text-sky-600 dark:text-sky-400" />
+                    <span>Config</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onToggleTargetedDispatch}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 text-xs font-semibold transition-all shrink-0"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/15 hover:bg-purple-600/25 dark:bg-purple-600/30 dark:hover:bg-purple-600/40 text-purple-800 dark:text-purple-200 border border-purple-500/40 text-xs font-semibold transition-all shrink-0"
                 >
-                  <Target size={13} className="text-purple-400" />
+                  <Target size={13} className="text-purple-600 dark:text-purple-400" />
                   <span>Target Agent</span>
                 </button>
                 <button
@@ -293,19 +317,19 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
           {(activeMeta.status === 'completed' ||
             activeMeta.status === 'awaiting_review' ||
             (activeMeta.currentRound >= 3 && !isRunning)) && (
-            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-sky-950/30 to-indigo-950/40 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-fadeIn">
+            <div className="p-4 rounded-xl bg-emerald-50/90 dark:bg-gradient-to-r dark:from-emerald-950/40 dark:via-sky-950/30 dark:to-indigo-950/40 border border-emerald-300 dark:border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-fadeIn">
               <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
                   <CheckCircle size={18} />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <span>Deliberation Concluded &amp; Evidence Graded</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 font-mono">
                       Consensus Settled
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-1 max-w-xl leading-relaxed">
+                  <div className="text-[11px] text-slate-700 dark:text-slate-400 mt-1 max-w-xl leading-relaxed">
                     Council debate has reached consensus across{' '}
                     {activeMeta.currentRound || 1} round(s). The structured
                     synthesis report and actionable checklist are ready for

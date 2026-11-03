@@ -261,4 +261,137 @@ html.light .cm-activeLineGutter,
   color: #0f172a !important;
 }
 
+/* White / Light Layout Global Contrast Guard for Pale Gray & Pastel Text */
+html:not(.dark) .text-slate-100,
+html.light .text-slate-100,
+[data-theme="light"] .text-slate-100,
+[data-theme="clean-white"] .text-slate-100,
+html:not(.dark) .text-slate-200,
+html.light .text-slate-200,
+[data-theme="light"] .text-slate-200,
+[data-theme="clean-white"] .text-slate-200,
+html:not(.dark) .text-neutral-100,
+html.light .text-neutral-100,
+[data-theme="light"] .text-neutral-100,
+[data-theme="clean-white"] .text-neutral-100,
+html:not(.dark) .text-neutral-200,
+html.light .text-neutral-200,
+[data-theme="light"] .text-neutral-200,
+[data-theme="clean-white"] .text-neutral-200 {
+  color: #0f172a;
+}
+
+html:not(.dark) .text-slate-300,
+html.light .text-slate-300,
+[data-theme="light"] .text-slate-300,
+[data-theme="clean-white"] .text-slate-300,
+html:not(.dark) .text-neutral-300,
+html.light .text-neutral-300,
+[data-theme="light"] .text-neutral-300,
+[data-theme="clean-white"] .text-neutral-300 {
+  color: #1e293b;
+}
+
+html:not(.dark) .text-slate-400,
+html.light .text-slate-400,
+[data-theme="light"] .text-slate-400,
+[data-theme="clean-white"] .text-slate-400,
+html:not(.dark) .text-neutral-400,
+html.light .text-neutral-400,
+[data-theme="light"] .text-neutral-400,
+[data-theme="clean-white"] .text-neutral-400 {
+  color: #475569;
+}
+
+html:not(.dark) .text-slate-500,
+html.light .text-slate-500,
+[data-theme="light"] .text-slate-500,
+[data-theme="clean-white"] .text-slate-500,
+html:not(.dark) .text-neutral-500,
+html.light .text-neutral-500,
+[data-theme="light"] .text-neutral-500,
+[data-theme="clean-white"] .text-neutral-500 {
+  color: #334155;
+}
+
+html:not(.dark) .text-rose-200,
+html:not(.dark) .text-rose-300,
+[data-theme="light"] .text-rose-200,
+[data-theme="light"] .text-rose-300,
+[data-theme="clean-white"] .text-rose-200,
+[data-theme="clean-white"] .text-rose-300 {
+  color: #be123c;
+}
+
+html:not(.dark) .text-amber-200,
+html:not(.dark) .text-amber-300,
+[data-theme="light"] .text-amber-200,
+[data-theme="light"] .text-amber-300,
+[data-theme="clean-white"] .text-amber-200,
+[data-theme="clean-white"] .text-amber-300 {
+  color: #b45309;
+}
+
+html:not(.dark) .text-emerald-200,
+html:not(.dark) .text-emerald-300,
+[data-theme="light"] .text-emerald-200,
+[data-theme="light"] .text-emerald-300,
+[data-theme="clean-white"] .text-emerald-200,
+[data-theme="clean-white"] .text-emerald-300 {
+  color: #047857;
+}
+
+html:not(.dark) .text-sky-200,
+html:not(.dark) .text-sky-300,
+[data-theme="light"] .text-sky-200,
+[data-theme="light"] .text-sky-300,
+[data-theme="clean-white"] .text-sky-200,
+[data-theme="clean-white"] .text-sky-300 {
+  color: #0369a1;
+}
+
+html:not(.dark) .text-purple-200,
+html:not(.dark) .text-purple-300,
+[data-theme="light"] .text-purple-200,
+[data-theme="light"] .text-purple-300,
+[data-theme="clean-white"] .text-purple-200,
+[data-theme="clean-white"] .text-purple-300 {
+  color: #6d28d9;
+}
+
+html:not(.dark) .text-indigo-200,
+html:not(.dark) .text-indigo-300,
+[data-theme="light"] .text-indigo-200,
+[data-theme="light"] .text-indigo-300,
+[data-theme="clean-white"] .text-indigo-200,
+[data-theme="clean-white"] .text-indigo-300 {
+  color: #4338ca;
+}
+
+html:not(.dark) .markdown-body,
+html.light .markdown-body,
+[data-theme="light"] .markdown-body,
+[data-theme="clean-white"] .markdown-body {
+  color: #0f172a;
+}
+
+html:not(.dark) .markdown-body h1,
+html:not(.dark) .markdown-body h2,
+html:not(.dark) .markdown-body h3,
+html:not(.dark) .markdown-body h4,
+html:not(.dark) .markdown-body strong,
+[data-theme="light"] .markdown-body h1,
+[data-theme="light"] .markdown-body h2,
+[data-theme="light"] .markdown-body h3,
+[data-theme="light"] .markdown-body h4,
+[data-theme="light"] .markdown-body strong,
+[data-theme="clean-white"] .markdown-body h1,
+[data-theme="clean-white"] .markdown-body h2,
+[data-theme="clean-white"] .markdown-body h3,
+[data-theme="clean-white"] .markdown-body h4,
+[data-theme="clean-white"] .markdown-body strong {
+  color: #0f172a;
+}
+
+
 

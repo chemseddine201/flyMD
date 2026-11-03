@@ -36,9 +36,10 @@ Modern AI-assisted engineering relies on multiple coding agents and models (Clau
 - **Automatic Consensus Detection**: Detects equivalent summaries (`>= 0.82` similarity) between successive agents in a round or across round boundaries with zero newly opened disputes, immediately skipping remaining turns in the round and all subsequent scheduled rounds.
 - **Skipped Turns & Escaped Steps Ledger**: Full untrimmed details captured for every executed step. Escaped steps within a converged round are recorded as `SkippedConsensus` (0 queries), and remaining rounds are locked as Duplicated / Ignored.
 
-### 2. Dynamic Subscription-Aware Agent & Model Discovery
+### 2. Dynamic Subscription-Aware Agent & Live Model Fetching
 - **Zero Static Hardcoded Dropdowns**: Dynamically probes connected CLI agents (`claude`, `agy`, `opencode`, `codex`, `cursor`, `zcode`), HTTP endpoints, live Ollama models, and custom user agents.
-- **Subscription Entitlement Filtering**: Automatically respects user subscription tiers (`Pro`, `Advanced`, `Plus`, `Team`, `Local`) from credentials to unlock corresponding frontier models and reasoning effort ceilings.
+- **1-Click Live Model Fetch & Subscription Filtering**: Includes an integrated **Fetch Models** (`RefreshCw`) button inside every model picker to query real available models from the selected agent's CLI (`agy models`, Claude settings, Ollama `/api/tags`), displaying only supported subscription models (`gemini-4-argon`, `gemini-3.8-flash`, `claude-opus-5-5`, `claude-sonnet-5-5`, `gpt-oss-120b`) and automatically normalizing legacy slugs.
+- **Error Recovery Model Switcher**: When a pipeline step or deliberation turn fails due to an invalid model or effort error, the recovery modal (`PipelineRecoveryModal`) and deliberation failure banner provide an immediate **Target Model** switcher + Fetch button so users can change the model and retry cleanly without restarting.
 
 ### 3. Untrimmed Collapsible Reports with Locked Ignored Rounds
 - **Clean Untrimmed Markdown**: Consensus reports render 100% full, untrimmed markdown with zero 3-line or 240-char truncation limits.

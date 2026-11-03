@@ -2,6 +2,7 @@
 
 use super::types::{
     AgentCheckpoint, AgentCredentialConfig, AgentProfile, AgentTaskRecord, AgentTaskRequest,
+    FetchedAgentModel,
 };
 use super::SharedAgentOrchestrator;
 use crate::store::SharedStore;
@@ -129,4 +130,13 @@ pub fn cmd_clear_workspace_cache(
     clear_temp_cache: Option<bool>,
 ) -> Result<String, String> {
     super::checkpoint::clear_workspace_memory_and_cache(&workspace_path, clear_memory, clear_temp_cache)
+}
+
+#[tauri::command]
+pub fn cmd_fetch_agent_models(
+    store: tauri::State<'_, SharedStore>,
+    agent_id: String,
+) -> Vec<FetchedAgentModel> {
+    let creds = store.get_agent_credentials();
+    super::discovery::fetch_live_agent_models(&agent_id, &creds)
 }

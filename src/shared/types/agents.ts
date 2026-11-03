@@ -322,3 +322,12 @@ export interface AgentPipelinePreset {
   description: string;
   steps: AgentPipelineStep[];
 }
+
+export interface FetchedAgentModel {
+  id: string;
+  displayName: string;
+  supportsReasoning: boolean;
+  supportedEffortLevels: AgentEffortLevel[];
+  defaultEffortLevel: AgentEffortLevel;
+  description?: string;
+}

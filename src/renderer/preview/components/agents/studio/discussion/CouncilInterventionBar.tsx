@@ -73,11 +73,11 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
       return (
         <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm transition-colors duration-150">
           {showTargetedDispatch && (
-            <div className="p-3 bg-purple-950/20 border-b border-purple-500/30 animate-fadeIn">
+            <div className="p-3 bg-purple-50/80 dark:bg-purple-950/20 border-b border-purple-300 dark:border-purple-500/30 animate-fadeIn">
               <div className="max-w-4xl mx-auto space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-purple-300">
+                <div className="flex items-center justify-between text-xs font-bold text-purple-800 dark:text-purple-300">
                   <div className="flex items-center gap-1.5">
-                    <Target size={14} className="text-purple-400" />
+                    <Target size={14} className="text-purple-600 dark:text-purple-400" />
                     <span>
                       Targeted Agent Inquiry &amp; Custom Action Dispatch
                     </span>
@@ -85,7 +85,7 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                   <button
                     type="button"
                     onClick={onCloseTargetedDispatch}
-                    className="text-slate-400 hover:text-slate-200 text-sm font-semibold"
+                    className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 text-sm font-semibold"
                   >
                     &times;
                   </button>

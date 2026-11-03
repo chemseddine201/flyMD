@@ -1,6 +1,6 @@
 //! Agent discovery, binary detection, and authentication status resolution.
 
-use super::types::{AgentCredentialConfig, AgentProfile};
+use super::types::{AgentCredentialConfig, AgentProfile, FetchedAgentModel};
 use std::collections::HashMap;
 
 pub use crate::common::process::{find_binary_on_system, get_user_home_dir};
@@ -372,7 +372,7 @@ pub fn discover_agent_profiles(
                     }
                     "antigravity" => {
                         if resolved_subscription_tier.as_deref() == Some("free") {
-                            "gemini-2.5-flash".to_string()
+                            "gemini-3.8-flash".to_string()
                         } else {
                             "gemini-4-argon".to_string()
                         }
@@ -524,4 +524,327 @@ pub fn discover_agent_profiles(
     }
 
     profiles
+}
+
+/// Probes the installed CLI / subscription configuration for the specified agent and returns
+/// only the real available subscription models with their supported effort tiers.
+pub fn fetch_live_agent_models(
+    agent_id: &str,
+    creds: &HashMap<String, AgentCredentialConfig>,
+) -> Vec<FetchedAgentModel> {
+    let norm = agent_id.trim().to_lowercase();
+
+    if norm == "antigravity" || norm == "gemini-antigravity" || norm == "gemini" || norm == "agy" {
+        let custom_bin = creds
+            .get("antigravity")
+            .and_then(|c| c.custom_binary_path.clone())
+            .filter(|s| !s.trim().is_empty());
+        let bin = custom_bin.or_else(|| find_binary_on_system(&["agy", "antigravity"]));
+
+        if let Some(bin_path) = bin {
+            let lower_bin = bin_path.to_lowercase();
+            let mut cmd = if lower_bin.ends_with(".cmd") || lower_bin.ends_with(".bat") {
+                let mut c = std::process::Command::new("cmd");
+                c.args(["/C", &bin_path, "models"]);
+                c
+            } else {
+                let mut c = std::process::Command::new(&bin_path);
+                c.arg("models");
+                c
+            };
+
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+
+            if let Ok(output) = cmd.output() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let mut order: Vec<String> = Vec::new();
+                let mut name_map: HashMap<String, String> = HashMap::new();
+                let mut efforts_map: HashMap<String, Vec<String>> = HashMap::new();
+
+                for line in stdout.lines() {
+                    let trimmed = line.trim();
+                    let Some((raw_slug, raw_label)) = trimmed.split_once('\t') else {
+                        continue;
+                    };
+                    let slug = raw_slug.trim();
+                    let label = raw_label.trim();
+                    if slug.is_empty() {
+                        continue;
+                    }
+
+                    let mut base_slug = slug.to_string();
+                    let mut parsed_effort: Option<String> = None;
+                    for eff_suffix in ["low", "medium", "high", "xhigh", "max"] {
+                        let pat = format!("-{}", eff_suffix);
+                        if slug.ends_with(&pat) {
+                            base_slug = slug[..slug.len() - pat.len()].to_string();
+                            parsed_effort = Some(eff_suffix.to_string());
+                            break;
+                        }
+                    }
+
+                    let mut clean_label = label.to_string();
+                    for suffix_label in [" (Low)", " (Medium)", " (High)", " (X-High)", " (Max)"] {
+                        if clean_label.ends_with(suffix_label) {
+                            clean_label = clean_label[..clean_label.len() - suffix_label.len()]
+                                .trim()
+                                .to_string();
+                            break;
+                        }
+                    }
+
+                    if !order.contains(&base_slug) {
+                        order.push(base_slug.clone());
+                    }
+                    name_map.entry(base_slug.clone()).or_insert(clean_label);
+                    let entry = efforts_map.entry(base_slug).or_default();
+                    if let Some(eff) = parsed_effort {
+                        if !entry.contains(&eff) {
+                            entry.push(eff);
+                        }
+                    }
+                }
+
+                if !order.is_empty() {
+                    let canonical = ["low", "medium", "high", "xhigh", "max"];
+                    return order
+                        .into_iter()
+                        .map(|id| {
+                            let mut effs = efforts_map.remove(&id).unwrap_or_default();
+                            effs.sort_by_key(|e| {
+                                canonical.iter().position(|c| c == e).unwrap_or(99)
+                            });
+                            if effs.is_empty() {
+                                effs = vec![
+                                    "low".to_string(),
+                                    "medium".to_string(),
+                                    "high".to_string(),
+                                ];
+                            }
+                            let default_effort = if effs.iter().any(|e| e == "high") {
+                                "high".to_string()
+                            } else if effs.iter().any(|e| e == "medium") {
+                                "medium".to_string()
+                            } else {
+                                effs[0].clone()
+                            };
+                            let display_name =
+                                name_map.remove(&id).unwrap_or_else(|| id.clone());
+                            FetchedAgentModel {
+                                id: id.clone(),
+                                display_name: display_name.clone(),
+                                supports_reasoning: true,
+                                supported_effort_levels: effs,
+                                default_effort_level: default_effort,
+                                description: Some(format!(
+                                    "{} (Live Antigravity CLI subscription model)",
+                                    display_name
+                                )),
+                            }
+                        })
+                        .collect();
+                }
+            }
+        }
+
+        return vec![
+            FetchedAgentModel {
+                id: "gemini-4-argon".to_string(),
+                display_name: "Gemini 4 Argon".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Flagship Gemini 4 Argon reasoning model via Antigravity CLI.".to_string()),
+            },
+            FetchedAgentModel {
+                id: "gemini-3.8-flash".to_string(),
+                display_name: "Gemini 3.8 Flash".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("High-speed Gemini 3.8 Flash model via Antigravity CLI.".to_string()),
+            },
+            FetchedAgentModel {
+                id: "claude-opus-5-5".to_string(),
+                display_name: "Claude Opus 5.5".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Claude Opus 5.5 via Antigravity CLI.".to_string()),
+            },
+            FetchedAgentModel {
+                id: "claude-sonnet-5-5".to_string(),
+                display_name: "Claude Sonnet 5.5".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Claude Sonnet 5.5 via Antigravity CLI.".to_string()),
+            },
+            FetchedAgentModel {
+                id: "gpt-oss-120b".to_string(),
+                display_name: "GPT-OSS 120B".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec!["medium".to_string()],
+                default_effort_level: "medium".to_string(),
+                description: Some("GPT-OSS 120B (Medium effort) via Antigravity CLI.".to_string()),
+            },
+        ];
+    }
+
+    if norm == "claude-code" || norm == "claude" || norm == "anthropic" {
+        let mut models: Vec<FetchedAgentModel> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+
+        if let Some(home) = get_user_home_dir() {
+            let settings_path = home.join(".claude").join("settings.json");
+            if let Ok(content) = std::fs::read_to_string(&settings_path) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(ms) = v.get("modelSettings").and_then(|m| m.as_object()) {
+                        for key in ms.keys() {
+                            let k = key.trim().to_string();
+                            if !k.is_empty() && !seen.contains(&k) {
+                                seen.push(k.clone());
+                                let display = match k.as_str() {
+                                    "claude-opus-5-5" => "Claude Opus 5.5".to_string(),
+                                    "claude-sonnet-5-5" => "Claude Sonnet 5.5".to_string(),
+                                    other => other.to_string(),
+                                };
+                                models.push(FetchedAgentModel {
+                                    id: k,
+                                    display_name: display,
+                                    supports_reasoning: true,
+                                    supported_effort_levels: vec![
+                                        "low".to_string(),
+                                        "medium".to_string(),
+                                        "high".to_string(),
+                                        "xhigh".to_string(),
+                                        "max".to_string(),
+                                    ],
+                                    default_effort_level: "high".to_string(),
+                                    description: Some("Configured in ~/.claude/settings.json".to_string()),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let defaults = [
+            ("claude-opus-5-5", "Claude Opus 5.5", vec!["low", "medium", "high", "xhigh", "max"], "high"),
+            ("claude-sonnet-5-5", "Claude Sonnet 5.5", vec!["low", "medium", "high", "xhigh", "max"], "high"),
+            ("opus", "Claude Opus (Latest Alias)", vec!["low", "medium", "high", "xhigh", "max"], "high"),
+            ("sonnet", "Claude Sonnet (Latest Alias)", vec!["low", "medium", "high", "xhigh", "max"], "high"),
+            ("haiku", "Claude Haiku (Fast Alias)", vec!["low", "medium", "high"], "medium"),
+        ];
+
+        for (id, name, effs, def_eff) in defaults {
+            if !seen.contains(&id.to_string()) {
+                seen.push(id.to_string());
+                models.push(FetchedAgentModel {
+                    id: id.to_string(),
+                    display_name: name.to_string(),
+                    supports_reasoning: true,
+                    supported_effort_levels: effs.into_iter().map(|s| s.to_string()).collect(),
+                    default_effort_level: def_eff.to_string(),
+                    description: Some(format!("{} via Claude Code CLI subscription", name)),
+                });
+            }
+        }
+        return models;
+    }
+
+    if norm == "codex" || norm == "openai" {
+        return vec![
+            FetchedAgentModel {
+                id: "o3-mini".to_string(),
+                display_name: "OpenAI o3-mini".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec!["low".to_string(), "medium".to_string(), "high".to_string()],
+                default_effort_level: "high".to_string(),
+                description: Some("Fast reasoning model via OpenAI Codex CLI.".to_string()),
+            },
+            FetchedAgentModel {
+                id: "o3".to_string(),
+                display_name: "OpenAI o3".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "xhigh".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Deep reasoning model via OpenAI Codex CLI.".to_string()),
+            },
+            FetchedAgentModel {
+                id: "gpt-4o".to_string(),
+                display_name: "GPT-4o".to_string(),
+                supports_reasoning: false,
+                supported_effort_levels: vec!["low".to_string(), "medium".to_string(), "high".to_string()],
+                default_effort_level: "medium".to_string(),
+                description: Some("Omni model via OpenAI Codex CLI.".to_string()),
+            },
+        ];
+    }
+
+    vec![
+        FetchedAgentModel {
+            id: "claude-opus-5-5".to_string(),
+            display_name: "Claude Opus 5.5".to_string(),
+            supports_reasoning: true,
+            supported_effort_levels: vec![
+                "low".to_string(),
+                "medium".to_string(),
+                "high".to_string(),
+            ],
+            default_effort_level: "high".to_string(),
+            description: Some("Claude Opus 5.5 frontier model.".to_string()),
+        },
+        FetchedAgentModel {
+            id: "claude-sonnet-5-5".to_string(),
+            display_name: "Claude Sonnet 5.5".to_string(),
+            supports_reasoning: true,
+            supported_effort_levels: vec![
+                "low".to_string(),
+                "medium".to_string(),
+                "high".to_string(),
+            ],
+            default_effort_level: "high".to_string(),
+            description: Some("Claude Sonnet 5.5 balanced model.".to_string()),
+        },
+        FetchedAgentModel {
+            id: "gemini-4-argon".to_string(),
+            display_name: "Gemini 4 Argon".to_string(),
+            supports_reasoning: true,
+            supported_effort_levels: vec![
+                "low".to_string(),
+                "medium".to_string(),
+                "high".to_string(),
+            ],
+            default_effort_level: "high".to_string(),
+            description: Some("Gemini 4 Argon reasoning model.".to_string()),
+        },
+    ]
 }

@@ -1,4 +1,4 @@
-import { AgentEffortLevel } from '../types/agents';
+import { AgentEffortLevel, FetchedAgentModel } from '../types/agents';
 
 export interface SubscriptionTierDefinition {
   id: string;
@@ -26,36 +26,36 @@ export interface ModelCatalogEntry {
 export const SUBSCRIPTION_TIERS: Record<string, SubscriptionTierDefinition[]> = {
   'claude-code': [
     { id: 'free', label: 'Anthropic Free Tier', description: 'Basic tier with strict rate limits' },
-    { id: 'pro', label: 'Claude Pro ($20/mo)', description: 'Sonnet 3.7 & Opus 5.5 priority, extended thinking up to 64k' },
-    { id: 'team', label: 'Claude Team / Max ($30-100/mo)', description: 'Maximum rate limits, priority Claude Opus 5.5 & Sonnet 3.7' },
+    { id: 'pro', label: 'Claude Pro ($20/mo)', description: 'Opus 5.5 & Sonnet 5.5 priority, extended thinking up to 64k' },
+    { id: 'team', label: 'Claude Team / Max ($30-100/mo)', description: 'Maximum rate limits, priority Claude Opus 5.5 & Sonnet 5.5' },
     { id: 'api', label: 'Anthropic Direct API', description: 'Pay-as-you-go developer API keys (Tier 1-4)' },
   ],
   'antigravity': [
-    { id: 'free', label: 'Google AI Studio (Free)', description: 'Free tier with rate limits on Gemini 2.5 Flash' },
-    { id: 'advanced', label: 'Gemini Advanced / Google One ($20/mo)', description: 'Full Gemini 4 Argon & Gemini 2.5 Pro access with 1M-2M context' },
-    { id: 'ultra', label: 'Gemini Ultra / Enterprise', description: 'Maximum frontier throughput with unbounded multimodal context' },
+    { id: 'free', label: 'Antigravity Basic', description: 'Gemini 3.8 Flash & Gemini 4 Argon subscription access' },
+    { id: 'advanced', label: 'Antigravity Subscription', description: 'Gemini 4 Argon, Gemini 3.8 Flash, Claude Opus 5.5, Claude Sonnet 5.5 & GPT-OSS 120B' },
+    { id: 'ultra', label: 'Antigravity Ultra / Enterprise', description: 'Maximum frontier throughput across all Antigravity models' },
     { id: 'vertex', label: 'Google Cloud Vertex AI', description: 'Enterprise quota with pay-as-you-go billing' },
   ],
   'openai': [
-    { id: 'free', label: 'OpenAI Free', description: 'Standard GPT-4o-mini access' },
-    { id: 'plus', label: 'ChatGPT Plus ($20/mo)', description: 'Access to o3-mini, o1, GPT-4o, ChatGPT-4o Latest' },
-    { id: 'team', label: 'ChatGPT Team / Pro ($30-200/mo)', description: 'High limits on o3, o1-pro, and GPT-4.5' },
+    { id: 'free', label: 'OpenAI Free', description: 'Standard GPT-4o access' },
+    { id: 'plus', label: 'ChatGPT Plus ($20/mo)', description: 'Access to o3-mini, o3, GPT-4o' },
+    { id: 'team', label: 'ChatGPT Team / Pro ($30-200/mo)', description: 'High limits on o3 and o3-mini' },
     { id: 'api', label: 'OpenAI Developer API (Tier 1-5)', description: 'Direct developer API access pay-as-you-go' },
   ],
   'codex': [
-    { id: 'free', label: 'OpenAI Free', description: 'Standard GPT-4o-mini access' },
-    { id: 'plus', label: 'ChatGPT Plus ($20/mo)', description: 'Access to o3-mini, o1, GPT-4o in Codex CLI' },
-    { id: 'team', label: 'ChatGPT Team / Pro', description: 'High limits on o3 and o1-pro full reasoning models' },
+    { id: 'free', label: 'OpenAI Free', description: 'Standard GPT-4o access' },
+    { id: 'plus', label: 'ChatGPT Plus ($20/mo)', description: 'Access to o3-mini, o3, GPT-4o in Codex CLI' },
+    { id: 'team', label: 'ChatGPT Team / Pro', description: 'High limits on o3 and o3-mini full reasoning models' },
     { id: 'api', label: 'OpenAI Developer API', description: 'Pay-as-you-go OPENAI_API_KEY access' },
   ],
   'cursor': [
     { id: 'free', label: 'Cursor Hobby (Free)', description: 'Limited completions and fast model requests' },
-    { id: 'pro', label: 'Cursor Pro ($20/mo)', description: 'Frontier requests (Claude Opus 5.5, Claude 3.7, Gemini 4 Argon, o3-mini)' },
+    { id: 'pro', label: 'Cursor Pro ($20/mo)', description: 'Frontier requests (Claude Opus 5.5, Sonnet 5.5, Gemini 4 Argon, o3-mini)' },
     { id: 'business', label: 'Cursor Business', description: 'Team quota & centralized enterprise billing' },
   ],
   'zcode': [
     { id: 'free', label: 'Zed Free Tier', description: 'Basic hosted assistant quota' },
-    { id: 'pro', label: 'Zed Pro / BYOK API', description: 'Full Claude Opus 5.5, Sonnet 3.7 & custom API key models' },
+    { id: 'pro', label: 'Zed Pro / BYOK API', description: 'Full Claude Opus 5.5, Sonnet 5.5 & custom API key models' },
   ],
   'opencode': [
     { id: 'open', label: 'Standard Open Source / CLI', description: 'Configurable multi-model gateway (Claude, Gemini, OpenAI, DeepSeek, Ollama)' },
@@ -71,279 +71,149 @@ export const SUBSCRIPTION_TIERS: Record<string, SubscriptionTierDefinition[]> = 
 
 export const MODEL_CATALOG: ModelCatalogEntry[] = [
   // -------------------------------------------------------------
-  // Anthropic / Claude Frontier & Flagship Models
-  // -------------------------------------------------------------
-  {
-    id: 'claude-opus-5-5',
-    displayName: 'Claude Opus 5.5 (Frontier Reasoning)',
-    family: 'anthropic',
-    providerIds: ['claude-code', 'anthropic', 'cursor', 'zcode', 'opencode'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultEffortLevel: 'high',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 200000,
-    minTier: 'pro',
-    description: 'Anthropic next-gen frontier model with deep architectural reasoning, multi-file synthesis, and extreme reliability.',
-  },
-  {
-    id: 'claude-3-7-sonnet',
-    displayName: 'Claude 3.7 Sonnet (Hybrid Reasoning)',
-    family: 'anthropic',
-    providerIds: ['claude-code', 'anthropic', 'cursor', 'zcode', 'opencode'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 200000,
-    minTier: 'pro',
-    description: 'Premier hybrid model with instantaneous answering or dynamically extended thinking up to 64k tokens.',
-  },
-  {
-    id: 'claude-3-7-sonnet-thought',
-    displayName: 'Claude 3.7 Sonnet (Extended Thinking)',
-    family: 'anthropic',
-    providerIds: ['claude-code', 'anthropic', 'cursor', 'zcode', 'opencode'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['medium', 'high', 'xhigh', 'max'],
-    defaultEffortLevel: 'high',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 200000,
-    minTier: 'pro',
-    description: 'Preconfigured for maximum chain-of-thought exploration with high reasoning token budget.',
-  },
-  {
-    id: 'claude-3-opus',
-    displayName: 'Claude 3 Opus (Comprehensive Deliberation)',
-    family: 'anthropic',
-    providerIds: ['claude-code', 'anthropic', 'cursor', 'zcode', 'opencode'],
-    category: 'flagship',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultEffortLevel: 'high',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 200000,
-    minTier: 'team',
-    description: 'Top-tier comprehensive deliberation and high-complexity code evaluation.',
-  },
-  {
-    id: 'claude-3-5-sonnet',
-    displayName: 'Claude 3.5 Sonnet (v2)',
-    family: 'anthropic',
-    providerIds: ['claude-code', 'anthropic', 'cursor', 'zcode', 'opencode'],
-    category: 'flagship',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low', 'medium', 'high'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 200000,
-    description: 'Industry benchmark for code generation and architectural synthesis.',
-  },
-  {
-    id: 'claude-3-5-haiku',
-    displayName: 'Claude 3.5 Haiku',
-    family: 'anthropic',
-    providerIds: ['claude-code', 'anthropic', 'cursor', 'zcode', 'opencode'],
-    category: 'fast',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low'],
-    defaultEffortLevel: 'low',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 200000,
-    description: 'Ultra-fast sub-second latency for lightweight file inspection and formatting.',
-  },
-
-  // -------------------------------------------------------------
-  // Google / Gemini / Antigravity Frontier & Flagship Models
+  // Antigravity (`agy models`) Verified Subscription Models
   // -------------------------------------------------------------
   {
     id: 'gemini-4-argon',
-    displayName: 'Gemini 4 Argon (Frontier Deep Reasoning)',
+    displayName: 'Gemini 4 Argon',
     family: 'google',
     providerIds: ['antigravity', 'gemini-antigravity', 'gemini', 'cursor', 'opencode'],
     category: 'reasoning',
     supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+    supportedEffortLevels: ['low', 'medium', 'high'],
     defaultEffortLevel: 'high',
     supportsThinkingToggle: true,
     contextWindowTokens: 2000000,
-    minTier: 'advanced',
-    description: 'Google DeepMind next-generation flagship reasoning engine with native multimodal understanding and 2M context.',
+    description: 'Google DeepMind flagship reasoning engine via Antigravity subscription (Low / Medium / High effort).',
   },
   {
     id: 'gemini-3.8-flash',
-    displayName: 'Gemini 3.8 Flash (High-Speed Frontier)',
+    displayName: 'Gemini 3.8 Flash',
     family: 'google',
     providerIds: ['antigravity', 'gemini-antigravity', 'gemini', 'cursor', 'opencode'],
     category: 'fast',
     supportsReasoning: true,
     supportedEffortLevels: ['low', 'medium', 'high'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 1000000,
-    minTier: 'advanced',
-    description: 'High-speed frontier model with low latency and native thinking capability for rapid iterations.',
-  },
-  {
-    id: 'gemini-2.5-pro',
-    displayName: 'Gemini 2.5 Pro (Deep Reasoning 1M)',
-    family: 'google',
-    providerIds: ['antigravity', 'gemini-antigravity', 'gemini', 'cursor', 'opencode'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
     defaultEffortLevel: 'high',
     supportsThinkingToggle: true,
     contextWindowTokens: 1000000,
-    minTier: 'advanced',
-    description: 'Deep multimodal reasoning with up to 1M token context for massive codebase digestion.',
+    description: 'High-speed frontier model with native reasoning via Antigravity subscription (Low / Medium / High effort).',
   },
   {
-    id: 'gemini-2.5-flash',
-    displayName: 'Gemini 2.5 Flash',
-    family: 'google',
-    providerIds: ['antigravity', 'gemini-antigravity', 'gemini', 'cursor', 'opencode'],
-    category: 'fast',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low', 'medium'],
-    defaultEffortLevel: 'low',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 1000000,
-    description: 'High-speed 1M context engine ideal for fast pipeline loops and quick linting.',
-  },
-  {
-    id: 'gemini-2.0-flash-thinking',
-    displayName: 'Gemini 2.0 Flash Thinking',
-    family: 'google',
-    providerIds: ['antigravity', 'gemini-antigravity', 'gemini', 'cursor', 'opencode'],
+    id: 'gpt-oss-120b',
+    displayName: 'GPT-OSS 120B',
+    family: 'openai',
+    providerIds: ['antigravity', 'gemini-antigravity', 'opencode'],
     category: 'reasoning',
     supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high'],
+    supportedEffortLevels: ['medium'],
     defaultEffortLevel: 'medium',
     supportsThinkingToggle: true,
-    contextWindowTokens: 1000000,
-    description: 'Low-latency native thinking trace streaming directly from Google DeepMind.',
-  },
-  {
-    id: 'gemini-2.0-pro-exp-02-05',
-    displayName: 'Gemini 2.0 Pro Experimental',
-    family: 'google',
-    providerIds: ['antigravity', 'gemini-antigravity', 'gemini', 'cursor', 'opencode'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultEffortLevel: 'high',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 2000000,
-    minTier: 'advanced',
-    description: 'Experimental frontier model with superior reasoning, math, and code intelligence.',
-  },
-  {
-    id: 'gemini-1.5-pro',
-    displayName: 'Gemini 1.5 Pro (2M Context)',
-    family: 'google',
-    providerIds: ['antigravity', 'gemini-antigravity', 'gemini', 'cursor', 'opencode'],
-    category: 'flagship',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low', 'medium', 'high'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 2000000,
-    description: 'Massive 2M token context window model for full repository and log ingestion.',
-  },
-  {
-    id: 'gemini-1.5-flash',
-    displayName: 'Gemini 1.5 Flash',
-    family: 'google',
-    providerIds: ['antigravity', 'gemini-antigravity', 'gemini', 'cursor', 'opencode'],
-    category: 'fast',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low'],
-    defaultEffortLevel: 'low',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 1000000,
-    description: 'High-efficiency low-cost model for rapid document processing.',
+    contextWindowTokens: 128000,
+    description: 'GPT-OSS 120B open-weights model on Antigravity subscription (Medium effort).',
   },
 
   // -------------------------------------------------------------
-  // OpenAI / Codex / ChatGPT Frontier Models
+  // Anthropic / Claude Code (`claude`) & Antigravity Shared Models
   // -------------------------------------------------------------
   {
-    id: 'o3',
-    displayName: 'OpenAI o3 (Frontier Reasoning)',
-    family: 'openai',
-    providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
+    id: 'claude-opus-5-5',
+    displayName: 'Claude Opus 5.5',
+    family: 'anthropic',
+    providerIds: ['claude-code', 'anthropic', 'antigravity', 'gemini-antigravity', 'cursor', 'zcode', 'opencode'],
     category: 'reasoning',
     supportsReasoning: true,
     supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
     defaultEffortLevel: 'high',
     supportsThinkingToggle: true,
     contextWindowTokens: 200000,
-    minTier: 'plus',
-    description: 'Most powerful OpenAI frontier reasoning model designed for complex coding and deep architecture.',
+    description: 'Anthropic frontier model with deep architectural reasoning and multi-file synthesis.',
   },
   {
-    id: 'o3-mini',
-    displayName: 'OpenAI o3-mini (High-Speed Reasoning)',
-    family: 'openai',
-    providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
+    id: 'claude-sonnet-5-5',
+    displayName: 'Claude Sonnet 5.5',
+    family: 'anthropic',
+    providerIds: ['claude-code', 'anthropic', 'antigravity', 'gemini-antigravity', 'cursor', 'zcode', 'opencode'],
     category: 'reasoning',
     supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 200000,
-    minTier: 'plus',
-    description: 'Fast, cost-effective reasoning model specialized for math, science, and coding.',
-  },
-  {
-    id: 'o1-pro',
-    displayName: 'OpenAI o1 Pro (Maximum Deliberation)',
-    family: 'openai',
-    providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['medium', 'high', 'xhigh', 'max'],
-    defaultEffortLevel: 'max',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 200000,
-    minTier: 'team',
-    description: 'Uncapped reasoning compute model for the most intricate algorithmic verification challenges.',
-  },
-  {
-    id: 'o1',
-    displayName: 'OpenAI o1',
-    family: 'openai',
-    providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'max'],
+    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
     defaultEffortLevel: 'high',
     supportsThinkingToggle: true,
     contextWindowTokens: 200000,
-    minTier: 'plus',
-    description: 'Full-depth deliberation model for difficult architectural and debugging challenges.',
+    description: 'Balanced high-speed reasoning model supported across Claude Code and Antigravity.',
   },
   {
-    id: 'o1-mini',
-    displayName: 'OpenAI o1-mini',
+    id: 'opus',
+    displayName: 'Claude Opus (Latest Alias)',
+    family: 'anthropic',
+    providerIds: ['claude-code', 'anthropic'],
+    category: 'reasoning',
+    supportsReasoning: true,
+    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+    defaultEffortLevel: 'high',
+    supportsThinkingToggle: true,
+    contextWindowTokens: 200000,
+    description: 'Claude Code CLI alias pointing to the latest Opus subscription model.',
+  },
+  {
+    id: 'sonnet',
+    displayName: 'Claude Sonnet (Latest Alias)',
+    family: 'anthropic',
+    providerIds: ['claude-code', 'anthropic'],
+    category: 'reasoning',
+    supportsReasoning: true,
+    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+    defaultEffortLevel: 'high',
+    supportsThinkingToggle: true,
+    contextWindowTokens: 200000,
+    description: 'Claude Code CLI alias pointing to the latest Sonnet subscription model.',
+  },
+  {
+    id: 'haiku',
+    displayName: 'Claude Haiku (Fast Alias)',
+    family: 'anthropic',
+    providerIds: ['claude-code', 'anthropic'],
+    category: 'fast',
+    supportsReasoning: false,
+    supportedEffortLevels: ['low', 'medium', 'high'],
+    defaultEffortLevel: 'medium',
+    supportsThinkingToggle: false,
+    contextWindowTokens: 200000,
+    description: 'Claude Code CLI alias pointing to the fast Haiku subscription model.',
+  },
+
+  // -------------------------------------------------------------
+  // OpenAI / Codex Subscription Models
+  // -------------------------------------------------------------
+  {
+    id: 'o3-mini',
+    displayName: 'OpenAI o3-mini',
     family: 'openai',
     providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
     category: 'reasoning',
     supportsReasoning: true,
     supportedEffortLevels: ['low', 'medium', 'high'],
-    defaultEffortLevel: 'medium',
+    defaultEffortLevel: 'high',
     supportsThinkingToggle: true,
-    contextWindowTokens: 128000,
-    minTier: 'plus',
-    description: 'Lightweight reasoning model optimized for code and math.',
+    contextWindowTokens: 200000,
+    description: 'Fast reasoning model specialized for coding and architecture.',
   },
   {
-    id: 'gpt-4.5-preview',
-    displayName: 'GPT-4.5 Preview (Orion Flagship)',
+    id: 'o3',
+    displayName: 'OpenAI o3',
+    family: 'openai',
+    providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
+    category: 'reasoning',
+    supportsReasoning: true,
+    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
+    defaultEffortLevel: 'high',
+    supportsThinkingToggle: true,
+    contextWindowTokens: 200000,
+    description: 'Deep reasoning model for complex coding and architecture.',
+  },
+  {
+    id: 'gpt-4o',
+    displayName: 'GPT-4o',
     family: 'openai',
     providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
     category: 'flagship',
@@ -352,47 +222,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     defaultEffortLevel: 'medium',
     supportsThinkingToggle: false,
     contextWindowTokens: 128000,
-    minTier: 'team',
-    description: 'Massive world knowledge flagship model with rich context intuition and language depth.',
-  },
-  {
-    id: 'chatgpt-4o-latest',
-    displayName: 'ChatGPT-4o Latest (Dynamic Omni)',
-    family: 'openai',
-    providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
-    category: 'flagship',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low', 'medium'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 128000,
-    description: 'Continuously updated production GPT-4o model used in ChatGPT Plus.',
-  },
-  {
-    id: 'gpt-4o',
-    displayName: 'GPT-4o (Omni)',
-    family: 'openai',
-    providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
-    category: 'flagship',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low', 'medium'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 128000,
-    description: 'Flagship non-reasoning multimodal model with reliable tool calling and speed.',
-  },
-  {
-    id: 'gpt-4o-mini',
-    displayName: 'GPT-4o Mini',
-    family: 'openai',
-    providerIds: ['openai', 'codex', 'opencode', 'cursor', 'http-llm'],
-    category: 'fast',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low'],
-    defaultEffortLevel: 'low',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 128000,
-    description: 'Lightweight model with low latency and economical pricing.',
+    description: 'Flagship multimodal model with reliable tool calling.',
   },
 
   // -------------------------------------------------------------
@@ -424,19 +254,6 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     contextWindowTokens: 64000,
     description: '671B parameter Mixture-of-Experts model for general code generation.',
   },
-  {
-    id: 'deepseek-r1',
-    displayName: 'DeepSeek R1',
-    family: 'deepseek',
-    providerIds: ['deepseek', 'opencode', 'cursor', 'ollama'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
-    defaultEffortLevel: 'high',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 64000,
-    description: 'DeepSeek R1 reasoning alias.',
-  },
 
   // -------------------------------------------------------------
   // Local / Ollama Quantized Coding Models
@@ -453,32 +270,6 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     supportsThinkingToggle: true,
     contextWindowTokens: 32000,
     description: 'Top-tier local coding model running offline on consumer GPUs.',
-  },
-  {
-    id: 'qwen2.5-coder:14b',
-    displayName: 'Qwen 2.5 Coder 14B (Local)',
-    family: 'ollama',
-    providerIds: ['ollama', 'opencode'],
-    category: 'local',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 32000,
-    description: 'Medium footprint local coding model for laptops and 16GB VRAM.',
-  },
-  {
-    id: 'deepseek-r1:70b',
-    displayName: 'DeepSeek R1 70B (Local Distill)',
-    family: 'ollama',
-    providerIds: ['ollama', 'opencode'],
-    category: 'reasoning',
-    supportsReasoning: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
-    defaultEffortLevel: 'high',
-    supportsThinkingToggle: true,
-    contextWindowTokens: 64000,
-    description: 'Large local distillation of DeepSeek R1 for private on-prem reasoning.',
   },
   {
     id: 'deepseek-r1:14b',
@@ -506,20 +297,93 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     contextWindowTokens: 32000,
     description: 'State of the art open source 70B foundation model running locally via Ollama.',
   },
-  {
-    id: 'codestral:22b',
-    displayName: 'Mistral Codestral 22B (Local)',
-    family: 'ollama',
-    providerIds: ['ollama', 'opencode'],
-    category: 'local',
-    supportsReasoning: false,
-    supportedEffortLevels: ['low', 'medium'],
-    defaultEffortLevel: 'medium',
-    supportsThinkingToggle: false,
-    contextWindowTokens: 32000,
-    description: 'Mistral AI specialized 22B coding model with 32k context.',
-  },
 ];
+
+// Live runtime cache populated when the user clicks the Fetch Models button in the picker
+const LIVE_FETCHED_MODELS_BY_AGENT: Record<string, ModelCatalogEntry[]> = {};
+
+function normalizeAgentKey(agentOrProviderId: string): string {
+  const norm = (agentOrProviderId || '').toLowerCase().trim();
+  if (norm === 'antigravity' || norm === 'gemini-antigravity' || norm === 'gemini' || norm === 'agy') {
+    return 'antigravity';
+  }
+  if (norm === 'claude-code' || norm === 'claude' || norm === 'anthropic') {
+    return 'claude-code';
+  }
+  if (norm === 'codex' || norm === 'openai' || norm === 'http-llm') {
+    return 'codex';
+  }
+  return norm;
+}
+
+export function setLiveFetchedModelsForAgent(
+  agentOrProviderId: string,
+  fetched: FetchedAgentModel[]
+): ModelCatalogEntry[] {
+  const key = normalizeAgentKey(agentOrProviderId);
+  if (!fetched || fetched.length === 0) return getAvailableModelsForAgent(agentOrProviderId);
+
+  const entries: ModelCatalogEntry[] = fetched.map((f) => {
+    const existing = MODEL_CATALOG.find((m) => m.id.toLowerCase() === f.id.toLowerCase());
+    const efforts = (
+      f.supportedEffortLevels && f.supportedEffortLevels.length > 0
+        ? f.supportedEffortLevels
+        : existing?.supportedEffortLevels || ['low', 'medium', 'high']
+    ) as AgentEffortLevel[];
+    const defaultEff = (
+      f.defaultEffortLevel && efforts.includes(f.defaultEffortLevel as AgentEffortLevel)
+        ? f.defaultEffortLevel
+        : efforts.includes('high')
+        ? 'high'
+        : efforts[0] || 'medium'
+    ) as AgentEffortLevel;
+    return {
+      id: f.id,
+      displayName: f.displayName || existing?.displayName || f.id,
+      family: existing?.family || (key === 'antigravity' ? 'google' : key === 'claude-code' ? 'anthropic' : 'other'),
+      providerIds: [key, agentOrProviderId],
+      category: existing?.category || (f.supportsReasoning ? 'reasoning' : 'flagship'),
+      supportsReasoning: f.supportsReasoning ?? true,
+      supportedEffortLevels: efforts,
+      defaultEffortLevel: defaultEff,
+      supportsThinkingToggle: f.supportsReasoning ?? true,
+      contextWindowTokens: existing?.contextWindowTokens || 200000,
+      description: f.description || existing?.description || `${f.displayName} (${agentOrProviderId} subscription)`,
+    };
+  });
+
+  LIVE_FETCHED_MODELS_BY_AGENT[key] = entries;
+  return entries;
+}
+
+export async function fetchAndCacheAgentModels(agentOrProviderId: string): Promise<ModelCatalogEntry[]> {
+  const norm = normalizeAgentKey(agentOrProviderId);
+  try {
+    if (norm.includes('ollama') && typeof window !== 'undefined' && (window as any).electronAPI?.getOllamaModels) {
+      const res = await (window as any).electronAPI.getOllamaModels();
+      if (res?.models && Array.isArray(res.models) && res.models.length > 0) {
+        const mapped: FetchedAgentModel[] = res.models.map((m: string) => ({
+          id: m,
+          displayName: m,
+          supportsReasoning: isReasoningModel(m),
+          supportedEffortLevels: ['low', 'medium', 'high'],
+          defaultEffortLevel: 'medium',
+          description: `Local Ollama model (${m})`,
+        }));
+        return setLiveFetchedModelsForAgent(agentOrProviderId, mapped);
+      }
+    }
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.fetchAgentModels) {
+      const live: FetchedAgentModel[] = await (window as any).electronAPI.fetchAgentModels(agentOrProviderId);
+      if (Array.isArray(live) && live.length > 0) {
+        return setLiveFetchedModelsForAgent(agentOrProviderId, live);
+      }
+    }
+  } catch (err) {
+    console.warn('[models] Failed to fetch live models for', agentOrProviderId, err);
+  }
+  return getAvailableModelsForAgent(agentOrProviderId);
+}
 
 export const EFFORT_DESCRIPTIONS: Record<
   AgentEffortLevel,
@@ -599,26 +463,31 @@ const TIER_RANK_BY_NAME: Record<string, number> = {
 };
 
 /**
- * Returns available model options for a specific agent or provider id.
- * NEVER hides advanced models from the options list; instead, ranks and badges models so that
- * the user can freely select any model in their subscription, with frontier and reasoning models
- * prioritized at the top of the dropdown.
+ * Returns ONLY the available subscription model options for a specific agent or provider id.
+ * When live models have been fetched via `fetchAndCacheAgentModels`, returns those exact subscription models.
  */
 export function getAvailableModelsForAgent(
   agentOrProviderId: string,
-  subscriptionTier?: string,
+  _subscriptionTier?: string,
   dynamicRuntimeModels?: string[]
 ): ModelCatalogEntry[] {
   const norm = (agentOrProviderId || '').toLowerCase().trim();
+  const agentKey = normalizeAgentKey(norm);
+
+  if (LIVE_FETCHED_MODELS_BY_AGENT[agentKey] && LIVE_FETCHED_MODELS_BY_AGENT[agentKey].length > 0) {
+    return LIVE_FETCHED_MODELS_BY_AGENT[agentKey];
+  }
+
   const matched = MODEL_CATALOG.filter((m) =>
     m.providerIds.some(
       (pid) =>
         pid.toLowerCase() === norm ||
+        pid.toLowerCase() === agentKey ||
         ((norm.includes('claude') || norm === 'zcode' || norm === 'cursor' || norm === 'anthropic') &&
           pid === 'claude-code') ||
-        ((norm.includes('gemini') || norm.includes('antigravity') || norm === 'cursor') &&
+        ((norm.includes('gemini') || norm.includes('antigravity') || norm === 'agy') &&
           pid === 'antigravity') ||
-        ((norm.includes('open') || norm === 'codex' || norm === 'http-llm' || norm === 'cursor') &&
+        ((norm.includes('open') || norm === 'codex' || norm === 'http-llm') &&
           pid === 'openai') ||
         (norm.includes('deepseek') && pid === 'deepseek') ||
         (norm.includes('ollama') && pid === 'ollama')
@@ -627,32 +496,27 @@ export function getAvailableModelsForAgent(
 
   const baseList = matched.length > 0 ? matched : MODEL_CATALOG;
 
-  // Enhance each model with clear badges
-  const enrichedList = baseList.map((m) => {
-    let tag = '';
-    if (m.minTier && m.minTier !== 'free') {
-      tag = ` [${m.minTier.toUpperCase()}]`;
-    } else if (m.category === 'reasoning') {
-      tag = ' [REASONING]';
+  // Tailor effort levels per agent (e.g. `agy` supports low/medium/high, or medium for gpt-oss-120b)
+  const tailoredList: ModelCatalogEntry[] = baseList.map((m) => {
+    if (agentKey === 'antigravity') {
+      const agyEfforts: AgentEffortLevel[] =
+        m.id === 'gpt-oss-120b'
+          ? ['medium']
+          : (m.supportedEffortLevels.filter((e) => e === 'low' || e === 'medium' || e === 'high') as AgentEffortLevel[]);
+      return {
+        ...m,
+        supportedEffortLevels: agyEfforts.length > 0 ? agyEfforts : ['low', 'medium', 'high'],
+        defaultEffortLevel: m.id === 'gpt-oss-120b' ? 'medium' : 'high',
+      };
     }
-    return {
-      ...m,
-      displayName: m.displayName.includes('[') ? m.displayName : `${m.displayName}${tag}`,
-    };
-  });
-
-  // Sort so Frontier Reasoning models and Flagship models appear first
-  const sortedCatalog = [...enrichedList].sort((a, b) => {
-    const scoreA = (a.supportsReasoning ? 10 : 0) + (a.category === 'reasoning' ? 5 : a.category === 'flagship' ? 3 : 0);
-    const scoreB = (b.supportsReasoning ? 10 : 0) + (b.category === 'reasoning' ? 5 : b.category === 'flagship' ? 3 : 0);
-    return scoreB - scoreA;
+    return { ...m };
   });
 
   if (!dynamicRuntimeModels || dynamicRuntimeModels.length === 0) {
-    return sortedCatalog;
+    return tailoredList;
   }
 
-  const seen = new Set(sortedCatalog.map((m) => m.id.toLowerCase()));
+  const seen = new Set(tailoredList.map((m) => m.id.toLowerCase()));
   const dynamicEntries: ModelCatalogEntry[] = [];
   for (const rawModel of dynamicRuntimeModels) {
     const slug = rawModel.trim();
@@ -661,14 +525,12 @@ export function getAvailableModelsForAgent(
     const reasoning = isReasoningModel(slug);
     dynamicEntries.push({
       id: slug,
-      displayName: `${slug} [LIVE DETECTED]`,
+      displayName: slug,
       family: norm.includes('ollama') ? 'ollama' : 'other',
       providerIds: [agentOrProviderId],
       category: reasoning ? 'reasoning' : norm.includes('ollama') ? 'local' : 'flagship',
       supportsReasoning: reasoning,
-      supportedEffortLevels: reasoning
-        ? ['low', 'medium', 'high', 'xhigh', 'max']
-        : ['low', 'medium', 'high'],
+      supportedEffortLevels: ['low', 'medium', 'high'],
       defaultEffortLevel: 'medium',
       supportsThinkingToggle: reasoning,
       contextWindowTokens: 200000,
@@ -676,7 +538,66 @@ export function getAvailableModelsForAgent(
     });
   }
 
-  return [...dynamicEntries, ...sortedCatalog];
+  return [...dynamicEntries, ...tailoredList];
+}
+
+/**
+ * Normalizes a model ID for the target agent so legacy/unsupported slugs (such as `gemini-2.5-pro`)
+ * automatically resolve to a valid subscription model for that agent.
+ */
+export function normalizeModelForAgent(
+  agentId: string,
+  modelId?: string,
+  subscriptionTier?: string
+): string {
+  const available = getAvailableModelsForAgent(agentId, subscriptionTier);
+  const raw = (modelId || '').trim();
+  if (!raw || raw === 'default') {
+    return getDefaultModelForAgent(agentId, subscriptionTier);
+  }
+
+  const lower = raw.toLowerCase();
+  const agentKey = normalizeAgentKey(agentId);
+
+  if (agentKey === 'antigravity') {
+    if (
+      lower === 'gemini-2.5-pro' ||
+      lower === 'gemini-2.0-pro-exp-02-05' ||
+      lower === 'gemini-1.5-pro' ||
+      lower === 'gemini-pro'
+    ) {
+      return 'gemini-4-argon';
+    }
+    if (
+      lower === 'gemini-2.5-flash' ||
+      lower === 'gemini-2.0-flash-thinking' ||
+      lower === 'gemini-1.5-flash' ||
+      lower === 'gemini-flash'
+    ) {
+      return 'gemini-3.8-flash';
+    }
+    // Strip baked-in effort suffix if present
+    for (const suffix of ['-low', '-medium', '-high', '-xhigh', '-max']) {
+      if (lower.endsWith(suffix)) {
+        const stripped = raw.slice(0, -suffix.length);
+        if (available.some((m) => m.id.toLowerCase() === stripped.toLowerCase())) {
+          return stripped;
+        }
+      }
+    }
+  }
+
+  if (lower === 'claude-3-7-sonnet' || lower === 'claude-3-7-sonnet-thought' || lower === 'claude-3-5-sonnet') {
+    return 'claude-sonnet-5-5';
+  }
+  if (lower === 'claude-3-opus') {
+    return 'claude-opus-5-5';
+  }
+
+  const exact = available.find((m) => m.id.toLowerCase() === lower);
+  if (exact) return exact.id;
+
+  return available[0]?.id || getDefaultModelForAgent(agentId, subscriptionTier);
 }
 
 /**
@@ -687,29 +608,23 @@ export function getDefaultModelForAgent(
   subscriptionTier?: string
 ): string {
   const isFree = subscriptionTier?.toLowerCase() === 'free';
-  const tier = (subscriptionTier || '').toLowerCase();
-  const hasHighTier = ['pro', 'plus', 'advanced', 'team', 'max', 'vertex', 'api', 'ultra', 'enterprise'].includes(tier);
+  const agentKey = normalizeAgentKey(agentId);
 
-  switch (agentId.toLowerCase()) {
+  if (LIVE_FETCHED_MODELS_BY_AGENT[agentKey] && LIVE_FETCHED_MODELS_BY_AGENT[agentKey].length > 0) {
+    return LIVE_FETCHED_MODELS_BY_AGENT[agentKey][0].id;
+  }
+
+  switch (agentKey) {
     case 'claude-code':
-    case 'anthropic':
-      if (hasHighTier) return 'claude-opus-5-5';
-      return isFree ? 'claude-3-5-sonnet' : 'claude-3-7-sonnet';
+      return isFree ? 'claude-sonnet-5-5' : 'claude-opus-5-5';
     case 'antigravity':
-    case 'gemini-antigravity':
-    case 'gemini':
-      if (hasHighTier) return 'gemini-4-argon';
-      return isFree ? 'gemini-2.5-flash' : 'gemini-2.5-pro';
+      return isFree ? 'gemini-3.8-flash' : 'gemini-4-argon';
     case 'codex':
-    case 'opencode':
-    case 'openai':
-    case 'http-llm':
-      if (hasHighTier) return 'o3-mini';
-      return isFree ? 'gpt-4o-mini' : 'o3-mini';
+      return isFree ? 'gpt-4o' : 'o3-mini';
     case 'cursor':
-      return hasHighTier ? 'claude-opus-5-5' : 'claude-3-7-sonnet';
     case 'zcode':
-      return hasHighTier ? 'claude-opus-5-5' : 'claude-3-7-sonnet';
+    case 'opencode':
+      return 'claude-opus-5-5';
     case 'deepseek':
       return 'deepseek-reasoner';
     case 'ollama':

@@ -70,31 +70,31 @@ export const LiveStreamingTurnCard: React.FC<LiveStreamingTurnCardProps> = React
     const thinkingText = streamingThinking[agentId];
 
     return (
-      <div className="rounded-xl border border-sky-500/50 bg-sky-950/20 p-4 space-y-3 shadow-lg animate-fadeIn">
+      <div className="rounded-xl border border-sky-500/40 bg-sky-50/70 dark:bg-sky-950/20 p-4 space-y-3 shadow-lg animate-fadeIn">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5 text-xs font-bold text-sky-400">
-            <Sparkles size={14} className="animate-spin text-sky-400" />
+          <div className="flex items-center gap-2.5 text-xs font-bold text-sky-700 dark:text-sky-400">
+            <Sparkles size={14} className="animate-spin text-sky-600 dark:text-sky-400" />
             <span>Deliberating: {agentId}...</span>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold animate-pulse">
+          <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 font-semibold animate-pulse">
             LIVE IN PROGRESS
           </span>
         </div>
 
         {thinkingText && (
-          <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/30 p-3 space-y-1.5 animate-fadeIn">
-            <div className="flex items-center justify-between text-xs font-bold text-indigo-300">
+          <div className="rounded-xl border border-indigo-500/35 bg-indigo-50/80 dark:bg-indigo-950/30 p-3 space-y-1.5 animate-fadeIn">
+            <div className="flex items-center justify-between text-xs font-bold text-indigo-800 dark:text-indigo-300">
               <div className="flex items-center gap-2">
-                <Brain size={14} className="text-indigo-400 animate-pulse" />
+                <Brain size={14} className="text-indigo-600 dark:text-indigo-400 animate-pulse" />
                 <span>Streaming Analytical Reasoning...</span>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse font-mono">
+              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 animate-pulse font-mono">
                 REASONING
               </span>
             </div>
-            <div className="p-2.5 rounded-lg bg-indigo-50/70 dark:bg-slate-950/90 font-mono text-[11px] text-indigo-950 dark:text-slate-300 max-h-48 overflow-y-auto border border-indigo-300 dark:border-indigo-500/20 whitespace-pre-wrap leading-relaxed">
+            <div className="p-2.5 rounded-lg bg-white dark:bg-slate-950/90 font-mono text-[11px] text-indigo-950 dark:text-slate-300 max-h-48 overflow-y-auto border border-indigo-300 dark:border-indigo-500/20 whitespace-pre-wrap leading-relaxed">
               {thinkingText}
-              <span className="inline-block w-2 h-3.5 bg-indigo-400 ml-1 animate-pulse" />
+              <span className="inline-block w-2 h-3.5 bg-indigo-500 dark:bg-indigo-400 ml-1 animate-pulse" />
             </div>
           </div>
         )}
@@ -158,7 +158,7 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
           className="rounded-xl border border-amber-500/25 bg-amber-50/60 dark:bg-slate-950/60 p-3 flex flex-wrap items-center justify-between gap-2 opacity-80 select-none"
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-bold uppercase">
+            <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[10px] font-bold uppercase">
               Ignored Step
             </span>
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">

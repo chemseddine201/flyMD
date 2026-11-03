@@ -14,6 +14,7 @@ import {
   Bot,
   Sparkles,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 import {
   DiscussionConfig,
@@ -26,6 +27,11 @@ import {
 } from '../../../../../../shared/types';
 import { UnsavedChangesModal } from '../../../common/UnsavedChangesModal';
 import { renderDiscussionStatusBadge } from '../../../../utils/discussionTextUtils';
+import {
+  fetchAndCacheAgentModels,
+  getAvailableModelsForAgent,
+  normalizeModelForAgent,
+} from '../../../../../../shared/constants/models';
 
 export interface DeliberationConfigInspectorModalProps {
   isOpen: boolean;
@@ -53,6 +59,19 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+  const [fetchingAgentKey, setFetchingAgentKey] = useState<string | null>(null);
+  const [fetchRev, setFetchRev] = useState(0);
+
+  const handleFetchModelsForProvider = async (providerOrAgentId: string) => {
+    if (fetchingAgentKey) return;
+    setFetchingAgentKey(providerOrAgentId);
+    try {
+      await fetchAndCacheAgentModels(providerOrAgentId);
+      setFetchRev((r) => r + 1);
+    } finally {
+      setFetchingAgentKey(null);
+    }
+  };
 
   // Initialize local config whenever config prop changes
   useEffect(() => {
@@ -131,7 +150,11 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
     slotIdx: number,
     patch: Partial<DiscussionParticipant> & { roundDirective?: string }
   ) => {
-    if (!isEditable || roundNumber <= currentRound) return;
+    const canModifyRound =
+      isEditable &&
+      (roundNumber > currentRound ||
+        (roundNumber === currentRound && metadata?.status === 'failed'));
+    if (!canModifyRound) return;
     setLocalConfig((prev) => {
       if (!prev) return prev;
       const schedule = [...(prev.roundSchedule || [])];
@@ -141,13 +164,19 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
           roundNumber,
           title: `Round ${roundNumber}: Specialist Deliberation`,
           objective: '',
-          slots: [],
+          slots: (prev.participants || []).map((part, idx) => ({
+            slotId: `slot-r${roundNumber}-${idx + 1}`,
+            participant: { ...part },
+            roundDirective: '',
+          })),
         };
         schedule.push(roundPlan);
       }
       const slots = [...roundPlan.slots];
+      let targetAgentId: string | undefined;
       if (slots[slotIdx]) {
         const currentSlot = slots[slotIdx];
+        targetAgentId = currentSlot.participant.agentId;
         const updatedParticipant: DiscussionParticipant = {
           ...currentSlot.participant,
           ...(patch.agentId !== undefined ? { agentId: patch.agentId } : {}),
@@ -165,8 +194,20 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
         };
         roundPlan.slots = slots;
       }
+      const updatedParticipants = (prev.participants || []).map((part) => {
+        if (targetAgentId && part.agentId === targetAgentId) {
+          return {
+            ...part,
+            ...(patch.modelId !== undefined ? { modelId: patch.modelId } : {}),
+            ...(patch.effortLevel !== undefined ? { effortLevel: patch.effortLevel } : {}),
+            ...(patch.thinkingEnabled !== undefined ? { thinkingEnabled: patch.thinkingEnabled } : {}),
+          };
+        }
+        return part;
+      });
       return {
         ...prev,
+        participants: updatedParticipants,
         roundSchedule: schedule,
       };
     });
@@ -428,16 +469,27 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
             </div>
 
             {roundsList.map((roundNum) => {
-              const isPastOrCurrent = roundNum <= currentRound;
+              const isFailedCurrentRound =
+                roundNum === currentRound && metadata?.status === 'failed';
+              const isPastOrLocked = roundNum <= currentRound && !isFailedCurrentRound;
               const roundPlan = localConfig.roundSchedule?.find((p) => p.roundNumber === roundNum);
-              const slots = roundPlan?.slots || [];
+              const slots: DiscussionRoundSlot[] =
+                roundPlan?.slots && roundPlan.slots.length > 0
+                  ? roundPlan.slots
+                  : (localConfig.participants || []).map((part, idx) => ({
+                      slotId: `slot-r${roundNum}-${idx + 1}`,
+                      participant: part,
+                      roundDirective: '',
+                    }));
 
               return (
                 <div
-                  key={roundNum}
+                  key={`${roundNum}-${fetchRev}`}
                   className={`p-4 rounded-xl border transition-all ${
-                    isPastOrCurrent
-                      ? 'border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 opacity-80'
+                    isPastOrLocked
+                      ? 'border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 opacity-85'
+                      : isFailedCurrentRound
+                      ? 'border-rose-500/40 bg-rose-50/30 dark:bg-rose-950/15'
                       : 'border-sky-500/30 dark:border-sky-500/20 bg-sky-50/20 dark:bg-sky-950/10'
                   }`}
                 >
@@ -446,19 +498,24 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                       <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
                         Round {roundNum}
                       </span>
-                      {isPastOrCurrent ? (
-                        <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
+                      {isPastOrLocked ? (
+                        <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 font-semibold">
                           <Lock size={10} />
                           <span>{roundNum < currentRound ? 'Executed' : 'Current Active'} (Locked)</span>
                         </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-600 dark:text-sky-400 font-semibold">
+                      ) : isFailedCurrentRound ? (
+                        <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-semibold">
                           <Edit3 size={10} />
-                          <span>Upcoming (Editable when paused)</span>
+                          <span>Failed Round — Model &amp; Effort Editable for Retry</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-700 dark:text-sky-400 font-semibold">
+                          <Edit3 size={10} />
+                          <span>Upcoming (Editable)</span>
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400">
                       {slots.length} participating agent(s)
                     </div>
                   </div>
@@ -467,9 +524,32 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                   <div className="space-y-2">
                     {slots.map((slot, sIdx) => {
                       const p = slot.participant;
+                      const providerKey = p.providerId || p.agentId;
                       const dynamicModels = getDynamicModelsForAgent
-                        ? getDynamicModelsForAgent(p.providerId || p.agentId)
+                        ? getDynamicModelsForAgent(providerKey)
                         : [];
+                      const tier = getSubscriptionTierForAgent
+                        ? getSubscriptionTierForAgent(providerKey)
+                        : undefined;
+                      const catalogModels = getAvailableModelsForAgent(
+                        providerKey,
+                        tier,
+                        dynamicModels
+                      );
+                      const resolvedModelId = normalizeModelForAgent(
+                        providerKey,
+                        p.modelId,
+                        tier
+                      );
+                      const activeCatalogModel =
+                        catalogModels.find(
+                          (m) => m.id.toLowerCase() === resolvedModelId.toLowerCase()
+                        ) || catalogModels[0];
+                      const supportedEfforts: AgentEffortLevel[] =
+                        activeCatalogModel?.supportedEffortLevels &&
+                        activeCatalogModel.supportedEffortLevels.length > 0
+                          ? activeCatalogModel.supportedEffortLevels
+                          : ['low', 'medium', 'high'];
 
                       return (
                         <div
@@ -477,69 +557,96 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                           className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
                         >
                           <div className="flex items-center gap-2.5 min-w-[200px]">
-                            <div className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                            <div className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
                               <Bot size={14} />
                             </div>
                             <div className="min-w-0">
                               <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                                 {p.displayName || p.agentId}
                               </div>
-                              <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase">
+                              <div className="text-[10px] font-mono text-slate-600 dark:text-slate-400 uppercase">
                                 Role: {p.role} • Provider: {p.providerId}
                               </div>
                             </div>
                           </div>
 
-                          {/* Editable controls for future rounds */}
-                          {!isPastOrCurrent && isEditable ? (
+                          {/* Editable controls for future rounds or failed current round */}
+                          {!isPastOrLocked && isEditable ? (
                             <div className="flex items-center gap-2 flex-wrap">
-                              {/* Model selector */}
-                              <select
-                                value={p.modelId || ''}
-                                onChange={(e) =>
-                                  handleUpdateSlot(roundNum, sIdx, { modelId: e.target.value })
-                                }
-                                className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-slate-200 focus:outline-none"
-                              >
-                                {dynamicModels.length > 0 ? (
-                                  dynamicModels.map((m) => (
-                                    <option key={m} value={m}>
-                                      {m}
+                              {/* Model selector + Fetch button */}
+                              <div className="flex items-center gap-1">
+                                <select
+                                  value={resolvedModelId}
+                                  onChange={(e) => {
+                                    const nextModel = e.target.value;
+                                    const entry = catalogModels.find((m) => m.id === nextModel);
+                                    const patch: Partial<DiscussionParticipant> = {
+                                      modelId: nextModel,
+                                    };
+                                    if (
+                                      entry?.supportedEffortLevels &&
+                                      entry.supportedEffortLevels.length > 0 &&
+                                      !entry.supportedEffortLevels.includes(
+                                        (p.effortLevel || 'medium') as AgentEffortLevel
+                                      )
+                                    ) {
+                                      patch.effortLevel =
+                                        entry.defaultEffortLevel || entry.supportedEffortLevels[0];
+                                    }
+                                    handleUpdateSlot(roundNum, sIdx, patch);
+                                  }}
+                                  className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-slate-200 focus:outline-none cursor-pointer"
+                                >
+                                  {catalogModels.map((m) => (
+                                    <option
+                                      key={m.id}
+                                      value={m.id}
+                                      className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200"
+                                    >
+                                      {m.displayName} ({m.id})
                                     </option>
-                                  ))
-                                ) : (
-                                  <option value={p.modelId}>{p.modelId}</option>
-                                )}
-                              </select>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => handleFetchModelsForProvider(providerKey)}
+                                  disabled={fetchingAgentKey === providerKey}
+                                  title="Fetch real available models from subscription CLI"
+                                  className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                                >
+                                  <RefreshCw
+                                    size={11}
+                                    className={fetchingAgentKey === providerKey ? 'animate-spin text-sky-500' : ''}
+                                  />
+                                </button>
+                              </div>
 
                               {/* Effort level */}
                               <div className="flex items-center rounded bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-300 dark:border-slate-700">
-                                {(['low', 'medium', 'high', 'extreme'] as AgentEffortLevel[]).map(
-                                  (eff) => (
-                                    <button
-                                      key={eff}
-                                      type="button"
-                                      onClick={() =>
-                                        handleUpdateSlot(roundNum, sIdx, { effortLevel: eff })
-                                      }
-                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                                        (p.effortLevel || 'medium') === eff
-                                          ? 'bg-sky-500 text-slate-950'
-                                          : 'text-slate-400 hover:text-slate-200'
-                                      }`}
-                                    >
-                                      {eff[0]}
-                                    </button>
-                                  )
-                                )}
+                                {supportedEfforts.map((eff) => (
+                                  <button
+                                    key={eff}
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateSlot(roundNum, sIdx, { effortLevel: eff })
+                                    }
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                                      (p.effortLevel || 'medium') === eff
+                                        ? 'bg-sky-500 text-slate-950'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    {eff[0]}
+                                  </button>
+                                ))}
                               </div>
 
-                              {/* Delete slot */}
-                              {slots.length > 1 && (
+                              {/* Delete slot (only for future rounds) */}
+                              {roundNum > currentRound && slots.length > 1 && (
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveSlot(roundNum, sIdx)}
-                                  className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-500 transition-colors"
+                                  className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-500 transition-colors"
                                   title="Remove agent slot"
                                 >
                                   <Trash2 size={13} />
@@ -551,7 +658,7 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                               <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                                 {p.modelId}
                               </span>
-                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-500">
+                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400">
                                 {(p.effortLevel || 'medium')[0]} Effort
                               </span>
                             </div>
@@ -561,7 +668,7 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                     })}
 
                     {/* Add Slot Button for Future Rounds */}
-                    {!isPastOrCurrent && isEditable && (
+                    {roundNum > currentRound && isEditable && (
                       <button
                         type="button"
                         onClick={() => handleAddSlot(roundNum)}

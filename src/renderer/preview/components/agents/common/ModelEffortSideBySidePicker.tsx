@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Brain, Cpu, Sparkles, Zap, ChevronDown, Check, X } from 'lucide-react';
+import { Brain, Cpu, Sparkles, Zap, ChevronDown, RefreshCw, X } from 'lucide-react';
 import { AgentEffortLevel } from '../../../../../shared/types';
 import {
   EFFORT_DESCRIPTIONS,
+  fetchAndCacheAgentModels,
   getAvailableModelsForAgent,
   getDefaultModelForAgent,
   isReasoningModel,
   ModelCatalogEntry,
+  normalizeModelForAgent,
 } from '../../../../../shared/constants/models';
 
 export interface ModelEffortSideBySidePickerProps {
@@ -40,50 +42,83 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
 }) => {
   const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
   const [customInputVal, setCustomInputVal] = useState<string>(selectedModel || '');
+  const [isFetchingModels, setIsFetchingModels] = useState<boolean>(false);
+  const [fetchRevision, setFetchRevision] = useState<number>(0);
+
+  const availableModels: ModelCatalogEntry[] = useMemo(() => {
+    return getAvailableModelsForAgent(agentId, subscriptionTier, dynamicModels);
+  }, [agentId, subscriptionTier, dynamicModels, fetchRevision]);
+
+  const effectiveModel = useMemo(() => {
+    return normalizeModelForAgent(agentId, selectedModel, subscriptionTier);
+  }, [selectedModel, agentId, subscriptionTier, fetchRevision]);
+
+  const activeModelEntry = useMemo(() => {
+    return (
+      availableModels.find((m) => m.id.toLowerCase() === effectiveModel.toLowerCase()) ||
+      availableModels[0]
+    );
+  }, [availableModels, effectiveModel]);
+
+  const supportedEfforts: AgentEffortLevel[] = useMemo(() => {
+    if (activeModelEntry?.supportedEffortLevels && activeModelEntry.supportedEffortLevels.length > 0) {
+      return activeModelEntry.supportedEffortLevels;
+    }
+    return ['low', 'medium', 'high'];
+  }, [activeModelEntry]);
 
   useEffect(() => {
     if (selectedModel && selectedModel.trim().length > 0) {
-      setCustomInputVal(selectedModel.trim());
+      const normalized = normalizeModelForAgent(agentId, selectedModel, subscriptionTier);
+      setCustomInputVal(normalized);
+      if (normalized !== selectedModel.trim()) {
+        onChangeModel(normalized);
+      }
     }
-  }, [selectedModel]);
-
-  const effectiveModel = useMemo(() => {
-    if (selectedModel && selectedModel.trim().length > 0) return selectedModel.trim();
-    return getDefaultModelForAgent(agentId, subscriptionTier);
   }, [selectedModel, agentId, subscriptionTier]);
 
-  const availableModels: ModelCatalogEntry[] = useMemo(() => {
-    const list = getAvailableModelsForAgent(agentId, subscriptionTier, dynamicModels);
-    if (
-      effectiveModel &&
-      !list.some((m) => m.id.toLowerCase() === effectiveModel.toLowerCase())
-    ) {
-      const reasoning = isReasoningModel(effectiveModel);
-      return [
-        {
-          id: effectiveModel,
-          displayName: `${effectiveModel} [ACTIVE]`,
-          family: 'other',
-          providerIds: [agentId],
-          category: reasoning ? 'reasoning' : 'flagship',
-          supportsReasoning: reasoning,
-          supportedEffortLevels: reasoning
-            ? ['low', 'medium', 'high', 'xhigh', 'max']
-            : ['low', 'medium', 'high'],
-          defaultEffortLevel: 'medium',
-          supportsThinkingToggle: reasoning,
-          contextWindowTokens: 200000,
-          description: `Active model selection (${effectiveModel})`,
-        },
-        ...list,
-      ];
+  useEffect(() => {
+    if (supportedEfforts.length > 0 && !supportedEfforts.includes(effortLevel)) {
+      const fallback = activeModelEntry?.defaultEffortLevel && supportedEfforts.includes(activeModelEntry.defaultEffortLevel)
+        ? activeModelEntry.defaultEffortLevel
+        : supportedEfforts[supportedEfforts.length - 1];
+      onChangeEffortLevel(fallback);
     }
-    return list;
-  }, [agentId, subscriptionTier, dynamicModels, effectiveModel]);
+  }, [supportedEfforts, effortLevel, activeModelEntry]);
+
+  const handleFetchModels = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isFetchingModels) return;
+    setIsFetchingModels(true);
+    try {
+      const liveList = await fetchAndCacheAgentModels(agentId);
+      setFetchRevision((r) => r + 1);
+      if (liveList.length > 0) {
+        const currentMatch = liveList.find(
+          (m) => m.id.toLowerCase() === (selectedModel || '').trim().toLowerCase()
+        );
+        const chosen = currentMatch || liveList[0];
+        if (!currentMatch && chosen) {
+          onChangeModel(chosen.id);
+        }
+        if (
+          chosen?.supportedEffortLevels &&
+          chosen.supportedEffortLevels.length > 0 &&
+          !chosen.supportedEffortLevels.includes(effortLevel)
+        ) {
+          onChangeEffortLevel(chosen.defaultEffortLevel || chosen.supportedEffortLevels[0]);
+        }
+      }
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
 
   const reasoningSupported = useMemo(() => {
+    if (activeModelEntry) return activeModelEntry.supportsReasoning;
     return isReasoningModel(effectiveModel);
-  }, [effectiveModel]);
+  }, [activeModelEntry, effectiveModel]);
 
   const handleSelectDropdown = (val: string) => {
     if (val === '__custom__') {
@@ -94,6 +129,14 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
     } else {
       setIsCustomMode(false);
       onChangeModel(val);
+      const found = availableModels.find((m) => m.id === val);
+      if (
+        found?.supportedEffortLevels &&
+        found.supportedEffortLevels.length > 0 &&
+        !found.supportedEffortLevels.includes(effortLevel)
+      ) {
+        onChangeEffortLevel(found.defaultEffortLevel || found.supportedEffortLevels[0]);
+      }
     }
   };
 
@@ -107,8 +150,6 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
     }
   };
 
-  const effortLevels: AgentEffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-
   if (compact) {
     return (
       <div
@@ -116,9 +157,9 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
           disabled ? 'opacity-50 pointer-events-none' : ''
         } ${className}`}
       >
-        {/* Model Dropdown */}
+        {/* Model Dropdown + Small Fetch Button */}
         <div className="flex items-center gap-1 min-w-[140px]">
-          <Cpu className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
+          <Cpu className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
           {isCustomMode ? (
             <div className="flex items-center gap-1">
               <input
@@ -133,7 +174,7 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
               <button
                 type="button"
                 onClick={() => setIsCustomMode(false)}
-                title="Back to dropdown options"
+                title="Back to subscription models"
                 className="text-[11px] text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white p-0.5"
               >
                 <X className="w-3 h-3" />
@@ -143,18 +184,27 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
             <select
               value={effectiveModel}
               onChange={(e) => handleSelectDropdown(e.target.value)}
-              className="bg-transparent text-slate-800 dark:text-neutral-200 text-xs font-medium cursor-pointer focus:outline-none truncate max-w-[150px]"
+              className="bg-transparent text-slate-800 dark:text-neutral-200 text-xs font-medium cursor-pointer focus:outline-none truncate max-w-[145px]"
             >
               {availableModels.map((m) => (
                 <option key={m.id} value={m.id} className="bg-white dark:bg-neutral-900 text-slate-900 dark:text-neutral-200">
                   {m.displayName}
                 </option>
               ))}
-              <option value="__custom__" className="bg-white dark:bg-neutral-900 text-blue-500 dark:text-blue-400">
+              <option value="__custom__" className="bg-white dark:bg-neutral-900 text-blue-600 dark:text-blue-400">
                 + Custom Slug...
               </option>
             </select>
           )}
+          <button
+            type="button"
+            onClick={handleFetchModels}
+            disabled={isFetchingModels}
+            title="Fetch live available models from subscription CLI"
+            className="p-1 rounded text-slate-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-200/70 dark:hover:bg-neutral-800 transition-colors shrink-0"
+          >
+            <RefreshCw className={`w-3 h-3 ${isFetchingModels ? 'animate-spin text-blue-500' : ''}`} />
+          </button>
         </div>
 
         {/* Separator */}
@@ -171,7 +221,7 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
                 className={`p-1 rounded transition-colors ${
                   thinkingEnabled
                     ? 'bg-purple-500/20 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-500/40 shadow-xs'
-                    : 'text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300'
+                    : 'text-slate-500 dark:text-neutral-500 hover:text-slate-700 dark:hover:text-neutral-300'
                 }`}
               >
                 <Brain className="w-3.5 h-3.5" />
@@ -179,7 +229,7 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
             )}
 
             <div className="flex items-center bg-white dark:bg-neutral-950 border border-slate-300 dark:border-neutral-700/60 rounded p-0.5 gap-0.5">
-              {effortLevels.map((lvl) => {
+              {supportedEfforts.map((lvl) => {
                 const active = effortLevel === lvl;
                 return (
                   <button
@@ -189,7 +239,7 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
                     title={`${EFFORT_DESCRIPTIONS[lvl].label}: ${EFFORT_DESCRIPTIONS[lvl].badge} — ${EFFORT_DESCRIPTIONS[lvl].desc}`}
                     className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-all ${
                       active
-                        ? 'bg-purple-600/80 text-white shadow-xs'
+                        ? 'bg-purple-600/90 text-white shadow-xs'
                         : 'text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-neutral-200 hover:bg-slate-100 dark:hover:bg-neutral-800'
                     }`}
                   >
@@ -223,18 +273,30 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-neutral-300">
           <span className="flex items-center gap-1.5">
-            <Cpu className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
+            <Cpu className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             Active Model Selection
           </span>
-          {isCustomMode && (
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setIsCustomMode(false)}
-              className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
+              onClick={handleFetchModels}
+              disabled={isFetchingModels}
+              title="Fetch live available models from your subscription CLI"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30 transition-colors"
             >
-              Back to Catalog
+              <RefreshCw className={`w-2.5 h-2.5 ${isFetchingModels ? 'animate-spin' : ''}`} />
+              {isFetchingModels ? 'Fetching...' : 'Fetch Models'}
             </button>
-          )}
+            {isCustomMode && (
+              <button
+                type="button"
+                onClick={() => setIsCustomMode(false)}
+                className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Back to Catalog
+              </button>
+            )}
+          </div>
         </div>
 
         {isCustomMode ? (
@@ -244,11 +306,11 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
               value={customInputVal}
               onChange={(e) => setCustomInputVal(e.target.value)}
               onBlur={handleCustomBlur}
-              placeholder="e.g. claude-3-7-sonnet or my-fine-tune"
+              placeholder="e.g. gemini-4-argon or claude-opus-5-5"
               className="w-full bg-white dark:bg-neutral-950 border border-blue-500/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               autoFocus
             />
-            <span className="text-[10px] text-slate-500 dark:text-neutral-400 mt-1 block">
+            <span className="text-[10px] text-slate-600 dark:text-neutral-400 mt-1 block">
               Custom model identifier passed directly via <code className="text-blue-600 dark:text-blue-300">--model</code>.
             </span>
           </div>
@@ -268,12 +330,12 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
                 + Custom Model Slug...
               </option>
             </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400 absolute right-2.5 top-2.5 pointer-events-none" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 dark:text-neutral-400 absolute right-2.5 top-2.5 pointer-events-none" />
           </div>
         )}
 
         {/* Selected model micro-description */}
-        <div className="text-[11px] text-slate-500 dark:text-neutral-400 line-clamp-1">
+        <div className="text-[11px] text-slate-600 dark:text-neutral-400 line-clamp-1">
           {availableModels.find((m) => m.id === effectiveModel)?.description ||
             `Target model slug: ${effectiveModel}`}
         </div>
@@ -283,7 +345,7 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
       <div className="flex flex-col gap-1.5 border-t md:border-t-0 md:border-l border-slate-200 dark:border-neutral-800 md:pl-3 pt-2 md:pt-0">
         <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-neutral-300">
           <span className="flex items-center gap-1.5">
-            <Brain className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" />
+            <Brain className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
             Reasoning Effort Matrix
           </span>
           {reasoningSupported && onToggleThinking && (
@@ -304,8 +366,11 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
 
         {reasoningSupported ? (
           <div className="flex flex-col gap-1.5">
-            <div className="grid grid-cols-5 gap-1 bg-white dark:bg-neutral-950 p-1 rounded-lg border border-slate-200 dark:border-neutral-800">
-              {effortLevels.map((lvl) => {
+            <div
+              className="grid gap-1 bg-white dark:bg-neutral-950 p-1 rounded-lg border border-slate-200 dark:border-neutral-800"
+              style={{ gridTemplateColumns: `repeat(${Math.max(1, supportedEfforts.length)}, minmax(0, 1fr))` }}
+            >
+              {supportedEfforts.map((lvl) => {
                 const active = effortLevel === lvl;
                 return (
                   <button
@@ -324,12 +389,12 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
               })}
             </div>
 
-            <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-neutral-400 px-0.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-600 dark:text-neutral-400 px-0.5">
               <span className="text-purple-700 dark:text-purple-300/90 font-medium">
-                {EFFORT_DESCRIPTIONS[effortLevel].badge}
+                {EFFORT_DESCRIPTIONS[effortLevel]?.badge || ''}
               </span>
-              <span className="truncate max-w-[180px] text-slate-500 dark:text-neutral-400 text-right">
-                {EFFORT_DESCRIPTIONS[effortLevel].desc}
+              <span className="truncate max-w-[180px] text-slate-600 dark:text-neutral-400 text-right">
+                {EFFORT_DESCRIPTIONS[effortLevel]?.desc || ''}
               </span>
             </div>
           </div>
@@ -339,7 +404,7 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
               <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
               Standard Latency Generation
             </div>
-            <div className="text-[10px] text-slate-500 dark:text-neutral-400 mt-0.5">
+            <div className="text-[10px] text-slate-600 dark:text-neutral-400 mt-0.5">
               This model processes tokens with standard generation speed and does not require extended reasoning effort parameters.
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   AlertCircle,
@@ -6,12 +6,14 @@ import {
   ShieldCheck,
   Brain,
   RotateCcw,
+  RefreshCw,
   Play,
   Copy,
   Check,
   X,
   ChevronDown,
   ChevronRight,
+  Cpu,
 } from 'lucide-react';
 import {
   AgentTaskRecord,
@@ -21,6 +23,11 @@ import {
   AgentId,
   AgentEffortLevel,
 } from '../../../../../shared/types';
+import {
+  fetchAndCacheAgentModels,
+  getAvailableModelsForAgent,
+  normalizeModelForAgent,
+} from '../../../../../shared/constants/models';
 
 export interface PendingRecoveryPromptData {
   failedTask: AgentTaskRecord;
@@ -36,6 +43,8 @@ export interface PipelineRecoveryModalProps {
   visibleAgents: AgentProfile[];
   recoveryAgentId: AgentId | null;
   setRecoveryAgentId: (id: AgentId) => void;
+  recoveryModelId?: string;
+  setRecoveryModelId?: (modelId: string) => void;
   recoveryEffortLevel: AgentEffortLevel;
   setRecoveryEffortLevel: (lvl: AgentEffortLevel) => void;
   recoveryThinkingEnabled: boolean;
@@ -52,6 +61,8 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
   visibleAgents,
   recoveryAgentId,
   setRecoveryAgentId,
+  recoveryModelId,
+  setRecoveryModelId,
   recoveryEffortLevel,
   setRecoveryEffortLevel,
   recoveryThinkingEnabled,
@@ -63,6 +74,81 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
 }) => {
   const [showStderr, setShowStderr] = useState(false);
   const [copiedLog, setCopiedLog] = useState(false);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [fetchRev, setFetchRev] = useState(0);
+
+  const activeAgentId = recoveryAgentId || promptData?.failedTask?.targetAgentId || 'antigravity';
+
+  const availableModels = useMemo(() => {
+    return getAvailableModelsForAgent(activeAgentId);
+  }, [activeAgentId, fetchRev]);
+
+  const effectiveModelId = useMemo(() => {
+    return normalizeModelForAgent(
+      activeAgentId,
+      recoveryModelId || promptData?.failedTask?.modelId
+    );
+  }, [activeAgentId, recoveryModelId, promptData?.failedTask?.modelId, fetchRev]);
+
+  const activeModelEntry = useMemo(() => {
+    return (
+      availableModels.find((m) => m.id.toLowerCase() === effectiveModelId.toLowerCase()) ||
+      availableModels[0]
+    );
+  }, [availableModels, effectiveModelId]);
+
+  const supportedEfforts: AgentEffortLevel[] = useMemo(() => {
+    if (activeModelEntry?.supportedEffortLevels && activeModelEntry.supportedEffortLevels.length > 0) {
+      return activeModelEntry.supportedEffortLevels;
+    }
+    return ['low', 'medium', 'high'];
+  }, [activeModelEntry]);
+
+  useEffect(() => {
+    if (setRecoveryModelId && effectiveModelId && recoveryModelId !== effectiveModelId) {
+      setRecoveryModelId(effectiveModelId);
+    }
+  }, [effectiveModelId]);
+
+  useEffect(() => {
+    if (supportedEfforts.length > 0 && !supportedEfforts.includes(recoveryEffortLevel)) {
+      const nextEff =
+        activeModelEntry?.defaultEffortLevel &&
+        supportedEfforts.includes(activeModelEntry.defaultEffortLevel)
+          ? activeModelEntry.defaultEffortLevel
+          : supportedEfforts[supportedEfforts.length - 1];
+      setRecoveryEffortLevel(nextEff);
+    }
+  }, [supportedEfforts, recoveryEffortLevel, activeModelEntry]);
+
+  const handleFetchSubscriptionModels = async () => {
+    if (isFetchingModels) return;
+    setIsFetchingModels(true);
+    try {
+      const list = await fetchAndCacheAgentModels(activeAgentId);
+      setFetchRev((r) => r + 1);
+      if (list.length > 0 && setRecoveryModelId) {
+        const currentMatch = list.find(
+          (m) => m.id.toLowerCase() === effectiveModelId.toLowerCase()
+        );
+        const chosen = currentMatch || list[0];
+        if (chosen) {
+          setRecoveryModelId(chosen.id);
+          if (
+            chosen.supportedEffortLevels &&
+            chosen.supportedEffortLevels.length > 0 &&
+            !chosen.supportedEffortLevels.includes(recoveryEffortLevel)
+          ) {
+            setRecoveryEffortLevel(
+              chosen.defaultEffortLevel || chosen.supportedEffortLevels[0]
+            );
+          }
+        }
+      }
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
 
   if (!promptData) return null;
 
@@ -340,18 +426,22 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
             )}
           </div>
 
-          {/* 3. Optional Agent Switcher, Effort & Thinking Calibration & Recovery Note */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          {/* 3. Optional Agent Switcher, Model Switcher + Fetch, Effort & Thinking Calibration & Recovery Note */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 pt-1">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Target Agent:
               </label>
               <select
                 value={recoveryAgentId || ft.targetAgentId}
-                onChange={(e) =>
-                  setRecoveryAgentId(e.target.value as AgentId)
-                }
-                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
+                onChange={(e) => {
+                  const nextAg = e.target.value as AgentId;
+                  setRecoveryAgentId(nextAg);
+                  if (setRecoveryModelId) {
+                    setRecoveryModelId(normalizeModelForAgent(nextAg, effectiveModelId));
+                  }
+                }}
+                className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
               >
                 {visibleAgents.map((ag) => (
                   <option key={ag.id} value={ag.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
@@ -362,8 +452,56 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
               </select>
             </div>
 
+            <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <Cpu size={11} className="text-sky-600 dark:text-sky-400" />
+                  Target Model:
+                </label>
+                <button
+                  type="button"
+                  onClick={handleFetchSubscriptionModels}
+                  disabled={isFetchingModels}
+                  title="Fetch real available models from subscription CLI"
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-[10px] font-bold text-sky-700 dark:text-sky-300 transition-colors cursor-pointer"
+                >
+                  <RefreshCw size={10} className={isFetchingModels ? 'animate-spin' : ''} />
+                  <span>{isFetchingModels ? 'Fetching...' : 'Fetch'}</span>
+                </button>
+              </div>
+              <select
+                value={effectiveModelId}
+                onChange={(e) => {
+                  const nextModel = e.target.value;
+                  setRecoveryModelId?.(nextModel);
+                  const found = availableModels.find((m) => m.id === nextModel);
+                  if (
+                    found?.supportedEffortLevels &&
+                    found.supportedEffortLevels.length > 0 &&
+                    !found.supportedEffortLevels.includes(recoveryEffortLevel)
+                  ) {
+                    setRecoveryEffortLevel(
+                      found.defaultEffortLevel || found.supportedEffortLevels[0]
+                    );
+                  }
+                }}
+                className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-slate-950 border border-sky-500/50 text-slate-900 dark:text-white font-semibold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
+                title="Select an available subscription model to retry with"
+              >
+                {availableModels.map((m) => (
+                  <option
+                    key={m.id}
+                    value={m.id}
+                    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                  >
+                    {m.displayName} ({m.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Reasoning Effort:
               </label>
               <select
@@ -371,28 +509,40 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                 onChange={(e) =>
                   setRecoveryEffortLevel(e.target.value as AgentEffortLevel)
                 }
-                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-bold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
-                title="Adjust effort level (e.g. switch to Low/Medium to avoid timeouts)"
+                className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-bold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
+                title="Adjust effort level supported by the selected model"
               >
-                <option value="low" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Low (Fast)</option>
-                <option value="medium" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Medium (Default)</option>
-                <option value="high" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">High</option>
-                <option value="xhigh" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">X-High</option>
-                <option value="max" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Max</option>
+                {supportedEfforts.map((eff) => (
+                  <option
+                    key={eff}
+                    value={eff}
+                    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                  >
+                    {eff === 'low'
+                      ? 'Low (Fast)'
+                      : eff === 'medium'
+                      ? 'Medium (Default)'
+                      : eff === 'high'
+                      ? 'High'
+                      : eff === 'xhigh'
+                      ? 'X-High'
+                      : 'Max'}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Thinking Mode:
               </label>
               <button
                 type="button"
                 onClick={() => setRecoveryThinkingEnabled((prev) => !prev)}
-                className={`w-full px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                className={`w-full px-2.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                   recoveryThinkingEnabled
                     ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-700 dark:text-indigo-300 shadow-xs'
-                    : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-400 line-through'
+                    : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-500 line-through'
                 }`}
                 title={
                   recoveryThinkingEnabled
@@ -412,8 +562,8 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
               </button>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+            <div className="space-y-1 sm:col-span-2 lg:col-span-5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Optional Directive / Hint:
               </label>
               <input

@@ -16,13 +16,16 @@
   - Escaped steps within a converged round are explicitly recorded as `SkippedConsensus` (0 queries).
   - Escaped subsequent rounds are recorded in `metadata.roundLedger` as `ignored_consensus` and displayed as **Duplicated / Ignored (Same as Round M Debate Round)**.
 
-### 2. Dynamic Subscription-Aware Agent & Model Fetching
+### 2. Dynamic Subscription-Aware Agent & Live Model Fetching
 - **Zero Static Hardcoded Dropdowns**:
   - Cross-application elimination of static agent lists (`claude-code`, etc.).
   - Dynamically probes user-connected CLI binaries (`claude`, `agy`/`antigravity`, `opencode`, `codex`, `cursor`, `zcode`), HTTP endpoints, live Ollama models (`/api/tags`), and custom user agents.
-- **Subscription Entitlement Filtering**:
-  - Automatically respects user subscription tiers (`Pro`, `Advanced`, `Plus`, `Team`, `Local`) from credentials to unlock corresponding frontier models and reasoning effort ceilings.
-  - Integrated 1-click **Refresh Subscriptions** button and direct link to Manage Logins.
+- **1-Click Live Model Fetch & Subscription Filtering**:
+  - Added a small **Fetch Models** (`RefreshCw`) button inside `ModelEffortSideBySidePicker` (both compact and expanded views) to query real available models from the selected agent's CLI (`agy models`, Claude settings, Ollama `/api/tags`).
+  - Displays only valid subscription models (`gemini-4-argon`, `gemini-3.8-flash`, `claude-opus-5-5`, `claude-sonnet-5-5`, `gpt-oss-120b` for Antigravity) and normalizes legacy slugs in Rust (`cli_builder::normalize_antigravity_model_and_effort`) to prevent CLI exit code 1 errors.
+- **Error Recovery Model Switcher**:
+  - Added a **`Target Model:`** selector + **Fetch** button (`RefreshCw`) directly inside `PipelineRecoveryModal` next to `Target Agent`, and filtered `Reasoning Effort` to the selected model's supported effort levels.
+  - Added a **"Change Model / Config"** action button to the failed deliberation banner in `DiscussionTimelineView` and enabled model/effort switching on the active failed round in `DeliberationConfigInspectorModal`.
 
 ### 3. Full Application Dual-Theme Parity & UI Elevation
 - **Universal Theme Adaptation Across All 10 Themes**:
@@ -87,11 +90,9 @@
 
 | Executable | Architecture | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.0 MB | `CEDEBCBA9F060152FBDA527257624D51562644475B3C349903ED96BCEA4C8A2E` |
-| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.0 MB | `CEDEBCBA9F060152FBDA527257624D51562644475B3C349903ED96BCEA4C8A2E` |
-| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `875B11F734365114D6BB41015FA82F84F0C1EA3360A7B9570984D64694390D76` |
-| **`FlyMD 2.3.0.exe`** | Windows x64 (Electron Portable) | 70.4 MB | `875B11F734365114D6BB41015FA82F84F0C1EA3360A7B9570984D64694390D76` |
-| **`FlyMD Setup 2.3.0.exe`** | Windows x64 (NSIS Installer) | 70.7 MB | `7468D6216A2D51A0CA54AC554F5B450B43A009C8734AE97AB40600B1DB33397E` |
+| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.1 MB | `125067A43D66951EA10A18C0A4B4C2B3C8D17764CD1BE38D69909A38896C098E` |
+| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.1 MB | `125067A43D66951EA10A18C0A4B4C2B3C8D17764CD1BE38D69909A38896C098E` |
+| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `A223533E1C5B047326070AFDDB0756387C8DDEF803A0C59E007E12D22DE1DA1B` |
 
 ---
 
