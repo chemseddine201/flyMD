@@ -158,21 +158,21 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in select-none">
-      <div className="w-full max-w-2xl rounded-2xl border border-amber-500/50 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-fade-in select-none">
+      <div className="w-full max-w-2xl rounded-2xl border border-amber-500/50 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-150">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-950/80">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/80">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
               <AlertTriangle size={18} />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-extrabold text-white truncate">
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white truncate">
                 {promptData.pipeline
                   ? `Pipeline Step ${(promptData.stepIdx ?? 0) + 1} Interrupted — Resume or Revert & Retry`
                   : `Task Interrupted — Resume or Revert & Retry`}
               </h3>
-              <p className="text-[11px] text-slate-400 truncate">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                 {diag?.title ||
                   `Choose whether to continue from the last breakpoint or revert modified files and retry cleanly.`}
               </p>
@@ -182,13 +182,13 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
             <button
               type="button"
               onClick={handleCopyModalErrorLog}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-bold transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition-colors"
               title="Copy clean exception & error diagnostic log"
             >
               {copiedLog ? (
                 <>
-                  <Check size={12} className="text-emerald-400" />
-                  <span className="text-emerald-300">Copied Log</span>
+                  <Check size={12} className="text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-emerald-700 dark:text-emerald-300">Copied Log</span>
                 </>
               ) : (
                 <>
@@ -200,7 +200,7 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
             <button
               type="button"
               onClick={onDismissOrPause}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               title="Pause pipeline here and inspect workspace"
             >
               <X size={16} />
@@ -209,43 +209,43 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 space-y-4 overflow-y-auto text-xs">
+        <div className="p-5 space-y-4 overflow-y-auto text-xs bg-white dark:bg-slate-900">
           {/* 1. Clean Exception & Error Diagnostic Block */}
-          <div className="rounded-xl border border-rose-500/40 bg-rose-950/25 p-3.5 space-y-2.5">
+          <div className="rounded-xl border border-rose-500/40 bg-rose-50/50 dark:bg-rose-950/25 p-3.5 space-y-2.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-                <AlertCircle size={13} className="text-rose-400" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                <AlertCircle size={13} className="text-rose-600 dark:text-rose-400" />
                 Clean Exception &amp; Error Diagnostic
               </span>
               <div className="flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded bg-slate-950/90 border border-slate-700 text-[10px] font-mono font-bold uppercase text-amber-300">
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-950/90 border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold uppercase text-amber-700 dark:text-amber-300">
                   {diag?.category || ft.status}
                 </span>
                 {diag?.exitCode !== undefined && diag?.exitCode !== null && (
-                  <span className="px-2 py-0.5 rounded bg-rose-950 border border-rose-500/50 text-[10px] font-mono font-bold text-rose-300">
+                  <span className="px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-950 border border-rose-300 dark:border-rose-500/50 text-[10px] font-mono font-bold text-rose-700 dark:text-rose-300">
                     Exit Code: {diag.exitCode}
                   </span>
                 )}
                 {(ft.cliSessionId || diag?.cliSessionId) && (
-                  <span className="px-2 py-0.5 rounded bg-sky-950 border border-sky-500/40 text-[10px] font-mono text-sky-300">
+                  <span className="px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950 border border-sky-300 dark:border-sky-500/40 text-[10px] font-mono text-sky-700 dark:text-sky-300">
                     Session Ready
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="rounded-lg bg-slate-950/95 border border-slate-800 p-2.5 font-mono text-[11px] text-rose-200 leading-relaxed select-text">
+            <div className="rounded-lg bg-white dark:bg-slate-950/95 border border-rose-200 dark:border-slate-800 p-2.5 font-mono text-[11px] text-rose-700 dark:text-rose-200 leading-relaxed select-text">
               {exceptionMsg}
             </div>
 
             {lastActivity && (
-              <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-slate-950/70 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
-                <Clock size={12} className="text-sky-400 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2 text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-lg px-2.5 py-1.5">
+                <Clock size={12} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                 <div className="min-w-0">
-                  <span className="font-bold text-sky-300">
+                  <span className="font-bold text-sky-700 dark:text-sky-300">
                     Last Active Breakpoint:{' '}
                   </span>
-                  <span className="font-mono text-slate-200 break-words">
+                  <span className="font-mono text-slate-800 dark:text-slate-200 break-words">
                     {lastActivity}
                   </span>
                 </div>
@@ -253,11 +253,11 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
             )}
 
             {stderrLines.length > 0 && (
-              <div className="rounded-lg border border-slate-800 bg-slate-950/90 overflow-hidden">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/90 overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setShowStderr((prev) => !prev)}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold text-slate-300 hover:text-white bg-slate-900/80 transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-900/80 transition-colors"
                 >
                   <span className="flex items-center gap-1.5">
                     {showStderr ? (
@@ -275,7 +275,7 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                   </span>
                 </button>
                 {showStderr && (
-                  <div className="p-2.5 max-h-40 overflow-y-auto font-mono text-[10px] text-rose-300/90 space-y-1 select-text border-t border-slate-800">
+                  <div className="p-2.5 max-h-40 overflow-y-auto font-mono text-[10px] text-rose-700 dark:text-rose-300/90 space-y-1 select-text border-t border-slate-200 dark:border-slate-800">
                     {stderrLines.map((line, i) => (
                       <div key={i} className="leading-relaxed break-words">
                         {line}
@@ -288,26 +288,26 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
           </div>
 
           {/* 2. Modified Files & Safety Checkpoint Status */}
-          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3.5 space-y-2">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-3.5 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <ShieldCheck size={13} className="text-emerald-400" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
                 Workspace Files Modified by Current Failed Task (
                 {modifiedFileNames.length})
               </span>
               {cp && !cp.restored ? (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-semibold">
                   Safety Checkpoint Ready ({cp.id})
                 </span>
               ) : (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                   Workspace Snapshot Active
                 </span>
               )}
             </div>
 
             {modifiedFileNames.length === 0 ? (
-              <div className="text-[11px] text-slate-400 italic">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 italic">
                 No workspace code deliverables were written to disk before this task paused. Both options below are safe to run immediately.
               </div>
             ) : (
@@ -316,21 +316,21 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                   {modifiedFileNames.map((fname) => (
                     <span
                       key={fname}
-                      className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700 font-mono text-[11px] text-sky-300"
+                      className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-[11px] text-sky-700 dark:text-sky-300"
                     >
                       {fname}
                     </span>
                   ))}
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                   • Choose{' '}
-                  <strong className="text-emerald-300">
+                  <strong className="text-emerald-700 dark:text-emerald-300">
                     Continue from Last Breakpoint
                   </strong>{' '}
                   to keep these {modifiedFileNames.length} file(s) and finish
                   the remaining implementation from where the agent stopped.
                   <br />• Choose{' '}
-                  <strong className="text-amber-300">
+                  <strong className="text-amber-700 dark:text-amber-300">
                     Revert Modified Files &amp; Retry
                   </strong>{' '}
                   to roll back modified files and remove partial files using
@@ -343,7 +343,7 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
           {/* 3. Optional Agent Switcher, Effort & Thinking Calibration & Recovery Note */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                 Target Agent:
               </label>
               <select
@@ -351,10 +351,10 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                 onChange={(e) =>
                   setRecoveryAgentId(e.target.value as AgentId)
                 }
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-semibold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
               >
                 {visibleAgents.map((ag) => (
-                  <option key={ag.id} value={ag.id} className="bg-slate-900">
+                  <option key={ag.id} value={ag.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                     @{ag.name}{' '}
                     {ag.id === ft.targetAgentId ? '(Current)' : '(Switch)'}
                   </option>
@@ -363,7 +363,7 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                 Reasoning Effort:
               </label>
               <select
@@ -371,19 +371,19 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                 onChange={(e) =>
                   setRecoveryEffortLevel(e.target.value as AgentEffortLevel)
                 }
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sky-300 font-bold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-bold text-xs focus:outline-none focus:border-sky-500 cursor-pointer"
                 title="Adjust effort level (e.g. switch to Low/Medium to avoid timeouts)"
               >
-                <option value="low" className="bg-slate-900">Low (Fast)</option>
-                <option value="medium" className="bg-slate-900">Medium (Default)</option>
-                <option value="high" className="bg-slate-900">High</option>
-                <option value="xhigh" className="bg-slate-900">X-High</option>
-                <option value="max" className="bg-slate-900">Max</option>
+                <option value="low" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Low (Fast)</option>
+                <option value="medium" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Medium (Default)</option>
+                <option value="high" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">High</option>
+                <option value="xhigh" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">X-High</option>
+                <option value="max" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Max</option>
               </select>
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                 Thinking Mode:
               </label>
               <button
@@ -391,8 +391,8 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                 onClick={() => setRecoveryThinkingEnabled((prev) => !prev)}
                 className={`w-full px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                   recoveryThinkingEnabled
-                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-xs'
-                    : 'bg-slate-950 border-slate-700 text-slate-400 line-through'
+                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-700 dark:text-indigo-300 shadow-xs'
+                    : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-400 line-through'
                 }`}
                 title={
                   recoveryThinkingEnabled
@@ -404,8 +404,8 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                   size={12}
                   className={
                     recoveryThinkingEnabled
-                      ? 'text-indigo-400'
-                      : 'text-slate-500'
+                      ? 'text-indigo-600 dark:text-indigo-400'
+                      : 'text-slate-400 dark:text-slate-500'
                   }
                 />
                 <span>{recoveryThinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}</span>
@@ -413,7 +413,7 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                 Optional Directive / Hint:
               </label>
               <input
@@ -421,18 +421,18 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                 value={recoveryExtraDirective}
                 onChange={(e) => setRecoveryExtraDirective(e.target.value)}
                 placeholder="e.g. Write incrementally..."
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-sky-500"
               />
             </div>
           </div>
         </div>
 
         {/* Modal Footer: Explicit User Decision Buttons */}
-        <div className="px-5 py-3.5 border-t border-slate-800 bg-slate-950/90 flex items-center justify-between gap-2 flex-wrap">
+        <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/90 flex items-center justify-between gap-2 flex-wrap">
           <button
             type="button"
             onClick={onDismissOrPause}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+            className="px-3.5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs font-semibold transition-colors cursor-pointer"
           >
             Pause Pipeline &amp; Inspect
           </button>
@@ -441,7 +441,7 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
             <button
               type="button"
               onClick={() => onExecuteDecision('revert_and_retry')}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-bold text-xs transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-800 dark:text-amber-200 font-bold text-xs transition-all cursor-pointer"
               title="Restore pre-task safety checkpoint (reverting modified files and deleting newly created partial files) and retry cleanly"
             >
               <RotateCcw size={13} />

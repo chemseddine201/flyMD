@@ -38,6 +38,7 @@ import { useFileDrop } from '../shared/hooks/useFileDrop';
 import { useIpcEvent } from '../shared/hooks/useIpcEvent';
 import { THEME_CLASSES } from '../../shared/constants';
 import { undo, redo } from '@codemirror/commands';
+import { Loader2 } from 'lucide-react';
 import { scheduleBadgeClear } from './store/utils/badgeTimers';
 
 export const PreviewApp: React.FC = () => {
@@ -74,6 +75,7 @@ export const PreviewApp: React.FC = () => {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [isSupervisionModalOpen, setIsSupervisionModalOpen] = useState(false);
   const [isA11yModalOpen, setIsA11yModalOpen] = useState(false);
+  const [themeSwitchingName, setThemeSwitchingName] = useState<string | null>(null);
 
   const [saveExportModal, setSaveExportModal] = useState<{
     isOpen: boolean;
@@ -392,6 +394,19 @@ export const PreviewApp: React.FC = () => {
     };
   }, [store.settings.theme, store.settings.a11yConfig]);
 
+  const THEME_NAMES: Record<AppTheme, string> = {
+    system: 'System Adaptive',
+    dark: 'GitHub Dark',
+    light: 'GitHub Light',
+    'clean-white': 'Pure Clean White',
+    'tokyo-night': 'Tokyo Night',
+    catppuccin: 'Catppuccin Macchiato',
+    dracula: 'Dracula Dark',
+    sepia: 'Warm Sepia',
+    cyber: 'Cyberpunk Neon',
+    'high-contrast': 'High Contrast (WCAG AAA)',
+  };
+
   const handleToggleTheme = () => {
     const themes: AppTheme[] = [
       'system',
@@ -407,6 +422,8 @@ export const PreviewApp: React.FC = () => {
     ];
     const curIdx = themes.indexOf((store.settings.theme as AppTheme) || 'system');
     const nextTheme = themes[(curIdx + 1) % themes.length];
+    setThemeSwitchingName(THEME_NAMES[nextTheme] || nextTheme);
+    setTimeout(() => setThemeSwitchingName(null), 250);
     store.updateSettings({ theme: nextTheme });
     window.electronAPI.saveSettings({ theme: nextTheme });
   };
@@ -763,6 +780,15 @@ export const PreviewApp: React.FC = () => {
         }}
         onUpdateConfig={handleUpdateA11yConfig}
       />
+
+      {themeSwitchingName && (
+        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center animate-in fade-in duration-100">
+          <div className="bg-slate-900/90 dark:bg-white/90 text-white dark:text-slate-900 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/60 dark:border-slate-200/60 flex items-center gap-2.5 text-xs font-bold tracking-wide">
+            <Loader2 className="w-4 h-4 animate-spin text-sky-400 dark:text-sky-600" />
+            <span>Applying {themeSwitchingName}...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

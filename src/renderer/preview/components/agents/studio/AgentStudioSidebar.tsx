@@ -338,10 +338,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 }}
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl border text-xs transition-all ${
                   isDragOver
-                    ? 'border-indigo-400 bg-indigo-950/80 scale-[1.02] shadow-md ring-2 ring-indigo-500/50'
+                    ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 scale-[1.02] shadow-md ring-2 ring-indigo-500/50'
                     : isSelected
-                    ? 'border-sky-500/50 bg-slate-800/95 text-white shadow-sm'
-                    : 'border-slate-800/80 bg-slate-950/50 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    ? 'border-sky-500/50 bg-sky-50 dark:bg-slate-800/95 text-sky-950 dark:text-white shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 <button
@@ -354,10 +354,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     style={{ backgroundColor: agent.accentColor }}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-slate-200 truncate flex items-center gap-1.5">
+                    <div className="font-semibold text-slate-800 dark:text-slate-200 truncate flex items-center gap-1.5">
                       <span>{agent.name}</span>
                       {(agent.authStatus === 'connected' || agent.authStatus === 'web-connected' || agent.authStatus === 'api-key-ready') && (
-                        <span className="text-[9px] px-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60 font-mono">
+                        <span className="text-[9px] px-1 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/60 font-mono">
                           ready
                         </span>
                       )}
@@ -373,7 +373,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       onOpenExternalBrowser(agent.id);
                     }}
                     title={`Open ${agent.name} External CLI Dashboard / Web Browser`}
-                    className="p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-sky-300 transition-colors"
+                    className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-sky-600 dark:hover:text-sky-300 transition-colors"
                   >
                     <Globe size={11} />
                   </button>
@@ -395,7 +395,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             <div className="flex items-center gap-1">
               {/* Execution Mode Toggle: Icons Only */}
               {onSetWorkflowExecutionMode && (
-                <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-md p-0.5">
+                <div className="flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-md p-0.5">
                   <button
                     type="button"
                     disabled={isEditingLocked}
@@ -403,7 +403,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     className={`p-1 rounded transition-colors ${
                       workflowExecutionMode === 'auto'
                         ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                     title="⚡ Auto Mode: Automatically advances to next step when an agent finishes"
                   >
@@ -416,7 +416,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     className={`p-1 rounded transition-colors ${
                       workflowExecutionMode === 'manual'
                         ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                     title="✋ Manual Mode: Pauses after each step with an approval card to review before continuing"
                   >
@@ -431,9 +431,9 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                   type="button"
                   onClick={onOpenCustomActionsModal}
                   title="Manage Custom Pipeline Actions (Report, Security Audit, etc.)"
-                  className="p-1 rounded text-slate-400 hover:text-indigo-300 hover:bg-slate-800 transition-colors"
+                  className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
-                  <Sparkles size={11} className="text-indigo-400" />
+                  <Sparkles size={11} className="text-indigo-500 dark:text-indigo-400" />
                 </button>
               )}
 
@@ -445,7 +445,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                   confirmOrExecuteModification(() => onAddPipelineStep(primaryPipeline.id))
                 }
                 title="Add Step to Workflow"
-                className="p-1 rounded bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="p-1 rounded bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-700 dark:text-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <Plus size={11} />
               </button>
@@ -466,13 +466,13 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     }
                   }}
                   title="Reset Workflow Steps"
-                  className="p-1 rounded text-slate-400 hover:text-sky-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <RotateCcw size={11} />
                 </button>
                 {showResetMenu && (
-                  <div className="absolute top-7 right-0 z-50 bg-slate-900 border border-slate-700/90 rounded-xl shadow-2xl p-2 w-60 space-y-1 text-xs animate-in fade-in select-none">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-1">
+                  <div className="absolute top-7 right-0 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/90 rounded-xl shadow-2xl p-2 w-60 space-y-1 text-xs animate-in fade-in select-none">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1 mb-1">
                       Reset Workflow
                     </div>
                     <button
@@ -481,10 +481,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                         onClearStepDoneStatus?.(primaryPipeline.id);
                         setShowResetMenu(false);
                       }}
-                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-sky-300 transition-colors"
+                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-sky-700 dark:text-sky-300 transition-colors"
                     >
                       <div className="font-bold text-xs">Clear Done Status</div>
-                      <div className="text-[10px] text-slate-400 leading-tight">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
                         Keep steps, re-run from Step 1
                       </div>
                     </button>
@@ -494,17 +494,17 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                         confirmOrExecuteModification(onResetPipelines);
                         setShowResetMenu(false);
                       }}
-                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-rose-950/40 text-rose-300 transition-colors"
+                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-300 transition-colors"
                     >
                       <div className="font-bold text-xs">Restore Default Template</div>
-                      <div className="text-[10px] text-slate-400 leading-tight">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
                         Reset to Plan → Build → Review
                       </div>
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowResetMenu(false)}
-                      className="w-full text-center py-1 text-[10px] text-slate-500 hover:text-slate-300"
+                      className="w-full text-center py-1 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                     >
                       Cancel
                     </button>
@@ -608,35 +608,35 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                         : isStepFailed
                         ? 'bg-rose-950/60 border border-rose-500/80 text-rose-200 shadow-xs cursor-pointer hover:border-rose-400'
                         : isFinishedThisStep
-                        ? 'bg-emerald-950/60 border border-emerald-500/60 text-emerald-200 shadow-xs cursor-pointer hover:border-emerald-400/90'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-500/60 text-emerald-800 dark:text-emerald-200 shadow-xs cursor-pointer hover:border-emerald-500 dark:hover:border-emerald-400/90'
                         : isUpcomingStep
-                        ? 'bg-slate-950/40 border border-slate-800/60 opacity-55 text-slate-500'
-                        : 'bg-slate-950/90 border border-slate-800 hover:border-slate-700 text-slate-300'
+                        ? 'bg-slate-100/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/60 opacity-55 text-slate-400 dark:text-slate-500'
+                        : 'bg-white dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     <span className="text-[10px] font-extrabold shrink-0 w-4 flex items-center justify-center">
                       {isStepIncomplete ? (
                         <AlertTriangle
                           size={13}
-                          className="text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]"
+                          className="text-amber-500 dark:text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]"
                         />
                       ) : isStepFailed ? (
-                        <AlertCircle size={13} className="text-rose-400" />
+                        <AlertCircle size={13} className="text-rose-500 dark:text-rose-400" />
                       ) : isFinishedThisStep ? (
                         <CheckCircle2
                           size={13}
-                          className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                          className="text-emerald-500 dark:text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]"
                         />
                       ) : isRunningThisStep ? (
-                        <Loader2 size={13} className="animate-spin text-sky-400" />
+                        <Loader2 size={13} className="animate-spin text-sky-500 dark:text-sky-400" />
                       ) : isWaitingThisStep ? (
                         <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
                       ) : (
                         <span
                           className={
                             isPipelineActivelyRunning
-                              ? 'text-slate-600 font-mono'
-                              : 'text-indigo-400 font-mono font-bold'
+                              ? 'text-slate-400 dark:text-slate-600 font-mono'
+                              : 'text-indigo-600 dark:text-indigo-400 font-mono font-bold'
                           }
                         >
                           {idx + 1}.
@@ -645,7 +645,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                     </span>
 
                     {/* Step Action/Intent Dropdown with Custom Actions */}
-                    <div className="flex items-center gap-1 shrink-0 bg-slate-900/90 border border-slate-700 rounded px-1.5 py-0.5">
+                    <div className="flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5">
                       {stepActionIcon}
                       <select
                         value={
@@ -690,23 +690,23 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                             ? 'Completed step (locked)'
                             : 'Step Action Intent'
                         }
-                        className="bg-transparent text-indigo-300 font-bold text-[10px] focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                        className="bg-transparent text-indigo-700 dark:text-indigo-300 font-bold text-[10px] focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                       >
                         {AGENT_INTENT_PRESETS.map((preset) => (
-                          <option key={preset.id} value={preset.id}>
+                          <option key={preset.id} value={preset.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                             {INTENT_SHORT_LABELS[preset.id] || preset.title}
                           </option>
                         ))}
                         {availableCustomActions.length > 0 && (
                           <optgroup
                             label="Custom Actions"
-                            className="bg-slate-900 text-indigo-300 font-semibold"
+                            className="bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 font-semibold"
                           >
                             {availableCustomActions.map((ca) => (
                               <option
                                 key={ca.id}
                                 value={`custom:${ca.id}`}
-                                className="bg-slate-900 text-slate-100"
+                                className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
                               >
                                 ✨ {ca.shortLabel || ca.name}
                               </option>
@@ -716,7 +716,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                         {onOpenCustomActionsModal && (
                           <option
                             value="__manage_custom__"
-                            className="bg-slate-900 text-sky-400 font-bold"
+                            className="bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 font-bold"
                           >
                             + Manage Custom...
                           </option>
@@ -748,10 +748,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                             ? 'Completed step (locked)'
                             : 'Select Enabled Agent for this step'
                         }
-                        className="w-full bg-slate-900/90 text-white font-semibold text-[11px] rounded px-1 py-0.5 border border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer disabled:cursor-not-allowed truncate"
+                        className="w-full bg-slate-100 dark:bg-slate-900/90 text-slate-900 dark:text-white font-semibold text-[11px] rounded px-1 py-0.5 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-indigo-400 cursor-pointer disabled:cursor-not-allowed truncate"
                       >
                         {visibleAgents.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
+                          <option key={opt.id} value={opt.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                             {opt.name}
                           </option>
                         ))}
@@ -917,15 +917,15 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
 
                   {/* Inline Step Note Editor Popover */}
                   {activeStepNoteIdx === idx && (
-                    <div className="p-2 bg-slate-900/95 border border-amber-500/50 rounded-lg text-xs space-y-1.5 mt-1 animate-fadeIn">
-                      <div className="flex items-center justify-between text-[10px] text-amber-300 font-bold">
+                    <div className="p-2 bg-amber-50/95 dark:bg-slate-900/95 border border-amber-400 dark:border-amber-500/50 rounded-lg text-xs space-y-1.5 mt-1 shadow-sm animate-fadeIn">
+                      <div className="flex items-center justify-between text-[10px] text-amber-700 dark:text-amber-300 font-bold">
                         <span className="flex items-center gap-1">
                           <StickyNote size={10} /> Step {idx + 1} Directive / Error Log:
                         </span>
                         <button
                           type="button"
                           onClick={() => setActiveStepNoteIdx(null)}
-                          className="text-slate-500 hover:text-slate-300"
+                          className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
                         >
                           <X size={10} />
                         </button>
@@ -935,7 +935,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                         value={stepNoteDraft}
                         onChange={(e) => setStepNoteDraft(e.target.value)}
                         placeholder="e.g. TypeError: canvas_appHeader.getContext is not a function in app.js:29..."
-                        className="w-full p-1.5 rounded bg-slate-950 border border-slate-700 text-slate-100 text-[11px] placeholder-slate-600 focus:outline-none focus:border-amber-400 font-mono"
+                        className="w-full p-1.5 rounded bg-white dark:bg-slate-950 border border-amber-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-[11px] placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono"
                       />
                       <div className="flex justify-end gap-1.5">
                         {step.stepNote && (
@@ -947,7 +947,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                               });
                               setActiveStepNoteIdx(null);
                             }}
-                            className="px-2 py-0.5 text-[10px] text-rose-400 hover:bg-rose-950/40 rounded"
+                            className="px-2 py-0.5 text-[10px] text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/40 rounded transition-colors"
                           >
                             Clear
                           </button>
@@ -1227,8 +1227,8 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                   title="Left-click to view session • Right-click to Open in Directory or Delete"
                   className={`w-full text-left p-2.5 rounded-xl border transition-all ${
                     isSelected
-                      ? 'bg-slate-800/95 border-sky-500/50 shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700'
+                      ? 'bg-sky-50 dark:bg-slate-800/95 border-sky-500/50 shadow-sm'
+                      : 'bg-white dark:bg-slate-950/60 border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1.5">
@@ -1239,10 +1239,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                           backgroundColor: agent?.accentColor || '#38bdf8',
                         }}
                       />
-                      <span className="text-xs font-bold text-white truncate">
+                      <span className="text-xs font-bold text-slate-800 dark:text-white truncate">
                         {agent?.shortName || task.targetAgentId}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-sky-300 uppercase font-semibold">
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-sky-700 dark:text-sky-300 uppercase font-semibold">
                         {task.intent}
                       </span>
                     </div>
@@ -1311,13 +1311,13 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
 
       {/* Confirmation Modal when Modifying Pipeline In Progress */}
       {resetConfirmAction && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-amber-500/60 rounded-xl p-4 text-slate-100 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center gap-2 text-amber-400 font-bold text-xs mb-2">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-amber-500/60 rounded-xl p-4 text-slate-900 dark:text-slate-100 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-2 text-amber-500 dark:text-amber-400 font-bold text-xs mb-2">
               <ShieldAlert size={16} />
               <span>Workflow in Progress</span>
             </div>
-            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
               Modifying the workflow steps while in progress will cancel the active pipeline run and reset progress back to Step 1.
               Do you want to proceed?
             </p>
@@ -1325,7 +1325,7 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
               <button
                 type="button"
                 onClick={() => setResetConfirmAction(null)}
-                className="px-3 py-1.5 text-xs rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="px-3 py-1.5 text-xs rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 Keep Running
               </button>

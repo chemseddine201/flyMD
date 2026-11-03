@@ -91,20 +91,20 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-purple-500/30 text-xs">
-                    <span className="text-purple-400 font-semibold text-[11px]">
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-950 px-2 py-1 rounded-lg border border-purple-500/30 text-xs">
+                    <span className="text-purple-600 dark:text-purple-400 font-semibold text-[11px]">
                       Target Agent:
                     </span>
                     <select
                       value={targetedAgentId}
                       onChange={(e) => onChangeTargetedAgentId(e.target.value)}
-                      className="bg-transparent border-0 text-slate-200 focus:outline-none cursor-pointer text-xs"
+                      className="bg-transparent border-0 text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer text-xs"
                     >
                       {participantAgents.map((ag) => (
                         <option
                           key={ag.id}
                           value={ag.id}
-                          className="bg-slate-900 text-slate-200"
+                          className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200"
                         >
                           @{ag.name} ({ag.role})
                         </option>
@@ -112,42 +112,42 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                     </select>
                   </div>
 
-                  <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-purple-500/30 text-xs">
-                    <span className="text-purple-400 font-semibold text-[11px]">
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-950 px-2 py-1 rounded-lg border border-purple-500/30 text-xs">
+                    <span className="text-purple-600 dark:text-purple-400 font-semibold text-[11px]">
                       Action Directive:
                     </span>
                     <select
                       value={targetedActionName}
                       onChange={(e) => onChangeTargetedActionName(e.target.value)}
-                      className="bg-transparent border-0 text-slate-200 focus:outline-none cursor-pointer text-xs"
+                      className="bg-transparent border-0 text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer text-xs"
                     >
                       <option
                         value="Targeted Inquiry"
-                        className="bg-slate-900 text-slate-200"
+                        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200"
                       >
                         Targeted Inquiry
                       </option>
                       <option
                         value="Edge Case Stress Test"
-                        className="bg-slate-900 text-slate-200"
+                        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200"
                       >
                         Edge Case Stress Test
                       </option>
                       <option
                         value="Invariant Verification"
-                        className="bg-slate-900 text-slate-200"
+                        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200"
                       >
                         Constraint Verification
                       </option>
                       <option
                         value="Risk & Feasibility Probe"
-                        className="bg-slate-900 text-slate-200"
+                        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200"
                       >
                         Risk &amp; Feasibility Probe
                       </option>
                       <option
                         value="Alternative Solution Inquiry"
-                        className="bg-slate-900 text-slate-200"
+                        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200"
                       >
                         Alternative Solution Inquiry
                       </option>
@@ -181,7 +181,7 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                       }
                     }}
                     placeholder={`Specify inquiry or probe for ${targetedAgentId}... (e.g. 'What are the main risks, dependencies, or trade-offs?')`}
-                    className="flex-1 bg-slate-950 border border-purple-500/40 rounded-lg px-3.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 transition-colors"
+                    className="flex-1 bg-white dark:bg-slate-950 border border-purple-500/40 rounded-lg px-3.5 py-1.5 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-purple-400 transition-colors"
                   />
                   <button
                     type="button"
@@ -215,8 +215,8 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                 onClick={onToggleTargetedDispatch}
                 className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-bold transition-all shrink-0 ${
                   showTargetedDispatch
-                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
-                    : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300'
+                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-700 dark:text-purple-300'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                 }`}
                 title="Dispatch a targeted custom inquiry to an individual agent"
               >

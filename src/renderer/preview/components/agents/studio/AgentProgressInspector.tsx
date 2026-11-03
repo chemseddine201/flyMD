@@ -335,22 +335,22 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   return (
     <aside
       style={{ width: `${width || 340}px` }}
-      className="shrink-0 h-full border-l border-slate-800/90 bg-slate-900/75 flex flex-col p-3.5 space-y-3.5 select-none overflow-hidden"
+      className="shrink-0 h-full border-l border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-900/75 flex flex-col p-3.5 space-y-3.5 select-none overflow-hidden"
     >
       {/* 1. Live Progress & Git Guard Stepper */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 space-y-2.5 shrink-0">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 p-3 space-y-2.5 shrink-0">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-            <ShieldCheck size={13} className="text-sky-400" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <ShieldCheck size={13} className="text-sky-500 dark:text-sky-400" />
             Live Progress View
           </span>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-extrabold text-sky-300">{pct}%</span>
+            <span className="text-xs font-extrabold text-sky-600 dark:text-sky-300">{pct}%</span>
             {selectedTask && selectedTask.status !== 'running' && !isPipelineRunning && onDeleteTask && (
               <button
                 type="button"
                 onClick={() => onDeleteTask(selectedTask.id)}
-                className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition-colors"
+                className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                 title="Delete this finished task session"
               >
                 <Trash2 size={12} />
@@ -360,7 +360,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+        <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
           <div
             className={`h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 transition-all duration-300 ${
               selectedTask?.status === 'running' ? 'animate-pulse' : ''
@@ -371,9 +371,9 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
 
         {/* Live Execution & Background Tracking Monitor Card */}
         {selectedTask?.status === 'running' && (
-          <div className="rounded-xl border border-sky-500/30 bg-sky-950/30 p-2.5 space-y-2">
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 dark:bg-sky-950/30 p-2.5 space-y-2">
             <div className="flex items-center justify-between text-[11px]">
-              <div className="flex items-center gap-1.5 font-bold text-sky-300">
+              <div className="flex items-center gap-1.5 font-bold text-sky-700 dark:text-sky-300">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
@@ -381,7 +381,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                 <span>Live Execution</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[11px] font-bold text-amber-300 flex items-center gap-1">
+                <span className="font-mono text-[11px] font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1">
                   <Clock size={11} />
                   <TaskElapsedClock
                     startedAt={selectedTask.startedAt}
@@ -393,7 +393,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                   <button
                     type="button"
                     onClick={() => onCancelTask(selectedTask.id)}
-                    className="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-[10px] font-bold transition-colors"
+                    className="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-700 dark:text-rose-300 text-[10px] font-bold transition-colors"
                   >
                     Cancel
                   </button>
@@ -401,7 +401,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-200 font-medium leading-tight">
+            <div className="text-[11px] text-slate-700 dark:text-slate-200 font-medium leading-tight">
               {selectedTask.progressStage === 'snapshot' && 'Creating safety snapshot & Git guard...'}
               {selectedTask.progressStage === 'context' && 'Synchronizing workspace specification & MEMORY.md...'}
               {selectedTask.progressStage === 'reasoning' && 'Agent reasoning engine analyzing context, AST & invariants...'}
@@ -410,18 +410,18 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
             </div>
 
             {/* Live Streaming Activity Ticker */}
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800/80 p-2 text-[10px] font-mono space-y-1 max-h-24 overflow-y-auto">
+            <div className="rounded-lg bg-white dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800/80 p-2 text-[10px] font-mono space-y-1 max-h-24 overflow-y-auto">
               {selectedTask.logs && selectedTask.logs.length > 0 ? (
                 selectedTask.logs.slice(-3).map((log, lIdx) => (
-                  <div key={lIdx} className="text-slate-300 truncate flex items-center gap-1">
-                    <span className="text-sky-400 select-none">&gt;</span>
+                  <div key={lIdx} className="text-slate-700 dark:text-slate-300 truncate flex items-center gap-1">
+                    <span className="text-sky-500 dark:text-sky-400 select-none">&gt;</span>
                     <span className="truncate">{log}</span>
                   </div>
                 ))
               ) : selectedTask.thinkingTrace && selectedTask.thinkingTrace.length > 0 ? (
                 selectedTask.thinkingTrace.slice(-2).map((trace, tIdx) => (
-                  <div key={tIdx} className="text-indigo-300 truncate flex items-center gap-1">
-                    <span className="text-indigo-400 select-none">&bull;</span>
+                  <div key={tIdx} className="text-indigo-700 dark:text-indigo-300 truncate flex items-center gap-1">
+                    <span className="text-indigo-500 dark:text-indigo-400 select-none">&bull;</span>
                     <span className="truncate">{trace}</span>
                   </div>
                 ))
@@ -449,19 +449,19 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                 key={stage.id}
                 className={`flex items-center justify-between text-[11px] px-2 py-1 rounded-lg transition-colors ${
                   isCurrent
-                    ? 'bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30'
+                    ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 font-bold border border-sky-500/30'
                     : isDone
-                    ? 'text-emerald-300 font-medium'
-                    : 'text-slate-500'
+                    ? 'text-emerald-700 dark:text-emerald-300 font-medium'
+                    : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   {isCurrent ? (
-                    <Loader2 size={12} className="text-sky-400 animate-spin shrink-0" />
+                    <Loader2 size={12} className="text-sky-500 dark:text-sky-400 animate-spin shrink-0" />
                   ) : isDone ? (
-                    <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                    <CheckCircle2 size={12} className="text-emerald-500 dark:text-emerald-400 shrink-0" />
                   ) : (
-                    <Circle size={12} className="text-slate-600 shrink-0" />
+                    <Circle size={12} className="text-slate-400 dark:text-slate-600 shrink-0" />
                   )}
                   <span className="truncate">{stage.label}</span>
                 </div>
@@ -470,7 +470,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                     startedAt={selectedTask?.startedAt}
                     createdAt={selectedTask?.createdAt}
                     status={selectedTask?.status}
-                    className="text-[10px] font-mono text-sky-400 shrink-0"
+                    className="text-[10px] font-mono text-sky-600 dark:text-sky-400 shrink-0"
                   />
                 )}
               </div>
@@ -480,15 +480,15 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
 
         {/* Checkpoint Safety Restore Point */}
         {checkpoint && !checkpoint.restored && (
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
-            <span className="text-[10px] text-emerald-300 flex items-center gap-1">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between gap-2">
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
               <ShieldCheck size={11} /> Restore Point Ready
             </span>
             <button
               type="button"
               disabled={restoringCheckpointId === checkpoint.id}
               onClick={() => onRestoreCheckpoint(checkpoint.id)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[10px] font-bold transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-bold transition-colors"
             >
               <RotateCcw size={10} />
               {restoringCheckpointId === checkpoint.id
@@ -500,22 +500,22 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
       </div>
 
       {/* 2. Antigravity-Style Files Progress Deck (Files Touched & Created) */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 space-y-2 shrink-0">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 p-3 space-y-2 shrink-0">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-            <Globe size={13} className="text-emerald-400" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <Globe size={13} className="text-emerald-500 dark:text-emerald-400" />
             Files Touched &amp; Created ({touchedFiles.length})
           </span>
           {touchedFiles.some((f) => f.isHtml) && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="text-[9px] px-1.5 py-0.5 rounded font-extrabold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
               Web Ready
             </span>
           )}
         </div>
 
         {touchedFiles.length === 0 ? (
-          <div className="text-[11px] text-slate-500 py-2.5 text-center border border-dashed border-slate-800/80 rounded-xl px-2">
-            Files created or edited by the agent (e.g. <span className="text-sky-300 font-mono">index.html</span>) appear here with 1-click live preview.
+          <div className="text-[11px] text-slate-500 py-2.5 text-center border border-dashed border-slate-300 dark:border-slate-800/80 rounded-xl px-2">
+            Files created or edited by the agent (e.g. <span className="text-sky-600 dark:text-sky-300 font-mono">index.html</span>) appear here with 1-click live preview.
           </div>
         ) : (
           <div className="max-h-40 overflow-y-auto space-y-1.5 pr-0.5">
@@ -544,21 +544,21 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                     },
                   });
                 }}
-                className="group flex flex-col gap-1.5 p-2 rounded-xl bg-slate-900/90 border border-slate-800/90 hover:border-slate-700 transition-colors"
+                className="group flex flex-col gap-1.5 p-2 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
               >
                 <div className="flex items-center justify-between gap-1.5 min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
                     {file.isHtml ? (
-                      <Globe size={13} className="text-emerald-400 shrink-0" />
+                      <Globe size={13} className="text-emerald-500 dark:text-emerald-400 shrink-0" />
                     ) : file.name.endsWith('.css') ? (
-                      <Layers size={13} className="text-sky-400 shrink-0" />
+                      <Layers size={13} className="text-sky-500 dark:text-sky-400 shrink-0" />
                     ) : file.name.endsWith('.js') || file.name.endsWith('.ts') ? (
-                      <FileCode size={13} className="text-amber-400 shrink-0" />
+                      <FileCode size={13} className="text-amber-500 dark:text-amber-400 shrink-0" />
                     ) : (
-                      <FileText size={13} className="text-slate-400 shrink-0" />
+                      <FileText size={13} className="text-slate-500 dark:text-slate-400 shrink-0" />
                     )}
                     <span
-                      className="truncate text-[11px] font-semibold text-slate-200"
+                      className="truncate text-[11px] font-semibold text-slate-800 dark:text-slate-200"
                       title={file.fullPath}
                     >
                       {file.name}
@@ -567,8 +567,8 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                   <span
                     className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide shrink-0 ${
                       file.status === 'created'
-                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                        : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                     }`}
                   >
                     {file.status}
@@ -581,7 +581,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                       type="button"
                       onClick={() => handleLivePreview(file)}
                       title="Launch live web preview in browser"
-                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold transition-all"
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold transition-all"
                     >
                       <Globe size={10} />
                       <span>Live Preview</span>
@@ -591,7 +591,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                     type="button"
                     onClick={() => onOpenFileInEditor(file.fullPath)}
                     title="Open file in FlyMD editor"
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-300 hover:text-white text-[10px] font-medium transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-[10px] font-medium transition-colors"
                   >
                     <ExternalLink size={10} />
                     <span>FlyMD</span>
@@ -604,7 +604,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                       }
                     }}
                     title="Reveal in File Explorer"
-                    className="p-1 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-400 hover:text-white transition-colors"
+                    className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700/80 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                   >
                     <FolderOpen size={11} />
                   </button>
@@ -616,17 +616,17 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
       </div>
 
       {/* 3. Combined Clean Activity & Process Inspector (Human Feed + Terminal Stream) */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/90 flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/90 flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Navigation Tabs */}
-        <div className="flex items-center justify-between border-b border-slate-800/90 px-3 py-2 bg-slate-950/60">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/90 px-3 py-2 bg-slate-100/70 dark:bg-slate-950/60">
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => setViewTab('activity')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
                 viewTab === 'activity'
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <Activity size={11} />
@@ -637,8 +637,8 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
               onClick={() => setViewTab('terminal')}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
                 viewTab === 'terminal'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <Terminal size={11} />
@@ -651,7 +651,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
               type="button"
               onClick={() => onClearTaskLogs(selectedTask.id)}
               title="Clear Terminal Execution Log"
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-rose-500/20 text-[9px] font-bold text-slate-400 hover:text-rose-300 transition-colors"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800/80 hover:bg-rose-500/20 text-[9px] font-bold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 transition-colors"
             >
               <Trash2 size={9} />
               <span>Clear</span>
@@ -665,16 +665,16 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
             <div className="space-y-3">
               {/* Context Reasoning Trace */}
               {selectedTask?.thinkingTrace && selectedTask.thinkingTrace.length > 0 && (
-                <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-2.5 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-300 uppercase tracking-wider">
-                    <Sparkles size={11} className="text-indigo-400" />
+                <div className="rounded-xl border border-indigo-500/20 bg-indigo-50 dark:bg-indigo-950/20 p-2.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
+                    <Sparkles size={11} className="text-indigo-500 dark:text-indigo-400" />
                     Agent Context Reasoning
                   </div>
                   <div className="space-y-1">
                     {selectedTask.thinkingTrace.map((step, idx) => (
                       <div
                         key={idx}
-                        className="text-[11px] text-indigo-200/90 leading-relaxed pl-2 border-l border-indigo-500/30"
+                        className="text-[11px] text-indigo-900 dark:text-indigo-200/90 leading-relaxed pl-2 border-l border-indigo-500/30"
                       >
                         {step}
                       </div>
@@ -684,10 +684,10 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
               )}
 
               {/* Task Checklist Tracker */}
-              <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-2.5 space-y-2">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/60 p-2.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                    <ListChecks size={12} className="text-emerald-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <ListChecks size={12} className="text-emerald-500 dark:text-emerald-400" />
                     Task Checklist ({parsedChecklist.filter((i) => i.done).length}/
                     {parsedChecklist.length})
                   </span>
@@ -702,25 +702,25 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                     {parsedChecklist.map((item, idx) => (
                       <div
                         key={idx}
-                        className="group flex items-start justify-between gap-1.5 p-1.5 rounded-lg bg-slate-950/60 border border-slate-800/60 text-[11px]"
+                        className="group flex items-start justify-between gap-1.5 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/60 text-[11px]"
                       >
                         <div className="flex items-start gap-1.5 min-w-0">
                           {item.done ? (
                             <CheckCircle2
                               size={12}
-                              className="text-emerald-400 shrink-0 mt-0.5"
+                              className="text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5"
                             />
                           ) : (
                             <Circle
                               size={12}
-                              className="text-slate-500 shrink-0 mt-0.5"
+                              className="text-slate-400 dark:text-slate-500 shrink-0 mt-0.5"
                             />
                           )}
                           <span
                             className={
                               item.done
                                 ? 'text-slate-400 line-through'
-                                : 'text-slate-200'
+                                : 'text-slate-800 dark:text-slate-200'
                             }
                           >
                             {item.text}
@@ -731,7 +731,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                             type="button"
                             onClick={() => onRunSingleChecklistItem(item.text)}
                             title="Execute this specific step"
-                            className="opacity-0 group-hover:opacity-100 shrink-0 px-1.5 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-[9px] font-bold flex items-center gap-0.5 transition-all"
+                            className="opacity-0 group-hover:opacity-100 shrink-0 px-1.5 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-700 dark:text-sky-300 text-[9px] font-bold flex items-center gap-0.5 transition-all"
                           >
                             <Play size={8} fill="currentColor" /> Run
                           </button>
@@ -819,19 +819,19 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                         ? 'bg-sky-950/20 border-sky-500/30 text-sky-300'
                         : selectedTask.status === 'failed'
                         ? 'bg-rose-950/35 border-rose-500/60 text-rose-200'
-                        : 'bg-slate-900 border-slate-800 text-slate-400'
+                        : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 font-bold min-w-0">
                         {selectedTask.status === 'running' ? (
-                          <Loader2 size={13} className="animate-spin shrink-0 text-sky-400" />
+                          <Loader2 size={13} className="animate-spin shrink-0 text-sky-500 dark:text-sky-400" />
                         ) : selectedTask.status === 'completed' ? (
-                          <CheckCircle2 size={13} className="shrink-0 text-emerald-400" />
+                          <CheckCircle2 size={13} className="shrink-0 text-emerald-500 dark:text-emerald-400" />
                         ) : selectedTask.status === 'incomplete' ? (
-                          <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+                          <AlertTriangle size={14} className="shrink-0 text-amber-500 dark:text-amber-400" />
                         ) : selectedTask.status === 'failed' ? (
-                          <AlertCircle size={14} className="shrink-0 text-rose-400" />
+                          <AlertCircle size={14} className="shrink-0 text-rose-500 dark:text-rose-400" />
                         ) : null}
                         <span className="leading-snug">
                           {selectedTask.status === 'completed'
@@ -852,12 +852,12 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                           type="button"
                           onClick={handleCopyDiagnostic}
                           title="Copy clean error & exception log to clipboard"
-                          className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-[9px] font-bold text-slate-300 hover:text-white transition-colors"
+                          className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-900/90 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-[9px] font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
                         >
                           {copiedErrorLog ? (
                             <>
-                              <Check size={10} className="text-emerald-400" />
-                              <span className="text-emerald-300">Copied</span>
+                              <Check size={10} className="text-emerald-500 dark:text-emerald-400" />
+                              <span className="text-emerald-600 dark:text-emerald-300">Copied</span>
                             </>
                           ) : (
                             <>
@@ -874,24 +874,24 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                       <div className="space-y-2 pt-1">
                         {/* Category & Exit Code Badges */}
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded bg-slate-950/90 border border-slate-700/80 text-[9px] font-mono font-bold uppercase text-amber-300">
+                          <span className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-950/90 border border-slate-200 dark:border-slate-700/80 text-[9px] font-mono font-bold uppercase text-amber-700 dark:text-amber-300">
                             {diag?.category || selectedTask.status}
                           </span>
                           {diag?.exitCode !== undefined && diag?.exitCode !== null && (
-                            <span className="px-1.5 py-0.5 rounded bg-rose-950/80 border border-rose-500/40 text-[9px] font-mono font-bold text-rose-300">
+                            <span className="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/80 border border-rose-200 dark:border-rose-500/40 text-[9px] font-mono font-bold text-rose-700 dark:text-rose-300">
                               Exit Code: {diag.exitCode}
                             </span>
                           )}
                           {touchedFiles.length > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/40 text-[9px] font-mono text-indigo-300">
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-500/40 text-[9px] font-mono text-indigo-700 dark:text-indigo-300">
                               {touchedFiles.length} file(s) modified
                             </span>
                           )}
                         </div>
 
                         {/* Clean Exception Message Box */}
-                        <div className="rounded-lg bg-slate-950/90 border border-slate-800/90 p-2 font-mono text-[10px] text-rose-200/95 leading-relaxed break-words select-text">
-                          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                        <div className="rounded-lg bg-white dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800/90 p-2 font-mono text-[10px] text-rose-700 dark:text-rose-200/95 leading-relaxed break-words select-text">
+                          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">
                             Exception / Error Reason:
                           </div>
                           {exceptionMsg}
@@ -899,11 +899,11 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
 
                         {/* Last Known Activity Breakpoint */}
                         {lastActivity && (
-                          <div className="text-[10px] text-slate-300 bg-slate-950/60 border border-slate-800/70 rounded-lg px-2 py-1.5 flex items-start gap-1.5">
-                            <Clock size={11} className="text-sky-400 shrink-0 mt-0.5" />
+                          <div className="text-[10px] text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/70 rounded-lg px-2 py-1.5 flex items-start gap-1.5">
+                            <Clock size={11} className="text-sky-500 dark:text-sky-400 shrink-0 mt-0.5" />
                             <div className="min-w-0">
-                              <span className="font-bold text-sky-300">Last Breakpoint: </span>
-                              <span className="font-mono text-slate-200 break-words">
+                              <span className="font-bold text-sky-600 dark:text-sky-300">Last Breakpoint: </span>
+                              <span className="font-mono text-slate-800 dark:text-slate-200 break-words">
                                 {lastActivity}
                               </span>
                             </div>
@@ -912,11 +912,11 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
 
                         {/* Collapsible Stderr / Exception Trace */}
                         {stderrLines.length > 0 && (
-                          <div className="rounded-lg border border-slate-800/90 bg-slate-950/80 overflow-hidden">
+                          <div className="rounded-lg border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-950/80 overflow-hidden">
                             <button
                               type="button"
                               onClick={() => setShowStderrTrace((prev) => !prev)}
-                              className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-900/70 transition-colors"
+                              className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-900/70 transition-colors"
                             >
                               <span className="flex items-center gap-1">
                                 {showStderrTrace ? (
@@ -928,12 +928,12 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                                   Exception &amp; Stderr Trace ({stderrLines.length} lines)
                                 </span>
                               </span>
-                              <span className="text-[9px] text-slate-400 font-normal">
+                              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-normal">
                                 {showStderrTrace ? 'Hide' : 'Expand'}
                               </span>
                             </button>
                             {showStderrTrace && (
-                              <div className="p-2 max-h-36 overflow-y-auto font-mono text-[9px] text-rose-300/90 space-y-1 select-text border-t border-slate-800/80">
+                              <div className="p-2 max-h-36 overflow-y-auto font-mono text-[9px] text-rose-700 dark:text-rose-300/90 space-y-1 select-text border-t border-slate-200 dark:border-slate-800/80">
                                 {stderrLines.map((line, idx) => (
                                   <div key={idx} className="leading-relaxed break-words">
                                     {line}
@@ -949,10 +949,10 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                           selectedTask.verificationReport.gaps &&
                           selectedTask.verificationReport.gaps.length > 0 && (
                             <div className="space-y-1 pt-1 border-t border-amber-500/20">
-                              <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
                                 Missing Deliverables / Stubs:
                               </span>
-                              <ul className="text-[10px] space-y-0.5 text-amber-200 list-disc list-inside">
+                              <ul className="text-[10px] space-y-0.5 text-amber-800 dark:text-amber-200 list-disc list-inside">
                                 {selectedTask.verificationReport.gaps.map((gap, gIdx) => (
                                   <li key={gIdx} className="leading-tight">
                                     {gap}
@@ -964,13 +964,13 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
 
                         {/* Interactive Resume / Retry Action Buttons */}
                         {onRecoverTask && (
-                          <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
-                            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+                          <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5">
+                            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
                               <span>Task Recovery &amp; Breakpoint Resume</span>
                               <button
                                 type="button"
                                 onClick={() => onRecoverTask(selectedTask, 'ask')}
-                                className="text-sky-400 hover:text-sky-300 underline font-semibold"
+                                className="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 underline font-semibold"
                               >
                                 Full Recovery Dialog...
                               </button>
@@ -995,7 +995,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                                 onClick={() =>
                                   onRecoverTask(selectedTask, 'revert_and_retry')
                                 }
-                                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold text-[10px] transition-colors cursor-pointer"
+                                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-800 dark:text-amber-200 font-bold text-[10px] transition-colors cursor-pointer"
                                 title="Revert modified/created files using safety checkpoint and retry cleanly"
                               >
                                 <RotateCcw size={10} />
@@ -1008,7 +1008,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                     )}
 
                     {selectedTask.verificationReport && selectedTask.verificationReport.passed && (
-                      <div className="text-[10px] text-emerald-400/90 font-mono flex items-center gap-1">
+                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400/90 font-mono flex items-center gap-1">
                         <CheckCircle2 size={11} />
                         <span>{selectedTask.verificationReport.checkedFiles.length} deliverable files verified</span>
                       </div>
@@ -1018,7 +1018,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
               })()}
             </div>
           ) : (
-            <div className="font-mono text-[10px] text-slate-400 space-y-1">
+            <div className="font-mono text-[10px] text-slate-600 dark:text-slate-400 space-y-1">
               {selectedTask && selectedTask.logs.length > 0 ? (
                 selectedTask.logs.map((line, i) => (
                   <div key={i} className="leading-relaxed break-words">
@@ -1026,7 +1026,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                   </div>
                 ))
               ) : (
-                <div className="text-slate-600 italic">
+                <div className="text-slate-400 dark:text-slate-600 italic">
                   Raw terminal stream events will appear here...
                 </div>
               )}

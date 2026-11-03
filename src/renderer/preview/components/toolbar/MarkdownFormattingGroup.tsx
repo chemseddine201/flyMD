@@ -166,87 +166,87 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
         {/* Dropdown Menu Popover */}
         {showMoreMenu && (
           <div
-            className="absolute top-full left-0 mt-1.5 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-xl
-                       shadow-[0_12px_32px_rgba(0,0,0,0.6)] py-1.5 z-50 text-slate-200 animate-in fade-in zoom-in-95 duration-150"
+            className="absolute top-full left-0 mt-1.5 w-52 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-slate-700/80 rounded-xl
+                       shadow-[0_12px_32px_rgba(0,0,0,0.15)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.6)] py-1.5 z-50 text-slate-800 dark:text-slate-200 animate-in fade-in zoom-in-95 duration-150"
           >
-            <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800/80 mb-1">
+            <div className="px-3 py-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800/80 mb-1">
               Formatting Tools
             </div>
 
             <button
               onClick={() => handleSelectFormat('## ', '', 'Heading 2')}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-800/90 text-left text-xs transition group"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/90 text-left text-xs transition group text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white"
             >
-              <Heading2 className="w-3.5 h-3.5 text-sky-400 group-hover:scale-110 transition-transform" />
+              <Heading2 className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 group-hover:scale-110 transition-transform" />
               <div className="flex-1 flex items-center justify-between">
                 <span>Heading 2</span>
-                <span className="text-[10px] text-slate-500 font-mono">## H2</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">## H2</span>
               </div>
             </button>
 
             <button
               onClick={() => handleSelectFormat('### ', '', 'Heading 3')}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-800/90 text-left text-xs transition group"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/90 text-left text-xs transition group text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white"
             >
-              <Heading2 className="w-3.5 h-3.5 text-sky-400 group-hover:scale-110 transition-transform" />
+              <Heading2 className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 group-hover:scale-110 transition-transform" />
               <div className="flex-1 flex items-center justify-between">
                 <span>Heading 3</span>
-                <span className="text-[10px] text-slate-500 font-mono">### H3</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">### H3</span>
               </div>
             </button>
 
             <button
               onClick={() => handleSelectFormat('~~', '~~', 'strikethrough')}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-800/90 text-left text-xs transition group"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/90 text-left text-xs transition group text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white"
             >
-              <Strikethrough className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+              <Strikethrough className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 group-hover:scale-110 transition-transform" />
               <div className="flex-1 flex items-center justify-between">
                 <span>Strikethrough</span>
-                <span className="text-[10px] text-slate-500 font-mono">~~text~~</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">~~text~~</span>
               </div>
             </button>
 
             <button
               onClick={() => handleSelectFormat('> ', '', 'Quote')}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-800/90 text-left text-xs transition group"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/90 text-left text-xs transition group text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white"
             >
-              <Quote className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
+              <Quote className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 group-hover:scale-110 transition-transform" />
               <div className="flex-1 flex items-center justify-between">
                 <span>Blockquote</span>
-                <span className="text-[10px] text-slate-500 font-mono">&gt; quote</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">&gt; quote</span>
               </div>
             </button>
 
             <button
               onClick={() => handleSelectFormat('```\n', '\n```', 'code here')}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-800/90 text-left text-xs transition group"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/90 text-left text-xs transition group text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white"
             >
-              <Code className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <Code className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
               <div className="flex-1 flex items-center justify-between">
                 <span>Code Block</span>
-                <span className="text-[10px] text-slate-500 font-mono">```code```</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">```code```</span>
               </div>
             </button>
 
             <button
               onClick={() => handleSelectFormat('- [ ] ', '', 'Task item')}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-800/90 text-left text-xs transition group"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/90 text-left text-xs transition group text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white"
             >
-              <CheckSquare className="w-3.5 h-3.5 text-teal-400 group-hover:scale-110 transition-transform" />
+              <CheckSquare className="w-3.5 h-3.5 text-teal-500 dark:text-teal-400 group-hover:scale-110 transition-transform" />
               <div className="flex-1 flex items-center justify-between">
                 <span>Task Checklist</span>
-                <span className="text-[10px] text-slate-500 font-mono">- [ ]</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">- [ ]</span>
               </div>
             </button>
 
             <button
               onClick={() => handleSelectFormat('$$\n', '\n$$', 'E = mc^2')}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-800/90 text-left text-xs transition group"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/90 text-left text-xs transition group text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white"
             >
-              <Sigma className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition-transform" />
+              <Sigma className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 group-hover:scale-110 transition-transform" />
               <div className="flex-1 flex items-center justify-between">
                 <span>KaTeX Math</span>
-                <span className="text-[10px] text-slate-500 font-mono">$$...$$</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">$$...$$</span>
               </div>
             </button>
 
@@ -258,12 +258,12 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
                   ''
                 )
               }
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-800/90 text-left text-xs transition group"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/90 text-left text-xs transition group text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white"
             >
-              <Table className="w-3.5 h-3.5 text-violet-400 group-hover:scale-110 transition-transform" />
+              <Table className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400 group-hover:scale-110 transition-transform" />
               <div className="flex-1 flex items-center justify-between">
                 <span>Insert Table</span>
-                <span className="text-[10px] text-slate-500 font-mono">| table |</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">| table |</span>
               </div>
             </button>
           </div>

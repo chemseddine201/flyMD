@@ -272,12 +272,12 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                     'Refine and structure this Markdown specification with a clear step-by-step checklist.'
                   )
                 }
-                className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-sky-500/50 transition-all group"
+                className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 hover:border-sky-500/50 transition-all group"
               >
-                <div className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                <div className="text-xs font-bold text-sky-700 dark:text-sky-300 flex items-center gap-1.5">
                   <Sparkles size={13} /> 1. Refine Plan
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                   Ask <strong>{activeAgent?.shortName}</strong> to expand `{activeFileName}` into a structured plan.
                 </p>
               </button>
@@ -290,12 +290,12 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                     'Execute the checklist steps in this Markdown plan and generate the implementation report.'
                   )
                 }
-                className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-emerald-500/50 transition-all group"
+                className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 hover:border-emerald-500/50 transition-all group"
               >
-                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                   <Terminal size={13} /> 2. Build &amp; Execute
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                   Run <strong>{activeAgent?.shortName}</strong> on `{activeFileName}` with a safety restore point.
                 </p>
               </button>
@@ -308,12 +308,12 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                     'Audit this Markdown specification and implementation for edge cases, bugs, and security risks.'
                   )
                 }
-                className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-amber-500/50 transition-all group"
+                className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 hover:border-amber-500/50 transition-all group"
               >
-                <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <div className="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
                   <ShieldCheck size={13} /> 3. Review &amp; Audit
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                   Have <strong>{activeAgent?.shortName}</strong> verify quality and produce an audit table.
                 </p>
               </button>
@@ -323,23 +323,23 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
           <div className="max-w-4xl mx-auto space-y-4">
             {/* Turn 1: User Dispatched Task Bubble */}
             <div className="flex justify-end">
-              <div className="max-w-2xl rounded-2xl rounded-tr-sm border border-sky-500/30 bg-sky-950/30 px-4 py-3 text-xs text-slate-100 space-y-2 shadow-md">
+              <div className="max-w-2xl rounded-2xl rounded-tr-sm border border-sky-500/30 bg-sky-500/10 dark:bg-sky-950/30 px-4 py-3 text-xs text-slate-800 dark:text-slate-100 space-y-2 shadow-md">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300 flex items-center gap-1.5">
                     <span>You → @{taskAgent?.name || selectedTask.targetAgentId}</span>
-                    <span className="px-1.5 py-0.2 rounded bg-sky-500/20 border border-sky-500/30 text-sky-200">
+                    <span className="px-1.5 py-0.2 rounded bg-sky-500/10 dark:bg-sky-500/20 border border-sky-500/30 text-sky-800 dark:text-sky-200">
                       {selectedTask.intent.toUpperCase()}
                     </span>
                   </span>
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <FileText size={11} className="text-sky-400" />
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <FileText size={11} className="text-sky-500 dark:text-sky-400" />
                     {selectedTask.fileName}
                   </span>
                 </div>
-                <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap select-text">
+                <div className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap select-text">
                   {selectedTask.customPrompt ? (
                     <div
-                      className="prose prose-invert text-xs max-w-none prose-img:max-h-72 prose-img:rounded-xl prose-img:border prose-img:border-slate-800/80 prose-img:my-2"
+                      className="prose dark:prose-invert text-xs max-w-none prose-img:max-h-72 prose-img:rounded-xl prose-img:border prose-img:border-slate-300 dark:prose-img:border-slate-800/80 prose-img:my-2"
                       dangerouslySetInnerHTML={{
                         __html: markdownService.render(selectedTask.customPrompt),
                       }}
@@ -354,9 +354,9 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
             </div>
 
             {/* Turn 2: Agent Response Bubble (Thinking + Tool Calls + Live Rendered Markdown + Relay Bar) */}
-            <div className="rounded-2xl border border-slate-800/95 bg-slate-900/90 shadow-xl overflow-hidden">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800/95 bg-white dark:bg-slate-900/90 shadow-xl overflow-hidden">
               {/* Agent Message Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/90 bg-slate-900">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800/90 bg-slate-50 dark:bg-slate-900">
                 <div className="flex items-center gap-2.5">
                   <span
                     className="w-3 h-3 rounded-full shrink-0"
@@ -364,20 +364,20 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       backgroundColor: taskAgent?.accentColor || '#38bdf8',
                     }}
                   />
-                  <span className="text-xs font-extrabold text-white">
+                  <span className="text-xs font-extrabold text-slate-900 dark:text-white">
                     {taskAgent?.name || selectedTask.targetAgentId}
                   </span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
                     ({taskAgent?.vendor || 'AI Agent'})
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase bg-slate-950 text-sky-300 border border-slate-800">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase bg-slate-100 dark:bg-slate-950 text-sky-700 dark:text-sky-300 border border-slate-200 dark:border-slate-800">
                     Effort: {selectedTask.effortLevel || 'medium'}
                   </span>
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase flex items-center gap-1 border ${
                       selectedTask.thinkingEnabled === false
-                        ? 'bg-slate-950 text-slate-400 border-slate-800 line-through'
-                        : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                        ? 'bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 line-through'
+                        : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
                     }`}
                   >
                     <Brain size={10} />
@@ -388,13 +388,13 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                 <div className="flex items-center gap-2">
                   {selectedTask.tokenUsage && (
                     <span
-                      className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1"
+                      className="text-[10px] font-mono text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-950 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-800 hidden sm:inline-flex items-center gap-1"
                       title={`Prompt: ${selectedTask.tokenUsage.promptTokens.toLocaleString()} | Completion: ${selectedTask.tokenUsage.completionTokens.toLocaleString()} | Reasoning: ${selectedTask.tokenUsage.reasoningTokens.toLocaleString()}`}
                     >
-                      <Zap size={10} className="text-sky-400" />
+                      <Zap size={10} className="text-sky-500 dark:text-sky-400" />
                       <span>{selectedTask.tokenUsage.totalTokens.toLocaleString()} tok</span>
                       {selectedTask.tokenUsage.reasoningTokens > 0 && (
-                        <span className="text-indigo-400">
+                        <span className="text-indigo-600 dark:text-indigo-400">
                           (🧠 {selectedTask.tokenUsage.reasoningTokens.toLocaleString()})
                         </span>
                       )}
@@ -402,14 +402,14 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                   )}
                   {selectedTask.status === 'running' ? (
                     <>
-                      <span className="text-[11px] font-bold text-sky-300 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30">
+                      <span className="text-[11px] font-bold text-sky-700 dark:text-sky-300 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30">
                         <Loader2 size={11} className="animate-spin" />
                         Streaming ({selectedTask.progressPercent ?? 45}%)
                       </span>
                       <button
                         type="button"
                         onClick={() => onCancelTask(selectedTask.id)}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[10px] font-bold"
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 dark:text-rose-300 text-[10px] font-bold"
                       >
                         <StopCircle size={11} /> Stop
                       </button>
@@ -420,8 +420,8 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       <span
                         className={`text-[10px] font-bold uppercase flex items-center gap-1 px-2.5 py-0.5 rounded-full border ${
                           selectedTask.status === 'incomplete'
-                            ? 'text-amber-300 bg-amber-500/15 border-amber-500/40'
-                            : 'text-rose-300 bg-rose-500/15 border-rose-500/40'
+                            ? 'text-amber-700 dark:text-amber-300 bg-amber-500/15 border-amber-500/40'
+                            : 'text-rose-700 dark:text-rose-300 bg-rose-500/15 border-rose-500/40'
                         }`}
                       >
                         {selectedTask.status === 'incomplete' ? (
@@ -444,7 +444,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       )}
                     </>
                   ) : (
-                    <span className="text-[10px] font-bold uppercase text-emerald-300 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30">
+                    <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30">
                       <CheckCircle2 size={11} />
                       {selectedTask.status}
                     </span>
@@ -465,16 +465,16 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                   <div
                     className={`rounded-xl border p-3.5 space-y-2.5 text-xs ${
                       selectedTask.status === 'incomplete'
-                        ? 'bg-amber-950/30 border-amber-500/50 text-amber-100'
-                        : 'bg-rose-950/30 border-rose-500/50 text-rose-100'
+                        ? 'bg-amber-500/10 dark:bg-amber-950/30 border-amber-500/50 text-amber-900 dark:text-amber-100'
+                        : 'bg-rose-500/10 dark:bg-rose-950/30 border-rose-500/50 text-rose-900 dark:text-rose-100'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 font-bold text-white">
+                      <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
                         {selectedTask.status === 'incomplete' ? (
-                          <AlertTriangle size={15} className="text-amber-400 shrink-0" />
+                          <AlertTriangle size={15} className="text-amber-500 dark:text-amber-400 shrink-0" />
                         ) : (
-                          <AlertCircle size={15} className="text-rose-400 shrink-0" />
+                          <AlertCircle size={15} className="text-rose-500 dark:text-rose-400 shrink-0" />
                         )}
                         <span>
                           {selectedTask.errorDiagnostic?.title ||
@@ -484,13 +484,13 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                         </span>
                       </div>
                       {selectedTask.errorDiagnostic?.category && (
-                        <span className="px-2 py-0.5 rounded bg-slate-950/90 border border-slate-700 text-[10px] font-mono uppercase text-amber-300 shrink-0">
+                        <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-950/90 border border-slate-200 dark:border-slate-700 text-[10px] font-mono uppercase text-amber-700 dark:text-amber-300 shrink-0">
                           {selectedTask.errorDiagnostic.category}
                         </span>
                       )}
                     </div>
 
-                    <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 font-mono text-[11px] text-rose-200 leading-relaxed select-text">
+                    <div className="rounded-lg bg-white dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 p-2.5 font-mono text-[11px] text-rose-700 dark:text-rose-200 leading-relaxed select-text">
                       {selectedTask.errorDiagnostic?.exceptionMessage ||
                         selectedTask.error ||
                         selectedTask.outcomeReason ||
@@ -498,11 +498,11 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                     </div>
 
                     {selectedTask.errorDiagnostic?.lastKnownActivity && (
-                      <div className="text-[11px] text-slate-300 flex items-center gap-1.5">
-                        <span className="font-bold text-sky-300">
+                      <div className="text-[11px] text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <span className="font-bold text-sky-700 dark:text-sky-300">
                           Last Breakpoint:
                         </span>
-                        <span className="font-mono text-slate-200 truncate">
+                        <span className="font-mono text-slate-800 dark:text-slate-200 truncate">
                           {selectedTask.errorDiagnostic.lastKnownActivity}
                         </span>
                       </div>
@@ -530,7 +530,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                           onClick={() =>
                             onRecoverTask(selectedTask, 'revert_and_retry')
                           }
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold text-xs transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-800 dark:text-amber-200 font-bold text-xs transition-colors cursor-pointer"
                         >
                           <RotateCcw size={11} />
                           <span>Revert Modified Files &amp; Retry</span>
@@ -538,7 +538,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                         <button
                           type="button"
                           onClick={() => onRecoverTask(selectedTask, 'ask')}
-                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
                         >
                           Recovery Options...
                         </button>
@@ -549,10 +549,10 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
 
                 {/* Rendered Markdown Output Document */}
                 {selectedTask.responseMarkdown ? (
-                  <div className="space-y-3 pt-2 border-t border-slate-800">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <span className="font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                        <FileCheck2 size={13} className="text-emerald-400" />
+                  <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <FileCheck2 size={13} className="text-emerald-500 dark:text-emerald-400" />
                         Agent Markdown Deliverable
                       </span>
                       {selectedTask.outputReportPath && (
@@ -561,7 +561,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                           onClick={() =>
                             onOpenReportInTab(selectedTask.outputReportPath)
                           }
-                          className="flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300 underline"
+                          className="flex items-center gap-1 text-[11px] text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 underline"
                         >
                           <span>Open in Tab</span>
                           <ExternalLink size={11} />
@@ -570,23 +570,23 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                     </div>
 
                     <div
-                      className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs leading-relaxed overflow-x-auto max-h-[500px] select-text prose prose-invert max-w-none"
+                      className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs leading-relaxed overflow-x-auto max-h-[500px] select-text prose dark:prose-invert max-w-none"
                       dangerouslySetInnerHTML={{ __html: renderedReplyHtml }}
                     />
                   </div>
                 ) : selectedTask.status === 'running' ? (
-                  <div className="py-8 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
-                    <Loader2 size={24} className="text-sky-400 animate-spin" />
+                  <div className="py-8 text-center text-xs text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-2">
+                    <Loader2 size={24} className="text-sky-500 dark:text-sky-400 animate-spin" />
                     <span>Agent is generating live markdown deliverable...</span>
                   </div>
                 ) : (
-                  <div className="py-4 text-xs text-slate-400 italic">
+                  <div className="py-4 text-xs text-slate-500 dark:text-slate-400 italic">
                     Task completed. View logs or generated report in tabs.
                   </div>
                 )}
 
                 {/* Bottom Agent Action Bar: Quick Apply & Direct Relay */}
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80 flex-wrap">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/80 flex-wrap">
                   <div className="flex items-center gap-2">
                     {selectedTask.responseMarkdown && (
                       <button
@@ -594,7 +594,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                         onClick={() =>
                           onApplyToActiveTab(selectedTask.responseMarkdown || '')
                         }
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-all"
                       >
                         <Wand2 size={12} />
                         <span>Apply to Active Tab</span>
@@ -605,7 +605,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       type="button"
                       disabled={isPasteExternalDisabled}
                       onClick={() => onPasteExternalReply(selectedTask)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-medium transition-all"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-medium transition-all"
                       title={
                         isTaskRunning
                           ? 'Agent is actively generating — paste is locked'
@@ -621,13 +621,13 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
 
                   {/* Immediate Agent-to-Agent Handoff Relay Dropdown */}
                   <div
-                    className={`flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border text-xs transition-colors ${
+                    className={`flex items-center gap-1.5 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border text-xs transition-colors ${
                       isRelayDisabled
-                        ? 'border-slate-800/60 opacity-60'
-                        : 'border-slate-800'
+                        ? 'border-slate-200 dark:border-slate-800/60 opacity-60'
+                        : 'border-slate-200 dark:border-slate-800'
                     }`}
                   >
-                    <span className="text-[10px] font-bold text-slate-400 pl-1">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 pl-1">
                       Relay to:
                     </span>
                     <select
@@ -636,12 +636,12 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       onChange={(e) =>
                         setRelayAgentId(e.target.value as AgentId)
                       }
-                      className="bg-transparent text-sky-300 font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                      className="bg-transparent text-sky-600 dark:text-sky-300 font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                     >
                       {visibleAgents
                         .filter((a) => a.id !== selectedTask.targetAgentId)
                         .map((a) => (
-                          <option key={a.id} value={a.id} className="bg-slate-900">
+                          <option key={a.id} value={a.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                             @{a.name}
                           </option>
                         ))}
@@ -660,36 +660,36 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                           setRelayCustomActionId('');
                         }
                       }}
-                      className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                      className="bg-transparent text-slate-800 dark:text-slate-200 text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                     >
-                      <option value="review" className="bg-slate-900">
+                      <option value="review" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Review
                       </option>
-                      <option value="build" className="bg-slate-900">
+                      <option value="build" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Build
                       </option>
-                      <option value="fix-bugs" className="bg-slate-900">
+                      <option value="fix-bugs" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Fix Bugs
                       </option>
-                      <option value="refine-plan" className="bg-slate-900">
+                      <option value="refine-plan" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Plan
                       </option>
-                      <option value="write-tests" className="bg-slate-900">
+                      <option value="write-tests" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Tests
                       </option>
-                      <option value="explain" className="bg-slate-900">
+                      <option value="explain" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Explain
                       </option>
                       {availableCustomActions.length > 0 && (
                         <optgroup
                           label="Custom Actions"
-                          className="bg-slate-900 text-indigo-300 font-semibold"
+                          className="bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 font-semibold"
                         >
                           {availableCustomActions.map((ca) => (
                             <option
                               key={ca.id}
                               value={`custom:${ca.id}`}
-                              className="bg-slate-900 text-slate-100"
+                              className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                             >
                               ✨ {ca.name}
                             </option>
@@ -705,22 +705,22 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       onChange={(e) =>
                         setRelayEffort(e.target.value as AgentEffortLevel)
                       }
-                      className="bg-transparent text-sky-300 font-bold text-[11px] focus:outline-none cursor-pointer disabled:cursor-not-allowed border-l border-slate-800 pl-1.5"
+                      className="bg-transparent text-sky-600 dark:text-sky-300 font-bold text-[11px] focus:outline-none cursor-pointer disabled:cursor-not-allowed border-l border-slate-200 dark:border-slate-800 pl-1.5"
                       title="Effort level for relayed task (tokens/reasoning depth)"
                     >
-                      <option value="low" className="bg-slate-900">
+                      <option value="low" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Low Effort
                       </option>
-                      <option value="medium" className="bg-slate-900">
+                      <option value="medium" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Med Effort (Default)
                       </option>
-                      <option value="high" className="bg-slate-900">
+                      <option value="high" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         High Effort
                       </option>
-                      <option value="xhigh" className="bg-slate-900">
+                      <option value="xhigh" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         X-High Effort
                       </option>
-                      <option value="max" className="bg-slate-900">
+                      <option value="max" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         Max Effort
                       </option>
                     </select>
@@ -732,8 +732,8 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                       onClick={() => setRelayThinking((prev) => !prev)}
                       className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer disabled:cursor-not-allowed ${
                         relayThinking
-                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                          : 'bg-slate-800 text-slate-400 border border-slate-700 line-through'
+                          ? 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/40'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 line-through'
                       }`}
                       title={
                         relayThinking

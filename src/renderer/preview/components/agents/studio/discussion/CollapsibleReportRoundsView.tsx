@@ -204,20 +204,20 @@ export const CollapsibleReportRoundsView: React.FC<CollapsibleReportRoundsViewPr
       <div className="space-y-6">
         {parsed.beforeSection4Html && (
           <div
-            className="markdown-body text-slate-200 leading-relaxed transition-all"
+            className="markdown-body text-slate-800 dark:text-slate-200 leading-relaxed transition-all"
             style={fontStyle}
             dangerouslySetInnerHTML={{ __html: parsed.beforeSection4Html }}
           />
         )}
 
         {parsed.rounds.length > 0 && (
-          <section className="space-y-3 pt-2 border-t border-slate-800/80">
+          <section className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800/80">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-base font-bold text-slate-100">
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                   4. Main Arguments, Critiques, Replies, and Revisions
                 </h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
                   Full untrimmed Markdown for every executed debate round
                   (collapsed by default — click any executed round to expand).
                 </p>
@@ -226,9 +226,9 @@ export const CollapsibleReportRoundsView: React.FC<CollapsibleReportRoundsViewPr
                 <button
                   type="button"
                   onClick={handleToggleAllExecuted}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-semibold transition-colors"
                 >
-                  <ChevronsUpDown size={12} className="text-sky-400" />
+                  <ChevronsUpDown size={12} className="text-sky-500 dark:text-sky-400" />
                   <span>
                     {anyExpanded
                       ? 'Collapse All Rounds'
@@ -246,23 +246,23 @@ export const CollapsibleReportRoundsView: React.FC<CollapsibleReportRoundsViewPr
                       key={round.roundNumber}
                       aria-disabled="true"
                       title="This round was automatically skipped because successive agents already reached identical summary consensus in the previous round."
-                      className="rounded-xl border border-amber-500/25 bg-slate-950/60 px-4 py-3 flex flex-wrap items-center justify-between gap-2 opacity-75 select-none cursor-not-allowed"
+                      className="rounded-xl border border-amber-500/25 bg-amber-500/5 dark:bg-slate-950/60 px-4 py-3 flex flex-wrap items-center justify-between gap-2 opacity-75 select-none cursor-not-allowed"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Lock
                           size={14}
-                          className="text-amber-400/80 shrink-0"
+                          className="text-amber-500 dark:text-amber-400/80 shrink-0"
                         />
                         <div className="min-w-0">
-                          <div className="text-xs font-bold text-slate-300 flex items-center gap-2 flex-wrap">
+                          <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 flex-wrap">
                             <span>{round.title}</span>
                           </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5">
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                             {round.metaSummary}
                           </div>
                         </div>
                       </div>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-bold uppercase tracking-wide shrink-0">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-bold uppercase tracking-wide shrink-0">
                         <SkipForward size={10} />
                         Duplicated / Ignored
                       </span>
@@ -280,50 +280,50 @@ export const CollapsibleReportRoundsView: React.FC<CollapsibleReportRoundsViewPr
                     key={round.roundNumber}
                     className={`rounded-xl border transition-all overflow-hidden ${
                       isExpanded
-                        ? 'border-sky-500/40 bg-slate-950/80 shadow-lg'
-                        : 'border-slate-800 bg-slate-950/45 hover:border-slate-700'
+                        ? 'border-sky-500/40 bg-white dark:bg-slate-950/80 shadow-md'
+                        : 'border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/45 hover:border-slate-300 dark:hover:border-slate-700'
                     }`}
                   >
                     <button
                       type="button"
                       onClick={() => handleToggleRound(round.roundNumber, false)}
                       aria-expanded={isExpanded}
-                      className="w-full px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-left hover:bg-slate-900/70 transition-colors cursor-pointer"
+                      className="w-full px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-left hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         {isExpanded ? (
                           <ChevronDown
                             size={15}
-                            className="text-sky-400 shrink-0"
+                            className="text-sky-500 dark:text-sky-400 shrink-0"
                           />
                         ) : (
                           <ChevronRight
                             size={15}
-                            className="text-slate-400 shrink-0"
+                            className="text-slate-400 dark:text-slate-500 shrink-0"
                           />
                         )}
                         <CheckCircle2
                           size={14}
-                          className="text-emerald-400 shrink-0"
+                          className="text-emerald-500 dark:text-emerald-400 shrink-0"
                         />
-                        <span className="text-xs font-bold text-slate-100">
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
                           {round.title}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 border border-slate-700/70 font-mono">
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/70 font-mono">
                           {round.metaSummary}
                         </span>
-                        <span className="text-[10px] text-sky-400 font-semibold">
+                        <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold">
                           {isExpanded ? 'Hide Details' : 'Read Full Markdown'}
                         </span>
                       </div>
                     </button>
 
                     {isExpanded && (
-                      <div className="px-5 py-4 border-t border-slate-800/80 bg-slate-900/50">
+                      <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/50">
                         <div
-                          className="markdown-body text-slate-200 leading-relaxed"
+                          className="markdown-body text-slate-800 dark:text-slate-200 leading-relaxed"
                           style={fontStyle}
                           dangerouslySetInnerHTML={{ __html: roundHtml }}
                         />
@@ -338,7 +338,7 @@ export const CollapsibleReportRoundsView: React.FC<CollapsibleReportRoundsViewPr
 
         {parsed.afterSection4Html && (
           <div
-            className="markdown-body text-slate-200 leading-relaxed pt-2 border-t border-slate-800/80 transition-all"
+            className="markdown-body text-slate-800 dark:text-slate-200 leading-relaxed pt-2 border-t border-slate-200 dark:border-slate-800/80 transition-all"
             style={fontStyle}
             dangerouslySetInnerHTML={{ __html: parsed.afterSection4Html }}
           />

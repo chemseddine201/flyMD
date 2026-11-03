@@ -140,29 +140,29 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex flex-col bg-slate-950/90 backdrop-blur-md select-none animate-in fade-in duration-150"
+      className="fixed inset-0 z-[120] flex flex-col bg-slate-950/70 backdrop-blur-md select-none animate-in fade-in duration-150"
       onMouseUp={handleMouseUp}
     >
-      <div className="h-12 w-full flex items-center justify-between px-4 bg-slate-900/90 border-b border-slate-800 text-slate-200 z-50 shrink-0">
+      <div className="h-12 w-full flex items-center justify-between px-4 bg-white/95 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 z-50 shrink-0 transition-colors duration-150">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+          <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-600 dark:text-sky-400">
             <Maximize2 className="w-3.5 h-3.5" />
           </div>
-          <span className="font-semibold text-xs text-slate-100 truncate">
+          <span className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">
             {title}
           </span>
-          <span className="text-[11px] text-slate-500 hidden sm:inline font-mono">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:inline font-mono">
             (Scroll to zoom • Drag to pan)
           </span>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <div className="flex items-center bg-slate-800/80 rounded-lg p-0.5 border border-slate-700/60 text-xs">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700/60 text-xs">
             <button
               type="button"
               onClick={handleZoomOut}
               title="Zoom Out (-)"
-              className="p-1.5 hover:text-white hover:bg-slate-700 rounded transition"
+              className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
@@ -170,7 +170,7 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
               type="button"
               onClick={handleResetZoom}
               title="Reset Zoom (0)"
-              className="px-2 py-0.5 text-[11px] font-mono hover:text-sky-300 transition"
+              className="px-2 py-0.5 text-[11px] font-mono text-slate-700 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-300 transition"
             >
               {Math.round(scale * 100)}%
             </button>
@@ -178,7 +178,7 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
               type="button"
               onClick={handleZoomIn}
               title="Zoom In (+)"
-              className="p-1.5 hover:text-white hover:bg-slate-700 rounded transition"
+              className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
@@ -186,28 +186,28 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
               type="button"
               onClick={handleResetZoom}
               title="Fit to Window"
-              className="p-1.5 hover:text-white hover:bg-slate-700 rounded transition text-slate-400"
+              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="h-4 w-px bg-slate-800 mx-1" />
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
 
           <button
             type="button"
             onClick={handleCopySvg}
             title="Copy SVG to Clipboard"
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60 text-xs transition"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/60 text-xs transition"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-emerald-400 font-medium">Copied!</span>
+                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-emerald-700 dark:text-emerald-400 font-medium">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5 text-slate-400" />
+                <Copy className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                 <span>Copy</span>
               </>
             )}
@@ -217,9 +217,9 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
             type="button"
             onClick={handleDownloadSvg}
             title="Download Vector SVG"
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60 text-xs transition"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/60 text-xs transition"
           >
-            <Download className="w-3.5 h-3.5 text-sky-400" />
+            <Download className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
             <span>SVG</span>
           </button>
 
@@ -234,13 +234,13 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
             <span>{isExportingPng ? 'Saving...' : 'PNG'}</span>
           </button>
 
-          <div className="h-4 w-px bg-slate-800 mx-1" />
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
 
           <button
             type="button"
             onClick={onClose}
             title="Close Preview (Esc)"
-            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition"
+            className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -252,12 +252,12 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
-        className={`flex-1 w-full h-full overflow-hidden relative flex items-center justify-center ${
+        className={`flex-1 w-full h-full overflow-hidden relative flex items-center justify-center bg-white dark:bg-slate-950 ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         style={{
           backgroundImage:
-            'radial-gradient(circle, rgba(148, 163, 184, 0.08) 1px, transparent 1px)',
+            'radial-gradient(circle, rgba(148, 163, 184, 0.15) 1px, transparent 1px)',
           backgroundSize: '24px 24px',
         }}
       >
@@ -272,7 +272,7 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
         />
       </div>
 
-      <div className="h-8 px-4 bg-slate-950/80 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-500">
+      <div className="h-8 px-4 bg-slate-50 dark:bg-slate-950/80 border-t border-slate-200 dark:border-slate-900 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
             <Move className="w-3 h-3 text-slate-400" />
@@ -282,7 +282,7 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
           <span>Scroll mouse wheel to zoom in / out</span>
         </div>
         <div>
-          <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-400">
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-[10px] font-mono text-slate-600 dark:text-slate-400">
             Esc
           </kbd>{' '}
           to exit

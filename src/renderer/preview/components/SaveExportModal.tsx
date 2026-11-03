@@ -204,22 +204,22 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
                     onClick={() => setSaveExt(item.ext)}
                     className={`flex flex-col text-left p-2.5 rounded-xl border transition ${
                       saveExt === item.ext
-                        ? 'border-sky-500 bg-sky-500/15 text-white shadow-sm'
-                        : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                        ? 'border-sky-500 bg-sky-500/15 text-slate-900 dark:text-white shadow-xs'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <span className="font-mono font-bold text-xs text-sky-300">
+                      <span className="font-mono font-bold text-xs text-sky-600 dark:text-sky-300">
                         {item.ext}
                       </span>
                       {saveExt === item.ext && (
-                        <Check className="w-3.5 h-3.5 text-sky-400" />
+                        <Check className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
                       )}
                     </div>
-                    <span className="text-[11px] font-medium text-slate-200 mt-0.5">
+                    <span className="text-[11px] font-medium text-slate-800 dark:text-slate-200 mt-0.5">
                       {item.label}
                     </span>
-                    <span className="text-[9px] text-slate-500 mt-0.5 leading-tight">
+                    <span className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
                       {item.desc}
                     </span>
                   </button>
@@ -228,7 +228,7 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <label className="text-[11px] font-semibold text-slate-300 block">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block">
                 Select Export Format:
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -241,22 +241,22 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
                       onClick={() => setExportFormat(item.id)}
                       className={`flex flex-col text-left p-3 rounded-xl border transition ${
                         isSelected
-                          ? `${item.color} shadow-sm`
-                          : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                          ? `${item.color} shadow-xs`
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
                       <div className="flex items-center justify-between w-full">
                         <div className="flex items-center gap-2">
                           {item.icon}
-                          <span className="font-semibold text-xs text-slate-200">
+                          <span className="font-semibold text-xs text-slate-800 dark:text-slate-200">
                             {item.label}
                           </span>
                         </div>
-                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                           {item.ext}
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-400 mt-1.5 leading-tight">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 leading-tight">
                         {item.desc}
                       </span>
                     </button>

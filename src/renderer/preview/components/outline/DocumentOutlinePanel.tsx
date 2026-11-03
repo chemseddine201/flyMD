@@ -223,7 +223,7 @@ export const DocumentOutlinePanel: React.FC<DocumentOutlinePanelProps> = ({
       </div>
 
       {/* Subtitle / Tip */}
-      <div className="px-3 py-1 bg-slate-950/40 border-b border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500">
+      <div className="px-3 py-1 bg-slate-100/70 dark:bg-slate-950/40 border-b border-slate-200 dark:border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
         <span>{headings.length} headings detected</span>
         <span>Click to jump</span>
       </div>

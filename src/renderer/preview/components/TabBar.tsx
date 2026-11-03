@@ -317,7 +317,7 @@ export const TabBar: React.FC<TabBarProps> = ({
             top: Math.min(contextMenu.y, window.innerHeight - 170),
             zIndex: 100,
           }}
-          className="w-48 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl p-1 text-slate-200 text-xs flex flex-col gap-0.5 animate-in fade-in duration-100"
+          className="w-48 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-2xl p-1 text-slate-700 dark:text-slate-200 text-xs flex flex-col gap-0.5 animate-in fade-in duration-100"
           onMouseDown={(e) => e.stopPropagation()}
         >
           {onAssignTabToAgent && (
@@ -328,12 +328,12 @@ export const TabBar: React.FC<TabBarProps> = ({
                   if (contextMenu.tab) onAssignTabToAgent(contextMenu.tab);
                   setContextMenu((prev) => ({ ...prev, isOpen: false }));
                 }}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 text-sky-300 font-semibold transition text-left"
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 font-semibold transition text-left"
               >
-                <Send className="w-3.5 h-3.5 text-sky-400" />
+                <Send className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
                 <span className="flex-1">Assign to Agent...</span>
               </button>
-              <div className="h-px bg-slate-800 my-0.5" />
+              <div className="h-px bg-slate-200 dark:bg-slate-800 my-0.5" />
             </>
           )}
 
@@ -343,11 +343,11 @@ export const TabBar: React.FC<TabBarProps> = ({
               if (contextMenu.tab) onCloseTab(contextMenu.tab.id);
               setContextMenu((prev) => ({ ...prev, isOpen: false }));
             }}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition text-left"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition text-left"
           >
             <X className="w-3.5 h-3.5 text-slate-400" />
             <span className="flex-1">Close</span>
-            <kbd className="text-[9px] text-slate-500 font-mono">Ctrl+W</kbd>
+            <kbd className="text-[9px] text-slate-400 dark:text-slate-500 font-mono">Ctrl+W</kbd>
           </button>
 
           <button
@@ -357,9 +357,9 @@ export const TabBar: React.FC<TabBarProps> = ({
               setContextMenu((prev) => ({ ...prev, isOpen: false }));
               if (targetId) triggerCloseOthers(targetId);
             }}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition text-left"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition text-left"
           >
-            <Minimize2 className="w-3.5 h-3.5 text-sky-400" />
+            <Minimize2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
             <span className="flex-1">Close Others</span>
           </button>
 
@@ -370,13 +370,13 @@ export const TabBar: React.FC<TabBarProps> = ({
               setContextMenu((prev) => ({ ...prev, isOpen: false }));
               if (targetId) onCloseTabsToRight?.(targetId);
             }}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition text-left"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition text-left"
           >
             <ArrowRightToLine className="w-3.5 h-3.5 text-slate-400" />
             <span className="flex-1">Close to the Right</span>
           </button>
 
-          <div className="h-px bg-slate-800 my-0.5" />
+          <div className="h-px bg-slate-200 dark:bg-slate-800 my-0.5" />
 
           <button
             type="button"
@@ -384,7 +384,7 @@ export const TabBar: React.FC<TabBarProps> = ({
               setContextMenu((prev) => ({ ...prev, isOpen: false }));
               triggerCloseAll();
             }}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 hover:text-rose-300 text-rose-400 transition text-left"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition text-left"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span className="flex-1 font-medium">Close All</span>
@@ -393,17 +393,17 @@ export const TabBar: React.FC<TabBarProps> = ({
       )}
 
       {confirmModal.isOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-5 text-slate-100 flex flex-col gap-4">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-in fade-in duration-150 select-none">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-5 text-slate-900 dark:text-slate-100 flex flex-col gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-semibold text-sm text-slate-100">
+                <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100">
                   {confirmModal.action === 'all' ? 'Close All Tabs?' : 'Close Other Tabs?'}
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {confirmModal.action === 'all'
                     ? `Are you sure you want to close all ${confirmModal.count} tab${confirmModal.count > 1 ? 's' : ''}?`
                     : `Are you sure you want to close ${confirmModal.count} other tab${confirmModal.count > 1 ? 's' : ''}?`}
@@ -412,29 +412,29 @@ export const TabBar: React.FC<TabBarProps> = ({
             </div>
 
             {confirmModal.hasDirty && (
-              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 <span>One or more tabs have unsaved edits which will be discarded.</span>
               </div>
             )}
 
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+            <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={confirmModal.dontAskAgain}
                 onChange={(e) =>
                   setConfirmModal((prev) => ({ ...prev, dontAskAgain: e.target.checked }))
                 }
-                className="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0 focus:ring-offset-0 w-4 h-4"
+                className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sky-500 focus:ring-0 focus:ring-offset-0 w-4 h-4"
               />
               <span>Do not ask me again</span>
             </label>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                className="px-3.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white transition text-xs font-medium"
+                className="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition text-xs font-medium"
               >
                 Cancel
               </button>

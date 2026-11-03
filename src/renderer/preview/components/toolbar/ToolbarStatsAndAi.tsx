@@ -1,5 +1,20 @@
 import React from 'react';
-import { Languages, Sun, Moon, Sparkles, Coffee, Settings, ListTree, Accessibility, Monitor } from 'lucide-react';
+import {
+  Languages,
+  Sun,
+  SunMedium,
+  Moon,
+  MoonStar,
+  Sparkles,
+  Flame,
+  Coffee,
+  Zap,
+  Eye,
+  Settings,
+  ListTree,
+  Accessibility,
+  Monitor,
+} from 'lucide-react';
 import { AppSettings } from '../../../../shared/types';
 import { TextDirection } from '../../../../shared/utils';
 import { DirectionToggle } from './DirectionToggle';
@@ -40,20 +55,21 @@ export const ToolbarStatsAndAi: React.FC<ToolbarStatsAndAiProps> = ({
       case 'system':
         return <Monitor className="w-3.5 h-3.5 text-sky-500" />;
       case 'light':
-      case 'clean-white':
         return <Sun className="w-3.5 h-3.5 text-amber-500" />;
+      case 'clean-white':
+        return <SunMedium className="w-3.5 h-3.5 text-emerald-500" />;
       case 'tokyo-night':
-        return <Moon className="w-3.5 h-3.5 text-indigo-400" />;
+        return <MoonStar className="w-3.5 h-3.5 text-indigo-400" />;
       case 'catppuccin':
-        return <Sparkles className="w-3.5 h-3.5 text-rose-300" />;
+        return <Sparkles className="w-3.5 h-3.5 text-rose-400" />;
       case 'dracula':
-        return <Sparkles className="w-3.5 h-3.5 text-purple-400" />;
+        return <Flame className="w-3.5 h-3.5 text-purple-400" />;
       case 'cyber':
-        return <Sparkles className="w-3.5 h-3.5 text-cyan-400" />;
+        return <Zap className="w-3.5 h-3.5 text-cyan-400" />;
       case 'sepia':
         return <Coffee className="w-3.5 h-3.5 text-amber-600" />;
       case 'high-contrast':
-        return <Sun className="w-3.5 h-3.5 text-yellow-400" />;
+        return <Eye className="w-3.5 h-3.5 text-yellow-400" />;
       case 'dark':
       default:
         return <Moon className="w-3.5 h-3.5 text-sky-400" />;

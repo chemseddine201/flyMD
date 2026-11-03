@@ -68,27 +68,27 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
     !tokenQuotaConfig.enabled || tokenQuotaConfig.budgetCap <= 0;
 
   // Status badge styling
-  let badgeBorder = 'border-slate-800';
-  let badgeBg = 'bg-slate-900/90 hover:bg-slate-800/90';
-  let badgeText = 'text-slate-300';
-  let iconColor = 'text-sky-400';
+  let badgeBorder = 'border-slate-200 dark:border-slate-800';
+  let badgeBg = 'bg-slate-100 dark:bg-slate-900/90 hover:bg-slate-200 dark:hover:bg-slate-800/90';
+  let badgeText = 'text-slate-700 dark:text-slate-300';
+  let iconColor = 'text-sky-600 dark:text-sky-400';
 
   if (!isUnlimited) {
     if (isBreached) {
       badgeBorder = 'border-rose-500/60';
-      badgeBg = 'bg-rose-950/50 hover:bg-rose-900/60';
-      badgeText = 'text-rose-200';
-      iconColor = 'text-rose-400';
+      badgeBg = 'bg-rose-500/10 dark:bg-rose-950/50 hover:bg-rose-500/20 dark:hover:bg-rose-900/60';
+      badgeText = 'text-rose-700 dark:text-rose-200';
+      iconColor = 'text-rose-600 dark:text-rose-400';
     } else if (isSoftWarning) {
       badgeBorder = 'border-amber-500/50';
-      badgeBg = 'bg-amber-950/40 hover:bg-amber-900/50';
-      badgeText = 'text-amber-200';
-      iconColor = 'text-amber-400';
+      badgeBg = 'bg-amber-500/10 dark:bg-amber-950/40 hover:bg-amber-500/20 dark:hover:bg-amber-900/50';
+      badgeText = 'text-amber-800 dark:text-amber-200';
+      iconColor = 'text-amber-600 dark:text-amber-400';
     } else {
       badgeBorder = 'border-sky-500/30';
-      badgeBg = 'bg-sky-950/30 hover:bg-sky-900/40';
-      badgeText = 'text-sky-200';
-      iconColor = 'text-sky-400';
+      badgeBg = 'bg-sky-500/10 dark:bg-sky-950/30 hover:bg-sky-500/20 dark:hover:bg-sky-900/40';
+      badgeText = 'text-sky-800 dark:text-sky-200';
+      iconColor = 'text-sky-600 dark:text-sky-400';
     }
   }
 
@@ -98,13 +98,13 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`px-2.5 py-1 rounded-lg border ${badgeBorder} ${badgeBg} ${badgeText} flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm select-none cursor-pointer`}
+        className={`px-2.5 py-1 rounded-lg border ${badgeBorder} ${badgeBg} ${badgeText} flex items-center gap-1.5 text-xs font-semibold transition-all shadow-xs select-none cursor-pointer`}
         title="Token Usage Telemetry & Quota Governance"
       >
         <Zap size={13} className={`${iconColor} shrink-0`} />
         <span>
           {formatTokens(sessionMetrics.totalTokens)}
-          <span className="text-[10px] text-slate-400 ml-0.5">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 ml-0.5">
             / {isUnlimited ? '∞' : formatTokens(tokenQuotaConfig.budgetCap)}
           </span>
         </span>
@@ -112,10 +112,10 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
           <span
             className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold ${
               isBreached
-                ? 'bg-rose-500/30 text-rose-300'
+                ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300'
                 : isSoftWarning
-                ? 'bg-amber-500/30 text-amber-300'
-                : 'bg-sky-500/20 text-sky-300'
+                ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
+                : 'bg-sky-500/20 text-sky-800 dark:text-sky-300'
             }`}
           >
             {percent}%
@@ -126,36 +126,36 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
 
       {/* Popover */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl p-3.5 z-50 text-xs space-y-3.5 animate-fadeIn">
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-2xl p-3.5 z-50 text-xs space-y-3.5 animate-fadeIn">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
             <div className="flex items-center gap-1.5">
-              <Zap size={14} className="text-sky-400" />
-              <span className="font-bold text-white text-xs">
+              <Zap size={14} className="text-sky-600 dark:text-sky-400" />
+              <span className="font-bold text-slate-900 dark:text-white text-xs">
                 Token Usage &amp; Quota
               </span>
             </div>
             <label className="flex items-center gap-1.5 cursor-pointer select-none">
-              <span className="text-[10px] text-slate-400">Guard</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Guard</span>
               <input
                 type="checkbox"
                 checked={tokenQuotaConfig.enabled}
                 onChange={(e) =>
                   setTokenQuotaConfig({ enabled: e.target.checked })
                 }
-                className="w-3.5 h-3.5 rounded bg-slate-950 border-slate-700 text-sky-500 focus:ring-0 cursor-pointer"
+                className="w-3.5 h-3.5 rounded bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-sky-500 focus:ring-0 cursor-pointer"
               />
             </label>
           </div>
 
           {/* Session Token Breakdown */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span className="font-medium text-slate-200">Session Usage</span>
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-medium text-slate-800 dark:text-slate-200">Session Usage</span>
               <button
                 type="button"
                 onClick={resetSessionMetrics}
-                className="text-[10px] text-slate-400 hover:text-sky-400 flex items-center gap-1 transition-colors"
+                className="text-[10px] text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 flex items-center gap-1 transition-colors"
                 title="Reset session token counters"
               >
                 <RotateCcw size={10} />
@@ -165,7 +165,7 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
 
             {/* Progress Bar */}
             {!isUnlimited && (
-              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${
                     isBreached
@@ -181,24 +181,24 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
 
             {/* Prompt vs Completion vs Reasoning */}
             <div className="grid grid-cols-3 gap-1.5 pt-1 text-center">
-              <div className="p-1.5 rounded-lg bg-slate-950/70 border border-slate-800/80">
-                <div className="text-[10px] text-slate-400">Prompt</div>
-                <div className="font-mono text-white font-bold text-[11px] mt-0.5">
+              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Prompt</div>
+                <div className="font-mono text-slate-900 dark:text-white font-bold text-[11px] mt-0.5">
                   {formatTokens(sessionMetrics.promptTokens)}
                 </div>
               </div>
-              <div className="p-1.5 rounded-lg bg-slate-950/70 border border-slate-800/80">
-                <div className="text-[10px] text-slate-400">Completion</div>
-                <div className="font-mono text-emerald-400 font-bold text-[11px] mt-0.5">
+              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Completion</div>
+                <div className="font-mono text-emerald-600 dark:text-emerald-400 font-bold text-[11px] mt-0.5">
                   {formatTokens(sessionMetrics.completionTokens)}
                 </div>
               </div>
-              <div className="p-1.5 rounded-lg bg-slate-950/70 border border-slate-800/80">
-                <div className="text-[10px] text-indigo-300 flex items-center justify-center gap-0.5">
+              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80">
+                <div className="text-[10px] text-indigo-700 dark:text-indigo-300 flex items-center justify-center gap-0.5">
                   <Brain size={10} />
                   <span>Reasoning</span>
                 </div>
-                <div className="font-mono text-indigo-300 font-bold text-[11px] mt-0.5">
+                <div className="font-mono text-indigo-700 dark:text-indigo-300 font-bold text-[11px] mt-0.5">
                   {formatTokens(sessionMetrics.reasoningTokens)}
                 </div>
               </div>
@@ -207,7 +207,7 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
 
           {/* Budget Presets */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-medium text-slate-300 block">
+            <label className="text-[11px] font-medium text-slate-700 dark:text-slate-300 block">
               Session Budget Limit Cap
             </label>
             <div className="flex flex-wrap gap-1">
@@ -226,7 +226,7 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
                     className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                       isSelected
                         ? 'bg-sky-500 text-slate-950'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     {preset.label}
@@ -237,12 +237,12 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
           </div>
 
           {/* Policy Setting: Pause at Boundary */}
-          <div className="p-2 rounded-lg bg-slate-950/80 border border-slate-800 text-[10px] space-y-1">
-            <div className="flex items-center gap-1.5 text-slate-200 font-medium">
-              <ShieldAlert size={12} className="text-amber-400" />
+          <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-[10px] space-y-1">
+            <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-medium">
+              <ShieldAlert size={12} className="text-amber-500 dark:text-amber-400" />
               <span>Boundary Governance Policy</span>
             </div>
-            <div className="flex items-center gap-2 pt-1 text-slate-400">
+            <div className="flex items-center gap-2 pt-1 text-slate-600 dark:text-slate-400">
               <label className="flex items-center gap-1 cursor-pointer">
                 <input
                   type="radio"
@@ -251,7 +251,7 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
                   onChange={() =>
                     setTokenQuotaConfig({ breachAction: 'pause_at_boundary' })
                   }
-                  className="w-3 h-3 text-sky-500 bg-slate-900 border-slate-700"
+                  className="w-3 h-3 text-sky-500 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                 />
                 <span>Pause at step/turn boundary (Safe)</span>
               </label>
@@ -263,7 +263,7 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
                   onChange={() =>
                     setTokenQuotaConfig({ breachAction: 'warn_only' })
                   }
-                  className="w-3 h-3 text-sky-500 bg-slate-900 border-slate-700"
+                  className="w-3 h-3 text-sky-500 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                 />
                 <span>Warn only</span>
               </label>
@@ -271,17 +271,17 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
           </div>
 
           {/* Cumulative Ledger Stats */}
-          <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
+          <div className="pt-1 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
             <span>
               Workspace Total:{' '}
-              <strong className="text-slate-200">
+              <strong className="text-slate-800 dark:text-slate-200">
                 {formatTokens(cumulativeMetrics.totalTokens)}
               </strong>
             </span>
             <button
               type="button"
               onClick={resetCumulativeMetrics}
-              className="text-slate-500 hover:text-slate-300"
+              className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               title="Reset cumulative workspace token count"
             >
               Clear Ledger

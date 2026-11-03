@@ -246,9 +246,9 @@ export const AgentsControlCenter: React.FC<AgentsControlCenterProps> = (props) =
                 } catch {}
               }}
               title="Drag to resize Live Progress Inspector (Double-click to reset to 340px)"
-              className="w-1.5 h-full bg-slate-900/60 hover:bg-sky-500/80 active:bg-sky-500 cursor-col-resize z-20 transition-colors shrink-0 flex items-center justify-center group select-none"
+              className="w-1.5 h-full bg-slate-200 dark:bg-slate-900/60 hover:bg-sky-500/80 active:bg-sky-500 cursor-col-resize z-20 transition-colors shrink-0 flex items-center justify-center group select-none border-x border-slate-200 dark:border-slate-800"
             >
-              <div className="w-0.5 h-8 bg-slate-700/80 group-hover:bg-sky-200 rounded transition-colors" />
+              <div className="w-0.5 h-8 bg-slate-400 dark:bg-slate-700/80 group-hover:bg-sky-200 rounded transition-colors" />
             </div>
 
             <AgentProgressInspector

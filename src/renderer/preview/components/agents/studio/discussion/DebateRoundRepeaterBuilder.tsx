@@ -251,20 +251,20 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
   return (
     <div className="space-y-4">
       {/* 1. Dynamic Subscription Multi-Engine Pool */}
-      <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+      <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-400">
+            <div className="p-1.5 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-600 dark:text-sky-400">
               <Cpu size={14} />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-100 flex items-center gap-2">
+              <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <span>Multi-Engine Subscription Pool</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-semibold">
                   {selectedEngines.length} Selected
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">
                 Dynamically synced from your active CLI logins, API keys, subscription tiers, and local models. Select multiple engines to combine their strengths.
               </p>
             </div>
@@ -274,7 +274,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
             <button
               type="button"
               onClick={onSelectAllReadyEngines}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 text-[11px] font-semibold transition-colors"
+              className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 text-[11px] font-semibold transition-colors"
             >
               Select All Ready
             </button>
@@ -282,7 +282,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
               type="button"
               onClick={onRefreshSubscriptions}
               disabled={isRefreshingSubscriptions}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+              className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-semibold flex items-center gap-1 transition-colors"
               title="Re-scan installed agent CLIs, subscription tiers, and Ollama models"
             >
               <RefreshCw
@@ -295,7 +295,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
               <button
                 type="button"
                 onClick={onOpenManageAccounts}
-                className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
               >
                 <KeyRound size={11} />
                 <span>Subscriptions</span>
@@ -323,10 +323,10 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                 onClick={() => onToggleSelectedEngine(prov.id)}
                 className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 ${
                   isSelected
-                    ? 'bg-sky-500/15 border-sky-500/50 text-slate-100 ring-1 ring-sky-500/30'
+                    ? 'bg-sky-500/15 border-sky-500/50 text-slate-900 dark:text-slate-100 ring-1 ring-sky-500/30'
                     : canSelect
-                    ? 'bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300'
-                    : 'bg-slate-950/30 border-slate-800/50 text-slate-500 opacity-55 cursor-not-allowed'
+                    ? 'bg-white dark:bg-slate-950/70 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
+                    : 'bg-slate-100/50 dark:bg-slate-950/30 border-slate-200/50 dark:border-slate-800/50 text-slate-400 dark:text-slate-500 opacity-55 cursor-not-allowed'
                 }`}
               >
                 <div className="min-w-0 flex-1">
@@ -340,11 +340,11 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                       }}
                     />
                     <span className="text-xs font-bold truncate">{prov.name}</span>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-sky-300 border border-slate-700 font-bold shrink-0">
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-sky-700 dark:text-sky-300 border border-slate-200 dark:border-slate-700 font-bold shrink-0">
                       {tierLabel}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-400 truncate mt-0.5 font-mono">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5 font-mono">
                     {prov.available
                       ? `Model: ${prov.model}`
                       : 'Not connected — configure in Subscriptions'}
@@ -352,7 +352,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                 </div>
                 {isSelected && (
                   <div className="w-5 h-5 rounded-full bg-sky-500/20 border border-sky-400/50 flex items-center justify-center shrink-0">
-                    <Check size={11} className="text-sky-300" />
+                    <Check size={11} className="text-sky-500 dark:text-sky-300" />
                   </div>
                 )}
               </button>
@@ -362,21 +362,21 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
       </div>
 
       {/* 2. Unlimited Custom Role & Domain Experience Library */}
-      <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+      <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-              <UserPlus size={13} className="text-amber-400" />
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <UserPlus size={13} className="text-amber-500 dark:text-amber-400" />
               <span>Specialist Roles, Experience &amp; Skills ({allRoles.length})</span>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400">
               Assign deep domain experience and competencies to each round&apos;s agents, or define your own specialist roles.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setShowRoleCreator((prev) => !prev)}
-            className="px-3 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-1 transition-colors"
+            className="px-3 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-1 transition-colors"
           >
             <Plus size={12} />
             <span>{showRoleCreator ? 'Close Role Creator' : 'Define Custom Specialist Role'}</span>
@@ -388,7 +388,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
             <span
               key={r.id}
               title={`${r.experienceProfile}\nDirective: ${r.defaultDirective}`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-950 border border-slate-800 text-[11px] text-slate-200"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-800 dark:text-slate-200"
             >
               <span
                 className="w-2 h-2 rounded-full shrink-0"
@@ -410,10 +410,10 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
         </div>
 
         {showRoleCreator && (
-          <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/30 space-y-2.5 animate-fadeIn">
+          <div className="p-3 rounded-xl bg-amber-500/5 dark:bg-slate-950 border border-amber-500/30 space-y-2.5 animate-fadeIn">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Specialist Role Title
                 </label>
                 <input
@@ -421,11 +421,11 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                   value={newRoleName}
                   onChange={(e) => setNewRoleName(e.target.value)}
                   placeholder="e.g. Distributed Database Architect, FinOps Cost Auditor, Regulatory Counsel..."
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-400"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Badge Accent
                 </label>
                 <div className="flex items-center gap-1.5 pt-1">
@@ -447,7 +447,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Experience, Background &amp; Domain Skills
               </label>
               <input
@@ -455,12 +455,12 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                 value={newRoleExperience}
                 onChange={(e) => setNewRoleExperience(e.target.value)}
                 placeholder="e.g. 12+ years scaling high-throughput event pipelines, zero-downtime migrations, and fault isolation..."
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-400"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-400"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Standing Round Inquiry Directive
               </label>
               <input
@@ -468,13 +468,13 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                 value={newRoleDirective}
                 onChange={(e) => setNewRoleDirective(e.target.value)}
                 placeholder="e.g. Challenge data consistency guarantees, partition recovery, and operational complexity..."
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-400"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-400"
               />
             </div>
 
             {detectedSkills.length > 0 && (
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Bind Detected Custom Skills (Optional)
                 </label>
                 <div className="flex flex-wrap gap-1.5">
@@ -493,8 +493,8 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                         }
                         className={`px-2 py-0.5 rounded-full text-[10px] font-mono border transition-colors ${
                           active
-                            ? 'bg-sky-500/20 text-sky-300 border-sky-500/50'
-                            : 'bg-slate-900 text-slate-400 border-slate-800'
+                            ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/50'
+                            : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
                         }`}
                       >
                         {active ? '✓ ' : '+ '}
@@ -528,19 +528,19 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
       </div>
 
       {/* 3. Round Repeater & Per-Round Split Choreography */}
-      <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
+      <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div>
-            <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-              <Repeat size={14} className="text-violet-400" />
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <Repeat size={14} className="text-violet-600 dark:text-violet-400" />
               <span>Debate Round Repeater &amp; Per-Round Engine/Role Split</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
               Split rounds into a repeating specialist cycle or customize each round with its own engine, model, and role. Automatically stops early if successive summaries converge!
             </p>
           </div>
 
-          <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 shrink-0">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -551,8 +551,8 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
               }}
               className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
                 repeaterMode === 'cycle'
-                  ? 'bg-violet-500/25 text-violet-200 border border-violet-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-violet-500/25 text-violet-800 dark:text-violet-200 border border-violet-500/40'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               Cycle Repeater
@@ -565,8 +565,8 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
               }}
               className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
                 repeaterMode === 'per_round'
-                  ? 'bg-sky-500/25 text-sky-200 border border-sky-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-sky-500/25 text-sky-800 dark:text-sky-200 border border-sky-500/40'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               Split All {maxRounds} Rounds
@@ -576,8 +576,8 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
               onClick={() => onChangeRepeaterMode('off')}
               className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
                 repeaterMode === 'off'
-                  ? 'bg-slate-800 text-slate-200 border border-slate-700'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               Shared Team
@@ -586,7 +586,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
         </div>
 
         {repeaterMode === 'off' ? (
-          <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 text-[11px] text-slate-300 flex items-center justify-between gap-3">
+          <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 flex items-center justify-between gap-3">
             <span>
               <strong>Multi-Engine Team Mode:</strong> Your{' '}
               <strong>{selectedEngines.length}</strong> selected subscription engine(s) will be distributed across the active preset/team participants for all rounds, stopping early if consensus is reached.
@@ -597,7 +597,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                 onChangeRepeaterMode('cycle');
                 onAutoBuildRoundSchedule('cycle');
               }}
-              className="px-3 py-1.5 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-200 text-xs font-bold shrink-0 flex items-center gap-1"
+              className="px-3 py-1.5 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-800 dark:text-violet-200 text-xs font-bold shrink-0 flex items-center gap-1"
             >
               <Wand2 size={12} />
               <span>Enable Round Repeater</span>
@@ -606,10 +606,10 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
         ) : (
           <>
             {/* Live Cycle Preview & Auto-Generate Bar */}
-            <div className="p-2.5 rounded-lg bg-violet-950/25 border border-violet-500/30 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+            <div className="p-2.5 rounded-lg bg-violet-50 dark:bg-violet-950/25 border border-violet-500/30 flex flex-wrap items-center justify-between gap-2 text-[11px]">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-bold text-violet-300 flex items-center gap-1">
-                  <Zap size={12} className="text-amber-400" />
+                <span className="font-bold text-violet-800 dark:text-violet-300 flex items-center gap-1">
+                  <Zap size={12} className="text-amber-500 dark:text-amber-400" />
                   Execution Schedule ({maxRounds} Max Rounds):
                 </span>
                 {Array.from({ length: maxRounds }, (_, i) => {
@@ -624,7 +624,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                   return (
                     <span
                       key={rNum}
-                      className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300 font-mono text-[10px]"
+                      className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px]"
                     >
                       R{rNum}&rarr;Step{' '}
                       {mappedPlan ? mappedPlan.roundNumber : 1} (
@@ -632,7 +632,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                     </span>
                   );
                 })}
-                <span className="text-[10px] text-emerald-400 font-semibold ml-1">
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold ml-1">
                   • Auto-skips remaining rounds on consensus
                 </span>
               </div>
@@ -644,7 +644,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                     repeaterMode === 'per_round' ? 'per_round' : 'cycle'
                   )
                 }
-                className="px-2.5 py-1 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-200 text-[11px] font-bold flex items-center gap-1 shrink-0"
+                className="px-2.5 py-1 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-800 dark:text-violet-200 text-[11px] font-bold flex items-center gap-1 shrink-0"
                 title="Automatically distribute selected subscription engines and specialist roles across rounds"
               >
                 <Wand2 size={11} />
@@ -669,11 +669,11 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                 return (
                   <div
                     key={`round-plan-${plan.roundNumber}-${roundIdx}`}
-                    className="p-3 rounded-xl bg-slate-950/90 border border-slate-800 space-y-2.5"
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 space-y-2.5"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800/80">
                       <div className="flex items-center gap-2 flex-1 min-w-[220px]">
-                        <span className="px-2 py-0.5 rounded-md bg-violet-500/20 border border-violet-500/40 text-violet-200 font-bold text-[11px] shrink-0">
+                        <span className="px-2 py-0.5 rounded-md bg-violet-500/20 border border-violet-500/40 text-violet-800 dark:text-violet-200 font-bold text-[11px] shrink-0">
                           {repeaterMode === 'cycle'
                             ? `Cycle Step ${roundIdx + 1} (Rounds ${matchingRounds.join(', ')})`
                             : `Round ${plan.roundNumber}`}
@@ -685,7 +685,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                             updateRoundPlan(roundIdx, { title: e.target.value })
                           }
                           placeholder="Round phase title..."
-                          className="flex-1 bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-bold text-slate-100 focus:outline-none focus:border-violet-400"
+                          className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2.5 py-1 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-violet-400"
                         />
                       </div>
 
@@ -693,7 +693,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                         <button
                           type="button"
                           onClick={() => handleAddSlotToRound(roundIdx)}
-                          className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 text-[11px] font-semibold flex items-center gap-1"
+                          className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 text-[11px] font-semibold flex items-center gap-1"
                         >
                           <Plus size={11} />
                           <span>Add Agent Turn</span>
@@ -719,7 +719,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                           updateRoundPlan(roundIdx, { objective: e.target.value })
                         }
                         placeholder="Round focus objective (e.g. 'Architecture decomposition & threat model critique')..."
-                        className="w-full bg-slate-900/70 border border-slate-800/80 rounded px-2.5 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-violet-400"
+                        className="w-full bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/80 rounded px-2.5 py-1 text-[11px] text-slate-700 dark:text-slate-300 focus:outline-none focus:border-violet-400"
                       />
                     </div>
 
@@ -736,10 +736,10 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                         return (
                           <div
                             key={slot.slotId || `${roundIdx}-${slotIdx}`}
-                            className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 space-y-2"
+                            className="p-2.5 rounded-lg bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2"
                           >
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
                                 Turn {slotIdx + 1}
                               </span>
                               <input
@@ -770,7 +770,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                                   }))
                                 }
                                 placeholder="Agent Display Name"
-                                className="w-40 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs font-semibold text-slate-100"
+                                className="w-40 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-2 py-1 text-xs font-semibold text-slate-800 dark:text-slate-100"
                               />
 
                               {/* Dynamic Specialist Role Selector */}
@@ -797,16 +797,16 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                                     },
                                   }));
                                 }}
-                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-amber-300 font-semibold"
+                                className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-2 py-1 text-xs text-amber-700 dark:text-amber-300 font-semibold"
                                 title="Specialist Role & Experience Profile"
                               >
                                 {allRoles.map((r) => (
-                                  <option key={r.id} value={r.id}>
+                                  <option key={r.id} value={r.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                                     Role: {r.name}
                                   </option>
                                 ))}
                                 {!matchedRole && (
-                                  <option value="custom">Role: {p.role}</option>
+                                  <option value="custom" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Role: {p.role}</option>
                                 )}
                               </select>
 
@@ -834,7 +834,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                                     },
                                   }));
                                 }}
-                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-sky-300 font-semibold flex-1 min-w-[160px]"
+                                className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-2 py-1 text-xs text-sky-700 dark:text-sky-300 font-semibold flex-1 min-w-[160px]"
                                 title="Subscription AI Engine for this turn"
                               >
                                 {dynamicProviders.map((dp) => (
@@ -842,6 +842,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                                     key={dp.id}
                                     value={dp.id}
                                     disabled={!dp.available && dp.id !== 'mock'}
+                                    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                                   >
                                     Engine: {dp.name}{' '}
                                     {dp.available || dp.id === 'mock'
@@ -917,7 +918,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                                   }))
                                 }
                                 placeholder="Domain experience & skills profile..."
-                                className="bg-slate-950 border border-slate-800/80 rounded px-2 py-1 text-[11px] text-slate-300"
+                                className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded px-2 py-1 text-[11px] text-slate-700 dark:text-slate-300"
                               />
                               <input
                                 type="text"
@@ -929,15 +930,15 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                                   }))
                                 }
                                 placeholder="Round-specific directive or challenge..."
-                                className="bg-slate-950 border border-slate-800/80 rounded px-2 py-1 text-[11px] text-amber-200/90"
+                                className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded px-2 py-1 text-[11px] text-amber-800 dark:text-amber-200/90"
                               />
                             </div>
 
                             {/* Per-Slot Skill Binding Pills if Custom Skills Detected */}
                             {detectedSkills.length > 0 && (
                               <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                                <span className="text-[10px] text-slate-400 flex items-center gap-1 mr-1">
-                                  <Layers size={10} className="text-sky-400" />
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mr-1">
+                                  <Layers size={10} className="text-sky-500 dark:text-sky-400" />
                                   Skills:
                                 </span>
                                 {detectedSkills.map((sk) => {
@@ -967,8 +968,8 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                                       }
                                       className={`px-1.5 py-0.2 rounded text-[10px] font-mono border ${
                                         bound
-                                          ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                                          : 'bg-slate-950 text-slate-500 border-slate-800'
+                                          ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40'
+                                          : 'bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800'
                                       }`}
                                     >
                                       {bound ? '✓ ' : ''}

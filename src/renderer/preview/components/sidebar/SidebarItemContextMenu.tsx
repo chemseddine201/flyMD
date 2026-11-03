@@ -87,43 +87,43 @@ export const SidebarItemContextMenu: React.FC<SidebarItemContextMenuProps> = ({
 
   if (confirmingDelete) {
     return ReactDOM.createPortal(
-      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in select-none">
-        <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/60">
-            <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-fade-in select-none">
+        <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl overflow-hidden transition-colors duration-150">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60">
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-bold text-xs">
               <AlertTriangle size={15} />
               <span>Confirm Deletion</span>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <X size={14} />
             </button>
           </div>
 
-          <div className="p-4 space-y-2 text-xs">
-            <p className="text-slate-200 font-semibold">
+          <div className="p-4 space-y-2 text-xs bg-white dark:bg-slate-900">
+            <p className="text-slate-800 dark:text-slate-200 font-semibold">
               Are you sure you want to delete{' '}
-              <span className="text-sky-300 font-bold">&ldquo;{target.title}&rdquo;</span>?
+              <span className="text-sky-600 dark:text-sky-300 font-bold">&ldquo;{target.title}&rdquo;</span>?
             </p>
             {target.subtitle && (
-              <p className="text-[11px] text-slate-400 break-all font-mono bg-slate-950 p-2 rounded-lg border border-slate-800">
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 break-all font-mono bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
                 {target.subtitle}
               </p>
             )}
-            <p className="text-[11px] text-amber-300/90">
+            <p className="text-[11px] text-amber-700 dark:text-amber-300/90 font-medium">
               This action cannot be undone.
             </p>
           </div>
 
-          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-800 bg-slate-950/60">
+          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60">
             <button
               type="button"
               disabled={deleting}
               onClick={onClose}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+              className="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
             >
               Cancel
             </button>
@@ -131,7 +131,7 @@ export const SidebarItemContextMenu: React.FC<SidebarItemContextMenuProps> = ({
               type="button"
               disabled={deleting}
               onClick={handleConfirmDelete}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 text-xs font-bold shadow-lg shadow-rose-500/20 transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/20 transition-all"
             >
               <Trash2 size={12} />
               <span>{deleting ? 'Deleting...' : 'Confirm Delete'}</span>
@@ -157,9 +157,9 @@ export const SidebarItemContextMenu: React.FC<SidebarItemContextMenuProps> = ({
         top: `${Math.max(8, top)}px`,
         zIndex: 99999,
       }}
-      className="w-56 bg-slate-900/95 backdrop-blur-md border border-slate-700/90 rounded-xl shadow-2xl py-1.5 text-xs select-none text-slate-200"
+      className="w-56 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700/90 rounded-xl shadow-2xl py-1.5 text-xs select-none text-slate-700 dark:text-slate-200"
     >
-      <div className="px-3 py-1 border-b border-slate-800/80 mb-1 truncate text-[10px] font-bold text-slate-400">
+      <div className="px-3 py-1 border-b border-slate-200 dark:border-slate-800/80 mb-1 truncate text-[10px] font-bold text-slate-500 dark:text-slate-400">
         {target.title}
       </div>
 
@@ -171,9 +171,9 @@ export const SidebarItemContextMenu: React.FC<SidebarItemContextMenuProps> = ({
             onClose();
             if (fn) fn();
           }}
-          className="w-full px-3 py-1.5 flex items-center gap-2 text-left hover:bg-slate-800 transition-colors"
+          className="w-full px-3 py-1.5 flex items-center gap-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors"
         >
-          <FileText size={13} className="text-sky-400 shrink-0" />
+          <FileText size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
           <span>Open in FlyMD</span>
         </button>
       )}
@@ -182,21 +182,21 @@ export const SidebarItemContextMenu: React.FC<SidebarItemContextMenuProps> = ({
         <button
           type="button"
           onClick={handleRevealInDirectory}
-          className="w-full px-3 py-1.5 flex items-center gap-2 text-left hover:bg-slate-800 transition-colors"
+          className="w-full px-3 py-1.5 flex items-center gap-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors"
         >
-          <FolderOpen size={13} className="text-amber-400 shrink-0" />
+          <FolderOpen size={13} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <span>Open File in Directory</span>
         </button>
       )}
 
-      <div className="border-t border-slate-800/80 my-1" />
+      <div className="border-t border-slate-200 dark:border-slate-800/80 my-1" />
 
       <button
         type="button"
         onClick={() => setConfirmingDelete(true)}
-        className="w-full px-3 py-1.5 flex items-center gap-2 text-left text-rose-300 hover:bg-rose-500/15 transition-colors font-semibold"
+        className="w-full px-3 py-1.5 flex items-center gap-2 text-left text-rose-600 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/15 transition-colors font-semibold"
       >
-        <Trash2 size={13} className="text-rose-400 shrink-0" />
+        <Trash2 size={13} className="text-rose-600 dark:text-rose-400 shrink-0" />
         <span>{target.deleteLabel || 'Delete...'}</span>
       </button>
     </div>,

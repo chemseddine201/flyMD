@@ -230,10 +230,10 @@ export const AgentDispatchModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
-      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl border border-slate-700/80 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-fade-in select-none">
+      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl overflow-hidden transition-colors duration-150">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/95">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/95">
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center border"
@@ -246,17 +246,17 @@ export const AgentDispatchModal: React.FC = () => {
               <Send size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 Confirm & Assign Markdown to Agent
-                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
                   Human-in-the-Loop Gate
                 </span>
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-                <FileText size={12} className="text-sky-400" />
-                <span className="font-semibold text-slate-200">{dispatchDraft.sourceFileName}</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+                <FileText size={12} className="text-sky-500 dark:text-sky-400" />
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{dispatchDraft.sourceFileName}</span>
                 {dispatchDraft.sourceAgentId && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                     Created by {dispatchDraft.sourceAgentId}
                   </span>
                 )}
@@ -266,18 +266,18 @@ export const AgentDispatchModal: React.FC = () => {
 
           <button
             onClick={closeDispatchModal}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-white dark:bg-slate-900">
           {/* Step 1: Choose Target Agent */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                 1. Choose Which Agent Receives This File
               </label>
               <div className="flex items-center gap-3">
@@ -285,7 +285,7 @@ export const AgentDispatchModal: React.FC = () => {
                   type="button"
                   onClick={() => refreshSubscriptionAgents()}
                   disabled={isRefreshingSubscriptions}
-                  className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-semibold"
+                  className="text-[11px] text-sky-600 dark:text-sky-400 hover:text-sky-500 flex items-center gap-1 font-semibold"
                   title="Re-scan installed agents, logins and subscription tiers"
                 >
                   <RefreshCw size={11} className={isRefreshingSubscriptions ? 'animate-spin' : ''} />
@@ -297,7 +297,7 @@ export const AgentDispatchModal: React.FC = () => {
                     closeDispatchModal();
                     setShowAgentAccountsModal(true);
                   }}
-                  className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold"
+                  className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 flex items-center gap-1 font-semibold"
                 >
                   <Plus size={12} /> Add Custom Agent / Manage Logins
                 </button>
@@ -317,8 +317,8 @@ export const AgentDispatchModal: React.FC = () => {
                     }}
                     className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
                       isSelected
-                        ? 'bg-slate-800/90 border-sky-400 shadow-sm ring-1 ring-sky-400/40'
-                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                        ? 'bg-sky-50/80 dark:bg-slate-800/90 border-sky-500 dark:border-sky-400 shadow-xs ring-1 ring-sky-500/40'
+                        : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                     }`}
                   >
                     <div className="min-w-0">
@@ -327,21 +327,21 @@ export const AgentDispatchModal: React.FC = () => {
                           className="w-2 h-2 rounded-full shrink-0"
                           style={{ backgroundColor: agent.accentColor }}
                         />
-                        <span className="text-xs font-bold text-white truncate">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                           {agent.name}
                         </span>
                         {agent.isCustom && (
-                          <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300">
+                          <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
                             Custom
                           </span>
                         )}
                         {tier && (
-                          <span className="text-[9px] px-1 rounded bg-sky-500/20 text-sky-300 font-bold uppercase">
+                          <span className="text-[9px] px-1 rounded bg-sky-500/20 text-sky-700 dark:text-sky-300 font-bold uppercase">
                             {tier}
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400 block truncate mt-0.5">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate mt-0.5">
                         {agent.webUrl || agent.vendor}
                       </span>
                     </div>
@@ -357,19 +357,19 @@ export const AgentDispatchModal: React.FC = () => {
                 onClick={() => setExecutionMode('in-app')}
                 className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
                   executionMode === 'in-app'
-                    ? 'bg-sky-500/15 border-sky-500/50 text-white ring-1 ring-sky-500/30'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-sky-500/10 dark:bg-sky-500/15 border-sky-500/50 text-slate-900 dark:text-white ring-1 ring-sky-500/30'
+                    : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
-                <Terminal size={16} className="text-sky-400 shrink-0 mt-0.5" />
+                <Terminal size={16} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                 <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     In-App Chat &amp; Live Progress Studio
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-bold uppercase">
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-700 dark:text-sky-300 font-bold uppercase">
                       Recommended
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-300 mt-0.5">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-300 mt-0.5">
                     Runs directly inside FlyMD with live step progress, thinking trace, native IDE sync, and rendered Markdown chat!
                   </div>
                 </div>
@@ -380,16 +380,16 @@ export const AgentDispatchModal: React.FC = () => {
                 onClick={() => setExecutionMode('web')}
                 className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
                   executionMode === 'web'
-                    ? 'bg-emerald-500/15 border-emerald-500/50 text-white ring-1 ring-emerald-500/30'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/50 text-slate-900 dark:text-white ring-1 ring-emerald-500/30'
+                    : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
               >
-                <Globe size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                <Globe size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <div className="text-xs font-bold text-white">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">
                     Also Open External Web Browser
                   </div>
-                  <div className="text-[10px] text-slate-300 mt-0.5">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-300 mt-0.5">
                     Copies your Markdown prompt to clipboard and opens {targetAgent?.shortName} in your default browser.
                   </div>
                 </div>
@@ -399,7 +399,7 @@ export const AgentDispatchModal: React.FC = () => {
 
           {/* Step 2: Plain-English Mission / Intent */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
               2. What Should {targetAgent?.name} Do? (Plain-English Goal)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -412,23 +412,23 @@ export const AgentDispatchModal: React.FC = () => {
                     onClick={() => setIntent(preset.id)}
                     className={`flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all ${
                       active
-                        ? 'bg-sky-500/15 border-sky-500/50 text-white'
-                        : 'bg-slate-950/60 border-slate-800/90 text-slate-300 hover:border-slate-700'
+                        ? 'bg-sky-500/10 dark:bg-sky-500/15 border-sky-500/50 text-slate-900 dark:text-white ring-1 ring-sky-500/20'
+                        : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800/90 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
                     }`}
                   >
                     <div
                       className={`mt-0.5 p-1.5 rounded-lg ${
-                        active ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-400'
+                        active ? 'bg-sky-500/20 text-sky-600 dark:text-sky-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                       }`}
                     >
                       {getIntentIcon(preset.iconName)}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-white">{preset.title}</div>
-                      <div className="text-[11px] text-sky-300/90 font-medium">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white">{preset.title}</div>
+                      <div className="text-[11px] text-sky-600 dark:text-sky-300/90 font-medium">
                         “{preset.nonDevLabel}”
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
                         {preset.description}
                       </div>
                     </div>
@@ -443,30 +443,30 @@ export const AgentDispatchModal: React.FC = () => {
                 onChange={(e) => setCustomPrompt(e.target.value)}
                 rows={2}
                 placeholder="Optional extra instructions in plain words (e.g., 'Focus on mobile layout first' or 'Keep existing styles')..."
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-sky-500"
               />
             </div>
           </div>
 
           {/* Step 3: Checklist Step Selector (if file has tasks) */}
           {checklistItems.length > 0 && (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3.5">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/70 p-3.5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-200">
+                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                   Checklist Tasks Detected ({checklistItems.length} steps in document)
                 </span>
-                <label className="flex items-center gap-1.5 text-[11px] text-sky-300 cursor-pointer">
+                <label className="flex items-center gap-1.5 text-[11px] text-sky-600 dark:text-sky-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={filterSelectedOnly}
                     onChange={(e) => setFilterSelectedOnly(e.target.checked)}
-                    className="rounded border-slate-700 bg-slate-900 text-sky-500"
+                    className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sky-500"
                   />
                   Only send checked steps below
                 </label>
               </div>
               {filterSelectedOnly && (
-                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 mt-2 border-t border-slate-800/80 pt-2">
+                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 mt-2 border-t border-slate-200 dark:border-slate-800/80 pt-2">
                   {checklistItems.map((item) => {
                     const isPicked = !!selectedTasks[item.index];
                     return (
@@ -474,16 +474,16 @@ export const AgentDispatchModal: React.FC = () => {
                         key={item.index}
                         type="button"
                         onClick={() => toggleChecklistItem(item.index)}
-                        className="w-full flex items-center gap-2 text-left px-2 py-1 rounded hover:bg-slate-900 text-xs"
+                        className="w-full flex items-center gap-2 text-left px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-900 text-xs"
                       >
                         {isPicked ? (
-                          <CheckSquare size={13} className="text-sky-400 shrink-0" />
+                          <CheckSquare size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
                         ) : (
-                          <Square size={13} className="text-slate-600 shrink-0" />
+                          <Square size={13} className="text-slate-400 dark:text-slate-600 shrink-0" />
                         )}
                         <span
                           className={
-                            isPicked ? 'text-slate-200' : 'text-slate-500 line-through'
+                            isPicked ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500 line-through'
                           }
                         >
                           {item.text}
@@ -498,7 +498,7 @@ export const AgentDispatchModal: React.FC = () => {
 
           {/* Step 4: Side-by-Side Model Selection & Reasoning Effort Control */}
           <div className="space-y-1">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Model Selection & Reasoning Effort Matrix
             </label>
             <ModelEffortSideBySidePicker
@@ -522,18 +522,18 @@ export const AgentDispatchModal: React.FC = () => {
               onClick={() => setCreateSafetyCheckpoint(!createSafetyCheckpoint)}
               className={`p-3 rounded-xl border text-left transition-all ${
                 createSafetyCheckpoint
-                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200'
-                  : 'bg-slate-950 border-slate-800 text-slate-400'
+                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-800 dark:text-emerald-200'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <ShieldCheck size={15} className="text-emerald-400" />
-                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+                <ShieldCheck size={15} className="text-emerald-600 dark:text-emerald-400" />
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
                   {createSafetyCheckpoint ? 'ON' : 'OFF'}
                 </span>
               </div>
-              <div className="text-xs font-bold text-white">Safety Time-Machine</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-xs font-bold text-slate-900 dark:text-white">Safety Time-Machine</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                 Auto-saves a restore point so you can 1-click Undo if the agent makes a mistake.
               </div>
             </button>
@@ -543,18 +543,18 @@ export const AgentDispatchModal: React.FC = () => {
               onClick={() => setSafeParallelMode(!safeParallelMode)}
               className={`p-3 rounded-xl border text-left transition-all ${
                 safeParallelMode
-                  ? 'bg-violet-500/10 border-violet-500/40 text-violet-200'
-                  : 'bg-slate-950 border-slate-800 text-slate-400'
+                  ? 'bg-violet-500/10 border-violet-500/40 text-violet-800 dark:text-violet-200'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <GitBranch size={15} className="text-violet-400" />
-                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300">
+                <GitBranch size={15} className="text-violet-600 dark:text-violet-400" />
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-700 dark:text-violet-300">
                   {safeParallelMode ? 'ISOLATED' : 'DIRECT'}
                 </span>
               </div>
-              <div className="text-xs font-bold text-white">Safe Parallel Sandbox</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-xs font-bold text-slate-900 dark:text-white">Safe Parallel Sandbox</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                 Runs in an isolated worktree so multiple agents can work at the same time safely.
               </div>
             </button>
@@ -564,34 +564,34 @@ export const AgentDispatchModal: React.FC = () => {
               onClick={() => setAttachSharedMemory(!attachSharedMemory)}
               className={`p-3 rounded-xl border text-left transition-all ${
                 attachSharedMemory
-                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
-                  : 'bg-slate-950 border-slate-800 text-slate-400'
+                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-800 dark:text-amber-200'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <BrainCircuit size={15} className="text-amber-400" />
-                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                <BrainCircuit size={15} className="text-amber-600 dark:text-amber-400" />
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300">
                   {attachSharedMemory ? 'SHARED' : 'OFF'}
                 </span>
               </div>
-              <div className="text-xs font-bold text-white">Shared Project Memory</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-xs font-bold text-slate-900 dark:text-white">Shared Project Memory</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                 Shares `.flymd/MEMORY.md` so this agent knows what other agents already did.
               </div>
             </button>
           </div>
 
           {/* Step 5: Optional Relay Chain */}
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <ArrowRight size={14} className="text-sky-400" />
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 p-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+              <ArrowRight size={14} className="text-sky-600 dark:text-sky-400" />
               <span className="font-semibold">Auto-Relay When Done (Optional):</span>
             </div>
             <div className="flex items-center gap-2">
               <select
                 value={nextAgentInChain}
                 onChange={(e) => setNextAgentInChain(e.target.value)}
-                className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200"
+                className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200"
               >
                 <option value="">None (Stop after {targetAgent?.shortName})</option>
                 {visibleAgents
@@ -606,7 +606,7 @@ export const AgentDispatchModal: React.FC = () => {
                 <select
                   value={nextIntentInChain}
                   onChange={(e) => setNextIntentInChain(e.target.value as AgentTaskIntent)}
-                  className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200"
+                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200"
                 >
                   {AGENT_INTENT_PRESETS.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -620,15 +620,15 @@ export const AgentDispatchModal: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-800 bg-slate-900/95">
-          <div className="text-[11px] text-slate-400 truncate max-w-md">
-            Workspace: <span className="text-slate-300 font-mono">{resolvedWorkspace || 'Current file folder'}</span>
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/95">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-md">
+            Workspace: <span className="text-slate-800 dark:text-slate-300 font-mono">{resolvedWorkspace || 'Current file folder'}</span>
           </div>
           <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={closeDispatchModal}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors"
+              className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
             >
               Cancel
             </button>

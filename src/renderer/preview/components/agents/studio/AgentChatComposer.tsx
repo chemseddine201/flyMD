@@ -216,29 +216,29 @@ export const AgentChatComposer = React.memo(
         setIsDragOver(false);
         if (e.dataTransfer.files) addImageFiles(e.dataTransfer.files);
       }}
-      className={`p-3 bg-slate-900 border-t border-slate-800 space-y-2 shrink-0 transition-colors ${
-        isDragOver ? 'bg-sky-950/40 border-sky-500' : ''
+      className={`p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 space-y-2 shrink-0 transition-colors ${
+        isDragOver ? 'bg-sky-50 dark:bg-sky-950/40 border-sky-500' : ''
       }`}
     >
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           {/* @Agent Selector Pill */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-700 text-xs">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-xs">
             <span
               className="w-2 h-2 rounded-full"
               style={{
                 backgroundColor: activeAgent?.accentColor || '#38bdf8',
               }}
             />
-            <span className="text-[10px] font-bold text-slate-400">Agent:</span>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Agent:</span>
             <select
               value={selectedAgentId}
               disabled={isComposerDisabled}
               onChange={(e) => onSelectAgent(e.target.value)}
-              className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+              className="bg-transparent text-slate-800 dark:text-white font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
             >
               {visibleAgents.map((a) => (
-                <option key={a.id} value={a.id} className="bg-slate-900">
+                <option key={a.id} value={a.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                   @{a.name}
                 </option>
               ))}
@@ -246,9 +246,9 @@ export const AgentChatComposer = React.memo(
           </div>
 
           {/* Mode / Intent Selector Pill */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-700 text-xs">
-            <Sparkles size={11} className="text-sky-400" />
-            <span className="text-[10px] font-bold text-slate-400">Mode:</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-xs">
+            <Sparkles size={11} className="text-sky-600 dark:text-sky-400" />
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Mode:</span>
             <select
               value={
                 selectedCustomActionId
@@ -271,23 +271,23 @@ export const AgentChatComposer = React.memo(
                   setSelectedCustomActionId('');
                 }
               }}
-              className="bg-transparent text-sky-300 font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+              className="bg-transparent text-sky-600 dark:text-sky-300 font-bold text-xs focus:outline-none cursor-pointer disabled:cursor-not-allowed"
             >
               {AGENT_INTENT_PRESETS.map((p) => (
-                <option key={p.id} value={p.id} className="bg-slate-900">
+                <option key={p.id} value={p.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                   {p.title}
                 </option>
               ))}
               {availableCustomActions.length > 0 && (
                 <optgroup
                   label="Custom Actions"
-                  className="bg-slate-900 text-indigo-300 font-semibold"
+                  className="bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 font-semibold"
                 >
                   {availableCustomActions.map((ca) => (
                     <option
                       key={ca.id}
                       value={`custom:${ca.id}`}
-                      className="bg-slate-900 text-slate-100"
+                      className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
                     >
                       ✨ {ca.name}
                     </option>
@@ -297,7 +297,7 @@ export const AgentChatComposer = React.memo(
               {onOpenCustomActionsModal && (
                 <option
                   value="__manage_custom__"
-                  className="bg-slate-900 text-sky-400 font-bold"
+                  className="bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 font-bold"
                 >
                   + Manage Custom Actions...
                 </option>
@@ -306,22 +306,22 @@ export const AgentChatComposer = React.memo(
           </div>
 
           {/* Attached Markdown Context File Selector */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-800 text-xs max-w-xs">
-            <FileCheck2 size={12} className="text-emerald-400 shrink-0" />
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs max-w-xs">
+            <FileCheck2 size={12} className="text-emerald-500 dark:text-emerald-400 shrink-0" />
             <select
               value={selectedSourceFile || activeFilePath}
               disabled={isComposerDisabled}
               onChange={(e) => onSelectSourceFile(e.target.value)}
-              className="bg-transparent text-slate-200 font-medium text-xs focus:outline-none truncate cursor-pointer disabled:cursor-not-allowed"
+              className="bg-transparent text-slate-700 dark:text-slate-200 font-medium text-xs focus:outline-none truncate cursor-pointer disabled:cursor-not-allowed"
             >
-              <option value={activeFilePath} className="bg-slate-900">
+              <option value={activeFilePath} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                 Target: {activeFileName}
               </option>
               {watchedFiles
                 .filter((f) => f.path !== activeFilePath)
                 .slice(0, 25)
                 .map((f) => (
-                  <option key={f.path} value={f.path} className="bg-slate-900">
+                  <option key={f.path} value={f.path} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                     {f.name}
                   </option>
                 ))}
@@ -359,15 +359,15 @@ export const AgentChatComposer = React.memo(
           {attachedImages.map((img) => (
             <div
               key={img.id}
-              className="relative group shrink-0 rounded-xl border border-slate-700 bg-slate-950 p-1.5 flex items-center gap-2 shadow-sm"
+              className="relative group shrink-0 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 p-1.5 flex items-center gap-2 shadow-sm"
             >
               <img
                 src={img.dataUrl}
                 alt={img.name}
-                className="w-12 h-12 object-cover rounded-lg border border-slate-800"
+                className="w-12 h-12 object-cover rounded-lg border border-slate-200 dark:border-slate-800"
               />
               <div className="text-[10px] pr-2 max-w-[130px]">
-                <div className="font-semibold text-slate-200 truncate">{img.name}</div>
+                <div className="font-semibold text-slate-800 dark:text-slate-200 truncate">{img.name}</div>
                 <div className="text-slate-500 font-mono">
                   {(img.size / 1024).toFixed(1)} KB
                 </div>
@@ -404,7 +404,7 @@ export const AgentChatComposer = React.memo(
               ? 'Workflow running — manual input locked until pipeline completes or pauses...'
               : `Message @${activeAgent?.shortName || 'Agent'} about ${activeFileName}...\n(Enter or Shift+Enter creates a new line. Click Send button to dispatch)`
           }
-          className="w-full min-h-[76px] p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500 leading-relaxed font-sans resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full min-h-[76px] p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-sky-500 leading-relaxed font-sans resize-y disabled:opacity-50 disabled:cursor-not-allowed"
         />
 
         {/* Action Row: Attach Image Picker & Manual Send Button */}
@@ -427,12 +427,12 @@ export const AgentChatComposer = React.memo(
               disabled={isComposerDisabled}
               onClick={() => fileInputRef.current?.click()}
               title="Attach images (or paste screenshot with Ctrl+V, or drag & drop)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-medium transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs font-medium transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <ImageIcon size={13} className="text-sky-400" />
+              <ImageIcon size={13} className="text-sky-600 dark:text-sky-400" />
               <span>Attach Image</span>
               {attachedImages.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-bold">
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-700 dark:text-sky-300 text-[10px] font-bold">
                   {attachedImages.length}
                 </span>
               )}

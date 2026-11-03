@@ -189,19 +189,19 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
   }, [editedMarkdown, reportMarkdown]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden transition-colors duration-150">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-b border-slate-800 bg-slate-900/90">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
         <div className="flex items-center gap-2.5">
-          <FileText className="w-4 h-4 text-cyan-400 shrink-0" />
+          <FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
           <div>
-            <h3 className="text-xs font-semibold text-slate-100 flex items-center gap-2">
+            <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               Synthesis Report &amp; Contract Specification
-              <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-700/60 font-mono">
+              <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-cyan-500/10 dark:bg-cyan-950/70 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 dark:border-cyan-700/60 font-mono">
                 Evidence Graded
               </span>
             </h3>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
               Review contractual specifications and checklist before provisioning dedicated pipeline.
             </p>
           </div>
@@ -213,10 +213,10 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
             <button
               type="button"
               onClick={() => setShowFeedbackModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-950/40 hover:bg-purple-900/50 text-purple-200 border border-purple-500/40 transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-200 border border-purple-500/30 transition-colors shadow-xs"
               title="Return to Council Debate with human guidance or new questions"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-purple-400" />
+              <RotateCcw className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
               <span>◀ Re-deliberate with Feedback</span>
             </button>
           )}
@@ -226,7 +226,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
             <button
               type="button"
               onClick={onRollupToMaster}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors"
             >
               <Award className="w-3.5 h-3.5" />
               <span>Rollup to Master Memory</span>
@@ -240,7 +240,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               isEditing
                 ? 'bg-amber-500 text-slate-950 font-bold'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
             }`}
           >
             {isEditing ? (
@@ -260,7 +260,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
           <button
             type="button"
             onClick={handleBuildPipelineFromReport}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-slate-950 shadow-md transition-all hover:scale-[1.02]"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white dark:text-slate-950 shadow-md transition-all hover:scale-[1.02]"
           >
             <Rocket className="w-3.5 h-3.5 fill-current" />
             <span>Assign to Pipeline &rarr;</span>
@@ -271,24 +271,24 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
       {/* Main Body */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Report Content (Rich Markdown or Editor) */}
-        <div className="flex-1 overflow-y-auto p-4 border-r border-slate-800 bg-slate-950/60">
+        <div className="flex-1 overflow-y-auto p-4 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/60">
           {isEditing ? (
             <div className="h-full flex flex-col space-y-2">
-              <div className="text-[11px] text-amber-300 flex items-center justify-between">
+              <div className="text-[11px] text-amber-600 dark:text-amber-300 flex items-center justify-between">
                 <span>Editing Markdown Source: Changes will update checklist and pipeline tasks.</span>
-                <span className="text-slate-500 font-mono text-[10px]">GFM Markdown</span>
+                <span className="text-slate-400 font-mono text-[10px]">GFM Markdown</span>
               </div>
               <textarea
                 value={editedMarkdown}
                 onChange={(e) => setEditedMarkdown(e.target.value)}
-                className="w-full flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3.5 font-mono text-xs text-slate-200 focus:outline-none focus:border-sky-500 resize-none leading-relaxed"
+                className="w-full flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-3.5 font-mono text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-sky-500 resize-none leading-relaxed"
                 placeholder="Enter markdown specification..."
               />
             </div>
           ) : (
             <div className="max-w-4xl mx-auto py-2">
               <div
-                className="markdown-body p-6 rounded-2xl bg-slate-900/80 border border-slate-800 text-slate-200 leading-relaxed shadow-lg"
+                className="markdown-body p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 leading-relaxed shadow-sm"
                 dangerouslySetInnerHTML={{ __html: renderedHtml }}
               />
             </div>
@@ -296,19 +296,19 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
         </div>
 
         {/* Right: Operator Checklist Gate & Pipeline Provisioning */}
-        <div className="w-80 bg-slate-950/80 p-3.5 flex flex-col shrink-0 border-l border-slate-800/80">
+        <div className="w-80 bg-white dark:bg-slate-950/80 p-3.5 flex flex-col shrink-0 border-l border-slate-200 dark:border-slate-800/80">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-semibold text-xs text-slate-200 flex items-center gap-1.5">
-              <CheckSquare className="w-3.5 h-3.5 text-sky-400" />
+            <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <CheckSquare className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
               Checklist Tasks ({completedCount}/{checklistItems.length})
             </span>
-            <span className="text-[11px] font-mono text-sky-400 font-bold">
+            <span className="text-[11px] font-mono text-sky-600 dark:text-sky-400 font-bold">
               {progressPercent}%
             </span>
           </div>
 
           {/* Progress Bar */}
-          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-3">
+          <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mb-3">
             <div
               className="bg-sky-500 h-full rounded-full transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
@@ -318,10 +318,10 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
           {/* Checklist Items */}
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
             {checklistItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-36 text-center text-slate-500 text-xs p-4 bg-slate-900/40 rounded-xl border border-slate-800/60">
-                <CheckSquare className="w-6 h-6 mb-1 text-slate-600" />
-                <p className="font-medium text-slate-400">No `- [ ]` tasks found</p>
-                <p className="text-[10px] text-slate-600 mt-1">
+              <div className="flex flex-col items-center justify-center h-36 text-center text-slate-500 text-xs p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-800/60">
+                <CheckSquare className="w-6 h-6 mb-1 text-slate-400 dark:text-slate-600" />
+                <p className="font-medium text-slate-600 dark:text-slate-400">No `- [ ]` tasks found</p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1">
                   Click 'Edit Source' to add tasks like `- [ ] Implement API endpoint`.
                 </p>
               </div>
@@ -332,16 +332,16 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
                   onClick={() => handleToggleItem(item.lineIndex)}
                   className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors border ${
                     item.checked
-                      ? 'bg-emerald-950/20 border-emerald-800/40 text-slate-400 line-through'
-                      : 'bg-slate-900/90 border-slate-800 hover:border-slate-700 text-slate-200 shadow-xs'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-slate-400 line-through'
+                      : 'bg-white dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-800 dark:text-slate-200 shadow-xs'
                   }`}
                 >
                   <button
                     type="button"
-                    className="mt-0.5 text-slate-400 hover:text-sky-400 shrink-0"
+                    className="mt-0.5 text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 shrink-0"
                   >
                     {item.checked ? (
-                      <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+                      <CheckSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     ) : (
                       <Square className="w-3.5 h-3.5" />
                     )}
@@ -353,7 +353,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
           </div>
 
           {/* Operator Action Bar */}
-          <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
             <button
               type="button"
               onClick={handleBuildPipelineFromReport}
@@ -362,7 +362,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
               <Rocket className="w-3.5 h-3.5 fill-current" />
               <span>Assign to Pipeline &rarr;</span>
             </button>
-            <p className="text-[10px] text-slate-500 text-center">
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
               Transitions to Pipeline configuration view before execution starts.
             </p>
           </div>
@@ -371,25 +371,25 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
 
       {/* Re-deliberate with Feedback Modal (Recycling Vector 1) */}
       {showFeedbackModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-5 text-slate-100">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn select-none">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-3">
               <div className="flex items-center gap-2">
-                <RotateCcw className="w-4 h-4 text-purple-400" />
-                <h4 className="text-sm font-bold text-slate-100">
+                <RotateCcw className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   Return to Deliberation Council with Feedback
                 </h4>
               </div>
               <button
                 type="button"
                 onClick={() => setShowFeedbackModal(false)}
-                className="text-slate-400 hover:text-slate-200"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-400 mb-3 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
               Steer the council to re-evaluate specific assumptions, challenge constraints, or explore alternative architecture before executing the pipeline.
             </p>
 
@@ -399,14 +399,14 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
               value={feedbackNotes}
               onChange={(e) => setFeedbackNotes(e.target.value)}
               placeholder="e.g. Please test edge cases with unexpected disconnects, prioritize memory efficiency, or evaluate alternative distribution models..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 leading-relaxed font-sans mb-4"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl p-3 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-purple-500 leading-relaxed font-sans mb-4"
             />
 
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowFeedbackModal(false)}
-                className="px-3.5 py-1.5 text-xs rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                className="px-3.5 py-1.5 text-xs rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>

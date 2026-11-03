@@ -25,17 +25,17 @@ export const DiscussionConfirmModals: React.FC<DiscussionConfirmModalsProps> =
       return (
         <>
           {sessionToDelete && (
-            <div className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6">
-                <div className="flex items-center gap-2.5 text-rose-400 mb-2">
+            <div className="fixed inset-0 z-[90] bg-black/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+              <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6">
+                <div className="flex items-center gap-2.5 text-rose-500 dark:text-rose-400 mb-2">
                   <Trash2 size={18} />
-                  <h3 className="text-sm font-bold text-slate-100">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Delete Deliberation
                   </h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
                   Are you sure you want to permanently delete session{' '}
-                  <span className="font-mono text-slate-200">
+                  <span className="font-mono text-slate-800 dark:text-slate-200">
                     {sessionToDelete}
                   </span>
                   ? Canonical transcript, decision ledger, and report versions
@@ -45,7 +45,7 @@ export const DiscussionConfirmModals: React.FC<DiscussionConfirmModalsProps> =
                   <button
                     type="button"
                     onClick={onCancelDeleteSession}
-                    className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 text-xs font-semibold"
+                    className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
                   >
                     Cancel
                   </button>
@@ -62,17 +62,17 @@ export const DiscussionConfirmModals: React.FC<DiscussionConfirmModalsProps> =
           )}
 
           {showClearAllModal && (
-            <div className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6">
-                <div className="flex items-center gap-2.5 text-rose-400 mb-2">
+            <div className="fixed inset-0 z-[90] bg-black/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+              <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6">
+                <div className="flex items-center gap-2.5 text-rose-500 dark:text-rose-400 mb-2">
                   <AlertTriangle size={18} />
-                  <h3 className="text-sm font-bold text-slate-100">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Clear All Deliberations
                   </h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
                   Are you sure you want to delete all{' '}
-                  <span className="font-bold text-slate-200">
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
                     {totalDiscussionsCount}
                   </span>{' '}
                   historical deliberation sessions in this workspace? This action
@@ -82,7 +82,7 @@ export const DiscussionConfirmModals: React.FC<DiscussionConfirmModalsProps> =
                   <button
                     type="button"
                     onClick={onCancelClearAll}
-                    className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 text-xs font-semibold"
+                    className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
                   >
                     Cancel
                   </button>

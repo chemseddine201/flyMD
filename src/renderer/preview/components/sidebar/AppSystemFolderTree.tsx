@@ -222,7 +222,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {allFolderIds.length > 0 && (
-        <div className="px-3 py-1 bg-slate-950/30 border-b border-slate-800/50 flex items-center justify-between text-[10px] text-slate-400">
+        <div className="px-3 py-1 bg-slate-100/70 dark:bg-slate-950/30 border-b border-slate-200 dark:border-slate-800/50 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
           <span className="uppercase tracking-wider font-semibold text-[9px] text-slate-500">
             Explorer Tree
           </span>
@@ -231,7 +231,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
               type="button"
               onClick={expandAll}
               title="Expand All Folders"
-              className="p-0.5 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+              className="p-0.5 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
             >
               <ChevronsUpDown className="w-3 h-3" />
             </button>
@@ -239,7 +239,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
               type="button"
               onClick={collapseAll}
               title="Collapse All Folders"
-              className="p-0.5 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+              className="p-0.5 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
             >
               <ChevronsDownUp className="w-3 h-3" />
             </button>
