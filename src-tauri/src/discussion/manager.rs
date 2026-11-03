@@ -15,8 +15,16 @@ use tokio::sync::Mutex;
 
 pub type SharedDiscussionManager = Arc<DiscussionManager>;
 
+#[derive(Clone)]
+pub struct SessionControls {
+    pub pause_flag: Arc<std::sync::atomic::AtomicBool>,
+    pub cancel_flag: Arc<std::sync::atomic::AtomicBool>,
+    pub workspace_path: String,
+}
+
 pub struct DiscussionManager {
     pub active_orchestrators: Arc<Mutex<HashMap<String, Arc<Mutex<DiscussionOrchestrator>>>>>,
+    pub session_controls: Arc<std::sync::Mutex<HashMap<String, SessionControls>>>,
     pub session_workspaces: Arc<std::sync::Mutex<HashMap<String, String>>>,
     pub client: reqwest::Client,
 }
@@ -25,12 +33,50 @@ impl DiscussionManager {
     pub fn new() -> Self {
         Self {
             active_orchestrators: Arc::new(Mutex::new(HashMap::new())),
+            session_controls: Arc::new(std::sync::Mutex::new(HashMap::new())),
             session_workspaces: Arc::new(std::sync::Mutex::new(HashMap::new())),
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(180))
                 .build()
                 .unwrap_or_default(),
         }
+    }
+
+    pub fn register_session_controls(
+        &self,
+        session_id: &str,
+        pause_flag: Arc<std::sync::atomic::AtomicBool>,
+        cancel_flag: Arc<std::sync::atomic::AtomicBool>,
+        workspace_path: &str,
+    ) {
+        let mut map = self
+            .session_controls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        map.insert(
+            session_id.to_string(),
+            SessionControls {
+                pause_flag,
+                cancel_flag,
+                workspace_path: workspace_path.to_string(),
+            },
+        );
+    }
+
+    pub fn unregister_session_controls(&self, session_id: &str) {
+        let mut map = self
+            .session_controls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        map.remove(session_id);
+    }
+
+    pub fn lookup_session_controls(&self, session_id: &str) -> Option<SessionControls> {
+        let map = self
+            .session_controls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        map.get(session_id).cloned()
     }
 
     pub fn record_session_workspace(&self, session_id: &str, workspace_path: &str) {
@@ -72,10 +118,21 @@ fn extract_panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String
 pub fn spawn_supervised_discussion_run(
     app: AppHandle,
     active_map: Arc<Mutex<HashMap<String, Arc<Mutex<DiscussionOrchestrator>>>>>,
+    controls_map: Arc<std::sync::Mutex<HashMap<String, SessionControls>>>,
     session_id: String,
     session_dir: PathBuf,
     orch_arc: Arc<Mutex<DiscussionOrchestrator>>,
 ) {
+    let clean_controls = {
+        let controls = controls_map.clone();
+        let sid = session_id.clone();
+        move || {
+            if let Ok(mut c) = controls.lock() {
+                c.remove(&sid);
+            }
+        }
+    };
+
     tauri::async_runtime::spawn(async move {
         let inner_orch = orch_arc.clone();
         let join_res = tokio::spawn(async move {
@@ -83,6 +140,8 @@ pub fn spawn_supervised_discussion_run(
             guard.run_discussion().await
         })
         .await;
+
+        clean_controls();
 
         match join_res {
             Ok(Ok(final_status)) => {

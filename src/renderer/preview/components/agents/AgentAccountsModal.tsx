@@ -108,6 +108,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
   const [newCustomColor, setNewCustomColor] = useState('#10b981');
   const [hidePredefinedOnCreate, setHidePredefinedOnCreate] = useState(false);
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+  const [pendingDeleteCustomProfile, setPendingDeleteCustomProfile] = useState<AgentProfile | null>(null);
 
   const hasUnsavedData = useMemo(() => {
     if (isCreatingCustom && Boolean(newCustomName.trim() || newCustomCliCmd.trim())) {
@@ -709,7 +710,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     {selectedProfile.isCustom && (
                       <button
                         type="button"
-                        onClick={() => handleDeleteCustomAgent(selectedProfile)}
+                        onClick={() => setPendingDeleteCustomProfile(selectedProfile)}
                         className="p-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-700 dark:text-rose-300"
                         title="Delete Custom Agent"
                       >
@@ -919,6 +920,40 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
         onConfirmDiscard={handleConfirmDiscard}
         onCancelKeepEditing={() => setShowDiscardAlert(false)}
       />
+
+      {pendingDeleteCustomProfile && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 className="w-5 h-5" />
+              <h4 className="text-sm font-bold">Delete Custom Agent?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to delete custom agent <span className="font-semibold text-slate-800 dark:text-slate-200">{pendingDeleteCustomProfile.name}</span>? Any custom CLI integration commands associated with it will be removed.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteCustomProfile(null)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const target = pendingDeleteCustomProfile;
+                  setPendingDeleteCustomProfile(null);
+                  await handleDeleteCustomAgent(target);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

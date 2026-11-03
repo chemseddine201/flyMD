@@ -203,8 +203,8 @@ pub struct DiscussionOrchestrator {
     pub memory: MemoryManager,
     pub skills_manager: super::skills::SkillsManager,
     pub providers: HashMap<String, Arc<dyn DiscussionProvider>>,
-    cancel_flag: Arc<AtomicBool>,
-    pause_flag: Arc<AtomicBool>,
+    pub cancel_flag: Arc<AtomicBool>,
+    pub pause_flag: Arc<AtomicBool>,
     lock: Option<SessionLock>,
     event_listener: Option<Arc<dyn DiscussionEventListener>>,
     pub step_mode: bool,
@@ -216,6 +216,12 @@ impl DiscussionOrchestrator {
         mut config: DiscussionConfig,
         providers: HashMap<String, Arc<dyn DiscussionProvider>>,
     ) -> Result<Self, String> {
+        if config.topic.trim().is_empty() {
+            return Err("Discussion topic is required to launch a deliberation".to_string());
+        }
+        if config.user_idea.trim().is_empty() {
+            return Err("Proposal/query and target objective are required to launch a deliberation".to_string());
+        }
         // Auto-align max_rounds with explicit round schedule length or per-agent participant count
         if !config.round_schedule.is_empty() && (config.repeater_mode.as_deref() == Some("per_round") || config.max_rounds == 0) {
             config.max_rounds = config.round_schedule.len() as u32;

@@ -80,6 +80,7 @@ export function useNewDeliberationDraft({
   // New discussion configuration state
   const [newTopic, setNewTopic] = useState('');
   const [newIdea, setNewIdea] = useState('');
+  const [newObjective, setNewObjective] = useState('');
   const [maxRounds, setMaxRounds] = useState(4);
   const [maxRoundsInput, setMaxRoundsInput] = useState<string>('4');
   const [turnTimeoutSecs, setTurnTimeoutSecs] = useState(120);
@@ -574,13 +575,21 @@ export function useNewDeliberationDraft({
     setShowAgentAccountsModal(true);
   }, [setShowAgentAccountsModal]);
 
+  const isTopicValid = newTopic.trim().length > 0;
+  const isIdeaValid = newIdea.trim().length > 0;
+  const isObjectiveValid = newObjective.trim().length > 0;
+  const isFormValid = isTopicValid && isIdeaValid && isObjectiveValid;
+
   const handleLaunchNewDiscussion = useCallback(async () => {
-    if (!resolvedWorkspace) return;
+    const trimmedTopic = newTopic.trim();
+    const trimmedIdea = newIdea.trim();
+    const trimmedObjective = newObjective.trim();
+    if (!resolvedWorkspace || !trimmedTopic || !trimmedIdea || !trimmedObjective) {
+      return;
+    }
     const sessionId = `disc-${Date.now()}`;
-    const topicToUse = newTopic.trim() || 'Multi-Agent Deliberation';
-    const ideaToUse =
-      newIdea.trim() ||
-      `In-depth multi-perspective evaluation and decision analysis for: ${topicToUse}`;
+    const topicToUse = trimmedTopic;
+    const ideaToUse = `${trimmedIdea}\n\n### Target Objectives & Invariants:\n${trimmedObjective}`;
 
     const currentPreset =
       presetsById.get(selectedPreset) ||
@@ -768,6 +777,7 @@ export function useNewDeliberationDraft({
     resolvedWorkspace,
     newTopic,
     newIdea,
+    newObjective,
     maxRoundsInput,
     maxRounds,
     presetsById,
@@ -808,6 +818,12 @@ export function useNewDeliberationDraft({
     setNewTopic,
     newIdea,
     setNewIdea,
+    newObjective,
+    setNewObjective,
+    isTopicValid,
+    isIdeaValid,
+    isObjectiveValid,
+    isFormValid,
     maxRounds,
     maxRoundsInput,
     setMaxRoundsInput,

@@ -164,6 +164,7 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
   };
 
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const isDirty = useMemo(() => {
     if (!selectedAction) return false;
@@ -498,15 +499,7 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                 {customActions.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (selectedAction) {
-                        onDeleteAction(selectedAction.id);
-                        const remaining = customActions.filter(
-                          (a) => a.id !== selectedAction.id
-                        );
-                        if (remaining[0]) handleSelectAction(remaining[0]);
-                      }
-                    }}
+                    onClick={() => setShowDeleteConfirm(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-500/40 text-rose-600 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/20 text-xs font-medium transition"
                   >
                     <Trash2 size={13} />
@@ -550,6 +543,41 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
         onConfirmDiscard={handleConfirmDiscard}
         onCancelKeepEditing={() => setShowDiscardAlert(false)}
       />
+
+      {showDeleteConfirm && selectedAction && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 size={18} />
+              <h4 className="text-sm font-bold">Delete Custom Action?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to permanently delete custom action <span className="font-semibold">{selectedAction.name}</span>? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteAction(selectedAction.id);
+                  const remaining = customActions.filter((a) => a.id !== selectedAction.id);
+                  if (remaining[0]) handleSelectAction(remaining[0]);
+                  setShowDeleteConfirm(false);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

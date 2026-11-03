@@ -165,6 +165,8 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
   const [activeStepNoteIdx, setActiveStepNoteIdx] = useState<number | null>(null);
   const [stepNoteDraft, setStepNoteDraft] = useState<string>('');
   const [showResetMenu, setShowResetMenu] = useState<boolean>(false);
+  const [pendingDeleteTaskId, setPendingDeleteTaskId] = useState<string | null>(null);
+  const [showClearDoneConfirm, setShowClearDoneConfirm] = useState(false);
 
   const availableCustomActions =
     customActions && customActions.length > 0
@@ -1170,8 +1172,8 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
             <button
               type="button"
               disabled={isPipelineActivelyRunning}
-              onClick={onClearFinished}
-              className={`text-[10px] flex items-center gap-1 transition-colors ${
+              onClick={() => setShowClearDoneConfirm(true)}
+              className={`text-[10px] flex items-center gap-1 font-semibold transition-colors ${
                 isPipelineActivelyRunning
                   ? 'text-slate-600 cursor-not-allowed opacity-40'
                   : 'text-slate-400 hover:text-rose-300'
@@ -1265,10 +1267,10 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                       {task.status !== 'running' && !runningPipelineId && (
                         <button
                           type="button"
-                          onClick={async (e) => {
+                          onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            await onDeleteTask(task.id);
+                            setPendingDeleteTaskId(task.id);
                           }}
                           title="Delete this finished task session"
                           className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 opacity-60 hover:opacity-100 transition-all shrink-0"
@@ -1339,6 +1341,73 @@ export const AgentStudioSidebar: React.FC<AgentStudioSidebarProps> = ({
                 className="px-3.5 py-1.5 text-xs rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-sm transition-colors"
               >
                 Reset from Zero &amp; Modify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteTaskId && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 size={18} />
+              <h4 className="text-sm font-bold">Delete Session Thread?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to permanently delete this agent task session? All reasoning logs and generated artifacts for this session will be removed.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteTaskId(null)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const tid = pendingDeleteTaskId;
+                  setPendingDeleteTaskId(null);
+                  await onDeleteTask(tid);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearDoneConfirm && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 size={18} />
+              <h4 className="text-sm font-bold">Clear All Done Tasks?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to clear all completed agent sessions from this workspace?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowClearDoneConfirm(false)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClearDoneConfirm(false);
+                  onClearFinished();
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Clear All Done
               </button>
             </div>
           </div>

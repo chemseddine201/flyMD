@@ -127,6 +127,8 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
   const [viewTab, setViewTab] = useState<'activity' | 'terminal'>('activity');
   const [copiedErrorLog, setCopiedErrorLog] = useState<boolean>(false);
   const [showStderrTrace, setShowStderrTrace] = useState<boolean>(false);
+  const [showDeleteTaskConfirm, setShowDeleteTaskConfirm] = useState<boolean>(false);
+  const [showClearLogsConfirm, setShowClearLogsConfirm] = useState<boolean>(false);
 
   const pct = selectedTask
     ? selectedTask.progressPercent ??
@@ -349,7 +351,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
             {selectedTask && selectedTask.status !== 'running' && !isPipelineRunning && onDeleteTask && (
               <button
                 type="button"
-                onClick={() => onDeleteTask(selectedTask.id)}
+                onClick={() => setShowDeleteTaskConfirm(true)}
                 className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                 title="Delete this finished task session"
               >
@@ -649,7 +651,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
           {viewTab === 'terminal' && selectedTask && selectedTask.logs.length > 0 && (
             <button
               type="button"
-              onClick={() => onClearTaskLogs(selectedTask.id)}
+              onClick={() => setShowClearLogsConfirm(true)}
               title="Clear Terminal Execution Log"
               className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800/80 hover:bg-rose-500/20 text-[9px] font-bold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 transition-colors"
             >
@@ -1040,6 +1042,72 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
         target={contextTarget}
         onClose={() => setContextTarget(null)}
       />
+
+      {showDeleteTaskConfirm && selectedTask && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 size={18} />
+              <h4 className="text-sm font-bold">Delete Task Session?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to permanently delete this task session?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteTaskConfirm(false)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteTaskConfirm(false);
+                  if (onDeleteTask) onDeleteTask(selectedTask.id);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearLogsConfirm && selectedTask && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 size={18} />
+              <h4 className="text-sm font-bold">Clear Terminal Logs?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to clear the terminal execution log history for this task?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowClearLogsConfirm(false)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClearLogsConfirm(false);
+                  if (onClearTaskLogs) onClearTaskLogs(selectedTask.id);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Clear Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };

@@ -77,6 +77,8 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
   const [newRoleDirective, setNewRoleDirective] = useState('');
   const [newRoleColor, setNewRoleColor] = useState('#38bdf8');
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+  const [pendingDeletePresetId, setPendingDeletePresetId] = useState<string | null>(null);
+  const [pendingDeleteRoleId, setPendingDeleteRoleId] = useState<string | null>(null);
 
   const hasUnsavedChanges = useMemo(() => {
     if (showNewRoleForm && Boolean(newRoleName.trim() || newRoleKey.trim() || newRoleDesc.trim() || newRoleDirective.trim())) {
@@ -508,9 +510,12 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
                           {presets.length > 1 && (
                             <button
                               type="button"
-                              onClick={(e) => onDeletePreset(preset.id, e)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPendingDeletePresetId(preset.id);
+                              }}
                               className="p-1 rounded hover:bg-rose-500/15 text-slate-400 hover:text-rose-500"
-                              title="Delete"
+                              title="Delete preset template"
                             >
                               <Trash2 size={12} />
                             </button>
@@ -664,7 +669,7 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
                         ) : (
                           <button
                             type="button"
-                            onClick={() => onDeleteCustomRole(role.id)}
+                            onClick={() => setPendingDeleteRoleId(role.id)}
                             className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
                             title="Delete custom role"
                           >
@@ -712,6 +717,72 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
         onConfirmDiscard={handleConfirmDiscard}
         onCancelKeepEditing={() => setShowDiscardAlert(false)}
       />
+
+      {pendingDeletePresetId && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 size={18} />
+              <h4 className="text-sm font-bold">Delete Preset Template?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to delete this preset template? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeletePresetId(null)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeletePreset(pendingDeletePresetId);
+                  setPendingDeletePresetId(null);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteRoleId && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 size={18} />
+              <h4 className="text-sm font-bold">Delete Custom Role?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to permanently delete this custom deliberation role?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteRoleId(null)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteCustomRole(pendingDeleteRoleId);
+                  setPendingDeleteRoleId(null);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

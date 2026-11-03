@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { HistoryItem } from '../../../shared/types';
 import { FileText, Clock, Trash2, X, FolderOpen } from 'lucide-react';
 
@@ -19,6 +19,9 @@ export const HistoryPopover: React.FC<HistoryPopoverProps> = ({
   onClearHistory,
   onClose,
 }) => {
+  const [showConfirmClear, setShowConfirmClear] = useState(false);
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const formatTime = (ts: number) => {
@@ -46,11 +49,11 @@ export const HistoryPopover: React.FC<HistoryPopoverProps> = ({
           <span>Recent Files ({history.length})</span>
         </div>
         <div className="flex items-center gap-1.5">
-          {history.length > 0 && (
+          {history.length > 0 && !showConfirmClear && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onClearHistory();
+                setShowConfirmClear(true);
               }}
               title="Clear all history"
               className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-700/60 rounded transition"
@@ -70,6 +73,31 @@ export const HistoryPopover: React.FC<HistoryPopoverProps> = ({
           </button>
         </div>
       </div>
+
+      {showConfirmClear && (
+        <div className="p-3 bg-rose-950/40 border-b border-rose-500/30 flex items-center justify-between gap-2 animate-fadeIn">
+          <span className="text-xs text-rose-200 font-medium">Clear all recent files?</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowConfirmClear(false)}
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowConfirmClear(false);
+                onClearHistory();
+              }}
+              className="px-2.5 py-1 text-[11px] rounded bg-rose-600 hover:bg-rose-500 text-white font-bold"
+            >
+              Confirm Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* List */}
       <div className="overflow-y-auto max-h-[250px] divide-y divide-slate-800/60 p-1.5 space-y-0.5">

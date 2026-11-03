@@ -76,7 +76,7 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
       onGoToReport,
     }) => {
       return (
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 w-full max-w-7xl 2xl:max-w-[1536px] mx-auto">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 md:p-6 space-y-4 w-full max-w-none mx-auto">
           {transcriptCount === 0 && !isRunning && (
             <div className="p-8 text-center text-slate-500 bg-slate-100 dark:bg-slate-900/30 rounded-xl border border-slate-200 dark:border-slate-800/60 transition-colors">
               <Bot

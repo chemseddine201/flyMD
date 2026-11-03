@@ -4,7 +4,7 @@ use super::manager::{
     heal_orphaned_session_on_disk, spawn_supervised_discussion_run, SharedDiscussionManager,
     TauriDiscussionListener,
 };
-use super::orchestrator::DiscussionOrchestrator;
+use super::orchestrator::{DiscussionEvent, DiscussionOrchestrator};
 use super::provider_registry::{
     build_provider_map, detect_available_providers, AvailableProviderInfo,
 };
@@ -13,8 +13,9 @@ use super::storage::{load_metadata, read_transcript_with_recovery, save_metadata
 use super::types::{now_ms, DiscussionConfig, DiscussionMessage, DiscussionMetadata, DiscussionStatus};
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
 #[tauri::command]
@@ -31,8 +32,16 @@ pub async fn cmd_start_discussion(
     store: tauri::State<'_, crate::store::SharedStore>,
     config: DiscussionConfig,
 ) -> Result<DiscussionMetadata, String> {
+    if config.topic.trim().is_empty() {
+        return Err("Discussion topic is required to launch a deliberation".to_string());
+    }
+    if config.user_idea.trim().is_empty() {
+        return Err("Proposal/query and target objective are required to launch a deliberation".to_string());
+    }
+
     let session_id = config.session_id.clone();
-    manager.record_session_workspace(&session_id, &config.workspace_path);
+    let workspace_path = config.workspace_path.clone();
+    manager.record_session_workspace(&session_id, &workspace_path);
     let providers = build_provider_map(&config, manager.client.clone(), Some(&store));
 
     let mut orchestrator = DiscussionOrchestrator::new(config, providers)?;
@@ -40,7 +49,11 @@ pub async fn cmd_start_discussion(
 
     let session_dir = orchestrator.session_dir.clone();
     let metadata = orchestrator.metadata.clone();
+    let pause_flag = orchestrator.pause_flag.clone();
+    let cancel_flag = orchestrator.cancel_flag.clone();
     let orch_arc = Arc::new(Mutex::new(orchestrator));
+
+    manager.register_session_controls(&session_id, pause_flag, cancel_flag, &workspace_path);
 
     {
         let mut active = manager.active_orchestrators.lock().await;
@@ -50,6 +63,7 @@ pub async fn cmd_start_discussion(
     spawn_supervised_discussion_run(
         app,
         manager.active_orchestrators.clone(),
+        manager.session_controls.clone(),
         session_id,
         session_dir,
         orch_arc,
@@ -60,15 +74,52 @@ pub async fn cmd_start_discussion(
 
 #[tauri::command]
 pub async fn cmd_pause_discussion(
+    app: AppHandle,
     manager: tauri::State<'_, SharedDiscussionManager>,
     session_id: String,
 ) -> Result<DiscussionMetadata, String> {
-    let active = manager.active_orchestrators.lock().await;
-    if let Some(orch_arc) = active.get(&session_id) {
-        let mut guard = orch_arc.lock().await;
-        guard.pause()?;
-        Ok(guard.metadata.clone())
+    if let Some(controls) = manager.lookup_session_controls(&session_id) {
+        controls.pause_flag.store(true, Ordering::SeqCst);
+        let session_dir = Path::new(&controls.workspace_path)
+            .join(".flymd")
+            .join("discussions")
+            .join(&session_id);
+        let meta = if let Ok(mut m) = load_metadata(&session_dir) {
+            m.status = DiscussionStatus::Paused;
+            m.updated_at = now_ms();
+            let _ = save_metadata(&session_dir, &m);
+            m
+        } else {
+            DiscussionMetadata {
+                session_id: session_id.clone(),
+                status: DiscussionStatus::Paused,
+                ..Default::default()
+            }
+        };
+        let status_evt = DiscussionEvent::StatusChanged {
+            session_id,
+            new_status: DiscussionStatus::Paused,
+        };
+        app.emit("discussion:event", &status_evt).ok();
+        Ok(meta)
     } else {
+        if let Some(ws) = manager.lookup_session_workspace(&session_id) {
+            let session_dir = Path::new(&ws)
+                .join(".flymd")
+                .join("discussions")
+                .join(&session_id);
+            if let Ok(mut m) = load_metadata(&session_dir) {
+                m.status = DiscussionStatus::Paused;
+                m.updated_at = now_ms();
+                let _ = save_metadata(&session_dir, &m);
+                let status_evt = DiscussionEvent::StatusChanged {
+                    session_id,
+                    new_status: DiscussionStatus::Paused,
+                };
+                app.emit("discussion:event", &status_evt).ok();
+                return Ok(m);
+            }
+        }
         Err(format!(
             "No active running discussion session: {}",
             session_id
@@ -129,14 +180,22 @@ pub async fn cmd_resume_discussion(
     };
 
     manager.record_session_workspace(&session_id, &workspace_path);
-    let (metadata, session_dir) = {
+    let (metadata, session_dir, pause_flag, cancel_flag) = {
         let guard = orch_arc.lock().await;
-        (guard.metadata.clone(), guard.session_dir.clone())
+        (
+            guard.metadata.clone(),
+            guard.session_dir.clone(),
+            guard.pause_flag.clone(),
+            guard.cancel_flag.clone(),
+        )
     };
+
+    manager.register_session_controls(&session_id, pause_flag, cancel_flag, &workspace_path);
 
     spawn_supervised_discussion_run(
         app,
         manager.active_orchestrators.clone(),
+        manager.session_controls.clone(),
         session_id,
         session_dir,
         orch_arc,
@@ -147,15 +206,56 @@ pub async fn cmd_resume_discussion(
 
 #[tauri::command]
 pub async fn cmd_cancel_discussion(
+    app: AppHandle,
     manager: tauri::State<'_, SharedDiscussionManager>,
     session_id: String,
 ) -> Result<DiscussionMetadata, String> {
-    let active = manager.active_orchestrators.lock().await;
-    if let Some(orch_arc) = active.get(&session_id) {
-        let mut guard = orch_arc.lock().await;
-        guard.cancel()?;
-        Ok(guard.metadata.clone())
+    if let Some(controls) = manager.lookup_session_controls(&session_id) {
+        controls.cancel_flag.store(true, Ordering::SeqCst);
+        let session_dir = Path::new(&controls.workspace_path)
+            .join(".flymd")
+            .join("discussions")
+            .join(&session_id);
+        let lock_path = session_dir.join(".session.lock");
+        let _ = fs::remove_file(&lock_path);
+        let meta = if let Ok(mut m) = load_metadata(&session_dir) {
+            m.status = DiscussionStatus::Cancelled;
+            m.updated_at = now_ms();
+            let _ = save_metadata(&session_dir, &m);
+            m
+        } else {
+            DiscussionMetadata {
+                session_id: session_id.clone(),
+                status: DiscussionStatus::Cancelled,
+                ..Default::default()
+            }
+        };
+        let status_evt = DiscussionEvent::StatusChanged {
+            session_id,
+            new_status: DiscussionStatus::Cancelled,
+        };
+        app.emit("discussion:event", &status_evt).ok();
+        Ok(meta)
     } else {
+        if let Some(ws) = manager.lookup_session_workspace(&session_id) {
+            let session_dir = Path::new(&ws)
+                .join(".flymd")
+                .join("discussions")
+                .join(&session_id);
+            let lock_path = session_dir.join(".session.lock");
+            let _ = fs::remove_file(&lock_path);
+            if let Ok(mut m) = load_metadata(&session_dir) {
+                m.status = DiscussionStatus::Cancelled;
+                m.updated_at = now_ms();
+                let _ = save_metadata(&session_dir, &m);
+                let status_evt = DiscussionEvent::StatusChanged {
+                    session_id,
+                    new_status: DiscussionStatus::Cancelled,
+                };
+                app.emit("discussion:event", &status_evt).ok();
+                return Ok(m);
+            }
+        }
         Err(format!("No active discussion session: {}", session_id))
     }
 }
@@ -168,10 +268,11 @@ pub async fn cmd_inject_discussion_guidance(
     session_id: String,
     guidance: String,
 ) -> Result<DiscussionMetadata, String> {
-    let orch_arc = {
+    let (orch_arc, ws_path) = {
         let mut active = manager.active_orchestrators.lock().await;
         if let Some(existing) = active.get(&session_id) {
-            existing.clone()
+            let ws = manager.lookup_session_workspace(&session_id).unwrap_or_default();
+            (existing.clone(), ws)
         } else if let Some(ws) = manager.lookup_session_workspace(&session_id) {
             let config_path = Path::new(&ws)
                 .join(".flymd")
@@ -189,21 +290,29 @@ pub async fn cmd_inject_discussion_guidance(
             recovered.set_event_listener(Arc::new(TauriDiscussionListener { app: app.clone() }));
             let arc = Arc::new(Mutex::new(recovered));
             active.insert(session_id.clone(), arc.clone());
-            arc
+            (arc, ws)
         } else {
             return Err(format!("Discussion session not loaded: {}", session_id));
         }
     };
 
-    let (metadata, session_dir) = {
+    let (metadata, session_dir, pause_flag, cancel_flag) = {
         let mut guard = orch_arc.lock().await;
         guard.inject_user_guidance(&guidance)?;
-        (guard.metadata.clone(), guard.session_dir.clone())
+        (
+            guard.metadata.clone(),
+            guard.session_dir.clone(),
+            guard.pause_flag.clone(),
+            guard.cancel_flag.clone(),
+        )
     };
+
+    manager.register_session_controls(&session_id, pause_flag, cancel_flag, &ws_path);
 
     spawn_supervised_discussion_run(
         app,
         manager.active_orchestrators.clone(),
+        manager.session_controls.clone(),
         session_id,
         session_dir,
         orch_arc,

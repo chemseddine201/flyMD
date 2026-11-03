@@ -168,10 +168,20 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     if (!window.electronAPI) return;
     try {
       (window as any)._flymd_last_workspace = workspacePath;
-      set({ activeSessionId: sessionId, discussionError: null, streamingChunks: {}, streamingThinking: {} });
+      const { activeSessionId } = get();
+      const isSwitchingSession = activeSessionId !== sessionId;
+      if (isSwitchingSession) {
+        set({
+          activeSessionId: sessionId,
+          discussionError: null,
+          streamingChunks: {},
+          streamingThinking: {},
+        });
+      }
       const meta = await window.electronAPI.getDiscussionMetadata(workspacePath, sessionId);
       const transcript = await window.electronAPI.getDiscussionTranscript(workspacePath, sessionId);
       set({
+        activeSessionId: sessionId,
         activeDiscussionMeta: meta,
         activeTranscript: transcript || [],
         isDiscussionRunning: meta?.status === 'running',
@@ -248,6 +258,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     const { activeSessionId } = get();
     if (!activeSessionId || !window.electronAPI?.pauseDiscussion) return;
     try {
+      set({ isDiscussionRunning: false });
       const meta = await window.electronAPI.pauseDiscussion(activeSessionId);
       set({ activeDiscussionMeta: meta, isDiscussionRunning: false });
     } catch (e: any) {
@@ -272,6 +283,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     const { activeSessionId } = get();
     if (!activeSessionId || !window.electronAPI?.cancelDiscussion) return;
     try {
+      set({ isDiscussionRunning: false });
       const meta = await window.electronAPI.cancelDiscussion(activeSessionId);
       set({ activeDiscussionMeta: meta, isDiscussionRunning: false });
     } catch (e: any) {
