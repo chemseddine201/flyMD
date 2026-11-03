@@ -325,12 +325,12 @@ impl CliProvider {
 
         match &self.cli_type {
             CliType::ClaudeCode => {
-                let mut args = vec![
-                    "-p".to_string(),
-                    prompt.to_string(),
-                    "--tools".to_string(),
-                    "".to_string(),
-                ];
+                let mut args = vec!["-p".to_string()];
+                if !prompt.is_empty() {
+                    args.push(prompt.to_string());
+                }
+                args.push("--tools".to_string());
+                args.push("".to_string());
                 if let Some(m) = sanitized_model {
                     args.push("--model".to_string());
                     args.push(m.to_string());
@@ -464,12 +464,23 @@ impl DiscussionProvider for CliProvider {
                 .join("\n\n---\n\n")
         };
 
-        let args = self.build_cli_args(
-            &full_prompt,
-            request.effort_level.as_deref(),
-            request.thinking_enabled,
-            request.model_id.as_deref(),
-        );
+        let prompt_on_stdin = matches!(&self.cli_type, CliType::ClaudeCode);
+
+        let args = if prompt_on_stdin {
+            self.build_cli_args(
+                "",
+                request.effort_level.as_deref(),
+                request.thinking_enabled,
+                request.model_id.as_deref(),
+            )
+        } else {
+            self.build_cli_args(
+                &full_prompt,
+                request.effort_level.as_deref(),
+                request.thinking_enabled,
+                request.model_id.as_deref(),
+            )
+        };
         let start = std::time::Instant::now();
 
         // Ensure sandbox dir exists
@@ -491,6 +502,12 @@ impl DiscussionProvider for CliProvider {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
+        if prompt_on_stdin {
+            cmd.stdin(Stdio::piped());
+        } else {
+            cmd.stdin(Stdio::null());
+        }
+
         #[cfg(target_os = "windows")]
         {
             // CREATE_NO_WINDOW flag
@@ -505,6 +522,14 @@ impl DiscussionProvider for CliProvider {
         let child_pid = child.id();
         let timeout_duration = Duration::from_secs(request.timeout_secs);
 
+        if prompt_on_stdin {
+            if let Some(mut stdin) = child.stdin.take() {
+                use tokio::io::AsyncWriteExt;
+                let _ = stdin.write_all(full_prompt.as_bytes()).await;
+                let _ = stdin.shutdown().await;
+            }
+        }
+
         let stdout = child
             .stdout
             .take()
@@ -512,6 +537,24 @@ impl DiscussionProvider for CliProvider {
                 exit_code: None,
                 stderr: "Child stdout was None".to_string(),
             })?;
+
+        // Concurrently drain stderr to prevent OS pipe buffer deadlocks (4KB limit on Windows)
+        let stderr = child.stderr.take();
+        let stderr_handle = tokio::spawn(async move {
+            let mut buf = String::new();
+            if let Some(mut err_stream) = stderr {
+                let mut reader = BufReader::new(&mut err_stream);
+                let mut line = String::new();
+                while let Ok(n) = reader.read_line(&mut line).await {
+                    if n == 0 {
+                        break;
+                    }
+                    buf.push_str(&line);
+                    line.clear();
+                }
+            }
+            buf
+        });
 
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
@@ -540,19 +583,19 @@ impl DiscussionProvider for CliProvider {
                     stderr: format!("Child wait error: {}", e),
                 })?;
 
+            let err_msg = stderr_handle.await.unwrap_or_default();
+
             if !status.success() {
-                let mut err_msg = String::new();
-                if let Some(mut stderr) = child.stderr.take() {
-                    let err_reader = BufReader::new(&mut stderr);
-                    let mut err_lines = err_reader.lines();
-                    while let Ok(Some(el)) = err_lines.next_line().await {
-                        err_msg.push_str(&el);
-                        err_msg.push('\n');
-                    }
-                }
+                let final_err = if !err_msg.trim().is_empty() {
+                    err_msg
+                } else if !splitter.answer.trim().is_empty() {
+                    format!("CLI error output:\n{}", splitter.answer.trim())
+                } else {
+                    "Process crashed with non-zero exit code and produced no output".to_string()
+                };
                 return Err(ProviderError::ProcessCrashed {
                     exit_code: status.code(),
-                    stderr: err_msg,
+                    stderr: final_err,
                 });
             }
 

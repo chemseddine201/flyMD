@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Settings,
   Plus,
@@ -24,6 +24,7 @@ import {
 import { DeliberationPreset } from '../../../../services/deliberationPresetRepository';
 import { getDefaultModelForAgent } from '../../../../../../shared/constants/models';
 import { DISCUSSION_AVATAR_PALETTE } from '../../../../utils/discussionTextUtils';
+import { UnsavedChangesModal } from '../../../common/UnsavedChangesModal';
 
 export interface CustomActionsAndRolesModalProps {
   isOpen: boolean;
@@ -75,6 +76,36 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [newRoleDirective, setNewRoleDirective] = useState('');
   const [newRoleColor, setNewRoleColor] = useState('#38bdf8');
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (showNewRoleForm && Boolean(newRoleName.trim() || newRoleKey.trim() || newRoleDesc.trim() || newRoleDirective.trim())) {
+      return true;
+    }
+    if (editingPreset !== null) {
+      return true;
+    }
+    return false;
+  }, [showNewRoleForm, newRoleName, newRoleKey, newRoleDesc, newRoleDirective, editingPreset]);
+
+  const handleRequestClose = () => {
+    if (hasUnsavedChanges) {
+      setShowDiscardAlert(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    setShowNewRoleForm(false);
+    setNewRoleName('');
+    setNewRoleKey('');
+    setNewRoleDesc('');
+    setNewRoleDirective('');
+    setEditingPreset(null);
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -139,7 +170,7 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
               <X size={18} />
@@ -664,13 +695,23 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
           </span>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleRequestClose}
             className="px-4 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 text-xs font-bold transition shadow-sm"
           >
             Done
           </button>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Unsaved Role or Preset Changes"
+        message="You have modified deliberation role or preset draft data. If you close now, your unsaved draft will be lost."
+        confirmLabel="Discard & Close"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
+      />
     </div>
   );
 };

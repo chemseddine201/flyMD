@@ -8,6 +8,8 @@ import {
   FastForward,
   CheckCircle,
   FileText,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import {
   DiscussionMetadata,
@@ -74,7 +76,7 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
       onGoToReport,
     }) => {
       return (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 w-full max-w-7xl 2xl:max-w-[1536px] mx-auto">
           {transcriptCount === 0 && !isRunning && (
             <div className="p-8 text-center text-slate-500 bg-slate-100 dark:bg-slate-900/30 rounded-xl border border-slate-200 dark:border-slate-800/60 transition-colors">
               <Bot
@@ -134,11 +136,11 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
             return (
               <div
                 key={group.round}
-                className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-900/40 overflow-hidden shadow-xs transition-all"
+                className="rounded-2xl border border-slate-200/90 dark:border-slate-800/80 bg-white dark:bg-slate-900/50 overflow-hidden shadow-xs transition-all"
               >
                 <div
                   onClick={() => onToggleRound(group.round)}
-                  className="px-4 py-3 bg-slate-50 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-900 cursor-pointer flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 select-none transition-colors"
+                  className="px-4 md:px-5 py-3 bg-slate-50/90 dark:bg-slate-900/90 hover:bg-slate-100/90 dark:hover:bg-slate-900 cursor-pointer flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800/70 select-none transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <button
@@ -182,9 +184,9 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
                 </div>
 
                 {isExpanded && (
-                  <div className="p-3.5 space-y-3 bg-slate-50/50 dark:bg-slate-950/40">
+                  <div className="p-3.5 md:p-4 space-y-3 bg-slate-50/40 dark:bg-slate-950/30">
                     {roundMessages.length === 0 && !isRoundStreaming ? (
-                      <div className="p-4 text-center text-slate-600 text-xs italic">
+                      <div className="p-5 text-center text-slate-500 dark:text-slate-400 text-xs rounded-xl bg-slate-100/50 dark:bg-slate-900/30 border border-dashed border-slate-200 dark:border-slate-800 italic">
                         Waiting for phase deliberation to dispatch...
                       </div>
                     ) : (
@@ -216,17 +218,54 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
             );
           })}
 
+          {activeMeta.status === 'failed' && (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-rose-950/40 via-red-950/30 to-amber-950/20 border border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-fadeIn">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0 mt-0.5">
+                  <AlertTriangle size={18} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-rose-200 flex items-center gap-2">
+                    <span>Agent Deliberation Turn Failed</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono">
+                      Round {activeMeta.currentRound}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                    {activeMeta.errorMessage || 'An unexpected error or timeout interrupted turn execution.'}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">
+                    Completed turns and ledger digests are safely preserved. Click below to re-execute the turn and continue deliberation.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={onResume}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-slate-950 text-xs font-bold transition-all shadow-md shrink-0"
+                  title="Retry failed turn and resume deliberation"
+                >
+                  <RotateCcw size={13} />
+                  <span>Resume &amp; Retry Turn</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeMeta.status === 'paused' && (
-            <div className="p-4 rounded-xl bg-amber-950/25 border border-amber-500/40 flex items-center justify-between gap-3 shadow-md">
+            <div className="p-4 rounded-xl bg-amber-950/25 border border-amber-500/40 flex items-center justify-between gap-3 shadow-md animate-fadeIn">
               <div className="flex items-center gap-2.5">
                 <Pause size={16} className="text-amber-400 shrink-0" />
                 <div>
-                  <div className="text-xs font-bold text-amber-200">
-                    Deliberation Paused for Human Review
+                  <div className="text-xs font-bold text-amber-200 flex items-center gap-2">
+                    <span>Deliberation Paused for Human Review</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                      Round {activeMeta.currentRound}
+                    </span>
                   </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    You can review the proposals above, inject guidance below,
-                    or direct a targeted inquiry to any agent.
+                    Review proposals, inject guidance below, direct targeted inquiries, or adjust upcoming round configuration before continuing.
                   </div>
                 </div>
               </div>
@@ -245,7 +284,7 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
                 >
                   <FastForward size={13} />
-                  <span>Continue Next Turn</span>
+                  <span>Resume Deliberation</span>
                 </button>
               </div>
             </div>

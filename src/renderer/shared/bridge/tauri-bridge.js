@@ -309,6 +309,12 @@
     getDiscussionReport: function (workspacePath, sessionId, version) {
       return invoke('cmd_get_discussion_report', { workspacePath: workspacePath, sessionId: sessionId, version: version || null });
     },
+    getDiscussionConfig: function (workspacePath, sessionId) {
+      return invoke('cmd_get_discussion_config', { workspacePath: workspacePath, sessionId: sessionId });
+    },
+    updateDiscussionConfig: function (workspacePath, sessionId, config) {
+      return invoke('cmd_update_discussion_config', { workspacePath: workspacePath, sessionId: sessionId, config: config });
+    },
     listDiscussions: function (workspacePath) {
       return invoke('cmd_list_discussions', { workspacePath: workspacePath });
     },

@@ -55,21 +55,36 @@
 - **Unlimited Specialist Roles Library**:
   - Built-in specialist roles (Architect, Critic, Auditor, Implementer, Researcher, Performance Lead, UX Strategist) plus full UI CRUD for user-defined custom roles with experience profiles, inquiry directives, and bound custom skills.
 
+### 6. Deliberation Lifecycle Recovery, Round Barrier Sync & In-Flight Configuration
+- **Deterministic Failure Resumption & Healing**:
+  - Automatically heals session state when an agent turn encounters a process crash, timeout, or rate-limit HTTP 429 without losing previous completed turns or committed ledger digests.
+  - Displays a dedicated Failure Diagnostic Recovery Card in the timeline with a 1-click **"Resume & Retry Turn"** action that clears error flags and re-executes the failed turn.
+- **Round-Level Barrier Synchronization**:
+  - Added configurable `pauseAtRoundBoundary` toggle to pause deliberation automatically at the end of each round for human-in-the-loop audit before the next round begins.
+  - Mid-round graceful pause allows active streaming turns to conclude cleanly before pausing.
+- **Sidebar Details & In-Flight Future-Round Editor**:
+  - Integrated a `<Sliders />` icon side-by-side with the delete session button in the deliberations sidebar.
+  - Opens `DeliberationConfigInspectorModal` with strict immutability:
+    - **Past & Active Rounds ($\le \text{currentRound}$)**: Strictly locked and read-only.
+    - **Upcoming Rounds ($> \text{currentRound}$)**: Fully editable when paused/failed to swap models, change reasoning effort tiers (`L`/`M`/`H`/`X`), add/remove specialist participants, or adjust directives.
+    - Guarded with `UnsavedChangesModal` to prevent accidental loss of edits.
+
 ---
 
 ## 📦 Production Executables & Cryptographic Hashes
 
 | Executable | Architecture | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | ~15.9 MB | `6f9b373ed79de8939462c32490d7a616f932d64d555b7a493b3d5e9661f914c0` |
-| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | ~15.9 MB | `bd3ac6e235ea16c5327c7deb15a463e83c72f35f0ebb24f7c9a19e05056678fc` |
-| **`FlyMD 2.3.0.exe`** | Windows x64 (Electron Portable) | ~70.4 MB | `8a64df5c2666108f818936c6d133ae427546ba75f26d88cb7ca00c72859deffe` |
-| **`FlyMD Setup 2.3.0.exe`** | Windows x64 (NSIS Installer) | ~70.7 MB | `61328ed01b2238175a3c401d15bca6ed2959fae7b37112cd59c2c36bc55c02bf` |
+| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | ~15.9 MB | `695F1A7EC5A46E06C500F7538DCA581B848038774198D0BD34C035666D8406F8` |
+| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | ~15.9 MB | `695F1A7EC5A46E06C500F7538DCA581B848038774198D0BD34C035666D8406F8` |
+| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | ~70.4 MB | `C764198A3C045993F0BB94015050A170E2633992185E19B4047D77C2A5889410` |
+| **`FlyMD 2.3.0.exe`** | Windows x64 (Electron Portable) | ~70.4 MB | `C764198A3C045993F0BB94015050A170E2633992185E19B4047D77C2A5889410` |
+| **`FlyMD Setup 2.3.0.exe`** | Windows x64 (NSIS Installer) | ~70.7 MB | `77A78C5503460E364FF8456CD4FBD4E750EC7DC4697F6FA4DA0452E2B8D4367A` |
 
 ---
 
 ## 🚦 Verification Summary
 
-- **Rust Test Suite**: 69/69 passed (0 failed, including 10-round early convergence test, multi-engine repeater test, and full offline 3-agent 3-round discussion).
+- **Rust Test Suite**: 72/72 passed (0 failed, including round barrier pause, resume failed discussion, and in-flight config immutability invariants).
 - **TypeScript**: 0 compiler errors (`tsc --noEmit`).
 - **Production Bundler**: Vite + Electron + Tauri release builds completed successfully.

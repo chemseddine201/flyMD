@@ -35,7 +35,7 @@ export const DiscussionReportView: React.FC<DiscussionReportViewProps> = React.m
     onReloadReport,
   }) => {
     return (
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 w-full max-w-7xl 2xl:max-w-[1536px] mx-auto">
         <div className="flex items-center justify-between p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center gap-2.5">
             <FileText size={16} className="text-emerald-500 dark:text-emerald-400" />
@@ -110,7 +110,7 @@ export const DiscussionReportView: React.FC<DiscussionReportViewProps> = React.m
 
 export const DiscussionDisputesView: React.FC<{ activeMeta: DiscussionMetadata }> =
   React.memo(({ activeMeta }) => (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
+    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 w-full max-w-7xl 2xl:max-w-[1536px] mx-auto">
       <div className="p-4 rounded-xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/30">
         <h3 className="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-2 mb-1.5">
           <ShieldAlert size={14} />

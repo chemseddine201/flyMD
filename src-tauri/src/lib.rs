@@ -319,6 +319,8 @@ pub fn run() {
             cmd_get_discussion_transcript,
             cmd_get_discussion_metadata,
             cmd_get_discussion_report,
+            cmd_get_discussion_config,
+            cmd_update_discussion_config,
             cmd_list_discussions,
             cmd_delete_discussion,
             cmd_clear_all_discussions,

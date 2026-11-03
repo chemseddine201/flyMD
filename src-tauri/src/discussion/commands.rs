@@ -9,8 +9,8 @@ use super::provider_registry::{
     build_provider_map, detect_available_providers, AvailableProviderInfo,
 };
 use super::skills::{SkillDescriptor, SkillsManager};
-use super::storage::read_transcript_with_recovery;
-use super::types::{DiscussionConfig, DiscussionMessage, DiscussionMetadata};
+use super::storage::{load_metadata, read_transcript_with_recovery, save_metadata};
+use super::types::{now_ms, DiscussionConfig, DiscussionMessage, DiscussionMetadata, DiscussionStatus};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -266,6 +266,106 @@ pub fn cmd_get_discussion_report(
             .map_err(|e| format!("Failed to read report {:?}: {}", report_file, e))
     } else {
         Err(format!("Report file not found: {:?}", report_file))
+    }
+}
+
+#[tauri::command]
+pub fn cmd_get_discussion_config(
+    workspace_path: String,
+    session_id: String,
+) -> Result<DiscussionConfig, String> {
+    let session_dir = Path::new(&workspace_path)
+        .join(".flymd")
+        .join("discussions")
+        .join(&session_id);
+    let config_path = session_dir.join("config.json");
+    let bytes = fs::read(&config_path)
+        .map_err(|e| format!("Failed to read config.json for session {}: {}", session_id, e))?;
+    let config: DiscussionConfig = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("Failed to parse config.json for session {}: {}", session_id, e))?;
+    Ok(config)
+}
+
+#[tauri::command]
+pub async fn cmd_update_discussion_config(
+    manager: tauri::State<'_, SharedDiscussionManager>,
+    store: tauri::State<'_, crate::store::SharedStore>,
+    workspace_path: String,
+    session_id: String,
+    config: DiscussionConfig,
+) -> Result<DiscussionMetadata, String> {
+    manager.record_session_workspace(&session_id, &workspace_path);
+
+    let maybe_orch = {
+        let active = manager.active_orchestrators.lock().await;
+        active.get(&session_id).cloned()
+    };
+
+    if let Some(orch_arc) = maybe_orch {
+        let mut guard = orch_arc.lock().await;
+        guard.update_future_config(config.clone())?;
+        // Rebuild provider map if new models or providers were configured for future rounds
+        let new_providers = build_provider_map(&config, manager.client.clone(), Some(&store));
+        guard.providers = new_providers;
+        Ok(guard.metadata.clone())
+    } else {
+        // Orchestrator not currently active in memory, validate and mutate directly on disk
+        let session_dir = Path::new(&workspace_path)
+            .join(".flymd")
+            .join("discussions")
+            .join(&session_id);
+        if !session_dir.exists() {
+            return Err(format!("Session directory does not exist: {}", session_id));
+        }
+
+        let mut meta = load_metadata(&session_dir)?;
+        if meta.status != DiscussionStatus::Paused
+            && meta.status != DiscussionStatus::Failed
+            && meta.status != DiscussionStatus::Created
+        {
+            return Err(format!(
+                "Cannot modify discussion configuration in state: {:?}",
+                meta.status
+            ));
+        }
+
+        if config.session_id != session_id {
+            return Err("Cannot mutate session_id".to_string());
+        }
+
+        if config.max_rounds < meta.current_round {
+            return Err(format!(
+                "max_rounds ({}) cannot be less than current round ({})",
+                config.max_rounds, meta.current_round
+            ));
+        }
+
+        // Validate that past and current round slots were not mutated
+        let existing_config_path = session_dir.join("config.json");
+        let existing_config_bytes = fs::read(&existing_config_path)
+            .map_err(|e| format!("Failed to read existing config: {}", e))?;
+        let existing_config: DiscussionConfig = serde_json::from_slice(&existing_config_bytes)
+            .map_err(|e| format!("Failed to parse existing config: {}", e))?;
+
+        for r in 1..=meta.current_round {
+            let (_, _, old_slots) = existing_config.resolve_round_plan(r);
+            let (_, _, new_slots) = config.resolve_round_plan(r);
+
+            let old_participants: Vec<String> = old_slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
+            let new_participants: Vec<String> = new_slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
+
+            if old_participants != new_participants {
+                return Err(format!(
+                    "Cannot modify participants for Round {} which has already executed or is currently active",
+                    r
+                ));
+            }
+        }
+
+        super::storage::atomic_write_json(&existing_config_path, &config)?;
+        meta.updated_at = now_ms();
+        save_metadata(&session_dir, &meta)?;
+        Ok(meta)
     }
 }
 

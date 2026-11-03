@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePreviewStore, PreviewStoreState } from '../../../../store';
 import {
+  DiscussionConfig,
   DiscussionMetadata,
   DiscussionMessage,
   AgentEffortLevel,
@@ -84,6 +85,12 @@ export function useDiscussionStudioController({
   );
   const setStepMode = usePreviewStore((s: PreviewStoreState) => s.setStepMode);
   const loadReport = usePreviewStore((s: PreviewStoreState) => s.loadReport);
+  const loadDiscussionConfig = usePreviewStore(
+    (s: PreviewStoreState) => s.loadDiscussionConfig
+  );
+  const updateDiscussionConfig = usePreviewStore(
+    (s: PreviewStoreState) => s.updateDiscussionConfig
+  );
   const handleDiscussionEvent = usePreviewStore(
     (s: PreviewStoreState) => s.handleDiscussionEvent
   );
@@ -134,6 +141,38 @@ export function useDiscussionStudioController({
   const [tabFocusNotification, setTabFocusNotification] = useState<
     string | null
   >(null);
+
+  const [inspectingSessionId, setInspectingSessionId] = useState<string | null>(null);
+  const [inspectingConfig, setInspectingConfig] = useState<DiscussionConfig | null>(null);
+  const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(false);
+
+  const handleInspectSession = useCallback(
+    async (sessionId: string) => {
+      setInspectingSessionId(sessionId);
+      setIsLoadingConfig(true);
+      try {
+        const cfg = await loadDiscussionConfig(resolvedWorkspace, sessionId);
+        setInspectingConfig(cfg);
+      } finally {
+        setIsLoadingConfig(false);
+      }
+    },
+    [loadDiscussionConfig, resolvedWorkspace]
+  );
+
+  const handleSaveDiscussionConfig = useCallback(
+    async (newConfig: DiscussionConfig) => {
+      if (!inspectingSessionId) return;
+      await updateDiscussionConfig(resolvedWorkspace, inspectingSessionId, newConfig);
+      setInspectingConfig(newConfig);
+    },
+    [inspectingSessionId, updateDiscussionConfig, resolvedWorkspace]
+  );
+
+  const handleCloseInspector = useCallback(() => {
+    setInspectingSessionId(null);
+    setInspectingConfig(null);
+  }, []);
 
   const [turnZoom, setTurnZoom] = useState<number>(() => {
     try {
@@ -597,6 +636,12 @@ export function useDiscussionStudioController({
     handleQuoteInGuidance,
     tabFocusNotification,
     setTabFocusNotification,
+    inspectingSessionId,
+    inspectingConfig,
+    isLoadingConfig,
+    handleInspectSession,
+    handleSaveDiscussionConfig,
+    handleCloseInspector,
     turnZoom,
     handleUpdateZoom,
     handleOpenReportInTab,

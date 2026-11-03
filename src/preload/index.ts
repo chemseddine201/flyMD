@@ -225,6 +225,10 @@ const electronAPI = {
     ipcRenderer.invoke('discussion:get-metadata', workspacePath, sessionId),
   getDiscussionReport: (workspacePath: string, sessionId: string, version?: number): Promise<string> =>
     ipcRenderer.invoke('discussion:get-report', workspacePath, sessionId, version),
+  getDiscussionConfig: (workspacePath: string, sessionId: string): Promise<DiscussionConfig> =>
+    ipcRenderer.invoke('discussion:get-config', workspacePath, sessionId),
+  updateDiscussionConfig: (workspacePath: string, sessionId: string, config: DiscussionConfig): Promise<DiscussionMetadata> =>
+    ipcRenderer.invoke('discussion:update-config', workspacePath, sessionId, config),
   listDiscussions: (workspacePath: string): Promise<DiscussionMetadata[]> =>
     ipcRenderer.invoke('discussion:list', workspacePath),
   deleteDiscussion: (workspacePath: string, sessionId: string): Promise<void> =>

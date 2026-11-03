@@ -14,6 +14,7 @@ import { usePreviewStore, selectActiveTab } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
 import { AgentId, AgentTaskIntent, AgentEffortLevel } from '../../../../shared/types';
 import { useSubscriptionAgents } from '../../hooks/useSubscriptionAgents';
+import { UnsavedChangesModal } from '../common/UnsavedChangesModal';
 
 const READY_AUTH_STATES = ['connected', 'api-key-ready', 'web-connected', 'ready'];
 
@@ -42,6 +43,21 @@ export const CouncilModal: React.FC = () => {
   const [effortLevel, setEffortLevel] = useState<AgentEffortLevel>('medium');
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
   const [broadcasting, setBroadcasting] = useState(false);
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+
+  const handleRequestClose = () => {
+    if (customPrompt.trim().length > 0) {
+      setShowDiscardAlert(true);
+    } else {
+      setShowCouncilModal(false);
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    setCustomPrompt('');
+    setShowCouncilModal(false);
+  };
 
   // Re-scan subscriptions each time the council opens
   useEffect(() => {
@@ -138,7 +154,7 @@ export const CouncilModal: React.FC = () => {
           </div>
 
           <button
-            onClick={() => setShowCouncilModal(false)}
+            onClick={handleRequestClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X size={18} />
@@ -345,7 +361,7 @@ export const CouncilModal: React.FC = () => {
         <div className="flex items-center justify-end gap-2.5 px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/95">
           <button
             type="button"
-            onClick={() => setShowCouncilModal(false)}
+            onClick={handleRequestClose}
             className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300"
           >
             Cancel
@@ -363,6 +379,16 @@ export const CouncilModal: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Discard Council Instructions?"
+        message="You have entered custom instructions for the council that have not been broadcast. Discard instructions?"
+        confirmLabel="Discard Instructions"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
+      />
     </div>
   );
 };

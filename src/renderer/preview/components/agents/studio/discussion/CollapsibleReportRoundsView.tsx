@@ -323,7 +323,7 @@ export const CollapsibleReportRoundsView: React.FC<CollapsibleReportRoundsViewPr
                     {isExpanded && (
                       <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/50">
                         <div
-                          className="markdown-body text-slate-800 dark:text-slate-200 leading-relaxed"
+                          className="markdown-body w-full max-w-none text-slate-800 dark:text-slate-200 leading-relaxed"
                           style={fontStyle}
                           dangerouslySetInnerHTML={{ __html: roundHtml }}
                         />

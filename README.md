@@ -58,6 +58,11 @@ Modern AI-assisted engineering relies on multiple coding agents and models (Clau
 - **Minimal Top Studio Controller**: Eliminated the redundant secondary toolbar button, keeping a single streamlined button on the top window title bar.
 - **Default Stage 1 (Debate) Focus**: Initial studio entrance automatically opens focused directly on Multi-Agent Deliberation & Debate rather than the pipeline executor.
 
+### 7. Deliberation Lifecycle: Failure Recovery, Round Pause/Resume & In-Flight Configuration
+- **Deterministic Healing & Resumption**: Automatically heals sessions on turn failures (CLI crash, timeout, rate limit 429) without discarding completed rounds; surfaces a prominent **"Resume & Retry Turn"** action card to re-execute the failed turn.
+- **Round-Level Barrier Synchronization**: Configurable `pauseAtRoundBoundary` toggle to pause deliberation cleanly after each round for human audit of consensus and dispute ledgers.
+- **Sidebar Details & In-Flight Future-Round Editor**: Side-by-side inspect icon in the deliberation sidebar opens the configuration inspector. Historical and active rounds ($\le \text{currentRound}$) remain strictly immutable, while upcoming rounds ($> \text{currentRound}$) allow swapping models, adjusting reasoning effort, and modifying directives when paused or failed, guarded by the Unsaved Changes alert.
+
 ---
 
 ## 🚀 What's New in FlyMD v2.2.0 (Stable)

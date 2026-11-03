@@ -28,6 +28,7 @@ import { AgentId, AgentTaskIntent, AgentEffortLevel } from '../../../../shared/t
 import { ModelEffortSideBySidePicker } from './common/ModelEffortSideBySidePicker';
 import { getDefaultModelForAgent } from '../../../../shared/constants/models';
 import { useSubscriptionAgents } from '../../hooks/useSubscriptionAgents';
+import { UnsavedChangesModal } from '../common/UnsavedChangesModal';
 
 export const AgentDispatchModal: React.FC = () => {
   const dispatchDraft = usePreviewStore((s) => s.dispatchDraft);
@@ -65,6 +66,21 @@ export const AgentDispatchModal: React.FC = () => {
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+
+  const handleRequestClose = () => {
+    if (customPrompt.trim().length > 0) {
+      setShowDiscardAlert(true);
+    } else {
+      closeDispatchModal();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    setCustomPrompt('');
+    closeDispatchModal();
+  };
 
   /** Resolve the user's subscription-aware model for an agent (saved selection → tier default). */
   const resolveModelForAgent = (agentId: string): string =>
@@ -265,7 +281,7 @@ export const AgentDispatchModal: React.FC = () => {
           </div>
 
           <button
-            onClick={closeDispatchModal}
+            onClick={handleRequestClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X size={18} />
@@ -627,7 +643,7 @@ export const AgentDispatchModal: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={closeDispatchModal}
+              onClick={handleRequestClose}
               className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
             >
               Cancel
@@ -644,6 +660,16 @@ export const AgentDispatchModal: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Discard Dispatch Prompt?"
+        message="You have entered a custom prompt for this agent task. If you close now, your draft will be discarded."
+        confirmLabel="Discard Draft"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
+      />
     </div>
   );
 };

@@ -340,6 +340,8 @@ pub struct DiscussionConfig {
     pub repeater_mode: Option<String>,
     #[serde(rename = "roundSchedule", default, skip_serializing_if = "Vec::is_empty")]
     pub round_schedule: Vec<DiscussionRoundPlan>,
+    #[serde(rename = "pauseAtRoundBoundary", default)]
+    pub pause_at_round_boundary: bool,
 }
 
 pub type ResolvedRoundSlot = (DiscussionParticipant, Option<String>);

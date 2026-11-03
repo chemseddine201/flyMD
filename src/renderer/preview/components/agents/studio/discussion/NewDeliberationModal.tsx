@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Sparkles,
   Sliders,
@@ -36,6 +36,7 @@ import { DebateRoundRepeaterBuilder } from './DebateRoundRepeaterBuilder';
 import { CustomActionsAndRolesModal } from './CustomActionsAndRolesModal';
 import { NewDebateModeTab } from './useNewDeliberationDraft';
 import { getDefaultModelForAgent } from '../../../../../../shared/constants/models';
+import { UnsavedChangesModal } from '../../../common/UnsavedChangesModal';
 
 export interface AvailableProviderOption {
   id: string;
@@ -187,6 +188,24 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   repeater,
 }) => {
   const [internalShowRolesModal, setInternalShowRolesModal] = useState(false);
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+
+  const hasUnsavedDraft = useMemo(() => {
+    return Boolean(newTopic.trim() || newIdea.trim());
+  }, [newTopic, newIdea]);
+
+  const handleRequestClose = () => {
+    if (hasUnsavedDraft) {
+      setShowDiscardAlert(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -243,7 +262,7 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleRequestClose}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               >
                 <X size={18} />
@@ -776,7 +795,7 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleRequestClose}
                 className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
               >
                 Cancel
@@ -815,6 +834,16 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
         onCreateCustomRole={repeater.onCreateCustomRole}
         onDeleteCustomRole={repeater.onDeleteCustomRole}
         getSubscriptionTierForAgent={repeater.getSubscriptionTierForAgent}
+      />
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Discard Deliberation Draft?"
+        message="You have entered a discussion topic or objective details that will be lost if you close now. Do you want to discard your draft?"
+        confirmLabel="Discard Draft"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
       />
     </>
   );

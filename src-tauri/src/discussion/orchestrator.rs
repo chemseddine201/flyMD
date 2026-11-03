@@ -106,6 +106,14 @@ pub enum DiscussionEvent {
         skipped_rounds: Vec<u32>,
         reason: String,
     },
+    RoundBarrierPaused {
+        session_id: String,
+        completed_round: u32,
+        next_round: u32,
+    },
+    ConfigUpdated {
+        session_id: String,
+    },
 }
 
 /// Sink for discussion events (e.g. Tauri window broadcast or test receiver).
@@ -194,7 +202,7 @@ pub struct DiscussionOrchestrator {
     pub session_dir: PathBuf,
     pub memory: MemoryManager,
     pub skills_manager: super::skills::SkillsManager,
-    providers: HashMap<String, Arc<dyn DiscussionProvider>>,
+    pub providers: HashMap<String, Arc<dyn DiscussionProvider>>,
     cancel_flag: Arc<AtomicBool>,
     pause_flag: Arc<AtomicBool>,
     lock: Option<SessionLock>,
@@ -368,6 +376,63 @@ impl DiscussionOrchestrator {
         let _ = atomic_write_json(&config_path, &self.config);
     }
 
+    /// Updates configuration for upcoming rounds when the deliberation is paused or failed.
+    /// Strictly forbids mutating historical or currently executing rounds.
+    pub fn update_future_config(&mut self, new_config: DiscussionConfig) -> Result<(), String> {
+        if self.metadata.status != DiscussionStatus::Paused
+            && self.metadata.status != DiscussionStatus::Failed
+            && self.metadata.status != DiscussionStatus::Created
+        {
+            return Err(format!(
+                "Cannot modify discussion configuration in state: {:?}",
+                self.metadata.status
+            ));
+        }
+
+        if new_config.session_id != self.config.session_id {
+            return Err("Cannot mutate session_id".to_string());
+        }
+
+        if new_config.max_rounds < self.metadata.current_round {
+            return Err(format!(
+                "max_rounds ({}) cannot be less than current round ({})",
+                new_config.max_rounds, self.metadata.current_round
+            ));
+        }
+
+        // Strict Immutability Guard: Past rounds and current round (r <= current_round)
+        // must not have their schedule or participants changed.
+        for r in 1..=self.metadata.current_round {
+            let (_, _, old_slots) = self.config.resolve_round_plan(r);
+            let (_, _, new_slots) = new_config.resolve_round_plan(r);
+
+            let old_participants: Vec<String> = old_slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
+            let new_participants: Vec<String> = new_slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
+
+            if old_participants != new_participants {
+                return Err(format!(
+                    "Cannot modify participants for Round {} which has already executed or is currently active",
+                    r
+                ));
+            }
+        }
+
+        self.step_mode = new_config.step_mode;
+        self.config = new_config;
+
+        let config_path = self.session_dir.join("config.json");
+        atomic_write_json(&config_path, &self.config)?;
+
+        self.metadata.updated_at = now_ms();
+        let _ = save_metadata(&self.session_dir, &self.metadata);
+
+        self.notify(DiscussionEvent::ConfigUpdated {
+            session_id: self.config.session_id.clone(),
+        });
+
+        Ok(())
+    }
+
     fn notify(&self, event: DiscussionEvent) {
         if let Some(ref listener) = self.event_listener {
             listener.on_event(event);
@@ -398,6 +463,9 @@ impl DiscussionOrchestrator {
             (DiscussionStatus::Running, DiscussionStatus::Interrupted) => true,
             (DiscussionStatus::Paused, DiscussionStatus::Running) => true,
             (DiscussionStatus::Paused, DiscussionStatus::Cancelled) => true,
+            (DiscussionStatus::Failed, DiscussionStatus::Running) => true,
+            (DiscussionStatus::Failed, DiscussionStatus::Cancelled) => true,
+            (DiscussionStatus::Failed, DiscussionStatus::Paused) => true,
             (DiscussionStatus::Interrupted, DiscussionStatus::Running) => true,
             (DiscussionStatus::Interrupted, DiscussionStatus::Cancelled) => true,
             (DiscussionStatus::AwaitingReview, DiscussionStatus::Running) => true,
@@ -579,11 +647,14 @@ impl DiscussionOrchestrator {
         match self.metadata.status {
             DiscussionStatus::Created
             | DiscussionStatus::Paused
-            | DiscussionStatus::Interrupted => {
+            | DiscussionStatus::Interrupted
+            | DiscussionStatus::Failed => {
                 self.acquire_lock_if_needed()?;
                 if self.metadata.started_at.is_none() {
                     self.metadata.started_at = Some(now_ms());
                 }
+                // Clear any prior failure error message upon resumption
+                self.metadata.error_message = None;
                 self.transition_status(DiscussionStatus::Running)?;
             }
             DiscussionStatus::AwaitingReview => {
@@ -881,6 +952,19 @@ impl DiscussionOrchestrator {
 
                 return self.finalize_and_generate_report();
             } else {
+                // Check if user requested round barrier pause or configured pause_at_round_boundary
+                if self.config.pause_at_round_boundary || self.pause_flag.load(Ordering::Relaxed) {
+                    self.pause_flag.store(false, Ordering::SeqCst);
+                    self.transition_status(DiscussionStatus::Paused)?;
+                    self.release_lock();
+                    self.notify(DiscussionEvent::RoundBarrierPaused {
+                        session_id: self.config.session_id.clone(),
+                        completed_round: current_round,
+                        next_round: current_round + 1,
+                    });
+                    return Ok(DiscussionStatus::Paused);
+                }
+
                 // Advance to next round
                 self.metadata.current_round += 1;
                 self.metadata.updated_at = now_ms();
@@ -1429,7 +1513,7 @@ impl DiscussionOrchestrator {
 mod tests {
     use super::*;
     use crate::discussion::runner::MockProvider;
-    use crate::discussion::types::AgentRole;
+    use crate::discussion::types::{AgentRole, DiscussionRoundPlan, DiscussionRoundSlot};
     use std::sync::Mutex;
 
     struct TestCollector {
@@ -1867,6 +1951,116 @@ mod tests {
         assert!(r2
             .iter()
             .any(|m| m.author_provider == "engine-gamma" && m.author_role == "Regulatory Counsel"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_round_barrier_pause_and_resumption() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_barrier_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let mut config = build_test_config(&temp_dir);
+        config.max_rounds = 2;
+        config.pause_at_round_boundary = true;
+
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(MockProvider::new("mock")));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config, providers).unwrap();
+        let status = orchestrator.run_discussion().await.unwrap();
+        assert_eq!(status, DiscussionStatus::Paused, "Must pause at round 1 barrier");
+        assert_eq!(orchestrator.metadata.current_round, 1);
+
+        // Verify Round 1 ledger was recorded
+        let r1_ledger = orchestrator.metadata.round_ledger.iter().find(|r| r.round_number == 1);
+        assert!(r1_ledger.is_some());
+        assert_eq!(r1_ledger.unwrap().status, RoundExecutionStatus::Executed);
+
+        // Resume deliberation to execute Round 2
+        let second_status = orchestrator.run_discussion().await.unwrap();
+        assert_eq!(second_status, DiscussionStatus::AwaitingReview, "Must complete round 2 upon resumption");
+        assert_eq!(orchestrator.metadata.current_round, 2);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_resume_failed_discussion() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_fail_resume_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let config = build_test_config(&temp_dir);
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(MockProvider::new("mock")));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config, providers).unwrap();
+        // Simulate a failure during previous turn execution
+        orchestrator.metadata.status = DiscussionStatus::Failed;
+        orchestrator.metadata.error_message = Some("Process exited with code 1".to_string());
+
+        // Resuming from Failed state must clear error and run cleanly
+        let status = orchestrator.run_discussion().await.unwrap();
+        assert_eq!(status, DiscussionStatus::AwaitingReview);
+        assert!(orchestrator.metadata.error_message.is_none());
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_update_future_config_invariants() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_config_invariants_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let mut config = build_test_config(&temp_dir);
+        config.max_rounds = 3;
+        config.round_schedule = vec![
+            DiscussionRoundPlan {
+                round_number: 1,
+                title: "Round 1".to_string(),
+                objective: None,
+                slots: vec![DiscussionRoundSlot {
+                    slot_id: "r1-s1".to_string(),
+                    participant: config.participants[0].clone(),
+                    round_directive: None,
+                }],
+            },
+            DiscussionRoundPlan {
+                round_number: 2,
+                title: "Round 2".to_string(),
+                objective: None,
+                slots: vec![DiscussionRoundSlot {
+                    slot_id: "r2-s1".to_string(),
+                    participant: config.participants[1].clone(),
+                    round_directive: None,
+                }],
+            },
+        ];
+
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(MockProvider::new("mock")));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config.clone(), providers).unwrap();
+        orchestrator.metadata.status = DiscussionStatus::Paused;
+        orchestrator.metadata.current_round = 1;
+
+        // 1. Mutating Round 1 participants must be rejected because Round 1 is current/executed
+        let mut illegal_config = config.clone();
+        illegal_config.round_schedule[0].slots[0].participant.agent_id = "mutated-agent".to_string();
+        let err = orchestrator.update_future_config(illegal_config);
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("Cannot modify participants for Round 1"));
+
+        // 2. Mutating Round 2 (upcoming round) must succeed
+        let mut legal_config = config.clone();
+        legal_config.round_schedule[1].slots[0].participant.agent_id = "new-future-agent".to_string();
+        let res = orchestrator.update_future_config(legal_config);
+        assert!(res.is_ok());
+
+        // Verify disk persistence
+        let read_back_bytes = fs::read(orchestrator.session_dir.join("config.json")).unwrap();
+        let read_back_config: DiscussionConfig = serde_json::from_slice(&read_back_bytes).unwrap();
+        assert_eq!(read_back_config.round_schedule[1].slots[0].participant.agent_id, "new-future-agent");
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

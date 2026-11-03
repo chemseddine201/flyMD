@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   AgentProfile,
   AgentCredentialConfig,
@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/types';
 import { ModelEffortSideBySidePicker } from './common/ModelEffortSideBySidePicker';
 import { SUBSCRIPTION_TIERS } from '../../../../shared/constants/models';
+import { UnsavedChangesModal } from '../common/UnsavedChangesModal';
 import {
   X,
   KeyRound,
@@ -106,6 +107,30 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
   const [newCustomDesc, setNewCustomDesc] = useState('');
   const [newCustomColor, setNewCustomColor] = useState('#10b981');
   const [hidePredefinedOnCreate, setHidePredefinedOnCreate] = useState(false);
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+
+  const hasUnsavedData = useMemo(() => {
+    if (isCreatingCustom && Boolean(newCustomName.trim() || newCustomCliCmd.trim())) {
+      return true;
+    }
+    return false;
+  }, [isCreatingCustom, newCustomName, newCustomCliCmd]);
+
+  const handleRequestClose = () => {
+    if (hasUnsavedData) {
+      setShowDiscardAlert(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    setIsCreatingCustom(false);
+    setNewCustomName('');
+    setNewCustomCliCmd('');
+    onClose();
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -365,7 +390,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
             >
               <X className="w-4 h-4" />
@@ -884,6 +909,16 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
           </div>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Discard Custom Agent Draft?"
+        message="You have unsaved custom agent configuration. If you close now, your draft will be discarded."
+        confirmLabel="Discard Draft"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Trash2, Plus, Search, Layers } from 'lucide-react';
+import { MessageSquare, Trash2, Plus, Search, Layers, Sliders } from 'lucide-react';
 import { DiscussionMetadata, DiscussionStatus } from '../../../../../../shared/types';
 
 export interface DiscussionSessionSidebarProps {
@@ -11,6 +11,7 @@ export interface DiscussionSessionSidebarProps {
   onSelectSession: (sessionId: string) => void;
   onOpenNewModal: () => void;
   onOpenClearAllModal: () => void;
+  onInspectSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   getStatusBadge: (status: DiscussionStatus) => React.ReactNode;
 }
@@ -24,6 +25,7 @@ export const DiscussionSessionSidebar: React.FC<DiscussionSessionSidebarProps> =
   onSelectSession,
   onOpenNewModal,
   onOpenClearAllModal,
+  onInspectSession,
   onDeleteSession,
   getStatusBadge,
 }) => {
@@ -107,6 +109,17 @@ export const DiscussionSessionSidebar: React.FC<DiscussionSessionSidebarProps> =
                   </span>
                   <div className="flex items-center gap-1.5">
                     {getStatusBadge(d.status)}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onInspectSession(d.sessionId);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-sky-500/20 text-slate-400 hover:text-sky-500 transition-opacity"
+                      title="View details & modify configuration (when paused)"
+                    >
+                      <Sliders size={12} />
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {

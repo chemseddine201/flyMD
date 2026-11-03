@@ -164,10 +164,23 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
                     <button
                       type="button"
                       onClick={onResume}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold transition-colors"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        activeMeta.status === 'failed'
+                          ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 shadow-sm'
+                          : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+                      }`}
+                      title={
+                        activeMeta.status === 'failed'
+                          ? 'Retry failed turn and resume deliberation'
+                          : 'Resume deliberation'
+                      }
                     >
                       <Play size={12} />
-                      <span>Resume</span>
+                      <span>
+                        {activeMeta.status === 'failed'
+                          ? 'Retry & Resume'
+                          : 'Resume'}
+                      </span>
                     </button>
                   )}
               </>

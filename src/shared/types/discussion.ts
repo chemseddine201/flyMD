@@ -199,6 +199,7 @@ export interface DiscussionConfig {
   selectedEngines?: string[];
   repeaterMode?: DebateRepeaterMode;
   roundSchedule?: DiscussionRoundPlan[];
+  pauseAtRoundBoundary?: boolean;
 }
 
 export interface DiscussionMetadata {

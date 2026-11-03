@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Plus,
@@ -22,6 +22,7 @@ import {
   CustomActionIconKey,
 } from '../../../../../shared/types';
 import { STARTER_CUSTOM_PIPELINE_ACTIONS } from '../../../../../shared/constants';
+import { UnsavedChangesModal } from '../../common/UnsavedChangesModal';
 
 interface CustomPipelineActionsModalProps {
   isOpen: boolean;
@@ -162,6 +163,43 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
     }
   };
 
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+
+  const isDirty = useMemo(() => {
+    if (!selectedAction) return false;
+    return (
+      formName !== selectedAction.name ||
+      formShortLabel !== selectedAction.shortLabel ||
+      formDescription !== selectedAction.description ||
+      formPromptTemplate !== selectedAction.promptTemplate ||
+      formOutputFileHint !== (selectedAction.outputFileHint || '') ||
+      formEpistemicPolicy !== selectedAction.epistemicPolicy ||
+      formIconKey !== selectedAction.iconKey
+    );
+  }, [
+    selectedAction,
+    formName,
+    formShortLabel,
+    formDescription,
+    formPromptTemplate,
+    formOutputFileHint,
+    formEpistemicPolicy,
+    formIconKey,
+  ]);
+
+  const handleRequestClose = () => {
+    if (isDirty) {
+      setShowDiscardAlert(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -187,7 +225,7 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleRequestClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="Close modal"
           >
@@ -485,7 +523,7 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleRequestClose}
                   className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium transition"
                 >
                   Close
@@ -502,6 +540,16 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
           </form>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Discard Action Changes?"
+        message="You have unsaved modifications in this pipeline action template. If you close now, your edits will be discarded."
+        confirmLabel="Discard Edits"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
+      />
     </div>
   );
 };

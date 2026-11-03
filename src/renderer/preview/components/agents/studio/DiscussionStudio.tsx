@@ -24,6 +24,7 @@ import {
 } from './discussion/DiscussionReportAndDisputesViews';
 import { CouncilInterventionBar } from './discussion/CouncilInterventionBar';
 import { DiscussionConfirmModals } from './discussion/DiscussionConfirmModals';
+import { DeliberationConfigInspectorModal } from './discussion/DeliberationConfigInspectorModal';
 import { useDiscussionStudioController } from './discussion/useDiscussionStudioController';
 
 export type { DeliberationPreset, PresetKey, ActionCatalogItem };
@@ -64,6 +65,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         }
         onOpenNewModal={() => draft.setShowNewModal(true)}
         onOpenClearAllModal={() => ctrl.setShowClearAllModal(true)}
+        onInspectSession={ctrl.handleInspectSession}
         onDeleteSession={ctrl.setSessionToDelete}
         getStatusBadge={renderDiscussionStatusBadge}
       />
@@ -300,6 +302,20 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         totalDiscussionsCount={ctrl.discussions.length}
         onCancelClearAll={() => ctrl.setShowClearAllModal(false)}
         onConfirmClearAll={ctrl.handleConfirmClearAll}
+      />
+
+      <DeliberationConfigInspectorModal
+        isOpen={!!ctrl.inspectingSessionId && !!ctrl.inspectingConfig}
+        onClose={ctrl.handleCloseInspector}
+        config={ctrl.inspectingConfig}
+        metadata={
+          ctrl.discussions.find((d) => d.sessionId === ctrl.inspectingSessionId) ||
+          ctrl.activeMeta
+        }
+        onSaveConfig={ctrl.handleSaveDiscussionConfig}
+        availableProviders={ctrl.availableProviders}
+        getDynamicModelsForAgent={draft.getDynamicModelsForAgent}
+        getSubscriptionTierForAgent={draft.getSubscriptionTierForAgent}
       />
     </div>
   );

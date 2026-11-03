@@ -12,6 +12,7 @@ import {
   Check,
   Copy,
   Quote,
+  Loader2,
 } from 'lucide-react';
 import { DiscussionMessage } from '../../../../../../shared/types';
 import { usePreviewStore, PreviewStoreState } from '../../../../store';
@@ -38,10 +39,31 @@ export const LiveStreamingTurnCard: React.FC<LiveStreamingTurnCardProps> = React
       (s: PreviewStoreState) => s.streamingThinking
     );
 
-    const entries = Object.entries(streamingChunks);
-    if (entries.length === 0 || roundNumber !== currentRound || !isRunning) {
+    if (roundNumber !== currentRound || !isRunning) {
       return null;
     }
+
+    const entries = Object.entries(streamingChunks);
+    if (entries.length === 0) {
+      return (
+        <div className="rounded-xl border border-sky-500/40 bg-sky-500/5 dark:bg-sky-950/20 p-4 space-y-2.5 shadow-sm animate-pulse transition-all">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 text-xs font-bold text-sky-600 dark:text-sky-400">
+              <Loader2 size={15} className="animate-spin text-sky-500" />
+              <span>Loading, processing, preparing agent deliberation...</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-300 border border-sky-500/30 font-semibold uppercase tracking-wider animate-pulse">
+              Preparing
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed flex items-center gap-2">
+            <Sparkles size={13} className="text-amber-500 shrink-0" />
+            <span>Anchoring token context, loading specialist directives, and initializing model reasoning...</span>
+          </div>
+        </div>
+      );
+    }
+
     const activeStreamingEntry = entries[entries.length - 1];
     const agentId = activeStreamingEntry[0];
     const chunkText = String(activeStreamingEntry[1]);
@@ -154,10 +176,10 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
       <div
         className={`rounded-xl border transition-all ${
           isHuman
-            ? 'bg-teal-500/10 dark:bg-teal-950/20 border-teal-500/40 shadow-sm'
+            ? 'bg-teal-500/10 dark:bg-teal-950/20 border-teal-500/30 shadow-xs'
             : isTurnExpanded
-            ? 'bg-white dark:bg-slate-900/80 border-slate-300 dark:border-slate-700/80 shadow-md'
-            : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+            ? 'bg-white dark:bg-slate-900/80 border-slate-200/90 dark:border-slate-800 shadow-sm'
+            : 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700'
         }`}
       >
         {/* Action Turn Header */}
@@ -277,7 +299,7 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
 
         {/* Expanded Full Markdown Body */}
         {isTurnExpanded && (
-          <div className="px-4 pb-4 pt-1 border-t border-slate-200 dark:border-slate-800/60 pl-11 space-y-3">
+          <div className="px-4 md:px-5 pb-4 pt-2 border-t border-slate-200/80 dark:border-slate-800/60 space-y-3">
             {msg.thinkingContent && (
               <div className="rounded-xl border border-indigo-500/30 bg-indigo-50 dark:bg-indigo-950/20 overflow-hidden text-xs my-1 shadow-sm">
                 <div
@@ -314,7 +336,7 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
             )}
 
             <div
-              className="markdown-body text-slate-800 dark:text-slate-200 leading-relaxed max-w-none transition-all"
+              className="markdown-body w-full max-w-none text-slate-800 dark:text-slate-200 leading-relaxed transition-all"
               style={{
                 fontSize: `${(13 * turnZoom) / 100}px`,
                 lineHeight: 1.65,
