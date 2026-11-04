@@ -308,6 +308,25 @@ pub struct DecisionItem {
     pub evidence_citations: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct DiscussionAttachedFile {
+    #[serde(default)]
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub extension: String,
+    #[serde(rename = "mimeType", default, skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(rename = "dataUrl", default, skip_serializing_if = "Option::is_none")]
+    pub data_url: Option<String>,
+    #[serde(rename = "isImage", default)]
+    pub is_image: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct DiscussionConfig {
     #[serde(rename = "schemaVersion", default = "default_schema_version")]
@@ -342,6 +361,8 @@ pub struct DiscussionConfig {
     pub round_schedule: Vec<DiscussionRoundPlan>,
     #[serde(rename = "pauseAtRoundBoundary", default)]
     pub pause_at_round_boundary: bool,
+    #[serde(rename = "attachedFiles", default, skip_serializing_if = "Vec::is_empty")]
+    pub attached_files: Vec<DiscussionAttachedFile>,
 }
 
 pub type ResolvedRoundSlot = (DiscussionParticipant, Option<String>);

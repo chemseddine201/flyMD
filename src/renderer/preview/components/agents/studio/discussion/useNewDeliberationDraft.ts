@@ -8,7 +8,13 @@ import {
   CustomRoleDefinition,
   DebateRepeaterMode,
   DiscussionRoundPlan,
+  DiscussionAttachedFile,
 } from '../../../../../../shared/types';
+import {
+  processFilesForAttachment,
+  formatAttachedFilesContext,
+  MAX_DISCUSSION_ATTACHMENTS,
+} from './discussionAttachmentUtils';
 import {
   DeliberationPreset,
   DEFAULT_PRESET_TEMPLATES,
@@ -107,6 +113,31 @@ export function useNewDeliberationDraft({
   const [isScanningSkills, setIsScanningSkills] = useState<boolean>(false);
   const [tokenBudgetCapInput, setTokenBudgetCapInput] =
     useState<string>('50000');
+
+  // Multi-file attachment state (up to 10 files, all allowed extensions)
+  const [attachedFiles, setAttachedFiles] = useState<DiscussionAttachedFile[]>([]);
+  const [attachmentClampedNotice, setAttachmentClampedNotice] = useState<boolean>(false);
+
+  const handleAddAttachedFiles = useCallback(async (files: FileList | File[]) => {
+    setAttachmentClampedNotice(false);
+    const { added, clamped } = await processFilesForAttachment(files, attachedFiles.length, MAX_DISCUSSION_ATTACHMENTS);
+    if (clamped) {
+      setAttachmentClampedNotice(true);
+    }
+    if (added.length > 0) {
+      setAttachedFiles((prev) => [...prev, ...added].slice(0, MAX_DISCUSSION_ATTACHMENTS));
+    }
+  }, [attachedFiles.length]);
+
+  const handleRemoveAttachedFile = useCallback((fileId: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId));
+    setAttachmentClampedNotice(false);
+  }, []);
+
+  const handleClearAttachedFiles = useCallback(() => {
+    setAttachedFiles([]);
+    setAttachmentClampedNotice(false);
+  }, []);
 
   // Re-fetch live subscription agents every time the modal opens
   useEffect(() => {
@@ -743,11 +774,14 @@ export function useNewDeliberationDraft({
       thinkingEnabled: p.thinkingEnabled ?? presetThinkingEnabled ?? true,
     }));
 
+    const filesContext = formatAttachedFilesContext(attachedFiles);
+    const fullUserIdea = filesContext ? `${ideaToUse}${filesContext}` : ideaToUse;
+
     const config: DiscussionConfig = {
       schemaVersion: 1,
       sessionId,
       topic: topicToUse,
-      userIdea: ideaToUse,
+      userIdea: fullUserIdea,
       workspacePath: resolvedWorkspace,
       maxRounds: effectiveMaxRounds,
       turnTimeoutSecs: Math.min(
@@ -767,9 +801,11 @@ export function useNewDeliberationDraft({
       selectedEngines: activeEnginePool,
       repeaterMode: effectiveRepeaterMode,
       roundSchedule: finalRoundSchedule,
+      attachedFiles: attachedFiles.length > 0 ? attachedFiles : undefined,
     };
 
     setShowNewModal(false);
+    setAttachedFiles([]);
     await startNewDiscussion(config);
   }, [
     resolvedWorkspace,
@@ -801,6 +837,7 @@ export function useNewDeliberationDraft({
     customSkillsDir,
     includeDefaultSkills,
     tokenBudgetCapInput,
+    attachedFiles,
     startNewDiscussion,
   ]);
 
@@ -881,5 +918,10 @@ export function useNewDeliberationDraft({
     handleLaunchNewDiscussion,
     showCustomRolesModal,
     setShowCustomRolesModal,
+    attachedFiles,
+    handleAddAttachedFiles,
+    handleRemoveAttachedFile,
+    handleClearAttachedFiles,
+    attachmentClampedNotice,
   };
 }

@@ -1,7 +1,8 @@
-import React from 'react';
-import { Target, Brain, RotateCw, Zap, Send } from 'lucide-react';
-import { AgentEffortLevel } from '../../../../../../shared/types';
+import React, { useRef, useState } from 'react';
+import { Target, Brain, RotateCw, Zap, Send, Paperclip, AlertCircle } from 'lucide-react';
+import { AgentEffortLevel, DiscussionAttachedFile } from '../../../../../../shared/types';
 import { ModelEffortSideBySidePicker } from '../../common/ModelEffortSideBySidePicker';
+import { DiscussionAttachmentPills, MAX_DISCUSSION_ATTACHMENTS } from './discussionAttachmentUtils';
 
 export interface ParticipantAgentOption {
   id: string;
@@ -37,6 +38,10 @@ export interface CouncilInterventionBarProps {
   guidanceInput: string;
   onChangeGuidanceInput: (text: string) => void;
   onSendGuidance: () => void;
+  interventionFiles?: DiscussionAttachedFile[];
+  onAddInterventionFiles?: (files: FileList | File[]) => Promise<void>;
+  onRemoveInterventionFile?: (fileId: string) => void;
+  interventionClampedNotice?: boolean;
 }
 
 export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
@@ -65,13 +70,53 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
       guidanceInput,
       onChangeGuidanceInput,
       onSendGuidance,
+      interventionFiles,
+      onAddInterventionFiles,
+      onRemoveInterventionFile,
+      interventionClampedNotice,
     }) => {
+      const fileInputRef = useRef<HTMLInputElement>(null);
+      const [isDragOver, setIsDragOver] = useState(false);
+
       const targetedProviderId =
         participantAgents.find((ag) => ag.id === targetedAgentId)?.providerId ||
         targetedAgentId;
 
       return (
-        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm transition-colors duration-150">
+        <div
+          onDragOver={(e) => {
+            if (e.dataTransfer?.types?.includes('Files')) {
+              e.preventDefault();
+              setIsDragOver(true);
+            }
+          }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragOver(false);
+            if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+              onAddInterventionFiles?.(e.dataTransfer.files);
+            }
+          }}
+          className={`shrink-0 border-t ${
+            isDragOver
+              ? 'border-sky-500 ring-2 ring-sky-500/30 bg-sky-50/50 dark:bg-sky-950/30'
+              : 'border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95'
+          } backdrop-blur-sm transition-colors duration-150`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                onAddInterventionFiles?.(e.target.files);
+                e.target.value = '';
+              }
+            }}
+            className="hidden"
+          />
+
           {showTargetedDispatch && (
             <div className="p-3 bg-purple-50/80 dark:bg-purple-950/20 border-b border-purple-300 dark:border-purple-500/30 animate-fadeIn">
               <div className="max-w-4xl mx-auto space-y-2">
@@ -187,7 +232,8 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                     type="button"
                     onClick={onDispatchTargetedQuery}
                     disabled={
-                      !targetedActionQuery.trim() || isDispatchingTargeted
+                      (!targetedActionQuery.trim() && (!interventionFiles || interventionFiles.length === 0)) ||
+                      isDispatchingTargeted
                     }
                     className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm shrink-0"
                   >
@@ -209,46 +255,83 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
           )}
 
           <div className="p-3">
-            <div className="max-w-4xl mx-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onToggleTargetedDispatch}
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-bold transition-all shrink-0 ${
-                  showTargetedDispatch
-                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-700 dark:text-purple-300'
-                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                }`}
-                title="Dispatch a targeted custom inquiry to an individual agent"
-              >
-                <Target size={13} className="text-purple-400" />
-                <span className="hidden sm:inline">Target Agent</span>
-              </button>
+            <div className="max-w-4xl mx-auto space-y-1.5">
+              {interventionFiles && interventionFiles.length > 0 && (
+                <div className="pb-1">
+                  <DiscussionAttachmentPills
+                    files={interventionFiles}
+                    onRemove={onRemoveInterventionFile || (() => {})}
+                    maxFiles={MAX_DISCUSSION_ATTACHMENTS}
+                  />
+                </div>
+              )}
+              {interventionClampedNotice && (
+                <div className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertCircle size={11} />
+                  <span>Maximum 10 files allowed. Additional files were omitted.</span>
+                </div>
+              )}
 
-              <input
-                type="text"
-                value={guidanceInput}
-                onChange={(e) => onChangeGuidanceInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (
-                    e.key === 'Enter' &&
-                    (e.metaKey || e.ctrlKey || !e.shiftKey)
-                  ) {
-                    e.preventDefault();
-                    onSendGuidance();
-                  }
-                }}
-                placeholder="Intervene or steer council... (e.g. 'Prioritize feasibility', 'Explore alternative angles', press Enter)"
-                className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3.5 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
-              />
-              <button
-                type="button"
-                onClick={onSendGuidance}
-                disabled={!guidanceInput.trim()}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:hover:bg-sky-500 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
-              >
-                <Send size={12} />
-                <span>Steer</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onToggleTargetedDispatch}
+                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-bold transition-all shrink-0 ${
+                    showTargetedDispatch
+                      ? 'bg-purple-500/20 border-purple-500/50 text-purple-700 dark:text-purple-300'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                  title="Dispatch a targeted custom inquiry to an individual agent"
+                >
+                  <Target size={13} className="text-purple-400" />
+                  <span className="hidden sm:inline">Target Agent</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-semibold transition-all shrink-0 ${
+                    interventionFiles && interventionFiles.length > 0
+                      ? 'bg-sky-500/15 border-sky-500/40 text-sky-800 dark:text-sky-300'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                  title="Attach up to 10 files (code, documents, configs, images)"
+                >
+                  <Paperclip size={13} className="text-sky-500" />
+                  <span className="hidden sm:inline">Attach</span>
+                  {interventionFiles && interventionFiles.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-700 dark:text-sky-300 text-[10px] font-bold">
+                      {interventionFiles.length}
+                    </span>
+                  )}
+                </button>
+
+                <input
+                  type="text"
+                  value={guidanceInput}
+                  onChange={(e) => onChangeGuidanceInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === 'Enter' &&
+                      (e.metaKey || e.ctrlKey || !e.shiftKey)
+                    ) {
+                      e.preventDefault();
+                      onSendGuidance();
+                    }
+                  }}
+                  placeholder="Intervene or steer council... (e.g. 'Prioritize feasibility', attach code/specs, press Enter)"
+                  className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3.5 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={onSendGuidance}
+                  disabled={!guidanceInput.trim() && (!interventionFiles || interventionFiles.length === 0)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:hover:bg-sky-500 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
+                >
+                  <Send size={12} />
+                  <span>Steer</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -196,6 +196,10 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
                   guidanceInput={ctrl.guidanceInput}
                   onChangeGuidanceInput={ctrl.setGuidanceInput}
                   onSendGuidance={ctrl.handleSendGuidance}
+                  interventionFiles={ctrl.interventionFiles}
+                  onAddInterventionFiles={ctrl.handleAddInterventionFiles}
+                  onRemoveInterventionFile={ctrl.handleRemoveInterventionFile}
+                  interventionClampedNotice={ctrl.interventionClampedNotice}
                 />
               )}
             </div>
@@ -234,6 +238,10 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         newObjective={draft.newObjective}
         setNewObjective={draft.setNewObjective}
         isFormValid={draft.isFormValid}
+        attachedFiles={draft.attachedFiles}
+        onAddAttachedFiles={draft.handleAddAttachedFiles}
+        onRemoveAttachedFile={draft.handleRemoveAttachedFile}
+        attachmentClampedNotice={draft.attachmentClampedNotice}
         maxRoundsInput={draft.maxRoundsInput}
         setMaxRoundsInput={draft.setMaxRoundsInput}
         setMaxRounds={draft.setMaxRounds}
@@ -313,7 +321,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
       />
 
       <DeliberationConfigInspectorModal
-        isOpen={!!ctrl.inspectingSessionId && !!ctrl.inspectingConfig}
+        isOpen={!!ctrl.inspectingSessionId}
         onClose={ctrl.handleCloseInspector}
         config={ctrl.inspectingConfig}
         metadata={

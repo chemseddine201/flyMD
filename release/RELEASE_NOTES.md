@@ -84,15 +84,25 @@
 - **Full-Width Unsquished Timeline**:
   - Expanded timeline container to 100% full width, preventing narrow docking on wide displays.
 
+### 5. Multi-File Reference Attachments & Deliberation Action Buttons Restoration
+- **Tauri Bridge Synchronization**:
+  - Added missing `getDiscussionConfig` and `updateDiscussionConfig` handlers to `bridge/tauri-bridge.js`.
+  - Added resilient fallback synthesis in `useDiscussionStudioController.ts` and an immediate loading skeleton in `DeliberationConfigInspectorModal.tsx`, restoring instant reactivity to the sidebar debate settings button (`<Sliders />`) and the timeline banner's **"Change Model / Config"** and **"Modify Next Rounds"** buttons.
+- **Multi-File Attachments (Up to 10 Files, All Allowed Extensions)**:
+  - Enabled multi-file reference attachments across both **Deliberation Inception** (`NewDeliberationModal.tsx`) and **Live Human Intervention** (`CouncilInterventionBar.tsx`).
+  - Supports all extensions (documents, markdown, scripts, code `.ts/.rs/.py`, configs `.json/.yml`, logs, and images).
+  - Features extension-based category icons, formatted file sizes, 1-click removal pills, drag-and-drop dropzones, and strict 10-file maximum enforcement with user notifications.
+  - Formats attached files directly into the proposal prompt and human intervention payloads so all council agents have immediate access to referenced code and documents.
+
 ---
 
 ## 📦 Production Executables & Cryptographic Hashes
 
 | Executable | Architecture | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.1 MB | `B594E54F2D30334476893D2341494F8E9346F42BE8881D60325CAEA3A31F31A7` |
-| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.1 MB | `B594E54F2D30334476893D2341494F8E9346F42BE8881D60325CAEA3A31F31A7` |
-| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `9E17030CE31AF94BD3724339A2E145D37B3D71301F77C5518B714DF1A17A965E` |
+| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.1 MB | `F0C371A4ACB328B12B9C43E4C572295E91F891515F95F4AA953E42F4744C5260` |
+| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.1 MB | `F0C371A4ACB328B12B9C43E4C572295E91F891515F95F4AA953E42F4744C5260` |
+| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `C6F5CD410FB5D7F7AD5E7F1686C05A0A264043D0D7A3649E3F73D881DF001D13` |
 
 ---
 

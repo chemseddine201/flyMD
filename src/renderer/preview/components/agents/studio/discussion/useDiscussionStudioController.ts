@@ -5,6 +5,7 @@ import {
   DiscussionMetadata,
   DiscussionMessage,
   AgentEffortLevel,
+  DiscussionAttachedFile,
 } from '../../../../../../shared/types';
 import { PRESET_TEMPLATES } from '../../../../services/deliberationPresetRepository';
 import { ROUND_METADATA_BY_NUMBER } from '../../../../utils/discussionTextUtils';
@@ -13,6 +14,11 @@ import { DiscussionStageViewTab } from './DiscussionTopToolbar';
 import { ParticipantAgentOption } from './CouncilInterventionBar';
 import { DiscussionRoundGroup } from './DiscussionTimelineView';
 import { useNewDeliberationDraft } from './useNewDeliberationDraft';
+import {
+  processFilesForAttachment,
+  formatAttachedFilesContext,
+  MAX_DISCUSSION_ATTACHMENTS,
+} from './discussionAttachmentUtils';
 
 export interface UseDiscussionStudioControllerParams {
   resolvedWorkspace: string;
@@ -136,6 +142,29 @@ export function useDiscussionStudioController({
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [showClearAllModal, setShowClearAllModal] = useState(false);
   const [guidanceInput, setGuidanceInput] = useState('');
+  const [interventionFiles, setInterventionFiles] = useState<DiscussionAttachedFile[]>([]);
+  const [interventionClampedNotice, setInterventionClampedNotice] = useState<boolean>(false);
+
+  const handleAddInterventionFiles = useCallback(async (files: FileList | File[]) => {
+    setInterventionClampedNotice(false);
+    const { added, clamped } = await processFilesForAttachment(files, interventionFiles.length, MAX_DISCUSSION_ATTACHMENTS);
+    if (clamped) {
+      setInterventionClampedNotice(true);
+    }
+    if (added.length > 0) {
+      setInterventionFiles((prev) => [...prev, ...added].slice(0, MAX_DISCUSSION_ATTACHMENTS));
+    }
+  }, [interventionFiles.length]);
+
+  const handleRemoveInterventionFile = useCallback((fileId: string) => {
+    setInterventionFiles((prev) => prev.filter((f) => f.id !== fileId));
+    setInterventionClampedNotice(false);
+  }, []);
+
+  const handleClearInterventionFiles = useCallback(() => {
+    setInterventionFiles([]);
+    setInterventionClampedNotice(false);
+  }, []);
   const [copiedReport, setCopiedReport] = useState(false);
   const [copiedTurnId, setCopiedTurnId] = useState<string | null>(null);
   const [tabFocusNotification, setTabFocusNotification] = useState<
@@ -151,13 +180,43 @@ export function useDiscussionStudioController({
       setInspectingSessionId(sessionId);
       setIsLoadingConfig(true);
       try {
-        const cfg = await loadDiscussionConfig(resolvedWorkspace, sessionId);
+        let cfg = await loadDiscussionConfig(resolvedWorkspace, sessionId);
+        if (!cfg) {
+          const meta = discussions.find((d) => d.sessionId === sessionId) || (activeSessionId === sessionId ? activeMeta : null);
+          if (meta) {
+            const rawMeta = meta as any;
+            cfg = {
+              schemaVersion: 1,
+              sessionId: meta.sessionId,
+              workspacePath: resolvedWorkspace,
+              topic: meta.topic || 'Deliberation Session',
+              userIdea: '',
+              turnTimeoutSecs: 120,
+              participants: Array.isArray(rawMeta.participants)
+                ? rawMeta.participants.map((p: any) => ({
+                    agentId: p.agentId || 'architect',
+                    providerId: p.providerId || p.agentId || 'antigravity',
+                    modelId: p.modelId || 'gemini-4-argon',
+                    displayName: p.displayName || p.agentId || 'Agent',
+                    role: p.role || 'architect',
+                    effortLevel: p.effortLevel || 'medium',
+                    thinkingEnabled: p.thinkingEnabled ?? true,
+                  }))
+                : [],
+              maxRounds: rawMeta.maxRounds || 4,
+              stepMode: false,
+              roundSchedule: rawMeta.roundSchedule || [],
+            };
+          }
+        }
         setInspectingConfig(cfg);
+      } catch (err) {
+        console.warn('[useDiscussionStudioController] Failed to load discussion config:', err);
       } finally {
         setIsLoadingConfig(false);
       }
     },
-    [loadDiscussionConfig, resolvedWorkspace]
+    [loadDiscussionConfig, resolvedWorkspace, discussions, activeSessionId, activeMeta]
   );
 
   const handleSaveDiscussionConfig = useCallback(
@@ -418,15 +477,21 @@ export function useDiscussionStudioController({
   }, [targetedAgentId, participantAgents]);
 
   const handleDispatchTargetedQuery = useCallback(async () => {
-    if (!targetedActionQuery.trim() || !targetedAgentId) return;
+    const rawQuery = targetedActionQuery.trim();
+    if ((!rawQuery && interventionFiles.length === 0) || !targetedAgentId) return;
     setIsDispatchingTargeted(true);
     try {
+      const filesContext = formatAttachedFilesContext(interventionFiles);
+      const effectiveQuery = rawQuery || 'Analyze and deliberate on the following attached files:';
+      const fullQuery = filesContext ? `${effectiveQuery}${filesContext}` : effectiveQuery;
       await dispatchTargetedAction(
         targetedAgentId,
         targetedActionName || 'Targeted Inquiry',
-        targetedActionQuery.trim()
+        fullQuery
       );
       setTargetedActionQuery('');
+      setInterventionFiles([]);
+      setInterventionClampedNotice(false);
       setShowTargetedDispatch(false);
     } finally {
       setIsDispatchingTargeted(false);
@@ -436,6 +501,7 @@ export function useDiscussionStudioController({
     targetedAgentId,
     dispatchTargetedAction,
     targetedActionName,
+    interventionFiles,
   ]);
 
   const handleProbeAgent = useCallback((agentId: string) => {
@@ -561,11 +627,16 @@ export function useDiscussionStudioController({
   );
 
   const handleSendGuidance = useCallback(async () => {
-    if (!guidanceInput.trim()) return;
-    const text = guidanceInput.trim();
+    const rawText = guidanceInput.trim();
+    if (!rawText && interventionFiles.length === 0) return;
+    const filesContext = formatAttachedFilesContext(interventionFiles);
+    const effectiveText = rawText || 'Deliberate on and integrate these attached reference files:';
+    const textToSend = filesContext ? `${effectiveText}${filesContext}` : effectiveText;
     setGuidanceInput('');
-    await injectGuidance(text);
-  }, [guidanceInput, injectGuidance]);
+    setInterventionFiles([]);
+    setInterventionClampedNotice(false);
+    await injectGuidance(textToSend);
+  }, [guidanceInput, interventionFiles, injectGuidance]);
 
   const handleToggleStepMode = useCallback(async () => {
     if (!activeSessionId || !resolvedWorkspace) return;
@@ -629,6 +700,11 @@ export function useDiscussionStudioController({
     guidanceInput,
     setGuidanceInput,
     handleSendGuidance,
+    interventionFiles,
+    handleAddInterventionFiles,
+    handleRemoveInterventionFile,
+    handleClearInterventionFiles,
+    interventionClampedNotice,
     copiedReport,
     handleCopyReport,
     copiedTurnId,

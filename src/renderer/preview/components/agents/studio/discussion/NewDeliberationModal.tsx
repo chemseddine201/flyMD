@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Sparkles,
   Sliders,
@@ -17,6 +17,8 @@ import {
   Clock,
   Coins,
   CheckCircle2,
+  Paperclip,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   DiscussionParticipant,
@@ -26,7 +28,9 @@ import {
   CustomRoleDefinition,
   DebateRepeaterMode,
   DiscussionRoundPlan,
+  DiscussionAttachedFile,
 } from '../../../../../../shared/types';
+import { DiscussionAttachmentPills } from './discussionAttachmentUtils';
 import { ModelEffortSideBySidePicker } from '../../common/ModelEffortSideBySidePicker';
 import {
   DeliberationPreset,
@@ -135,6 +139,11 @@ export interface NewDeliberationModalProps {
   showCustomRolesModal?: boolean;
   setShowCustomRolesModal?: (v: boolean) => void;
 
+  attachedFiles?: DiscussionAttachedFile[];
+  onAddAttachedFiles?: (files: FileList | File[]) => Promise<void>;
+  onRemoveAttachedFile?: (fileId: string) => void;
+  attachmentClampedNotice?: boolean;
+
   repeater: RepeaterAndSubscriptionProps;
 }
 
@@ -149,6 +158,10 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   newObjective = '',
   setNewObjective,
   isFormValid,
+  attachedFiles,
+  onAddAttachedFiles,
+  onRemoveAttachedFile,
+  attachmentClampedNotice,
   turnTimeoutInput,
   setTurnTimeoutInput,
   setTurnTimeoutSecs,
@@ -195,6 +208,8 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
 }) => {
   const [internalShowRolesModal, setInternalShowRolesModal] = useState(false);
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const effectiveFormValid =
     isFormValid !== undefined
@@ -202,8 +217,12 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
       : Boolean(newTopic.trim()) && Boolean(newIdea.trim());
 
   const hasUnsavedDraft = useMemo(() => {
-    return Boolean(newTopic.trim() || newIdea.trim());
-  }, [newTopic, newIdea]);
+    return Boolean(
+      newTopic.trim() ||
+        newIdea.trim() ||
+        (attachedFiles && attachedFiles.length > 0)
+    );
+  }, [newTopic, newIdea, attachedFiles]);
 
   const handleRequestClose = () => {
     if (hasUnsavedDraft) {
@@ -310,6 +329,83 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                   className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-sky-500 leading-relaxed transition-colors shadow-xs"
                 />
               </div>
+            </div>
+
+            {/* Multi-File Reference Attachments (Up to 10 files, all allowed extensions) */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  onAddAttachedFiles?.(e.target.files);
+                  e.target.value = '';
+                }
+              }}
+              className="hidden"
+            />
+            <div
+              onDragOver={(e) => {
+                if (e.dataTransfer?.types?.includes('Files')) {
+                  e.preventDefault();
+                  setIsDragOver(true);
+                }
+              }}
+              onDragLeave={() => setIsDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+                if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+                  onAddAttachedFiles?.(e.dataTransfer.files);
+                }
+              }}
+              className={`p-3 rounded-xl border transition-colors ${
+                isDragOver
+                  ? 'border-sky-500 bg-sky-500/10 ring-2 ring-sky-500/30'
+                  : 'border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950/60'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <Paperclip size={13} className="text-sky-500" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Attached Reference Files
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    (Max 10 files &mdash; code, specs, configs, documents, images)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={attachedFiles && attachedFiles.length >= 10}
+                  className="px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-500/15 hover:bg-sky-100 dark:hover:bg-sky-500/25 border border-sky-300 dark:border-sky-500/30 text-sky-800 dark:text-sky-300 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-40"
+                >
+                  <Paperclip size={12} />
+                  <span>
+                    Attach Files {attachedFiles && attachedFiles.length > 0 ? `(${attachedFiles.length}/10)` : ''}
+                  </span>
+                </button>
+              </div>
+
+              {attachedFiles && attachedFiles.length > 0 ? (
+                <DiscussionAttachmentPills
+                  files={attachedFiles}
+                  onRemove={onRemoveAttachedFile || (() => {})}
+                  maxFiles={10}
+                />
+              ) : (
+                <div className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400 italic">
+                  Drop files here or click Attach Files to include project specifications, code files, or logs into Round 1 deliberation.
+                </div>
+              )}
+
+              {attachmentClampedNotice && (
+                <div className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertTriangle size={11} />
+                  <span>Maximum 10 files allowed. Additional files were omitted.</span>
+                </div>
+              )}
             </div>
 
             {/* Section 2: Custom Skills & Domain Knowledge (PLACED UPFRONT AT INCEPTION) */}

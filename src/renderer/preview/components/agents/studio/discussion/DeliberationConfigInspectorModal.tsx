@@ -117,7 +117,27 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, handleRequestClose]);
 
-  if (!isOpen || !localConfig) return null;
+  if (!isOpen) return null;
+
+  if (!localConfig) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-3 min-w-[280px]">
+          <RefreshCw className="w-6 h-6 animate-spin text-sky-500" />
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            Loading deliberation configuration...
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-2 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleTogglePauseAtBoundary = () => {
     if (!isEditable) return;

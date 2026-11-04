@@ -182,6 +182,17 @@ export interface SkillDescriptor {
   state: SkillLifecycleState | string;
 }
 
+export interface DiscussionAttachedFile {
+  id: string;
+  name: string;
+  size: number;
+  extension: string;
+  mimeType?: string;
+  content?: string;
+  dataUrl?: string;
+  isImage: boolean;
+}
+
 export interface DiscussionConfig {
   schemaVersion: number;
   sessionId: string;
@@ -200,6 +211,7 @@ export interface DiscussionConfig {
   repeaterMode?: DebateRepeaterMode;
   roundSchedule?: DiscussionRoundPlan[];
   pauseAtRoundBoundary?: boolean;
+  attachedFiles?: DiscussionAttachedFile[];
 }
 
 export interface DiscussionMetadata {
