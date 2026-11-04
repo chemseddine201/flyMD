@@ -215,3 +215,4 @@ export const DiscussionAttachmentPills: React.FC<DiscussionAttachmentPillsProps>
     </div>
   );
 };
+
