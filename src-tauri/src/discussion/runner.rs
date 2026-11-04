@@ -308,6 +308,18 @@ impl CliProvider {
         thinking_enabled: bool,
         model_id: Option<&str>,
     ) -> Vec<String> {
+        self.build_cli_args_internal(prompt, effort_level, thinking_enabled, model_id, false)
+    }
+
+    /// Internal CLI argument builder with support for fused `--model <base>-<effort>` retry form.
+    pub fn build_cli_args_internal(
+        &self,
+        prompt: &str,
+        effort_level: Option<&str>,
+        thinking_enabled: bool,
+        model_id: Option<&str>,
+        fuse_antigravity_effort: bool,
+    ) -> Vec<String> {
         let raw_effort = effort_level.unwrap_or("medium").to_lowercase();
         let eff = match raw_effort.as_str() {
             "low" | "medium" | "high" | "xhigh" | "max" => raw_effort.as_str(),
@@ -360,12 +372,22 @@ impl CliProvider {
                         eff,
                         thinking_enabled,
                     );
-                if let Some(m) = norm_model {
+                if fuse_antigravity_effort {
+                    let fused = match norm_model {
+                        Some(ref m) => format!("{}-{}", m, norm_effort),
+                        None => norm_effort.clone(),
+                    };
                     args.push("--model".to_string());
-                    args.push(m);
+                    args.push(fused);
+                    // Omit --effort in fused retry form to recover from CLI "invalid model selection" rejection
+                } else {
+                    if let Some(m) = norm_model {
+                        args.push("--model".to_string());
+                        args.push(m);
+                    }
+                    args.push("--effort".to_string());
+                    args.push(norm_effort);
                 }
-                args.push("--effort".to_string());
-                args.push(norm_effort);
                 args
             }
             CliType::OpenCode => {
@@ -466,22 +488,6 @@ impl DiscussionProvider for CliProvider {
         };
 
         let prompt_on_stdin = matches!(&self.cli_type, CliType::ClaudeCode);
-
-        let args = if prompt_on_stdin {
-            self.build_cli_args(
-                "",
-                request.effort_level.as_deref(),
-                request.thinking_enabled,
-                request.model_id.as_deref(),
-            )
-        } else {
-            self.build_cli_args(
-                &full_prompt,
-                request.effort_level.as_deref(),
-                request.thinking_enabled,
-                request.model_id.as_deref(),
-            )
-        };
         let start = std::time::Instant::now();
 
         // Ensure sandbox dir exists
@@ -491,158 +497,196 @@ impl DiscussionProvider for CliProvider {
         let exe_lower = exe_str.to_lowercase();
         let is_batch = exe_lower.ends_with(".cmd") || exe_lower.ends_with(".bat");
 
-        let mut cmd = if is_batch {
-            let mut c = Command::new("cmd.exe");
-            c.args(["/C", &exe_str]);
-            c
+        let mut retried = false;
+        let mut cur_args = if prompt_on_stdin {
+            self.build_cli_args_internal(
+                "",
+                request.effort_level.as_deref(),
+                request.thinking_enabled,
+                request.model_id.as_deref(),
+                false,
+            )
         } else {
-            Command::new(&self.executable_path)
+            self.build_cli_args_internal(
+                &full_prompt,
+                request.effort_level.as_deref(),
+                request.thinking_enabled,
+                request.model_id.as_deref(),
+                false,
+            )
         };
-        cmd.args(&args)
-            .current_dir(&self.sandbox_dir)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
 
-        if prompt_on_stdin {
-            cmd.stdin(Stdio::piped());
-        } else {
-            cmd.stdin(Stdio::null());
-        }
+        let (output, thinking) = loop {
+            let mut cmd = if is_batch {
+                let mut c = Command::new("cmd.exe");
+                c.args(["/C", &exe_str]);
+                c
+            } else {
+                Command::new(&self.executable_path)
+            };
+            cmd.args(&cur_args)
+                .current_dir(&self.sandbox_dir)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
 
-        #[cfg(target_os = "windows")]
-        {
-            // CREATE_NO_WINDOW flag
-            cmd.creation_flags(0x08000000);
-        }
-
-        let mut child = cmd.spawn().map_err(|e| ProviderError::ProcessCrashed {
-            exit_code: None,
-            stderr: format!("Failed to spawn CLI process: {}", e),
-        })?;
-
-        let child_pid = child.id();
-        let timeout_duration = Duration::from_secs(request.timeout_secs);
-
-        if prompt_on_stdin {
-            if let Some(mut stdin) = child.stdin.take() {
-                use tokio::io::AsyncWriteExt;
-                let _ = stdin.write_all(full_prompt.as_bytes()).await;
-                let _ = stdin.shutdown().await;
+            if prompt_on_stdin {
+                cmd.stdin(Stdio::piped());
+            } else {
+                cmd.stdin(Stdio::null());
             }
-        }
 
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| ProviderError::ProcessCrashed {
+            #[cfg(target_os = "windows")]
+            {
+                // CREATE_NO_WINDOW flag
+                cmd.creation_flags(0x08000000);
+            }
+
+            let mut child = cmd.spawn().map_err(|e| ProviderError::ProcessCrashed {
                 exit_code: None,
-                stderr: "Child stdout was None".to_string(),
+                stderr: format!("Failed to spawn CLI process: {}", e),
             })?;
 
-        // Concurrently drain stderr to prevent OS pipe buffer deadlocks (4KB limit on Windows)
-        let stderr = child.stderr.take();
-        let stderr_handle = tokio::spawn(async move {
-            let mut buf = String::new();
-            if let Some(mut err_stream) = stderr {
-                let mut reader = BufReader::new(&mut err_stream);
-                let mut line = String::new();
-                while let Ok(n) = reader.read_line(&mut line).await {
-                    if n == 0 {
-                        break;
-                    }
-                    buf.push_str(&line);
-                    line.clear();
+            let child_pid = child.id();
+            let timeout_duration = Duration::from_secs(request.timeout_secs);
+
+            if prompt_on_stdin {
+                if let Some(mut stdin) = child.stdin.take() {
+                    use tokio::io::AsyncWriteExt;
+                    let _ = stdin.write_all(full_prompt.as_bytes()).await;
+                    let _ = stdin.shutdown().await;
                 }
             }
-            buf
-        });
 
-        let reader = BufReader::new(stdout);
-        let mut lines = reader.lines();
-        let mut splitter = ThoughtSplitter::new();
+            let stdout = child
+                .stdout
+                .take()
+                .ok_or_else(|| ProviderError::ProcessCrashed {
+                    exit_code: None,
+                    stderr: "Child stdout was None".to_string(),
+                })?;
 
-        let run_fut = async {
-            while let Ok(Some(line)) = lines.next_line().await {
-                if cancel_flag.load(Ordering::Relaxed) {
+            // Concurrently drain stderr to prevent OS pipe buffer deadlocks (4KB limit on Windows)
+            let stderr = child.stderr.take();
+            let stderr_handle = tokio::spawn(async move {
+                let mut buf = String::new();
+                if let Some(mut err_stream) = stderr {
+                    let mut reader = BufReader::new(&mut err_stream);
+                    let mut line = String::new();
+                    while let Ok(n) = reader.read_line(&mut line).await {
+                        if n == 0 {
+                            break;
+                        }
+                        buf.push_str(&line);
+                        line.clear();
+                    }
+                }
+                buf
+            });
+
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+            let mut splitter = ThoughtSplitter::new();
+
+            let run_fut = async {
+                while let Ok(Some(line)) = lines.next_line().await {
+                    if cancel_flag.load(Ordering::Relaxed) {
+                        if let Some(pid) = child_pid {
+                            kill_process_tree(pid);
+                        }
+                        return Err(ProviderError::Cancelled);
+                    }
+
+                    let (think, answer) = splitter.push(&format!("{}\n", line));
+                    emit_split(&stream_sink, &think, &answer).await;
+                }
+                let (think, answer) = splitter.finish();
+                emit_split(&stream_sink, &think, &answer).await;
+
+                let status = child
+                    .wait()
+                    .await
+                    .map_err(|e| ProviderError::ProcessCrashed {
+                        exit_code: None,
+                        stderr: format!("Child wait error: {}", e),
+                    })?;
+
+                let err_msg = stderr_handle.await.unwrap_or_default();
+
+                if !status.success() {
+                    let final_err = if !err_msg.trim().is_empty() {
+                        err_msg
+                    } else if !splitter.answer.trim().is_empty() {
+                        format!("CLI error output:\n{}", splitter.answer.trim())
+                    } else {
+                        "Process crashed with non-zero exit code and produced no output".to_string()
+                    };
+                    return Err(ProviderError::ProcessCrashed {
+                        exit_code: status.code(),
+                        stderr: final_err,
+                    });
+                }
+
+                Ok((splitter.answer.trim().to_string(), splitter.thinking_opt()))
+            };
+
+            match tokio::time::timeout(timeout_duration, run_fut).await {
+                Ok(Ok(pair)) => break pair,
+                Ok(Err(ProviderError::ProcessCrashed { exit_code, stderr })) => {
+                    if matches!(&self.cli_type, CliType::AntigravityGemini)
+                        && !retried
+                        && stderr.contains("invalid model selection")
+                    {
+                        retried = true;
+                        cur_args = self.build_cli_args_internal(
+                            if prompt_on_stdin { "" } else { &full_prompt },
+                            request.effort_level.as_deref(),
+                            request.thinking_enabled,
+                            request.model_id.as_deref(),
+                            true, // fuse_antigravity_effort
+                        );
+                        continue;
+                    }
+                    return Err(ProviderError::ProcessCrashed { exit_code, stderr });
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
                     if let Some(pid) = child_pid {
                         kill_process_tree(pid);
                     }
-                    return Err(ProviderError::Cancelled);
+                    return Err(ProviderError::Timeout(request.timeout_secs));
                 }
-
-                let (think, answer) = splitter.push(&format!("{}\n", line));
-                emit_split(&stream_sink, &think, &answer).await;
             }
-            let (think, answer) = splitter.finish();
-            emit_split(&stream_sink, &think, &answer).await;
-
-            let status = child
-                .wait()
-                .await
-                .map_err(|e| ProviderError::ProcessCrashed {
-                    exit_code: None,
-                    stderr: format!("Child wait error: {}", e),
-                })?;
-
-            let err_msg = stderr_handle.await.unwrap_or_default();
-
-            if !status.success() {
-                let final_err = if !err_msg.trim().is_empty() {
-                    err_msg
-                } else if !splitter.answer.trim().is_empty() {
-                    format!("CLI error output:\n{}", splitter.answer.trim())
-                } else {
-                    "Process crashed with non-zero exit code and produced no output".to_string()
-                };
-                return Err(ProviderError::ProcessCrashed {
-                    exit_code: status.code(),
-                    stderr: final_err,
-                });
-            }
-
-            Ok((splitter.answer.trim().to_string(), splitter.thinking_opt()))
         };
 
-        match tokio::time::timeout(timeout_duration, run_fut).await {
-            Ok(Ok((output, thinking))) => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                let prompt_tokens = estimate_tokens(&full_prompt);
-                let reasoning_tokens = thinking.as_deref().map(estimate_tokens).unwrap_or(0);
-                let completion_tokens = estimate_tokens(&output);
+        let elapsed = start.elapsed().as_millis() as u64;
+        let prompt_tokens = estimate_tokens(&full_prompt);
+        let reasoning_tokens = thinking.as_deref().map(estimate_tokens).unwrap_or(0);
+        let completion_tokens = estimate_tokens(&output);
 
-                Ok(TurnResponse {
-                    raw_markdown: output,
-                    usage: TokenUsage {
-                        prompt_tokens,
-                        completion_tokens,
-                        reasoning_tokens,
-                        total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
-                    },
-                    duration_ms: elapsed,
-                    model_id: request
-                        .model_id
-                        .clone()
-                        .filter(|m| !m.trim().is_empty())
-                        .unwrap_or_else(|| match &self.cli_type {
-                            CliType::ClaudeCode => "claude-code-cli".to_string(),
-                            CliType::AntigravityGemini => "antigravity-agy-cli".to_string(),
-                            CliType::OpenCode => "opencode-cli".to_string(),
-                            CliType::Codex => "codex-cli".to_string(),
-                            CliType::GenericCli { agent_id, .. } => format!("{}-cli", agent_id),
-                        }),
-                    context_truncated: false,
-                    thinking,
-                    simulated: false,
-                })
-            }
-            Ok(Err(e)) => Err(e),
-            Err(_) => {
-                if let Some(pid) = child_pid {
-                    kill_process_tree(pid);
-                }
-                Err(ProviderError::Timeout(request.timeout_secs))
-            }
-        }
+        Ok(TurnResponse {
+            raw_markdown: output,
+            usage: TokenUsage {
+                prompt_tokens,
+                completion_tokens,
+                reasoning_tokens,
+                total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
+            },
+            duration_ms: elapsed,
+            model_id: request
+                .model_id
+                .clone()
+                .filter(|m| !m.trim().is_empty())
+                .unwrap_or_else(|| match &self.cli_type {
+                    CliType::ClaudeCode => "claude-code-cli".to_string(),
+                    CliType::AntigravityGemini => "antigravity-agy-cli".to_string(),
+                    CliType::OpenCode => "opencode-cli".to_string(),
+                    CliType::Codex => "codex-cli".to_string(),
+                    CliType::GenericCli { agent_id, .. } => format!("{}-cli", agent_id),
+                }),
+            context_truncated: false,
+            thinking,
+            simulated: false,
+        })
     }
 }
 
@@ -1506,5 +1550,172 @@ mod tests {
             resp.usage.total_tokens,
             resp.usage.prompt_tokens + resp.usage.completion_tokens + resp.usage.reasoning_tokens
         );
+    }
+
+    #[tokio::test]
+    async fn test_antigravity_cli_invalid_model_selection_retry() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_b2_cli_test_{}", crate::common::time::now_ms()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        let build_req = |model: &str, eff: &str| TurnRequest {
+            session_id: "test-b2-session".to_string(),
+            round_number: 1,
+            agent_id: "antigravity".to_string(),
+            role: AgentRole::Architect,
+            system_prompt: "Sys".to_string(),
+            user_prompt: "User".to_string(),
+            messages: vec![],
+            context_summary: String::new(),
+            timeout_secs: 10,
+            topic: "Architecture".to_string(),
+            user_idea: "Debate".to_string(),
+            action_name: None,
+            action_query: None,
+            thinking_enabled: true,
+            effort_level: Some(eff.to_string()),
+            model_id: Some(model.to_string()),
+        };
+
+        // -------------------------------------------------------------
+        // Case 1: First form works (standard exit 0)
+        // -------------------------------------------------------------
+        #[cfg(target_os = "windows")]
+        let script_first_works = temp_dir.join("fake_agy_first_works.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script_first_works = temp_dir.join("fake_agy_first_works.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script_first_works,
+            "@echo off\r\necho ### Position Paper by Antigravity (First Form Works)\r\nexit /b 0\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(&script_first_works, "#!/bin/sh\necho '### Position Paper by Antigravity (First Form Works)'\nexit 0\n").unwrap();
+            let mut perms = std::fs::metadata(&script_first_works).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script_first_works, perms).unwrap();
+        }
+
+        let provider_first = CliProvider {
+            cli_type: CliType::AntigravityGemini,
+            executable_path: script_first_works,
+            sandbox_dir: temp_dir.clone(),
+            context_limit: 32000,
+        };
+
+        let res_first = provider_first
+            .execute_turn(build_req("gemini-4-argon", "medium"), cancel_flag.clone(), None)
+            .await;
+        assert!(res_first.is_ok(), "First form must succeed cleanly");
+        assert!(res_first.unwrap().raw_markdown.contains("First Form Works"));
+
+        // -------------------------------------------------------------
+        // Case 2: First form fails with "invalid model selection", retry succeeds!
+        // -------------------------------------------------------------
+        #[cfg(target_os = "windows")]
+        let script_retry_works = temp_dir.join("fake_agy_retry_works.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script_retry_works = temp_dir.join("fake_agy_retry_works.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script_retry_works,
+            "@echo off\r\n\
+             set \"ARGS=%*\"\r\n\
+             echo %ARGS% | findstr /C:\"--effort\" >nul\r\n\
+             if errorlevel 1 goto RETRY_OK\r\n\
+             echo error: invalid model selection (--model \"gemini-4-argon\" --effort \"medium\"): --effort is not supported for model \"gemini-4-argon\" 1>&2\r\n\
+             exit /b 1\r\n\
+             :RETRY_OK\r\n\
+             echo ### Position Paper by Antigravity (Recovered via Retry)\r\n\
+             exit /b 0\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(
+                &script_retry_works,
+                "#!/bin/sh\n\
+                 if echo \"$@\" | grep -q -- \"--effort\"; then\n\
+                   echo 'error: invalid model selection (--model \"gemini-4-argon\" --effort \"medium\"): --effort is not supported for model \"gemini-4-argon\"' >&2\n\
+                   exit 1\n\
+                 else\n\
+                   echo '### Position Paper by Antigravity (Recovered via Retry)'\n\
+                   exit 0\n\
+                 fi\n",
+            ).unwrap();
+            let mut perms = std::fs::metadata(&script_retry_works).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script_retry_works, perms).unwrap();
+        }
+
+        let provider_retry = CliProvider {
+            cli_type: CliType::AntigravityGemini,
+            executable_path: script_retry_works,
+            sandbox_dir: temp_dir.clone(),
+            context_limit: 32000,
+        };
+
+        let res_retry = provider_retry
+            .execute_turn(build_req("gemini-4-argon", "medium"), cancel_flag.clone(), None)
+            .await;
+        if let Err(ref e) = res_retry {
+            eprintln!("DEBUG res_retry error: {:?}", e);
+        }
+        assert!(res_retry.is_ok(), "Retry form must recover and succeed: {:?}", res_retry);
+        assert!(res_retry.unwrap().raw_markdown.contains("Recovered via Retry"));
+
+        // -------------------------------------------------------------
+        // Case 3: Both forms fail (keeps failed state and preserves error)
+        // -------------------------------------------------------------
+        #[cfg(target_os = "windows")]
+        let script_both_fail = temp_dir.join("fake_agy_both_fail.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script_both_fail = temp_dir.join("fake_agy_both_fail.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script_both_fail,
+            "@echo off\r\n\
+             echo error: invalid model selection: model not found 1>&2\r\n\
+             exit /b 1\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(
+                &script_both_fail,
+                "#!/bin/sh\n\
+                 echo 'error: invalid model selection: model not found' >&2\n\
+                 exit 1\n",
+            ).unwrap();
+            let mut perms = std::fs::metadata(&script_both_fail).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script_both_fail, perms).unwrap();
+        }
+
+        let provider_fail = CliProvider {
+            cli_type: CliType::AntigravityGemini,
+            executable_path: script_both_fail,
+            sandbox_dir: temp_dir.clone(),
+            context_limit: 32000,
+        };
+
+        let res_fail = provider_fail
+            .execute_turn(build_req("gemini-4-argon", "medium"), cancel_flag.clone(), None)
+            .await;
+        assert!(res_fail.is_err(), "Must report failure if both attempts fail");
+        match res_fail.unwrap_err() {
+            ProviderError::ProcessCrashed { exit_code, stderr } => {
+                assert_eq!(exit_code, Some(1));
+                assert!(stderr.contains("invalid model selection"));
+            }
+            other => panic!("Expected ProcessCrashed, got: {:?}", other),
+        }
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

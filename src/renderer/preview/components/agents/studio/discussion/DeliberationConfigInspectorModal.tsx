@@ -32,6 +32,10 @@ import {
   getAvailableModelsForAgent,
   normalizeModelForAgent,
 } from '../../../../../../shared/constants/models';
+import {
+  resolveRoundPlan,
+  expandFullRoundSchedule,
+} from './roundPlanResolver';
 
 export interface DeliberationConfigInspectorModalProps {
   isOpen: boolean;
@@ -61,6 +65,7 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
   const [fetchingAgentKey, setFetchingAgentKey] = useState<string | null>(null);
   const [fetchRev, setFetchRev] = useState(0);
+  const [perAgentEditNote, setPerAgentEditNote] = useState<string | null>(null);
 
   const handleFetchModelsForProvider = async (providerOrAgentId: string) => {
     if (fetchingAgentKey) return;
@@ -79,6 +84,7 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
       setLocalConfig(JSON.parse(JSON.stringify(config)));
       setSaveError(null);
       setSaveSuccess(false);
+      setPerAgentEditNote(null);
     }
   }, [config, isOpen]);
 
@@ -175,19 +181,59 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
       (roundNumber > currentRound ||
         (roundNumber === currentRound && metadata?.status === 'failed'));
     if (!canModifyRound) return;
+
     setLocalConfig((prev) => {
       if (!prev) return prev;
+
+      const isPerAgentWithEmptySchedule =
+        prev.repeaterMode === 'per_agent' &&
+        (!prev.roundSchedule || prev.roundSchedule.length === 0);
+
+      if (isPerAgentWithEmptySchedule) {
+        // Resolve target slot using real resolved plan
+        const resolved = resolveRoundPlan(prev, roundNumber);
+        const targetSlot = resolved.slots[slotIdx];
+        const targetAgentId = targetSlot?.participant.agentId;
+
+        // In per_agent mode with no schedule, edit participants directly without creating a roundSchedule!
+        const updatedParticipants = (prev.participants || []).map((part) => {
+          if (targetAgentId && part.agentId === targetAgentId) {
+            return {
+              ...part,
+              ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
+              ...(patch.providerId !== undefined ? { providerId: patch.providerId } : {}),
+              ...(patch.modelId !== undefined ? { modelId: patch.modelId } : {}),
+              ...(patch.effortLevel !== undefined ? { effortLevel: patch.effortLevel } : {}),
+              ...(patch.thinkingEnabled !== undefined ? { thinkingEnabled: patch.thinkingEnabled } : {}),
+            };
+          }
+          return part;
+        });
+
+        setPerAgentEditNote(
+          `Model & effort update applies to all rounds where ${targetSlot?.participant.displayName || targetAgentId} speaks.`
+        );
+
+        return {
+          ...prev,
+          participants: updatedParticipants,
+          roundSchedule: [], // strictly keep empty schedule to preserve per_agent resolution!
+        };
+      }
+
+      // Schedule-based or explicit per_round edit
       const schedule = [...(prev.roundSchedule || [])];
       let roundPlan = schedule.find((p) => p.roundNumber === roundNumber);
       if (!roundPlan) {
+        const resolved = resolveRoundPlan(prev, roundNumber);
         roundPlan = {
           roundNumber,
-          title: `Round ${roundNumber}: Specialist Deliberation`,
-          objective: '',
-          slots: (prev.participants || []).map((part, idx) => ({
-            slotId: `slot-r${roundNumber}-${idx + 1}`,
-            participant: { ...part },
-            roundDirective: '',
+          title: resolved.title,
+          objective: resolved.objective || '',
+          slots: resolved.slots.map((s) => ({
+            slotId: s.slotId,
+            participant: { ...s.participant },
+            roundDirective: s.roundDirective || '',
           })),
         };
         schedule.push(roundPlan);
@@ -237,7 +283,14 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
     if (!isEditable || roundNumber <= currentRound) return;
     setLocalConfig((prev) => {
       if (!prev) return prev;
-      const schedule = [...(prev.roundSchedule || [])];
+
+      // In per_agent mode with empty schedule:
+      // First expand full schedule for rounds 1..maxRounds preserving past rounds!
+      const schedule =
+        prev.roundSchedule && prev.roundSchedule.length > 0
+          ? [...prev.roundSchedule]
+          : expandFullRoundSchedule(prev, prev.maxRounds || 3);
+
       let roundPlan = schedule.find((p) => p.roundNumber === roundNumber);
       if (!roundPlan) {
         roundPlan = {
@@ -248,14 +301,23 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
         };
         schedule.push(roundPlan);
       }
+
+      // Choose available provider and default model from availableProviders
+      const defaultAgent = availableProviders.find((p) => p.available) || availableProviders[0];
+      const defaultProviderId = defaultAgent?.id || 'antigravity';
+      const defaultModelId =
+        defaultAgent?.model ||
+        getAvailableModelsForAgent(defaultProviderId)[0]?.id ||
+        'gemini-4-argon';
+
       const newSlot: DiscussionRoundSlot = {
         slotId: `slot-r${roundNumber}-${roundPlan.slots.length + 1}`,
         participant: {
           agentId: `custom-agent-${Date.now()}`,
           displayName: 'Specialist Advisor',
           role: 'custom' as any,
-          providerId: 'ClaudeCode',
-          modelId: 'claude-3-7-sonnet',
+          providerId: defaultProviderId,
+          modelId: defaultModelId,
           effortLevel: 'medium',
           thinkingEnabled: true,
         },
@@ -273,7 +335,14 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
     if (!isEditable || roundNumber <= currentRound) return;
     setLocalConfig((prev) => {
       if (!prev) return prev;
-      const schedule = [...(prev.roundSchedule || [])];
+
+      // In per_agent mode with empty schedule:
+      // First expand full schedule for rounds 1..maxRounds preserving past rounds!
+      const schedule =
+        prev.roundSchedule && prev.roundSchedule.length > 0
+          ? [...prev.roundSchedule]
+          : expandFullRoundSchedule(prev, prev.maxRounds || 3);
+
       const roundPlan = schedule.find((p) => p.roundNumber === roundNumber);
       if (roundPlan && roundPlan.slots.length > 1) {
         roundPlan.slots = roundPlan.slots.filter((_, idx) => idx !== slotIdx);
@@ -296,7 +365,7 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
       setTimeout(() => {
         setSaveSuccess(false);
         onClose();
-      }, 1000);
+      }, 1200);
     } catch (err: any) {
       setSaveError(err.message || String(err));
     } finally {
@@ -476,6 +545,23 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
             </div>
           </div>
 
+          {/* Optional per_agent edit notice */}
+          {perAgentEditNote && (
+            <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-300 text-xs flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Info size={14} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                <span>{perAgentEditNote}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPerAgentEditNote(null)}
+                className="text-sky-500 hover:text-sky-700 dark:hover:text-sky-200 p-1"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
           {/* Round-by-Round Breakdown & Editor */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -492,15 +578,8 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
               const isFailedCurrentRound =
                 roundNum === currentRound && metadata?.status === 'failed';
               const isPastOrLocked = roundNum <= currentRound && !isFailedCurrentRound;
-              const roundPlan = localConfig.roundSchedule?.find((p) => p.roundNumber === roundNum);
-              const slots: DiscussionRoundSlot[] =
-                roundPlan?.slots && roundPlan.slots.length > 0
-                  ? roundPlan.slots
-                  : (localConfig.participants || []).map((part, idx) => ({
-                      slotId: `slot-r${roundNum}-${idx + 1}`,
-                      participant: part,
-                      roundDirective: '',
-                    }));
+              const resolved = resolveRoundPlan(localConfig, roundNum);
+              const slots = resolved.slots;
 
               return (
                 <div
@@ -587,6 +666,11 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                               <div className="text-[10px] font-mono text-slate-600 dark:text-slate-400 uppercase">
                                 Role: {p.role} • Provider: {p.providerId}
                               </div>
+                              {p.modelId && p.modelId !== resolvedModelId && (
+                                <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+                                  Saved model &apos;{p.modelId}&apos; is unavailable; normalized to &apos;{resolvedModelId}&apos;.
+                                </div>
+                              )}
                             </div>
                           </div>
 

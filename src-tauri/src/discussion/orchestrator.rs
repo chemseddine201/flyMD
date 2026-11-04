@@ -2070,4 +2070,261 @@ mod tests {
 
         let _ = fs::remove_dir_all(&temp_dir);
     }
+
+    #[tokio::test]
+    async fn test_per_agent_config_edit_rejection_and_clean_persistence_fix() {
+        use crate::discussion::commands::update_discussion_config_on_disk;
+        use crate::discussion::golden_tests::RecordingMockProvider;
+
+        let temp_dir = std::env::temp_dir().join(format!("flymd_b1_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let session_id = format!("disc-test-b1-{}", now_ms());
+        let participants = vec![
+            DiscussionParticipant {
+                agent_id: "agent-lead".to_string(),
+                provider_id: "mock".to_string(),
+                model_id: "gemini-4-argon".to_string(),
+                display_name: "Teacher".to_string(),
+                role: AgentRole::Architect,
+                role_description: "Lead domain architect.".to_string(),
+                avatar_color: "#38bdf8".to_string(),
+                assigned_skill_uris: Vec::new(),
+                context_budget_tokens: 32000,
+                custom_action: None,
+                custom_query: None,
+                thinking_enabled: true,
+                effort_level: Some("medium".to_string()),
+            },
+            DiscussionParticipant {
+                agent_id: "agent-critic".to_string(),
+                provider_id: "mock".to_string(),
+                model_id: "claude-opus-5-5".to_string(),
+                display_name: "Adversarial Critic".to_string(),
+                role: AgentRole::Critic,
+                role_description: "Adversarial stress tester.".to_string(),
+                avatar_color: "#ef4444".to_string(),
+                assigned_skill_uris: Vec::new(),
+                context_budget_tokens: 32000,
+                custom_action: None,
+                custom_query: None,
+                thinking_enabled: true,
+                effort_level: Some("medium".to_string()),
+            },
+            DiscussionParticipant {
+                agent_id: "agent-dev".to_string(),
+                provider_id: "mock".to_string(),
+                model_id: "gemini-4-argon".to_string(),
+                display_name: "Developer".to_string(),
+                role: AgentRole::Implementer,
+                role_description: "Systems implementer.".to_string(),
+                avatar_color: "#10b981".to_string(),
+                assigned_skill_uris: Vec::new(),
+                context_budget_tokens: 16000,
+                custom_action: None,
+                custom_query: None,
+                thinking_enabled: true,
+                effort_level: Some("medium".to_string()),
+            },
+        ];
+
+        let config = DiscussionConfig {
+            schema_version: 1,
+            session_id: session_id.clone(),
+            topic: "Arabic & Distributed Agents".to_string(),
+            user_idea: "Build a resilient debate system.".to_string(),
+            workspace_path: temp_dir.to_string_lossy().to_string(),
+            max_rounds: 3,
+            turn_timeout_secs: 10,
+            participants: participants.clone(),
+            repeater_mode: Some("per_agent".to_string()),
+            round_schedule: Vec::new(), // empty schedule in per_agent mode!
+            ..Default::default()
+        };
+
+        let (mock_provider, turns_log, _) = RecordingMockProvider::new("mock");
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(mock_provider));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config.clone(), providers).unwrap();
+        // Simulate failed state at Round 1 (identical to disc-1793743338597)
+        orchestrator.metadata.status = DiscussionStatus::Failed;
+        orchestrator.metadata.current_round = 1;
+        save_metadata(&orchestrator.session_dir, &orchestrator.metadata).unwrap();
+
+        // 1. REPRODUCE BUG: Simulate the broken modal payload that created a roundSchedule with all 3 participants
+        let mut broken_config = config.clone();
+        broken_config.round_schedule = vec![DiscussionRoundPlan {
+            round_number: 1,
+            title: "Round 1".to_string(),
+            objective: None,
+            slots: participants
+                .iter()
+                .enumerate()
+                .map(|(idx, p)| DiscussionRoundSlot {
+                    slot_id: format!("slot-r1-{}", idx + 1),
+                    participant: p.clone(),
+                    round_directive: None,
+                })
+                .collect(),
+        }];
+
+        // Guard MUST reject this broken payload
+        let broken_err = orchestrator.update_future_config(broken_config.clone());
+        assert!(broken_err.is_err());
+        assert!(broken_err.unwrap_err().contains("Cannot modify participants for Round 1"));
+
+        // 2. VERIFY FIX: In per_agent mode with empty schedule, mutating participants directly succeeds
+        let mut fixed_config = config.clone();
+        fixed_config.participants[0].model_id = "gemini-3.8-flash".to_string();
+        fixed_config.participants[0].effort_level = Some("low".to_string());
+        // round_schedule remains empty!
+
+        let fix_res = orchestrator.update_future_config(fixed_config.clone());
+        assert!(fix_res.is_ok(), "Fixed per_agent config update must succeed");
+
+        // Verify disk persistence
+        let read_back_bytes = fs::read(orchestrator.session_dir.join("config.json")).unwrap();
+        let read_back: DiscussionConfig = serde_json::from_slice(&read_back_bytes).unwrap();
+        assert_eq!(read_back.participants[0].model_id, "gemini-3.8-flash");
+        assert_eq!(read_back.participants[0].effort_level.as_deref(), Some("low"));
+
+        // 3. Resume and verify TurnRequest sends the updated model & effort!
+        orchestrator.metadata.status = DiscussionStatus::Created; // clear failed status for run
+        orchestrator.run_discussion().await.unwrap();
+
+        let recorded = turns_log.lock().unwrap();
+        assert!(!recorded.is_empty(), "Turn must have executed");
+        assert_eq!(recorded[0].model_id.as_deref(), Some("gemini-3.8-flash"));
+        assert_eq!(recorded[0].effort_level.as_deref(), Some("low"));
+        drop(recorded);
+
+        // 4. Test when orchestrator is NOT in memory (commands::update_discussion_config)
+        // Reset metadata on disk to Failed
+        let mut disk_meta = load_metadata(&orchestrator.session_dir).unwrap();
+        disk_meta.status = DiscussionStatus::Failed;
+        disk_meta.current_round = 1;
+        save_metadata(&orchestrator.session_dir, &disk_meta).unwrap();
+
+        // Broken payload is rejected from disk
+        let disk_err = update_discussion_config_on_disk(&orchestrator.session_dir, broken_config);
+        assert!(disk_err.is_err());
+        assert!(disk_err.unwrap_err().contains("Cannot modify participants for Round 1"));
+
+        // Fixed payload succeeds from disk
+        let mut disk_fixed = read_back.clone();
+        disk_fixed.participants[0].model_id = "gemini-3.8-flash-updated".to_string();
+        let disk_ok = update_discussion_config_on_disk(&orchestrator.session_dir, disk_fixed);
+        assert!(disk_ok.is_ok());
+
+        let final_read_bytes = fs::read(orchestrator.session_dir.join("config.json")).unwrap();
+        let final_config: DiscussionConfig = serde_json::from_slice(&final_read_bytes).unwrap();
+        assert_eq!(final_config.participants[0].model_id, "gemini-3.8-flash-updated");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_copy_of_fly13_session_persistence_and_retry_with_mock_provider() {
+        use crate::discussion::commands::update_discussion_config_on_disk;
+        use crate::discussion::golden_tests::RecordingMockProvider;
+
+        let fly13_src = PathBuf::from(r"G:\xampp-httpdocs\fly13\.flymd\discussions\disc-1793743338597");
+        if !fly13_src.exists() {
+            eprintln!("Warning: fly13 directory not found, skipping real disk copy");
+            return;
+        }
+
+        let temp_dir = std::env::temp_dir().join(format!("flymd_fly13_copy_test_{}", now_ms()));
+        let temp_session_dir = temp_dir.join(".flymd").join("discussions").join("disc-1793743338597");
+        fs::create_dir_all(&temp_session_dir).unwrap();
+
+        // Recursively copy fly13 session files to isolated temp copy
+        for entry in fs::read_dir(&fly13_src).unwrap() {
+            let entry = entry.unwrap();
+            let dest = temp_session_dir.join(entry.file_name());
+            if entry.file_type().unwrap().is_file() {
+                fs::copy(entry.path(), &dest).unwrap();
+            } else if entry.file_type().unwrap().is_dir() {
+                let _ = fs::create_dir_all(&dest);
+            }
+        }
+
+        // Verify config loaded from copied session
+        let initial_config_bytes = fs::read(temp_session_dir.join("config.json")).unwrap();
+        let mut initial_config: DiscussionConfig = serde_json::from_slice(&initial_config_bytes).unwrap();
+        // Point workspace_path to temp_dir so it is completely isolated from fly13
+        initial_config.workspace_path = temp_dir.to_string_lossy().to_string();
+        fs::write(temp_session_dir.join("config.json"), serde_json::to_vec_pretty(&initial_config).unwrap()).unwrap();
+
+        assert_eq!(initial_config.repeater_mode.as_deref(), Some("per_agent"));
+        assert!(initial_config.round_schedule.is_empty());
+        assert_eq!(initial_config.participants[0].model_id, "gemini-4-argon");
+        assert_eq!(initial_config.participants[0].effort_level.as_deref(), Some("medium"));
+
+        // 1. Orchestrator NOT in memory (commands::update_discussion_config_on_disk)
+        let mut disk_mutated = initial_config.clone();
+        disk_mutated.participants[0].model_id = "gemini-3.8-flash".to_string();
+        disk_mutated.participants[0].effort_level = Some("low".to_string());
+
+        let disk_res = update_discussion_config_on_disk(&temp_session_dir, disk_mutated);
+        assert!(disk_res.is_ok(), "Disk update when orchestrator is not in memory must succeed");
+
+        // Re-read from disk and verify persistence
+        let read1_bytes = fs::read(temp_session_dir.join("config.json")).unwrap();
+        let read1_config: DiscussionConfig = serde_json::from_slice(&read1_bytes).unwrap();
+        assert_eq!(read1_config.participants[0].model_id, "gemini-3.8-flash");
+        assert_eq!(read1_config.participants[0].effort_level.as_deref(), Some("low"));
+
+        // 2. Orchestrator IS in memory
+        let (mock_antigravity, turns_log, _) = RecordingMockProvider::new("antigravity");
+        let (mock_claude, _, _) = RecordingMockProvider::new("claude-code");
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("antigravity".to_string(), Arc::new(mock_antigravity));
+        providers.insert("claude-code".to_string(), Arc::new(mock_claude));
+
+        let mut orchestrator = DiscussionOrchestrator::new(read1_config.clone(), providers).unwrap();
+        // Mutate model and effort in memory
+        let mut mem_mutated = read1_config.clone();
+        mem_mutated.participants[0].model_id = "gemini-2.5-pro".to_string();
+        mem_mutated.participants[0].effort_level = Some("high".to_string());
+
+        let mem_res = orchestrator.update_future_config(mem_mutated);
+        assert!(mem_res.is_ok(), "In-memory orchestrator config update must succeed");
+
+        // Verify disk persistence after in-memory update
+        let read2_bytes = fs::read(temp_session_dir.join("config.json")).unwrap();
+        let read2_config: DiscussionConfig = serde_json::from_slice(&read2_bytes).unwrap();
+        assert_eq!(read2_config.participants[0].model_id, "gemini-2.5-pro");
+        assert_eq!(read2_config.participants[0].effort_level.as_deref(), Some("high"));
+
+        // 3. Resume & Retry sends updated model and effort to TurnRequest
+        // Clear failed state to simulate clicking 'Resume & Retry'
+        orchestrator.metadata.status = DiscussionStatus::Created;
+        save_metadata(&temp_session_dir, &orchestrator.metadata).unwrap();
+
+        let run_res = orchestrator.run_discussion().await;
+        assert!(run_res.is_ok(), "Discussion run must succeed with mock provider");
+
+        let recorded = turns_log.lock().unwrap();
+        assert!(!recorded.is_empty(), "TurnRequest must have been delivered to antigravity provider");
+        assert_eq!(recorded[0].model_id.as_deref(), Some("gemini-2.5-pro"));
+        assert_eq!(recorded[0].effort_level.as_deref(), Some("high"));
+        drop(recorded);
+
+        // 4. Invariants check: executed rounds stay locked
+        let mut invalid_past_edit = read2_config.clone();
+        invalid_past_edit.round_schedule = vec![
+            DiscussionRoundPlan {
+                round_number: 1,
+                title: "Tampered Round 1".to_string(),
+                objective: None,
+                slots: vec![],
+            }
+        ];
+        let reject_res = orchestrator.update_future_config(invalid_past_edit);
+        assert!(reject_res.is_err(), "Executed round 1 must remain strictly locked");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
 }

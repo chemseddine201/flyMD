@@ -423,59 +423,67 @@ pub async fn cmd_update_discussion_config(
             .join(".flymd")
             .join("discussions")
             .join(&session_id);
-        if !session_dir.exists() {
-            return Err(format!("Session directory does not exist: {}", session_id));
-        }
-
-        let mut meta = load_metadata(&session_dir)?;
-        if meta.status != DiscussionStatus::Paused
-            && meta.status != DiscussionStatus::Failed
-            && meta.status != DiscussionStatus::Created
-        {
-            return Err(format!(
-                "Cannot modify discussion configuration in state: {:?}",
-                meta.status
-            ));
-        }
-
-        if config.session_id != session_id {
-            return Err("Cannot mutate session_id".to_string());
-        }
-
-        if config.max_rounds < meta.current_round {
-            return Err(format!(
-                "max_rounds ({}) cannot be less than current round ({})",
-                config.max_rounds, meta.current_round
-            ));
-        }
-
-        // Validate that past and current round slots were not mutated
-        let existing_config_path = session_dir.join("config.json");
-        let existing_config_bytes = fs::read(&existing_config_path)
-            .map_err(|e| format!("Failed to read existing config: {}", e))?;
-        let existing_config: DiscussionConfig = serde_json::from_slice(&existing_config_bytes)
-            .map_err(|e| format!("Failed to parse existing config: {}", e))?;
-
-        for r in 1..=meta.current_round {
-            let (_, _, old_slots) = existing_config.resolve_round_plan(r);
-            let (_, _, new_slots) = config.resolve_round_plan(r);
-
-            let old_participants: Vec<String> = old_slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
-            let new_participants: Vec<String> = new_slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
-
-            if old_participants != new_participants {
-                return Err(format!(
-                    "Cannot modify participants for Round {} which has already executed or is currently active",
-                    r
-                ));
-            }
-        }
-
-        super::storage::atomic_write_json(&existing_config_path, &config)?;
-        meta.updated_at = now_ms();
-        save_metadata(&session_dir, &meta)?;
-        Ok(meta)
+        update_discussion_config_on_disk(&session_dir, config)
     }
+}
+
+/// Validates and mutates discussion configuration directly on disk when orchestrator is not resident in memory.
+pub fn update_discussion_config_on_disk(
+    session_dir: &Path,
+    config: DiscussionConfig,
+) -> Result<DiscussionMetadata, String> {
+    if !session_dir.exists() {
+        return Err(format!("Session directory does not exist: {}", session_dir.display()));
+    }
+
+    let mut meta = load_metadata(session_dir)?;
+    if meta.status != DiscussionStatus::Paused
+        && meta.status != DiscussionStatus::Failed
+        && meta.status != DiscussionStatus::Created
+    {
+        return Err(format!(
+            "Cannot modify discussion configuration in state: {:?}",
+            meta.status
+        ));
+    }
+
+    if config.session_id != meta.session_id {
+        return Err("Cannot mutate session_id".to_string());
+    }
+
+    if config.max_rounds < meta.current_round {
+        return Err(format!(
+            "max_rounds ({}) cannot be less than current round ({})",
+            config.max_rounds, meta.current_round
+        ));
+    }
+
+    // Validate that past and current round slots were not mutated
+    let existing_config_path = session_dir.join("config.json");
+    let existing_config_bytes = fs::read(&existing_config_path)
+        .map_err(|e| format!("Failed to read existing config: {}", e))?;
+    let existing_config: DiscussionConfig = serde_json::from_slice(&existing_config_bytes)
+        .map_err(|e| format!("Failed to parse existing config: {}", e))?;
+
+    for r in 1..=meta.current_round {
+        let (_, _, old_slots) = existing_config.resolve_round_plan(r);
+        let (_, _, new_slots) = config.resolve_round_plan(r);
+
+        let old_participants: Vec<String> = old_slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
+        let new_participants: Vec<String> = new_slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
+
+        if old_participants != new_participants {
+            return Err(format!(
+                "Cannot modify participants for Round {} which has already executed or is currently active",
+                r
+            ));
+        }
+    }
+
+    super::storage::atomic_write_json(&existing_config_path, &config)?;
+    meta.updated_at = now_ms();
+    save_metadata(session_dir, &meta)?;
+    Ok(meta)
 }
 
 #[tauri::command]

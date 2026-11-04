@@ -88,6 +88,34 @@ pub fn build_agent_cli_command(
     effort_val: &str,
     model_id: Option<&str>,
 ) -> Command {
+    build_agent_cli_command_internal(
+        bin,
+        agent_id,
+        exec_dir,
+        prompt_arg,
+        resume_sid,
+        warm_cli_continue,
+        thinking_on,
+        effort_val,
+        model_id,
+        false,
+    )
+}
+
+/// Constructs a configured CLI `Command` with support for fused `--model <base>-<effort>` retry form.
+#[allow(clippy::too_many_arguments)]
+pub fn build_agent_cli_command_internal(
+    bin: &str,
+    agent_id: &str,
+    exec_dir: &str,
+    prompt_arg: &str,
+    resume_sid: Option<&str>,
+    warm_cli_continue: bool,
+    thinking_on: bool,
+    effort_val: &str,
+    model_id: Option<&str>,
+    fuse_antigravity_effort: bool,
+) -> Command {
     let bin_lower = bin.to_lowercase();
     let is_batch = bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat");
 
@@ -132,10 +160,19 @@ pub fn build_agent_cli_command(
                 "--output-format",
                 "stream-json",
             ]);
-            if let Some(ref model) = norm_model {
-                cmd.args(["--model", model.as_str()]);
+            if fuse_antigravity_effort {
+                let fused = match norm_model {
+                    Some(ref m) => format!("{}-{}", m, norm_effort),
+                    None => norm_effort.clone(),
+                };
+                cmd.args(["--model", fused.as_str()]);
+                // Omit --effort when fused to recover from "invalid model selection" CLI rejection
+            } else {
+                if let Some(ref model) = norm_model {
+                    cmd.args(["--model", model.as_str()]);
+                }
+                cmd.args(["--effort", norm_effort.as_str()]);
             }
-            cmd.args(["--effort", norm_effort.as_str()]);
         }
         "claude-code" => {
             if let Some(sid) = resume_sid {

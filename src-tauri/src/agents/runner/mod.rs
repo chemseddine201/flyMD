@@ -455,14 +455,14 @@ pub fn spawn_agent_execution(
                         }
                     }
 
-                    let exit_status = child.wait().ok();
-                    let exit_code = exit_status.and_then(|s| s.code());
+                    let mut exit_status = child.wait().ok();
+                    let mut exit_code = exit_status.and_then(|s| s.code());
                     process_manager.unregister_task_process(&task_id);
 
                     let mut created_files =
                         scan_workspace_modified_files(&exec_dir, task_started_at);
 
-                    let exited_err = exit_status.map(|s| !s.success()).unwrap_or(true);
+                    let mut exited_err = exit_status.map(|s| !s.success()).unwrap_or(true);
                     if (warm_cli_continue || resume_sid.is_some())
                         && exited_err
                         && decode_state.collected_md.trim().is_empty()
@@ -497,6 +497,138 @@ pub fn spawn_agent_execution(
                             }
                             created_files =
                                 scan_workspace_modified_files(&exec_dir, task_started_at);
+                        }
+                    }
+
+                    // Antigravity retry for "invalid model selection" (B2)
+                    let is_invalid_model = decode_state
+                        .captured_cli_error
+                        .as_deref()
+                        .unwrap_or("")
+                        .contains("invalid model selection")
+                        || decode_state
+                            .stderr_lines
+                            .iter()
+                            .any(|l| l.contains("invalid model selection"));
+
+                    if agent_id == "antigravity"
+                        && exited_err
+                        && is_invalid_model
+                        && decode_state.collected_md.trim().is_empty()
+                        && created_files.is_empty()
+                        && !cancel_flag.load(Ordering::Relaxed)
+                    {
+                        emit_log("[Antigravity Model Retry] CLI rejected model/effort combination ('invalid model selection'); retrying with `--model <base>-<effort>` without `--effort`...".to_string());
+                        let mut retry_cmd = crate::agents::runner::cli_builder::build_agent_cli_command_internal(
+                            &bin,
+                            &agent_id,
+                            &exec_dir,
+                            &prompt_arg,
+                            resume_sid.as_deref(),
+                            warm_cli_continue,
+                            thinking_on,
+                            effort_val,
+                            model_val,
+                            true, // fuse_antigravity_effort
+                        );
+                        #[cfg(target_os = "windows")]
+                        {
+                            use std::os::windows::process::CommandExt;
+                            retry_cmd.creation_flags(0x08000000);
+                        }
+                        retry_cmd
+                            .env("PYTHONIOENCODING", "utf-8")
+                            .env("PYTHONUTF8", "1")
+                            .current_dir(&exec_dir)
+                            .stdin(Stdio::null())
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped());
+
+                        if let (Some(prof), Some(cred)) = (&profile, &user_cred) {
+                            if let (Some(env_name), Some(api_key)) = (&prof.env_key_name, &cred.api_key) {
+                                if !api_key.trim().is_empty() {
+                                    retry_cmd.env(env_name, api_key.trim());
+                                }
+                            }
+                        }
+
+                        if let Ok(mut retry_child) = retry_cmd.spawn() {
+                            let retry_pid = retry_child.id();
+                            process_manager.register_task_process(&task_id, retry_pid, &agent_id, &exec_dir);
+                            decode_state = StreamDecodeState::new(
+                                record.cli_session_id.clone(),
+                                format!("Retried {} subprocess (PID: {}) in `{}`", agent_name, retry_pid, exec_dir),
+                                &record.tool_actions,
+                            );
+                            watchdog = WatchdogTracker::new();
+                            let retry_rx = spawn_stdio_reader_threads(retry_child.stdout.take(), retry_child.stderr.take());
+
+                            loop {
+                                if cancel_flag.load(Ordering::Relaxed) {
+                                    process_manager.terminate_task_tree(&task_id);
+                                    finalize_task(&store, &app, &task_id, "cancelled", None);
+                                    return;
+                                }
+
+                                match retry_rx.recv_timeout(Duration::from_millis(500)) {
+                                    Ok((is_stdout, line)) => {
+                                        watchdog.note_stream_activity();
+                                        if is_stdout {
+                                            let outcome = decode_stdout_line(&line, &mut decode_state);
+                                            let sid_snap = decode_state.captured_session_id.clone();
+                                            let md_snap = if decode_state.collected_md.is_empty() {
+                                                None
+                                            } else {
+                                                Some(decode_state.collected_md.clone())
+                                            };
+                                            update_task_streaming(&|t| {
+                                                t.progress_stage = Some("executing".to_string());
+                                                t.progress_percent = (t.progress_percent.max(75) + 1).min(96);
+                                                if sid_snap.is_some() {
+                                                    t.cli_session_id = sid_snap.clone();
+                                                }
+                                                if md_snap.is_some() {
+                                                    t.response_markdown = md_snap.clone();
+                                                }
+                                                if !outcome.display_line.is_empty() {
+                                                    t.logs.push(outcome.display_line.clone());
+                                                }
+                                                if let Some(ref act) = outcome.new_tool_action {
+                                                    t.tool_actions.push(act.clone());
+                                                }
+                                            });
+                                        } else if !line.trim().is_empty() {
+                                            emit_log(format!("[CLI Stderr] {}", line));
+                                            let (err_line, is_quota) = record_stderr_line(&line, &mut decode_state);
+                                            update_task_streaming(&|t| {
+                                                t.logs.push(err_line.clone());
+                                                if is_quota {
+                                                    t.logs.push("[Notice] CLI provider quota reached (429).".to_string());
+                                                }
+                                            });
+                                        }
+                                    }
+                                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                                        if let Ok(Some(_)) = retry_child.try_wait() {
+                                            while let Ok((is_stdout, line)) = retry_rx.try_recv() {
+                                                if is_stdout {
+                                                    decode_stdout_line(&line, &mut decode_state);
+                                                } else if !line.trim().is_empty() {
+                                                    record_stderr_line(&line, &mut decode_state);
+                                                }
+                                            }
+                                            break;
+                                        }
+                                    }
+                                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                                }
+                            }
+
+                            exit_status = retry_child.wait().ok();
+                            exit_code = exit_status.and_then(|s| s.code());
+                            process_manager.unregister_task_process(&task_id);
+                            created_files = scan_workspace_modified_files(&exec_dir, task_started_at);
+                            exited_err = exit_status.map(|s| !s.success()).unwrap_or(true);
                         }
                     }
 

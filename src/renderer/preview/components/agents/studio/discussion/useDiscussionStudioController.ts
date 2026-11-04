@@ -223,9 +223,15 @@ export function useDiscussionStudioController({
     async (newConfig: DiscussionConfig) => {
       if (!inspectingSessionId) return;
       await updateDiscussionConfig(resolvedWorkspace, inspectingSessionId, newConfig);
-      setInspectingConfig(newConfig);
+      // Reload updated config directly from disk to reflect persistent state
+      const reloaded = await loadDiscussionConfig(resolvedWorkspace, inspectingSessionId);
+      if (reloaded) {
+        setInspectingConfig(reloaded);
+      } else {
+        setInspectingConfig(newConfig);
+      }
     },
-    [inspectingSessionId, updateDiscussionConfig, resolvedWorkspace]
+    [inspectingSessionId, updateDiscussionConfig, loadDiscussionConfig, resolvedWorkspace]
   );
 
   const handleCloseInspector = useCallback(() => {
