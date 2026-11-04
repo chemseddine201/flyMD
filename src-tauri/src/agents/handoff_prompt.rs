@@ -120,10 +120,28 @@ pub fn assemble_task_handoff_package(
             .unwrap_or_else(|| req.markdown_content.clone())
     };
 
-    let body_to_process = if is_token_saver_on {
-        strip_discussion_report_section_4(&raw_body, &req.file_path)
+    // If source file points to a deliberation report that generated a decision-brief.md, use it in place of the report (Section 3.6)
+    let effective_raw_body = if !req.file_path.is_empty() {
+        let candidate_brief = Path::new(&req.file_path)
+            .parent()
+            .map(|p| p.join("decision-brief.md"));
+        if let Some(bp) = candidate_brief {
+            if bp.exists() {
+                std::fs::read_to_string(&bp).unwrap_or(raw_body)
+            } else {
+                raw_body
+            }
+        } else {
+            raw_body
+        }
     } else {
         raw_body
+    };
+
+    let body_to_process = if is_token_saver_on {
+        strip_discussion_report_section_4(&effective_raw_body, &req.file_path)
+    } else {
+        effective_raw_body
     };
 
     let prior_failed = existing_tasks

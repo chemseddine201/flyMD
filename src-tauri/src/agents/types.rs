@@ -185,7 +185,7 @@ pub struct AgentProfile {
     pub subscription_tier: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AgentTaskRequest {
     #[serde(rename = "targetAgentId")]
     pub target_agent_id: String,

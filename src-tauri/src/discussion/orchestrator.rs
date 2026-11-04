@@ -1,13 +1,20 @@
 //! Discussion Orchestrator: 8-state discussion lifecycle, barrier synchronization,
 //! checkpointing, and deterministic multi-turn debate coordinator.
 
+use super::board::{ClaimStatus, DebateBoardState};
 use super::convergence::{
     evaluate_round_boundary_convergence, evaluate_turn_convergence, ConvergenceVerdict,
 };
-use super::epistemic::evaluate_debate_epistemic_policy;
+use super::epistemic::{
+    build_epistemic_prompt_section, evaluate_debate_epistemic_policy,
+    format_board_handoff_state_emission_protocol,
+};
 use super::memory::MemoryManager;
 use super::provider_registry::provider_lookup_key;
-use super::runner::{DiscussionProvider, ProviderError, StreamSink, TurnRequest, TurnResponse};
+use super::runner::{
+    has_native_thinking, ChatMessageFrame, DiscussionProvider, ProviderError, StreamSink,
+    TurnRequest, TurnResponse,
+};
 use super::storage::{
     append_transcript_message, atomic_write_json, load_metadata, read_transcript_with_recovery,
     save_metadata, SessionLock,
@@ -18,7 +25,7 @@ use super::types::{
     RoundExecutionRecord, RoundExecutionStatus, TokenUsage, CURRENT_SCHEMA_VERSION,
 };
 use crate::projects::cache::{
-    load_cognitive_packet, parse_handoff_blocks_from_markdown,
+    filter_peer_messages_for_agent, load_cognitive_packet, parse_handoff_blocks_from_markdown,
     update_workspace_cognitive_cache_with_parsed,
 };
 use async_trait::async_trait;
@@ -201,6 +208,7 @@ pub struct DiscussionOrchestrator {
     pub metadata: DiscussionMetadata,
     pub session_dir: PathBuf,
     pub memory: MemoryManager,
+    pub board_state: DebateBoardState,
     pub skills_manager: super::skills::SkillsManager,
     pub providers: HashMap<String, Arc<dyn DiscussionProvider>>,
     pub cancel_flag: Arc<AtomicBool>,
@@ -266,6 +274,7 @@ impl DiscussionOrchestrator {
         save_metadata(&session_dir, &metadata)?;
 
         let memory = MemoryManager::new(session_dir.clone());
+        let board_state = DebateBoardState::load_or_init(&session_dir);
 
         let mut skills_manager = super::skills::SkillsManager::new();
         skills_manager.discover_all_skills(
@@ -281,6 +290,7 @@ impl DiscussionOrchestrator {
             metadata,
             session_dir,
             memory,
+            board_state,
             skills_manager,
             providers,
             cancel_flag: Arc::new(AtomicBool::new(false)),
@@ -345,6 +355,7 @@ impl DiscussionOrchestrator {
 
         save_metadata(&session_dir, &metadata)?;
 
+        let board_state = DebateBoardState::load_or_init(&session_dir);
         let step_mode = config.step_mode;
 
         let mut skills_manager = super::skills::SkillsManager::new();
@@ -359,6 +370,7 @@ impl DiscussionOrchestrator {
             metadata,
             session_dir,
             memory,
+            board_state,
             skills_manager,
             providers,
             cancel_flag: Arc::new(AtomicBool::new(false)),
@@ -806,6 +818,37 @@ impl DiscussionOrchestrator {
                     self.metadata.active_disagreements_count > disputes_before;
 
                 // Evaluate Early Convergence right after turn commits (saves remaining steps & remaining rounds)
+                if self.config.context_mode.as_deref() == Some("board") {
+                    if self.board_state.is_early_converged(active_participants.len()) {
+                        let verdict = ConvergenceVerdict {
+                            converged_round: current_round,
+                            reference_round: current_round.saturating_sub(1),
+                            similarity: 1.0,
+                            matched_agents: active_participants
+                                .iter()
+                                .map(|p| p.agent_id.clone())
+                                .collect(),
+                            reason: "Debate board full participant cycle completed with zero new claims and stable consensus status".to_string(),
+                        };
+                        let remaining_in_round: Vec<DiscussionParticipant> = round_slots
+                            .iter()
+                            .skip(slot_idx + 1)
+                            .map(|(p, _)| p.clone())
+                            .filter(|p| !spoken_agent_ids.contains(&p.agent_id))
+                            .collect();
+                        if !remaining_in_round.is_empty() || current_round < self.config.max_rounds {
+                            return self.handle_early_convergence_termination(
+                                current_round,
+                                &round_title,
+                                turn_index,
+                                &remaining_in_round,
+                                &active_participants,
+                                verdict,
+                            );
+                        }
+                    }
+                }
+
                 let (updated_transcript, _) = read_transcript_with_recovery(&self.session_dir)?;
                 if let Some(verdict) = evaluate_turn_convergence(
                     &updated_transcript,
@@ -864,6 +907,18 @@ impl DiscussionOrchestrator {
                 }
             }
 
+            // When in Debate Board mode, commit all staged updates from this round barrier
+            if self.config.context_mode.as_deref() == Some("board") {
+                let roster_agent_ids: Vec<String> = active_participants
+                    .iter()
+                    .map(|p| p.agent_id.clone())
+                    .collect();
+                self.board_state
+                    .commit_staged_round_updates(&roster_agent_ids, current_round);
+                let _ = self.board_state.sync_to_existing_files(&self.memory);
+                let _ = self.board_state.save(&self.session_dir);
+            }
+
             // Round completed successfully! Record in round ledger and freeze immutable round digest.
             self.upsert_round_ledger_record(RoundExecutionRecord {
                 round_number: current_round,
@@ -898,8 +953,8 @@ impl DiscussionOrchestrator {
                 }
             }
 
-            // 1. Ensure active disputes reflect parsed peer contradictions (fallback only if models emitted none):
-            if current_round == 2 {
+            // 1. Ensure active disputes reflect parsed peer contradictions (fallback only if models emitted none in classic mode):
+            if self.config.context_mode.as_deref() != Some("board") && current_round == 2 {
                 if self.memory.load_disagreements().is_empty() {
                     let dispute_topic = format!(
                         "Architecture & State Management Strategy: {}",
@@ -929,8 +984,8 @@ impl DiscussionOrchestrator {
             }
 
             if current_round >= self.config.max_rounds {
-                // 2. Ensure consensus decision ledger is populated (preserving real model-emitted decisions first):
-                if self.memory.load_decisions().is_empty() {
+                // 2. Ensure consensus decision ledger is populated (preserving real model-emitted decisions first in classic mode):
+                if self.config.context_mode.as_deref() != Some("board") && self.memory.load_decisions().is_empty() {
                     let decision_topic = format!(
                         "Unified Architecture & Execution Blueprint: {}",
                         self.config.topic
@@ -1094,8 +1149,8 @@ impl DiscussionOrchestrator {
         self.metadata.convergence_reason = Some(verdict.reason.clone());
         self.metadata.updated_at = now_ms();
 
-        // Ensure decision ledger records consensus if none emitted yet
-        if self.memory.load_decisions().is_empty() {
+        // Ensure decision ledger records consensus if none emitted yet (classic mode only)
+        if self.config.context_mode.as_deref() != Some("board") && self.memory.load_decisions().is_empty() {
             let agreed_by: Vec<String> = active_participants
                 .iter()
                 .map(|p| p.agent_id.clone())
@@ -1129,6 +1184,10 @@ impl DiscussionOrchestrator {
 
     /// Synthesizes the 12-section evidence report, updates decision metrics, transitions to AwaitingReview, and releases lock.
     fn finalize_and_generate_report(&mut self) -> Result<DiscussionStatus, String> {
+        if self.config.context_mode.as_deref() == Some("board") {
+            let _ = self.board_state.sync_to_existing_files(&self.memory);
+        }
+
         let decisions = self.memory.load_decisions();
         self.metadata.decisions_count = decisions.len();
         let active_disputes = self.memory.load_disagreements();
@@ -1143,6 +1202,39 @@ impl DiscussionOrchestrator {
             self.metadata.error_message = Some(format!("Report synthesis warning: {}", rep_err));
             let _ = save_metadata(&self.session_dir, &self.metadata);
         }
+
+        if self.config.context_mode.as_deref() == Some("board") {
+            let report_path = self.session_dir.join("report.md");
+            let _ = self.board_state.write_decision_brief(
+                &self.session_dir,
+                &self.config.topic,
+                &self.config.user_idea,
+                &self.config.session_id,
+                self.metadata.current_round,
+                &report_path.to_string_lossy(),
+            );
+
+            // Record agreed decisions in shared project memory
+            let ws_path = PathBuf::from(&self.config.workspace_path);
+            let project_id = "root";
+            for claim in &self.board_state.claims {
+                if claim.status == ClaimStatus::Agreed || claim.status == ClaimStatus::Uncontested {
+                    let _ = crate::projects::memory::record_scoped_memory(
+                        &ws_path,
+                        project_id,
+                        &claim.author_role,
+                        crate::projects::types::MemoryEntryKind::Decision,
+                        &claim.text,
+                        claim.source_paragraph.as_deref(),
+                        vec![
+                            format!("claim-{}", claim.id),
+                            format!("session-{}", self.config.session_id),
+                        ],
+                    );
+                }
+            }
+        }
+
         self.transition_status(DiscussionStatus::AwaitingReview)?;
         self.release_lock();
         Ok(DiscussionStatus::AwaitingReview)
@@ -1187,26 +1279,30 @@ impl DiscussionOrchestrator {
         }
         let _ = self.memory.append_peer_messages(&parsed.peer_messages);
 
-        for (idx, inv) in parsed.locked_invariants.iter().take(3).enumerate() {
-            let topic = format!(
-                "{} Invariant #{} ({})",
-                participant.role.as_str(),
-                idx + 1,
-                self.config.topic
-            );
-            let _ = self.memory.record_decision(
-                &topic,
-                inv,
-                &format!(
-                    "Established by {} ({}) in Round {}",
-                    participant.display_name,
+        // In classic mode, record locked_invariants into decisions.json;
+        // In board mode, decisions.json is fed strictly by computed consensus claims (Section 3.4).
+        if self.config.context_mode.as_deref() != Some("board") {
+            for (idx, inv) in parsed.locked_invariants.iter().take(3).enumerate() {
+                let topic = format!(
+                    "{} Invariant #{} ({})",
                     participant.role.as_str(),
-                    round
-                ),
-                vec![participant.agent_id.clone()],
-                round,
-                vec![format!("round-{}", round)],
-            );
+                    idx + 1,
+                    self.config.topic
+                );
+                let _ = self.memory.record_decision(
+                    &topic,
+                    inv,
+                    &format!(
+                        "Established by {} ({}) in Round {}",
+                        participant.display_name,
+                        participant.role.as_str(),
+                        round
+                    ),
+                    vec![participant.agent_id.clone()],
+                    round,
+                    vec![format!("round-{}", round)],
+                );
+            }
         }
 
         for disp in parsed.active_disputes.iter().take(2) {
@@ -1225,11 +1321,16 @@ impl DiscussionOrchestrator {
 
         let clean_markdown = parsed.clean_markdown.clone();
         let ws_path = PathBuf::from(&self.config.workspace_path);
+        let pipeline_id_for_cache = if self.config.context_mode.as_deref() == Some("board") {
+            Some(self.config.session_id.as_str())
+        } else {
+            None
+        };
         let _ = update_workspace_cognitive_cache_with_parsed(
             &ws_path,
             &participant.agent_id,
             participant.role.as_str(),
-            Some(&self.config.session_id),
+            pipeline_id_for_cache,
             round,
             Some(&self.config.user_idea),
             parsed,
@@ -1274,20 +1375,151 @@ impl DiscussionOrchestrator {
             &active_dispute_topics,
         );
 
-        let (mut frames, truncated) = self
-            .memory
-            .assemble_prefix_pinned_frames(
-                participant,
-                round,
+        let is_board_mode = self.config.context_mode.as_deref() == Some("board");
+        let (mut frames, truncated) = if is_board_mode {
+            let project_id = "root";
+            let nodes = crate::projects::storage::load_all_projects(&ws_path);
+            let tree = crate::projects::tree::ProjectTree::from_nodes(nodes);
+            let recall_pack =
+                crate::projects::memory::build_recall_pack(&ws_path, &tree, project_id, 300);
+            let recall_text = if !recall_pack.rendered_markdown.trim().is_empty() {
+                Some(recall_pack.rendered_markdown.as_str())
+            } else {
+                None
+            };
+
+            let topic_card = DebateBoardState::build_topic_card(
                 &self.config.topic,
                 &self.config.user_idea,
+                &self.config.participants,
                 &ws_path,
+                recall_text,
+            );
+
+            let board_snapshot = self.board_state.build_board_snapshot();
+            let positions_snapshot = self.board_state.build_position_cards_snapshot();
+
+            let is_multi_agent_same_model_round = {
+                let (_, _, round_slots) = self.config.resolve_round_plan(round);
+                let same_model_count = round_slots
+                    .iter()
+                    .filter(|(p, _)| p.model_id == participant.model_id)
+                    .count();
+                same_model_count > 1
+            };
+
+            let mut board_frames = Vec::new();
+            if is_multi_agent_same_model_round {
+                let mut sys = topic_card;
+                sys.push_str("\n\n");
+                sys.push_str(&board_snapshot);
+                sys.push_str("\n\n");
+                sys.push_str(&positions_snapshot);
+                board_frames.push(ChatMessageFrame {
+                    role: "system".to_string(),
+                    content: sys,
+                    cache_anchor: true,
+                });
+            } else {
+                board_frames.push(ChatMessageFrame {
+                    role: "system".to_string(),
+                    content: topic_card,
+                    cache_anchor: true,
+                });
+                let mut snapshot_frame = board_snapshot;
+                snapshot_frame.push_str("\n\n");
+                snapshot_frame.push_str(&positions_snapshot);
+                board_frames.push(ChatMessageFrame {
+                    role: "user".to_string(),
+                    content: snapshot_frame,
+                    cache_anchor: false,
+                });
+            }
+
+            let mut turn_frame = String::new();
+            turn_frame.push_str(&format!(
+                "## Active Role Assignment\nYou are **{}** (Agent ID: `{}`, Role: `{}`).\n{}\n\n",
+                participant.display_name,
+                participant.agent_id,
+                participant.role.as_str(),
+                participant.role_description.trim()
+            ));
+
+            let all_peer_msgs = self.memory.load_peer_messages();
+            let inbox = filter_peer_messages_for_agent(
+                &all_peer_msgs,
+                &participant.agent_id,
+                participant.role.as_str(),
+            );
+            if !inbox.is_empty() {
+                turn_frame.push_str("### Direct Peer Messages Addressed to You\n");
+                for pm in inbox.iter().rev().take(6).rev() {
+                    turn_frame.push_str(&format!(
+                        "- From **{} ({})** [{}]: {}\n",
+                        pm.from_agent, pm.from_role, pm.kind, pm.message
+                    ));
+                }
+                turn_frame.push('\n');
+            }
+
+            let needs_context = self.board_state.get_needs_context_for_agent(&participant.agent_id);
+            if !needs_context.is_empty() {
+                turn_frame.push_str(&needs_context);
+                turn_frame.push('\n');
+            }
+
+            turn_frame.push_str(&build_epistemic_prompt_section(
                 &epistemic_decision,
+                &ws_path,
                 cognitive_pkt.as_ref(),
-                frame_action_label,
-                action_query.as_deref(),
-            )
-            .map_err(|e| format!("Failed to assemble context frames: {}", e))?;
+            ));
+
+            if let Some(q) = action_query.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                let label = frame_action_label.unwrap_or("Focused Turn Directive");
+                turn_frame.push_str(&format!("\n### {}\nSpecifically address: {}\n", label, q));
+            }
+
+            turn_frame.push_str(
+                "\n### Turn Instructions\n\
+                 - Refer to board claims by id (`C1`, `C2`, ...). Do not restate them.\n\
+                 - Write only what changes the board. State concrete facts, decisions, risks, or questions.\n\
+                 - Write in the language of the user's proposal.\n",
+            );
+
+            let has_native = has_native_thinking(&participant.provider_id, &participant.model_id);
+            if participant.thinking_enabled && !has_native {
+                turn_frame.push_str(
+                    "\n### Thinking Protocol\n\
+                     Reason step-by-step inside `<thinking>...</thinking>` before writing your structured Markdown response.\n",
+                );
+            }
+
+            turn_frame.push_str(&format_board_handoff_state_emission_protocol(
+                epistemic_decision.requires_blind_self_conclusion(),
+            ));
+
+            board_frames.push(ChatMessageFrame {
+                role: "user".to_string(),
+                content: turn_frame,
+                cache_anchor: false,
+            });
+
+            (board_frames, false)
+        } else {
+            self.memory
+                .assemble_prefix_pinned_frames(
+                    participant,
+                    round,
+                    &self.config.topic,
+                    &self.config.user_idea,
+                    &ws_path,
+                    &epistemic_decision,
+                    cognitive_pkt.as_ref(),
+                    frame_action_label,
+                    action_query.as_deref(),
+                )
+                .map_err(|e| format!("Failed to assemble context frames: {}", e))?
+        };
 
         // Resolve active skills for this participant according to isolation policy
         let participant_skills = self.skills_manager.resolve_skills_for_participant(
@@ -1379,7 +1611,7 @@ impl DiscussionOrchestrator {
             author_provider: participant.provider_id.clone(),
             message_kind,
             target_peer_ids,
-            content: clean_markdown,
+            content: clean_markdown.clone(),
             timestamp: now_ms(),
             token_usage: Some(response.usage.clone()),
             duration_ms: response.duration_ms,
@@ -1392,6 +1624,33 @@ impl DiscussionOrchestrator {
         };
 
         append_transcript_message(&self.session_dir, &message)?;
+
+        if self.config.context_mode.as_deref() == Some("board") {
+            self.board_state.consume_pending_needs(&participant.agent_id);
+            let roster_agent_ids: Vec<String> = self
+                .config
+                .participants
+                .iter()
+                .map(|p| p.agent_id.clone())
+                .collect();
+            let is_multi_agent_round = self.config.repeater_mode.as_deref() != Some("per_agent")
+                && self.config.participants.len() > 1;
+            self.board_state.ingest_turn(
+                &msg_id,
+                &participant.agent_id,
+                participant.role.as_str(),
+                round,
+                turn_index,
+                &response.raw_markdown,
+                &clean_markdown,
+                is_multi_agent_round,
+                &roster_agent_ids,
+            );
+            if !is_multi_agent_round {
+                let _ = self.board_state.sync_to_existing_files(&self.memory);
+            }
+            let _ = self.board_state.save(&self.session_dir);
+        }
 
         self.metadata.total_messages += 1;
         self.metadata.total_tokens += response.usage.total_tokens;
@@ -2330,6 +2589,69 @@ mod tests {
         ];
         let reject_res = orchestrator.update_future_config(invalid_past_edit);
         assert!(reject_res.is_err(), "Executed round 1 must remain strictly locked");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_debate_board_full_run_with_computed_consensus_and_decision_brief() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_board_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let mut config = build_test_config(&temp_dir);
+        config.max_rounds = 2;
+        config.context_mode = Some("board".to_string());
+
+        let mut providers: HashMap<String, Arc<dyn DiscussionProvider>> = HashMap::new();
+        providers.insert("mock".to_string(), Arc::new(MockProvider::new("mock")));
+
+        let mut orchestrator = DiscussionOrchestrator::new(config, providers).unwrap();
+        let status = orchestrator.run_discussion().await.unwrap();
+
+        assert_eq!(status, DiscussionStatus::AwaitingReview);
+
+        // 1. Board state persisted to disk
+        let board_path = orchestrator.session_dir.join("board_state.json");
+        assert!(board_path.exists(), "board_state.json must be written to disk");
+
+        let read_board = DebateBoardState::load_or_init(&orchestrator.session_dir);
+        assert!(!read_board.claims.is_empty(), "Debate board must record structured claims");
+        assert!(!read_board.positions.is_empty(), "Position cards must be registered");
+
+        // 2. Computed status check
+        let has_agreed = read_board.claims.iter().any(|c| c.status == ClaimStatus::Agreed || c.status == ClaimStatus::Uncontested);
+        assert!(has_agreed, "At least one claim must reach agreed or uncontested computed consensus");
+
+        // 3. Keep existing files fed
+        let decisions = orchestrator.memory.load_decisions();
+        assert!(!decisions.is_empty(), "decisions.json must be populated from agreed/uncontested board claims");
+        assert!(decisions.iter().all(|d| d.rationale.contains("Debate Board Claim")));
+
+        // 4. Decision brief generated
+        let brief_path = orchestrator.session_dir.join("decision-brief.md");
+        assert!(brief_path.exists(), "decision-brief.md must be generated at debate conclusion");
+        let brief_content = fs::read_to_string(&brief_path).unwrap();
+        assert!(brief_content.contains("Agreed Architectural Decisions"));
+        assert!(brief_content.contains("Goal & Core Constraints"));
+
+        // 5. Shared project memory recorded
+        let scoped_records = crate::projects::storage::read_project_memory_records(&temp_dir, "root");
+        assert!(!scoped_records.is_empty(), "Agreed board decisions must be recorded to project memory");
+
+        // 6. Pipeline handoff package uses decision-brief.md in place of report.md
+        let report_path = orchestrator.session_dir.join("report.md");
+        fs::write(&report_path, "# Full Report\n## 4. Raw Rounds\nLong transcript...\n## 5. Summary").unwrap();
+
+        let req = crate::agents::types::AgentTaskRequest {
+            intent: "build-feature".to_string(),
+            file_path: report_path.to_string_lossy().to_string(),
+            markdown_content: "Fallback full report content".to_string(),
+            token_saver: Some("standard".to_string()),
+            target_agent_id: "claude-code".to_string(),
+            ..Default::default()
+        };
+        let pkg = crate::agents::handoff_prompt::assemble_task_handoff_package(&req, &temp_dir.to_string_lossy(), &[]);
+        assert!(pkg.body_to_process.contains("Agreed Architectural Decisions"), "Pipeline must use decision-brief in place of report");
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

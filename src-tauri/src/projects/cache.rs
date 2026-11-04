@@ -704,8 +704,49 @@ pub fn format_compact_digest_markdown(
     if include_upstream_claims {
         if !packet.locked_invariants.is_empty() {
             s.push_str("**Locked Architectural Invariants**:\n");
-            for inv in packet.locked_invariants.iter().take(8) {
-                s.push_str(&format!("- {}\n", inv));
+            let has_tags = packet
+                .locked_invariants
+                .iter()
+                .any(|inv| inv.starts_with('[') && inv.contains(']'));
+
+            if has_tags {
+                let current_pid = packet.pipeline_id.as_deref();
+                let mut relevant: Vec<&String> = packet
+                    .locked_invariants
+                    .iter()
+                    .rev()
+                    .filter(|inv| {
+                        if let Some(close_bracket) = inv.find(']') {
+                            if inv.starts_with('[') {
+                                let tag = &inv[1..close_bracket];
+                                return current_pid
+                                    .map(|cp| cp == tag || tag.contains(cp) || cp.contains(tag))
+                                    .unwrap_or(true);
+                            }
+                        }
+                        true
+                    })
+                    .take(8)
+                    .collect();
+                relevant.reverse();
+
+                for inv in relevant {
+                    let clean_inv = if let Some(close_bracket) = inv.find(']') {
+                        if inv.starts_with('[') {
+                            inv[close_bracket + 1..].trim()
+                        } else {
+                            inv.as_str()
+                        }
+                    } else {
+                        inv.as_str()
+                    };
+                    s.push_str(&format!("- {}\n", clean_inv));
+                }
+            } else {
+                // Classic / legacy untagged invariants: preserve first 8
+                for inv in packet.locked_invariants.iter().take(8) {
+                    s.push_str(&format!("- {}\n", inv));
+                }
             }
             s.push('\n');
         }
@@ -851,12 +892,12 @@ pub fn parse_handoff_blocks_from_markdown(
                 let after_at = &trimmed[at_pos + 1..];
                 let target_token: String = after_at
                     .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+                    .take_while(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
                     .collect();
-                let target_low = target_token.to_ascii_lowercase();
-                if known_targets.contains(&target_low.as_str()) {
+                let target_low = target_token.to_lowercase();
+                if known_targets.contains(&target_low.as_str()) || target_token.chars().count() >= 2 {
                     let msg_body = after_at[target_token.len()..]
-                        .trim_start_matches([':', '-', ')', ']'])
+                        .trim_start_matches([':', '-', ')', ']', ' '])
                         .trim();
                     if msg_body.len() >= 10
                         && !out
@@ -981,8 +1022,28 @@ pub fn update_workspace_cognitive_cache_with_parsed(
     }
 
     for inv in parsed.locked_invariants {
-        if !packet.locked_invariants.contains(&inv) && packet.locked_invariants.len() < 16 {
-            packet.locked_invariants.push(inv);
+        let trimmed_inv = inv.trim();
+        if trimmed_inv.is_empty() {
+            continue;
+        }
+        if let Some(pid) = pipeline_id {
+            // Tagged / Board mode (Section 3.7): tag with run, keep newest
+            let tagged_inv = format!("[{}] {}", pid, trimmed_inv);
+            if !packet.locked_invariants.iter().any(|existing| {
+                existing == &tagged_inv || existing == trimmed_inv || existing.ends_with(trimmed_inv)
+            }) {
+                if packet.locked_invariants.len() >= 16 {
+                    packet.locked_invariants.remove(0); // keep newest!
+                }
+                packet.locked_invariants.push(tagged_inv);
+            }
+        } else {
+            // Classic mode: keeps first 16 forever, new ones dropped
+            if !packet.locked_invariants.contains(&trimmed_inv.to_string())
+                && packet.locked_invariants.len() < 16
+            {
+                packet.locked_invariants.push(trimmed_inv.to_string());
+            }
         }
     }
     if !parsed.active_disputes.is_empty() {
@@ -1050,12 +1111,12 @@ pub fn filter_peer_messages_for_agent<'a>(
     agent_id: &str,
     role_name: &str,
 ) -> Vec<&'a PeerDirectMessage> {
-    let agent_low = agent_id.to_ascii_lowercase();
-    let role_low = role_name.to_ascii_lowercase();
+    let agent_low = agent_id.to_lowercase();
+    let role_low = role_name.to_lowercase();
     messages
         .iter()
         .filter(|m| {
-            let t = m.to_target.to_ascii_lowercase();
+            let t = m.to_target.to_lowercase();
             t == "all"
                 || t == agent_low
                 || t == role_low
@@ -1156,5 +1217,62 @@ Verified raw HTML and JS contracts independently; 2 DOM nodes present.
         assert_eq!(parsed.unverified_assumptions.len(), 1);
         assert!(parsed.independent_resume.is_some());
         assert_eq!(parsed.peer_messages.len(), 2);
+    }
+
+    #[test]
+    fn test_arabic_peer_mentions_and_exact_roster_routing() {
+        let md = r#"
+### مراجعة معمارية
+- @المعلم: يرجى التحقق من أداء واجهة المستخدم واستجابة الأزرار
+- @custom_agent: verify latency constraints under load.
+"#;
+        let parsed = parse_handoff_blocks_from_markdown(md, "agent-1", "Architect");
+        assert_eq!(parsed.peer_messages.len(), 2);
+
+        // Verify Arabic exact-ID mention
+        let arabic_inbox = filter_peer_messages_for_agent(&parsed.peer_messages, "المعلم", "معلم");
+        assert_eq!(arabic_inbox.len(), 1);
+        assert_eq!(arabic_inbox[0].to_target, "المعلم");
+
+        // Verify custom ID mention
+        let custom_inbox =
+            filter_peer_messages_for_agent(&parsed.peer_messages, "custom_agent", "CustomRole");
+        assert_eq!(custom_inbox.len(), 1);
+        assert_eq!(custom_inbox[0].to_target, "custom_agent");
+    }
+
+    #[test]
+    fn test_tagged_invariants_retention_and_filter() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_inv_test_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let mut parsed = ParsedAgentCognitiveOutput::default();
+        for i in 1..=18 {
+            parsed.locked_invariants.push(format!("Invariant number {}", i));
+        }
+
+        let pkt = update_workspace_cognitive_cache_with_parsed(
+            &temp_dir,
+            "agent-1",
+            "Architect",
+            Some("run-alpha"),
+            1,
+            None,
+            parsed,
+            false,
+            None,
+        );
+
+        // Must retain max 16, keeping newest
+        assert_eq!(pkt.locked_invariants.len(), 16);
+        assert!(pkt.locked_invariants.last().unwrap().contains("Invariant number 18"));
+        assert!(pkt.locked_invariants.first().unwrap().contains("Invariant number 3"));
+        assert!(pkt.locked_invariants.first().unwrap().starts_with("[run-alpha]"));
+
+        // Verify display filter keeps current run
+        let md = format_compact_digest_markdown(&pkt, true);
+        assert!(md.contains("Invariant number 18"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

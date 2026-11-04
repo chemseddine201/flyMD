@@ -281,6 +281,269 @@ ok 1 - roundPlanResolver parity with Rust resolve_round_plan across shared fixtu
 
 ---
 
-## 7. Review Gate: Ready for Owner Sign-Off
+## 7. Phase 3: Debate Board Implementation & Verification
 
-Phase 0, Phase 1, and Phase 2 are complete. We are stopped here and waiting for owner review before proceeding to Phase 3 (Debate Board) and Phase 4.
+Per Section 3 of `TOKEN_CONTEXT_TASKS.md`, Phase 3 (Debate Board) is implemented and verified offline. As required by Section 3.9, execution is **stopped for review before running any paid A/B calls**.
+
+### 7.1 What Changed (Files & Lines)
+
+1. **`src-tauri/src/discussion/board.rs` (Lines 1–1068)**:
+   - Created core Debate Board subsystem with structured claims (`ClaimKind::Decision`, `Risk`, `Fact`, `Question`), reaction stances (`agree`, `object`, `refine`, `withdraw`), and computed statuses (`agreed`, `uncontested`, `disputed`, `withdrawn`).
+   - Implemented computed consensus in `recompute_statuses` (lines 457–530):
+     - `withdrawn`: author withdrew it.
+     - `disputed`: open objection or refine.
+     - `agreed`: another agent agreed and nothing is open.
+     - `uncontested`: every other participant has had a turn since the claim appeared with no reaction.
+   - Implemented bad block fallback in `extract_fallback_position` & `parse_turn_block` (lines 235–300), filtering bare labels/`---` and preserving the agent's position paragraph with 0 claims.
+   - Implemented `build_topic_card` (lines 535–590): frozen protocol, topic, proposal word-for-word, exact-ID participant roster, live file index (SHA-256), and project recall pack.
+   - Implemented tight token budget snapshots: `build_board_snapshot` (lines 594–650) and `build_position_cards_snapshot` (lines 653–672).
+   - Implemented `build_needs_context` & `get_needs_context_for_agent` (lines 468–485, 675–695), injecting source paragraphs for requested claims up to ~1,500 tokens.
+   - Implemented `sync_to_existing_files` (lines 698–762), syncing agreed/uncontested claims to `decisions.json` and disputed claims to `disagreements.json`.
+   - Implemented `write_decision_brief` (lines 765–870), outputting canonical `decision-brief.md`.
+   - Implemented `is_early_converged` (lines 527–533), detecting full participant cycle with 0 new claims and 0 status changes.
+
+2. **`src-tauri/src/discussion/orchestrator.rs`**:
+   - Added `pub board_state: DebateBoardState` to `DiscussionOrchestrator` (lines 206–218).
+   - Initialized `board_state` in `new()` (lines 276–298) and `recover()` (lines 356–378) from `session_dir.join("board_state.json")`.
+   - Multi-agent round barrier synchronization (lines 908–922): staged updates are held in `staged_round_updates` during a round and committed at round end via `commit_staged_round_updates`. In `per_agent`, updates apply immediately.
+   - Early convergence check (lines 820–850): when `context_mode == "board"`, triggers early termination through existing convergence path when `is_early_converged` evaluates true.
+   - Guarded fallback stances (lines 957, 987) and locked invariants recording (line 1282) so they run only when `context_mode != "board"`. In board mode, `decisions.json` and `disagreements.json` are populated strictly from computed consensus claims.
+   - Turn frames assembly (lines 1373–1515): in board mode, topic card is placed in system prompt file; snapshots placed in system prompt only when multiple agents in round share the same model, otherwise sent first on stdin; dynamic agent turn frame includes role, peer inbox, requested `needs` context, epistemic policy, directive, and board turn instructions.
+   - Turn ingestion (lines 1622–1650): consumes pending needs, ingests output, syncs to disk atomically.
+   - Final report & brief generation (lines 1186–1235): syncs files, writes `decision-brief.md`, and persists agreed decisions to shared project memory via `record_scoped_memory`.
+   - Added integration test `test_debate_board_full_run_with_computed_consensus_and_decision_brief` (lines 2600–2660).
+
+3. **`src-tauri/src/projects/cache.rs`**:
+   - Exact-ID & Unicode mention routing (lines 879–885, 1095–1105): replaced `is_ascii_alphanumeric()` with `is_alphanumeric() || c == '-' || c == '_'` and Unicode `to_lowercase()`, enabling exact agent IDs and Arabic mentions (e.g., `@المعلم`). Added unit test `test_arabic_peer_mentions_and_exact_roster_routing`.
+   - Invariants run tagging & retention (lines 705–745, 1024–1050): in board mode with run ID, tags invariants `[<run_id>] <text>`, retains newest 16 (dropping oldest with `remove(0)`), and filters display to current run and source debate. Classic mode preserves existing first-16 retention. Added unit test `test_tagged_invariants_retention_and_filter`.
+
+4. **`src-tauri/src/discussion/runner.rs`**:
+   - Added `pub fn has_native_thinking(provider_id: &str, model_id: &str) -> bool` (lines 48–65).
+   - In `MockProvider` (lines 1398–1440), added simulated Debate Board `<handoff_state>` emission with `position`, `claims`, `reacts`, and `needs` when board mode is active.
+
+5. **`src-tauri/src/discussion/epistemic.rs` (Lines 547–580)**:
+   - Added `format_board_handoff_state_emission_protocol` instructing models to emit board `<handoff_state>` block with `position`, `claims`, `reacts`, and `needs`.
+
+6. **`src-tauri/src/agents/handoff_prompt.rs` (Lines 121–145)**:
+   - Updated `assemble_task_handoff_package`: when input points to a deliberation report and `decision-brief.md` exists in that session directory, uses `decision-brief.md` in place of `report.md`.
+
+7. **`src-tauri/src/agents/types.rs` (Line 188)**:
+   - Added `Default` derive to `AgentTaskRequest`.
+
+8. **`src/renderer/preview/components/agents/studio/discussion/DeliberationTurnCard.tsx` (Lines 141–145, 342–350)**:
+   - Added Claude native reasoning callout note in expanded turn card when Claude is used and explicit thinking traces are absent from prompt protocol.
+
+9. **`scripts/ab_debate_harness.py`**:
+   - Created standalone A/B testing harness and cost calculator covering 10 scenarios across 3 languages (English, Arabic, French) and 2 round modes (`per_agent`, `multi_agent`).
+   - Implemented strict safety gate: requires `--run-paid` and `--approved-budget` to execute real API calls.
+   - Implemented offline dry-run evaluator (`--dry-run`) verifying facts retention (>=90%), language compliance, settled points preservation, and early convergence checks.
+
+---
+
+### 7.2 Verification Commands & Real Test Output
+
+#### 1. Rust Unit & Integration Test Suite (`cargo test --lib`)
+- **Command:** `cargo test --lib`
+- **Output Evidence:**
+```text
+running 93 tests
+test agents::checkpoint::tests::test_safe_tail_utf8_with_multibyte_arabic ... ok
+test agents::handoff_prompt::tests::test_strip_discussion_report_section_4 ... ok
+test agents::checkpoint::tests::test_workspace_snapshot_and_restore_removes_new_files_and_restores_modified ... ok
+test agents::runner::code_blocks::tests::test_parse_fence_tag_variations ... ok
+test agents::runner::handoff::tests::test_persist_task_cognitive_handoff_updates_cache_and_strips_envelope ... ok
+test agents::runner::cli_builder::tests::test_build_agent_cli_command_antigravity_with_model ... ok
+test agents::runner::cli_builder::tests::test_build_agent_cli_command_with_model_and_effort ... ok
+test agents::runner::code_blocks::tests::test_extract_and_write_multi_file_blocks ... ok
+test agents::runner::handoff::tests::test_role_isolation_between_refine_plan_and_build ... ok
+test common::naming::tests::test_resolve_unique_deliverable_path_anti_collision ... ok
+test common::naming::tests::test_compose_smart_deliverable_name ... ok
+test agents::runner::handoff::tests::test_verify_deliverables_detects_missing_companions_and_stubs ... ok
+test common::stream_parsers::tests::test_parse_ollama_line ... ok
+test common::stream_parsers::tests::test_parse_openai_sse_line ... ok
+test common::time::tests::test_now_ms_is_positive ... ok
+test common::naming::tests::test_slugify_semantic_title_clean ... ok
+test common::naming::tests::test_transliterate_arabic_and_keywords ... ok
+test common::utf8::tests::test_safe_tail_utf8 ... ok
+test discussion::board::tests::test_bad_block_fallback_preserves_position ... ok
+test discussion::board::tests::test_board_status_transitions ... ok
+test discussion::board::tests::test_decision_brief_generation ... ok
+test common::utf8::tests::test_truncate_utf8_bytes_boundary ... ok
+test common::utf8::tests::test_truncate_utf8_chars_multibyte ... ok
+test discussion::board::tests::test_uncontested_claim_after_cycle ... ok
+test discussion::convergence::tests::test_dispute_veto_prevents_premature_convergence ... ok
+test discussion::convergence::tests::test_distinct_role_perspectives_do_not_false_positive ... ok
+test discussion::convergence::tests::test_successive_agents_same_summary_triggers_convergence ... ok
+test discussion::convergence::tests::test_arabic_utf8_successive_summaries_converge_cleanly ... ok
+test discussion::epistemic::tests::test_epistemic_routing_direct_inherit_vs_blind_audit_vs_hash_drift ... ok
+test agents::runner::tests::test_pipeline_antigravity_skip_retry_when_no_model ... ok
+test discussion::golden_tests::test_golden_cli_arguments_matrix ... ok
+test agents::runner::tests::test_pipeline_antigravity_both_fail ... ok
+test discussion::commands::tests::test_heal_orphaned_session_synthesizes_missing_report_and_transitions_to_review ... ok
+test discussion::golden_tests::test_missing_fixture_fails_without_env_var - should panic ... ok
+test discussion::memory::tests::test_decision_and_disagreement_persistence ... ok
+test discussion::memory::tests::test_prefix_pinned_frames_byte_identical_across_agents_and_rounds ... ok
+test discussion::memory::tests::test_token_estimation ... ok
+test discussion::orchestrator::tests::test_10_round_debate_stops_early_at_round_4_and_marks_rounds_5_to_10_ignored ... ok
+test discussion::orchestrator::tests::test_copy_of_fly13_session_persistence_and_retry_with_mock_provider ... ok
+test discussion::orchestrator::tests::test_debate_board_full_run_with_computed_consensus_and_decision_brief ... ok
+test discussion::orchestrator::tests::test_discussion_orchestrator_pauses_on_budget_cap_breach ... ok
+test agents::runner::tests::test_pipeline_antigravity_retry_works ... ok
+test discussion::orchestrator::tests::test_multi_engine_round_repeater_executes_distinct_engines_and_custom_roles_per_round ... ok
+test discussion::orchestrator::tests::test_pause_and_user_guidance_injection ... ok
+test discussion::orchestrator::tests::test_per_agent_config_edit_rejection_and_clean_persistence_fix ... ok
+test discussion::orchestrator::tests::test_resume_failed_discussion ... ok
+test discussion::orchestrator::tests::test_round_barrier_pause_and_resumption ... ok
+test discussion::orchestrator::tests::test_step_by_step_mode_and_turn_progression ... ok
+test discussion::orchestrator::tests::test_targeted_action_dispatch ... ok
+test discussion::orchestrator::tests::test_update_future_config_invariants ... ok
+test discussion::report::tests::test_12_sections_presence_and_versioning ... ok
+test discussion::report::tests::test_arabic_multibyte_utf8_report_generation_never_panics ... ok
+test discussion::report::tests::test_secret_redaction ... ok
+test discussion::report::tests::test_untrimmed_collapsible_rounds_and_ignored_duplicated_rounds ... ok
+test discussion::golden_tests::test_golden_arabic_scenario_per_agent_with_pause_resume_retry ... ok
+test discussion::runner::tests::test_cli_read_only_flags_generation ... ok
+test discussion::runner::tests::test_denylist_violation_check ... ok
+test discussion::golden_tests::test_golden_english_scenario_per_agent ... ok
+test discussion::runner::tests::test_parse_ollama_line ... ok
+test discussion::runner::tests::test_parse_openai_sse_line ... ok
+test discussion::runner::tests::test_prefix_pinned_http_messages_and_anthropic_cache_control ... ok
+test discussion::runner::tests::test_process_tree_kill_on_dead_pid ... ok
+test discussion::runner::tests::test_thought_splitter_basic ... ok
+test discussion::runner::tests::test_thought_splitter_split_tag ... ok
+test discussion::runner::tests::test_token_usage_breakdown_with_reasoning_tokens ... ok
+test discussion::skills::tests::test_custom_skills_precedence_and_isolation ... ok
+test discussion::skills::tests::test_path_traversal_blocking ... ok
+test discussion::skills::tests::test_precedence_and_explicit_replacement ... ok
+test discussion::skills::tests::test_yaml_frontmatter_parsing ... ok
+test discussion::storage::tests::test_atomic_write_and_read ... ok
+test discussion::storage::tests::test_partial_jsonl_recovery ... ok
+test discussion::types::tests::test_default_metadata_values ... ok
+test discussion::types::tests::test_discussion_status_serialization ... ok
+test discussion::types::tests::test_per_agent_round_schedule_resolution ... ok
+test discussion::types::tests::test_round_schedule_repeater_resolution ... ok
+test discussion::types::tests::test_shared_round_plan_cases_parity ... ok
+test projects::cache::tests::test_arabic_peer_mentions_and_exact_roster_routing ... ok
+test projects::cache::tests::test_parse_handoff_state_and_peer_mentions ... ok
+test projects::cache::tests::test_scan_and_verify_digest_detects_staleness ... ok
+test projects::cache::tests::test_sha256_nist_vectors ... ok
+test projects::cache::tests::test_tagged_invariants_retention_and_filter ... ok
+test projects::memory::tests::test_arabic_recall_pack_truncation_never_panics ... ok
+test projects::memory::tests::test_extract_master_invariants ... ok
+test projects::tree::tests::test_build_nested_hierarchy ... ok
+test projects::tree::tests::test_cycle_detection ... ok
+test projects::tree::tests::test_remove_subtree ... ok
+test projects::tree::tests::test_tree_hierarchy_and_children ... ok
+test store::tests::test_mutate_agent_task_conditional_snapshot ... ok
+test discussion::runner::tests::test_antigravity_cli_invalid_model_selection_retry ... ok
+test discussion::runner::tests::test_mock_provider_streaming_and_cancellation ... ok
+test discussion::golden_tests::test_golden_english_repeater_mode_with_round_barrier ... ok
+test discussion::golden_tests::test_golden_arabic_early_convergence ... ok
+test discussion::orchestrator::tests::test_full_offline_3_agent_3_round_discussion ... ok
+
+test result: ok. 93 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 60.07s
+```
+
+#### 2. TypeScript Typecheck (`npm run typecheck`)
+- **Command:** `npm run typecheck`
+- **Output Evidence:**
+```text
+$ npm run typecheck
+> fly-md@2.3.0 typecheck
+> tsc --noEmit
+(Exit code 0, 0 errors)
+```
+
+#### 3. TypeScript Round Plan Parity Test (`npm run test:round-plan`)
+- **Command:** `npm run test:round-plan`
+- **Output Evidence:**
+```text
+$ npm run test:round-plan
+> fly-md@2.3.0 test:round-plan
+> node --experimental-strip-types --test src/renderer/preview/components/agents/studio/discussion/roundPlanResolver.test.ts
+
+# Subtest: roundPlanResolver parity with Rust resolve_round_plan across shared fixture cases
+ok 1 - roundPlanResolver parity with Rust resolve_round_plan across shared fixture cases
+  ---
+  duration_ms: 11.0579
+  ...
+1..1
+# tests 1
+# pass 1
+# fail 0
+(Exit code 0)
+```
+
+#### 4. A/B Test Harness Dry Run (`python scripts/ab_debate_harness.py --dry-run`)
+- **Command:** `python scripts/ab_debate_harness.py --dry-run`
+- **Output Evidence:**
+```text
+====================================================================================
+FLYMD DEBATE BOARD A/B TEST HARNESS — PRE-RUN COST ESTIMATE (Part 3.9)
+====================================================================================
+Matrix Scope: 10 scenarios x 3 runs = 30 runs total (15 Classic vs 15 Board)
+Languages: English (4), Arabic (4), French (2)
+Modes: per_agent (5), multi_agent (5)
+------------------------------------------------------------------------------------
+Scenario | Lang    | Mode        | Classic ($)  | Board ($)  | Estimated Savings
+------------------------------------------------------------------------------------
+EN-01    | English | per_agent   | $  0.4698    | $ 0.2184   |  53.5% ($0.2514)
+EN-02    | English | multi_agent | $  0.0223    | $ 0.0107   |  52.2% ($0.0116)
+EN-03    | English | multi_agent | $  0.2878    | $ 0.1443   |  49.9% ($0.1435)
+AR-01    | Arabic  | per_agent   | $  0.4698    | $ 0.2184   |  53.5% ($0.2514)
+AR-02    | Arabic  | multi_agent | $  0.0223    | $ 0.0107   |  52.2% ($0.0116)
+AR-03    | Arabic  | multi_agent | $  0.2878    | $ 0.1443   |  49.9% ($0.1435)
+FR-01    | French  | per_agent   | $  0.0223    | $ 0.0107   |  52.2% ($0.0116)
+FR-02    | French  | multi_agent | $  0.4698    | $ 0.2184   |  53.5% ($0.2514)
+MIX-01   | English | multi_agent | $  0.2939    | $ 0.1466   |  50.1% ($0.1474)
+MIX-02   | Arabic  | per_agent   | $  0.2939    | $ 0.1466   |  50.1% ($0.1474)
+------------------------------------------------------------------------------------
+TOTAL TURNS PLANNED (30 RUNS): 288
+ESTIMATED TOTAL PAID API COST (Classic Arms): $2.6397
+ESTIMATED TOTAL PAID API COST (Board Arms):   $1.2688
+TOTAL ESTIMATED BUDGET REQUIRED:             $3.91 USD
+ACTUAL MONEY SPENT SO FAR:                   $0.00 USD (All prior tests offline/mock)
+====================================================================================
+Running offline dry-run verification across all 10 scenarios...
+Dry-run verification completed successfully: 10/10 scenarios verified.
+Passes all 6 criteria: facts >=90%, cost <= classic, language correct, settled points intact, early stop valid, recover/retry.
+```
+
+---
+
+### 7.3 Before vs After Metrics
+
+| Metric | Before (Classic Mode) | After (Debate Board Mode) | Status |
+|---|---|---|---|
+| **Turn Context Representation** | Truncated top 10 bullet lines per agent (`memory.rs:377`), losing tables/paragraphs | Structured Debate Board claims (`C1`, `C2`, ...) + latest position cards only | `observed` |
+| **Consensus Determination** | Self-declared by single agent's `lockedInvariants` | Strictly computed from peer reaction stances and cycle coverage | `observed` |
+| **Round Barrier** | Later agents in round could see prior same-round transcript text | Multi-agent turns held in `staged_round_updates` until round barrier | `observed` |
+| **Peer Mention Parsing** | ASCII only (`c.is_ascii_alphanumeric()`) & 10 hardcoded English roles | Alphanumeric + Unicode (`is_alphanumeric()`) matching exact IDs and `@المعلم` | `observed` |
+| **Invariants Retention** | First 16 workspace invariants kept forever, newer dropped | Tagged by run ID `[run_id]`, newest 16 retained, filtered to current run | `observed` |
+| **Reasoning Text** | "Thinking Protocol" instruction printed unconditionally for all models | Omitted for models with native thinking (Claude, Antigravity, etc.) | `observed` |
+| **Pipeline Input From Debate** | Full 12-section report (raw rounds transcript = 71% of report) | Canonical `decision-brief.md` (~500 tokens) with agreed decisions and risks | `observed` |
+| **Estimated Deliberation Cost (30 runs)** | **$2.64 USD** | **$1.27 USD** (~52% estimated savings) | `estimated` |
+
+---
+
+### 7.4 Scope Boundaries & Accounting
+
+- **Money Spent on Model Calls:** **$0.00 USD**. No paid API calls were executed.
+- **Workspace Protection:** No real workspaces (including `fly13`) were modified.
+- **Uncommitted Owner Edit:** `src/renderer/preview/components/agents/studio/discussion/discussionAttachmentUtils.tsx` has been left strictly unstaged and uncommitted.
+- **Release Binaries:** No release binaries were rebuilt.
+
+---
+
+### 7.5 Review Gate & Decisions Needed from Owner
+
+1. **A/B Test Execution Approval (Part 3.9)**:
+   - The test harness is written and verified in dry-run mode (`scripts/ab_debate_harness.py`).
+   - The total estimated cost to run the full 30-run A/B test suite across English, Arabic, and French is **$3.91 USD**.
+   - **Decision needed:** Does the owner approve running the paid A/B test suite with a budget cap of $5.00 USD?
+   - *Example:* If approved, we run `python scripts/ab_debate_harness.py --run-paid --approved-budget 5.00`. If disapproved, we keep the offline mock verification numbers.
+
+2. **Phase 4 Default Activation**:
+   - Per Section 4 of `TOKEN_CONTEXT_TASKS.md`, after the A/B test passes, new debates will default to `contextMode: "board"`. Old sessions remain `classic`.
+   - **Decision needed:** Should `NewDeliberationModal` / `useNewDeliberationDraft` switch the default `contextMode` to `"board"` now or wait until after the paid A/B run?
+

@@ -544,6 +544,36 @@ pub fn format_handoff_state_emission_protocol(require_independent_resume: bool) 
     s
 }
 
+/// Compact footer instruction asking the agent to emit Debate Board `<handoff_state>`
+/// with position, claims, reacts, and optional needs (Section 3.2).
+pub fn format_board_handoff_state_emission_protocol(require_independent_resume: bool) -> String {
+    let mut s = String::new();
+    if require_independent_resume {
+        s.push_str(
+            "\n\n### Mandatory Self-Conclusion Block\n\
+             Include an `<independent_resume>...</independent_resume>` section containing your independent technical conclusion derived strictly from raw file/spec evidence.\n",
+        );
+    }
+    s.push_str(
+        "\n### Debate Board State Block\n\
+         At the very end of your response, append the `<handoff_state>` JSON block (~400 tokens max, up to 8 claims, 8 reacts):\n\
+         - Refer to board claims by id (`C1`, `C2`, ...). Do not restate them.\n\
+         - Write only what changes the board. State concrete facts, decisions, risks, or questions.\n\
+         - Write in the language of the user's proposal.\n\
+         ```xml\n\
+         <handoff_state>\n\
+         {\n\
+           \"position\": \"latest stance, about 60 words\",\n\
+           \"claims\": [{\"text\": \"one point, about 28 words, exact numbers\", \"kind\": \"decision|risk|fact|question\"}],\n\
+           \"reacts\": [{\"id\": \"C1\", \"stance\": \"agree|object|refine|withdraw\", \"why\": \"about 15 words\"}],\n\
+           \"needs\": [\"C1\"]\n\
+         }\n\
+         </handoff_state>\n\
+         ```\n",
+    );
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

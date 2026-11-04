@@ -2,6 +2,7 @@
 //!
 //! Provides structured, bounded multi-agent debate and consensus synthesis.
 
+pub mod board;
 pub mod commands;
 pub mod convergence;
 pub mod epistemic;
@@ -18,6 +19,7 @@ pub mod types;
 #[cfg(test)]
 pub mod golden_tests;
 
+pub use board::*;
 pub use commands::*;
 pub use convergence::*;
 pub use epistemic::*;

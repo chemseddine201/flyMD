@@ -46,6 +46,23 @@ pub struct TurnRequest {
     pub token_saver: Option<String>,
 }
 
+/// Returns true if the provider or model has native internal reasoning / thinking,
+/// so explicit prompt-level `<thinking>` protocol should be omitted (Section 3.8).
+pub fn has_native_thinking(provider_id: &str, model_id: &str) -> bool {
+    let p = provider_id.to_ascii_lowercase();
+    let m = model_id.to_ascii_lowercase();
+    p.contains("claude")
+        || p.contains("antigravity")
+        || p.contains("codex")
+        || p.contains("openai")
+        || m.contains("claude")
+        || m.contains("antigravity")
+        || m.contains("o1")
+        || m.contains("o3")
+        || m.contains("deepseek-r1")
+        || m.contains("thinking")
+}
+
 /// Builds provider-specific JSON `messages` array preserving immutable prefix frames at Token 0.
 pub fn build_http_messages_json(
     request: &TurnRequest,
@@ -1379,17 +1396,35 @@ impl DiscussionProvider for MockProvider {
         }
 
         // Append structured cross-model handoff envelope & independent résumé on adversarial roles
-        let peer_handoff_footer = match &request.role {
-            AgentRole::Architect => format!(
-                "\n\n- @Implementer: Adopt decoupled state-machine contracts directly without re-scanning verified files.\n- @Critic: Stress-test recovery guards for `{}`.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Decoupled domain state machine with deterministic transition guards\"],\"activeDisputes\":[\"Formal state-machine boundaries vs reactive local state\"],\"unverifiedAssumptions\":[],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"directive\",\"message\":\"Bind view handlers strictly to exported core state actions.\"}},{{\"toRole\":\"Critic\",\"kind\":\"question\",\"message\":\"Verify edge-case recovery under rapid concurrent user events?\"}}]}}</handoff_state>",
-                topic_clean.replace('"', "'")
-            ),
-            AgentRole::Critic | AgentRole::Auditor => format!(
-                "\n\n<independent_resume>Independent raw audit of `{}` confirms boundary guards and error fallbacks are required before sign-off.</independent_resume>\n- @Implementer: Add explicit fallback guards for interrupted writes and sleep throttling.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Defensive runtime error boundaries and storage fallbacks\"],\"activeDisputes\":[\"Abstraction overhead vs sub-16ms runtime simplicity\"],\"unverifiedAssumptions\":[\"Concurrent write recovery under abrupt process termination\"],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"challenge\",\"message\":\"Ensure zero unhandled exceptions on malformed input or storage quota failure.\"}}]}}</handoff_state>",
-                topic_clean.replace('"', "'")
-            ),
-            AgentRole::Implementer => "\n\n- @Critic: Pure-function state reducer implemented with deterministic fallback recovery.\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Pure-function state engine with sub-16ms reactive view bindings\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[{\"toRole\":\"Critic\",\"kind\":\"contract\",\"message\":\"All state mutations route through pure reducer functions with unit assertions.\"}]}</handoff_state>".to_string(),
-            _ => "\n\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Deterministic barrier synchronization\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[]}</handoff_state>".to_string(),
+        let is_board_prompt = request.user_prompt.contains("Debate Board")
+            || request.system_prompt.contains("Debate Board");
+
+        let peer_handoff_footer = if is_board_prompt {
+            match &request.role {
+                AgentRole::Architect => format!(
+                    "\n\n- @Implementer: Adopt decoupled state-machine contracts directly without re-scanning verified files.\n- @Critic: Stress-test recovery guards for `{}`.\n<handoff_state>{{\"position\":\"Advocates for decoupled state-machine architecture with strict invariant guarantees.\",\"claims\":[{{\"text\":\"State updates must remain unidirectional and predictable\",\"kind\":\"decision\"}},{{\"text\":\"Unhandled exceptions risk process crash\",\"kind\":\"risk\"}}],\"reacts\":[{{\"id\":\"C2\",\"stance\":\"agree\",\"why\":\"Defensive fallbacks are necessary\"}}],\"needs\":[]}}</handoff_state>",
+                    topic_clean.replace('"', "'")
+                ),
+                AgentRole::Critic | AgentRole::Auditor => format!(
+                    "\n\n<independent_resume>Independent raw audit of `{}` confirms boundary guards and error fallbacks are required before sign-off.</independent_resume>\n- @Implementer: Add explicit fallback guards for interrupted writes and sleep throttling.\n<handoff_state>{{\"position\":\"Demands defensive fallbacks for storage quota exceptions and background sleep throttling.\",\"claims\":[{{\"text\":\"Defensive fallbacks for background sleep must remain mandatory\",\"kind\":\"decision\"}}],\"reacts\":[{{\"id\":\"C1\",\"stance\":\"agree\",\"why\":\"Predictable unidirectional updates reduce race conditions\"}}],\"needs\":[\"C1\"]}}</handoff_state>",
+                    topic_clean.replace('"', "'")
+                ),
+                AgentRole::Implementer => "\n\n- @Critic: Pure-function state reducer implemented with deterministic fallback recovery.\n<handoff_state>{\"position\":\"Pure-function state engine with sub-16ms reactive view bindings.\",\"claims\":[{\"text\":\"Pure-function state engine guarantees sub-16ms reactive view bindings\",\"kind\":\"fact\"}],\"reacts\":[{\"id\":\"C1\",\"stance\":\"agree\",\"why\":\"Matches pure reducer design\"},{\"id\":\"C2\",\"stance\":\"agree\",\"why\":\"Error boundaries implemented\"}],\"needs\":[]}</handoff_state>".to_string(),
+                _ => "\n\n<handoff_state>{\"position\":\"Balanced domain evaluation.\",\"claims\":[],\"reacts\":[],\"needs\":[]}</handoff_state>".to_string(),
+            }
+        } else {
+            match &request.role {
+                AgentRole::Architect => format!(
+                    "\n\n- @Implementer: Adopt decoupled state-machine contracts directly without re-scanning verified files.\n- @Critic: Stress-test recovery guards for `{}`.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Decoupled domain state machine with deterministic transition guards\"],\"activeDisputes\":[\"Formal state-machine boundaries vs reactive local state\"],\"unverifiedAssumptions\":[],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"directive\",\"message\":\"Bind view handlers strictly to exported core state actions.\"}},{{\"toRole\":\"Critic\",\"kind\":\"question\",\"message\":\"Verify edge-case recovery under rapid concurrent user events?\"}}]}}</handoff_state>",
+                    topic_clean.replace('"', "'")
+                ),
+                AgentRole::Critic | AgentRole::Auditor => format!(
+                    "\n\n<independent_resume>Independent raw audit of `{}` confirms boundary guards and error fallbacks are required before sign-off.</independent_resume>\n- @Implementer: Add explicit fallback guards for interrupted writes and sleep throttling.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Defensive runtime error boundaries and storage fallbacks\"],\"activeDisputes\":[\"Abstraction overhead vs sub-16ms runtime simplicity\"],\"unverifiedAssumptions\":[\"Concurrent write recovery under abrupt process termination\"],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"challenge\",\"message\":\"Ensure zero unhandled exceptions on malformed input or storage quota failure.\"}}]}}</handoff_state>",
+                    topic_clean.replace('"', "'")
+                ),
+                AgentRole::Implementer => "\n\n- @Critic: Pure-function state reducer implemented with deterministic fallback recovery.\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Pure-function state engine with sub-16ms reactive view bindings\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[{\"toRole\":\"Critic\",\"kind\":\"contract\",\"message\":\"All state mutations route through pure reducer functions with unit assertions.\"}]}</handoff_state>".to_string(),
+                _ => "\n\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Deterministic barrier synchronization\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[]}</handoff_state>".to_string(),
+            }
         };
         response_body.push_str(&peer_handoff_footer);
 

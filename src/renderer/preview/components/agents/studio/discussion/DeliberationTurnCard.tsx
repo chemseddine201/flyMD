@@ -138,6 +138,10 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
       msg.messageKind === 'user_intervention' ||
       msg.authorAgentId === 'human-user';
     const isSkippedConsensus = msg.messageKind === 'skipped_consensus';
+    const isClaude = Boolean(
+      msg.authorProvider?.toLowerCase().includes('claude') ||
+      msg.modelId?.toLowerCase().includes('claude')
+    );
 
     const snippet = useMemo(() => getMessageSnippet(msg.content), [msg.content]);
 
@@ -332,6 +336,13 @@ export const DeliberationTurnCard: React.FC<DeliberationTurnCardProps> = React.m
                     {msg.thinkingContent}
                   </div>
                 )}
+              </div>
+            )}
+
+            {!msg.thinkingContent && isClaude && (
+              <div className="rounded-xl border border-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-2 text-indigo-700 dark:text-indigo-300 font-mono text-[11px] flex items-center gap-2 my-1 shadow-sm">
+                <Brain size={13} className="text-indigo-500 shrink-0" />
+                <span>Claude native thinking stream executed internally; thinking traces are omitted from prompt protocol.</span>
               </div>
             )}
 
