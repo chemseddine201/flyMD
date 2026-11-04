@@ -44,7 +44,7 @@ pub struct CliProcessRunResult {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn run_agent_cli_subprocess_loop<FLog, FStreaming, FUpdate>(
+pub fn run_agent_cli_subprocess_loop<FLog, FStreaming, FUpdate, FUpdateStreaming>(
     bin: &str,
     agent_id: &str,
     agent_name: &str,
@@ -65,11 +65,13 @@ pub fn run_agent_cli_subprocess_loop<FLog, FStreaming, FUpdate>(
     mut emit_log: FLog,
     mut on_streaming_update: FStreaming,
     mut update_task: FUpdate,
+    mut update_task_streaming: FUpdateStreaming,
 ) -> Option<CliProcessRunResult>
 where
     FLog: FnMut(String),
     FStreaming: FnMut(&StdoutLineOutcome, &StreamDecodeState),
     FUpdate: FnMut(&dyn Fn(&mut AgentTaskRecord)),
+    FUpdateStreaming: FnMut(&dyn Fn(&mut AgentTaskRecord)),
 {
     let mut fuse_effort = false;
     let mut attempts = 0;
@@ -167,7 +169,7 @@ where
                             emit_log(format!("[CLI Stderr] {}", line));
                             let (err_line, is_quota) =
                                 record_stderr_line(&line, &mut decode_state);
-                            update_task(&|t| {
+                            update_task_streaming(&|t| {
                                 t.logs.push(err_line.clone());
                                 if is_quota {
                                     t.logs.push(
@@ -195,7 +197,7 @@ where
                                                 &line,
                                                 &mut decode_state,
                                             );
-                                            update_task(&|t| {
+                                            update_task_streaming(&|t| {
                                                 t.logs.push(err_line.clone());
                                             });
                                         }
@@ -633,6 +635,7 @@ pub fn spawn_agent_execution(
                         });
                     },
                     &update_task,
+                    &update_task_streaming,
                 );
 
                 if cancel_flag.load(Ordering::Relaxed) {
@@ -928,6 +931,7 @@ mod tests {
             |_| {},
             |_, _| {},
             |_| {},
+            |_| {},
         );
 
         assert!(run_res.is_some(), "Execution must return run result");
@@ -996,6 +1000,7 @@ mod tests {
             |_| {},
             |_, _| {},
             |_| {},
+            |_| {},
         );
 
         assert!(run_res.is_some(), "Execution must return run result");
@@ -1063,6 +1068,7 @@ mod tests {
             None,
             |_| {},
             |_, _| {},
+            |_| {},
             |_| {},
         );
 

@@ -16,7 +16,8 @@
     "dist:linux": "npm run build && electron-builder --linux",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "npm run build && tauri build"
+    "tauri:build": "npm run build && tauri build",
+    "test:round-plan": "node --experimental-strip-types --test src/renderer/preview/components/agents/studio/discussion/roundPlanResolver.test.ts"
   },
   "dependencies": {},
   "devDependencies": {
