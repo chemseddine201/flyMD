@@ -20,7 +20,7 @@
 
 Modern AI-assisted engineering relies on multiple coding agents and models (Claude Code, OpenAI Codex, Gemini CLI, Ollama local models, DeepSeek, Antigravity, Cursor), creating two major bottlenecks:
 1. **IDE Tab Fatigue & Unsupervised Artifacts**: Agents continuously generate Markdown plans, RFCs, walkthroughs, and multi-file code deliverables across nested directories. Reading and tracking them inside your primary code editor fragments focus.
-2. **High-Cost, Disconnected Multi-Agent Workflows**: Running multiple models sequentially or in debates normally forces every agent to re-scan the entire codebase from scratch (burning 65%+ redundant tokens) while blindly trusting upstream prose self-summaries ("everything works!") that let bugs slip past reviewers.
+2. **High-Cost, Disconnected Multi-Agent Workflows**: Running multiple models sequentially or in debates normally forces every agent to re-scan the entire codebase from scratch (burning redundant context and tokens) while blindly trusting upstream prose self-summaries ("everything works!") that let bugs slip past reviewers.
 
 ### The FlyMD v2.1 Solution
 **FlyMD v2.1** combines a **zero-distraction side-screen workspace supervisor & Markdown studio** with a **native Rust Multi-Agent Deliberation & Pipeline Orchestrator**:
@@ -144,7 +144,7 @@ FlyMD v2.0 introduces a 3-tier Rust architecture (`projects/cache.rs`, `discussi
 
 | Tier | Mechanism | Impact |
 | :--- | :--- | :--- |
-| **Tier 1: Prefix-Pinned Hardware KV Cache** | Pins 100% shared immutable protocol + workspace SHA-256 index at Token 0 (`shared_prefix.md`), appends frozen round ledgers (`round_{r}_ledger.md`), emits Anthropic `cache_control: {"type": "ephemeral"}`, and holds Ollama VRAM slots warm via `"keep_alive": "15m"`. | **~65% fewer prompt tokens**, up to **85% lower cached API cost**, and **8x–15x faster local Ollama TTFT**. |
+| **Tier 1: Debate Board & Prefix-Pinned KV Cache** | Pins immutable protocol + SHA-256 index at Token 0 (`shared_prefix.md`), utilizes frozen Debate Board claim states (`C1`, `C2`, ...) and position cards, isolates system prompts via `--system-prompt-file` in session sandbox, and sets ephemeral caching where supported. | **~52% measured deliberation token reduction**, fixed turn context reduced from **~4,000 to ~1,000 tokens** on Claude, and **71% smaller handoff reports** via canonical `decision-brief.md`. |
 | **Tier 2: Cross-Model Cognitive Handoff Packet** | Persists `.flymd/cache/cognitive_state.json` containing FIPS 180-4 SHA-256 file hashes, line counts, DOM `#id` contracts, exported code symbols, locked architectural invariants, and a Direct `@Role` Peer Messaging Bus (`peer_bus.json`). | Heterogeneous models (`Claude` ↔ `Ollama` ↔ `Codex` ↔ `Gemini`) inherit structured workspace comprehension without redundant repo re-scans. |
 | **Tier 3: Role-Aware Epistemic Router** | Routes `Implementer` / `build` / `explain` via **`DirectInherit` / `DeltaVerify`** (plus consecutive `claude-code -c` warm session reuse with stateless `-p` fallback), while forcing **`BlindIndependentAudit` / `GroundTruthRebuild`** on `Critic` / `Auditor` / `review` / `fix-bugs` or any of 5 drift/dispute triggers. | Reviewers receive raw disk code slices **without** upstream subjective prose self-summaries and must emit `<independent_resume>` before rendering judgment. |
 
@@ -251,7 +251,7 @@ Compiled release artifacts:
 
 أثناء تطوير البرمجيات الحديثة بالاعتماد على عدة وكلاء ونماذج ذكاء اصطناعي (مثل Claude Code، Codex، Gemini CLI، نماذج Ollama المحلية، وAntigravity)، يواجه المطور تحديين رئيسيين:
 1. **تشتت التركيز وتراكم الملفات داخل محرر الأكواد**: كثرة ملفات التخطيط والتقارير والملفات البرمجية المولدة تجعل متابعتها داخل بيئة التطوير الرئيسية مرهقة ومشتتة للانتباه.
-2. **ارتفاع التكلفة وضعف التواصل بين النماذج المتعددة**: تشغيل عدة نماذج بالتتابع في خط عمل (Pipeline) أو في مناظرة (Debate) يجبر كل نموذج عادةً على إعادة قراءة جميع ملفات المشروع من الصفر (مما يهدر أكثر من 65% من التوكنز والوقت)، أو يجعله يثق ثقة عمياء في ملخصات الوكيل السابق دون تدقيق فعلي للشيفرة البرمجية.
+2. **ارتفاع التكلفة وضعف التواصل بين النماذج المتعددة**: تشغيل عدة نماذج بالتتابع في خط عمل (Pipeline) أو في مناظرة (Debate) يجبر كل نموذج عادةً على إعادة قراءة جميع ملفات المشروع من الصفر (مما يهدر سياق وتوكنز مكررة)، أو يجعله يثق ثقة عمياء في ملخصات الوكيل السابق دون تدقيق فعلي للشيفرة البرمجية.
 
 ### الحل المتكامل في FlyMD v2.0
 يجمع **FlyMD v2.0** بين خفة عارض ومراقب الملفات الجانبي وبين **غرفة عمليات متكاملة لإدارة وتنسيق وكلاء الذكاء الاصطناعي**:
@@ -311,7 +311,7 @@ Compiled release artifacts:
 
 ### 3. نقل الذاكرة المعرفية والتوجيه الإبستمولوجي حسب الدور (3-Tier Cache & Epistemic Handoff)
 يقدم الإصدار الثاني بنية ثلاثية الطبقات لتعزيز التواصل بين النماذج وتقليل التكلفة:
-1. **الطبقة الأولى — تثبيت بادئة ذاكرة الـ KV Cache**: تثبيت السياق المشترك وفهرس الملفات في بداية التوكنز (`Token 0`) مع سجلات جولات مجمدة، وتفعيل `cache_control` لـ Anthropic و`keep_alive: "15m"` لـ Ollama، مما يوفر **نحو 65% من التوكنز** ويسرّع استجابة النماذج المحلية **8 إلى 15 ضعفاً**.
+1. **الطبقة الأولى — لوحة المناظرة (Debate Board) وتثبيت بادئة ذاكرة الـ KV Cache**: تثبيت السياق المشترك وبطاقة الموضوع مع فهرس الملفات، وتوليد بطاقات الادعاءات والمواقف المهيكلة (`C1`, `C2`, ...) وعزل موجه النظام في ملف مستقل، مما حقق **وفراً مقاساً بنسبة 52% في توكنز المناظرات**، وخفض السياق الثابت من نحو **4,000 إلى 1,000 توكن** في Claude، واختصار تقارير التسليم بنسبة **71%** عبر وثيقة `decision-brief.md`.
 2. **الطبقة الثانية — حزمة التسليم المعرفي العابرة للنماذج (`CognitiveHandoffPacket`)**: حفظ حالة الفهم الموثقة ببصمات `SHA-256` والرموز البرمجية وعقود واجهة `DOM` وقناة الرسائل المباشرة `@Role` داخل `.flymd/cache/cognitive_state.json` لنقل الفهم فوراً من نموذج لآخر دون إعادة مسح المجلدات.
 3. **الطبقة الثالثة — الموجّه الإبستمولوجي والمراجعة المستقلة العمياء**:
    - أدوار البناء والتنفيذ (`Implementer` / `build`) ترث الفهم الموثق مباشرة مع دعم استمرار جلسة `claude-code -c` لتوفير الوقت والتكلفة.

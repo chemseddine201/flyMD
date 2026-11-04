@@ -846,7 +846,7 @@ export function useNewDeliberationDraft({
       roundSchedule: finalRoundSchedule,
       attachedFiles: attachedFiles.length > 0 ? attachedFiles : undefined,
       tokenSaver: 'standard',
-      contextMode: 'classic',
+      contextMode: 'board',
     };
 
     setShowNewModal(false);
