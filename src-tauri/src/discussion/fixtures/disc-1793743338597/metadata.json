@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "disc-1793743338597",
+  "topic": "حركة الأقمار",
+  "status": "failed",
+  "currentRound": 1,
+  "createdAt": 1793743338718,
+  "startedAt": 1793743338721,
+  "updatedAt": 1793751406309,
+  "completedAt": null,
+  "totalMessages": 0,
+  "totalTokens": 0,
+  "errorMessage": "Agent turn execution failed: Process crashed with exit code Some(1): error: invalid model selection (--model \"gemini-4-argon\" --effort \"medium\"): --effort is not supported for model \"gemini-4-argon\"\n",
+  "activeDisagreementsCount": 0,
+  "decisionsCount": 0,
+  "latestReportVersion": 0
+}

@@ -472,11 +472,17 @@ impl DiscussionProvider for CliProvider {
         }
 
         let full_prompt = if request.messages.is_empty() {
-            format!(
-                "{}\n\n{}",
-                request.system_prompt.trim(),
-                request.user_prompt.trim()
-            )
+            if request.system_prompt.trim().is_empty() {
+                request.user_prompt.trim().to_string()
+            } else if request.user_prompt.trim().is_empty() {
+                request.system_prompt.trim().to_string()
+            } else {
+                format!(
+                    "{}\n\n{}",
+                    request.system_prompt.trim(),
+                    request.user_prompt.trim()
+                )
+            }
         } else {
             request
                 .messages
@@ -632,8 +638,14 @@ impl DiscussionProvider for CliProvider {
             match tokio::time::timeout(timeout_duration, run_fut).await {
                 Ok(Ok(pair)) => break pair,
                 Ok(Err(ProviderError::ProcessCrashed { exit_code, stderr })) => {
+                    let has_model = request
+                        .model_id
+                        .as_deref()
+                        .map(|m| !m.trim().is_empty())
+                        .unwrap_or(false);
                     if matches!(&self.cli_type, CliType::AntigravityGemini)
                         && !retried
+                        && has_model
                         && stderr.contains("invalid model selection")
                     {
                         retried = true;
@@ -1563,7 +1575,7 @@ mod tests {
             round_number: 1,
             agent_id: "antigravity".to_string(),
             role: AgentRole::Architect,
-            system_prompt: "Sys".to_string(),
+            system_prompt: String::new(),
             user_prompt: "User".to_string(),
             messages: vec![],
             context_summary: String::new(),
@@ -1624,8 +1636,7 @@ mod tests {
         std::fs::write(
             &script_retry_works,
             "@echo off\r\n\
-             set \"ARGS=%*\"\r\n\
-             echo %ARGS% | findstr /C:\"--effort\" >nul\r\n\
+             echo %* | findstr /C:\"--effort\" >nul\r\n\
              if errorlevel 1 goto RETRY_OK\r\n\
              echo error: invalid model selection (--model \"gemini-4-argon\" --effort \"medium\"): --effort is not supported for model \"gemini-4-argon\" 1>&2\r\n\
              exit /b 1\r\n\
@@ -1709,6 +1720,24 @@ mod tests {
             .await;
         assert!(res_fail.is_err(), "Must report failure if both attempts fail");
         match res_fail.unwrap_err() {
+            ProviderError::ProcessCrashed { exit_code, stderr } => {
+                assert_eq!(exit_code, Some(1));
+                assert!(stderr.contains("invalid model selection"));
+            }
+            other => panic!("Expected ProcessCrashed, got: {:?}", other),
+        }
+
+        // -------------------------------------------------------------
+        // Case 4: Skip retry when no model is set (model_id is None)
+        // -------------------------------------------------------------
+        let mut req_no_model = build_req("gemini-4-argon", "medium");
+        req_no_model.model_id = None;
+
+        let res_no_model = provider_retry
+            .execute_turn(req_no_model, cancel_flag.clone(), None)
+            .await;
+        assert!(res_no_model.is_err(), "Must skip retry when no model is set and keep original error");
+        match res_no_model.unwrap_err() {
             ProviderError::ProcessCrashed { exit_code, stderr } => {
                 assert_eq!(exit_code, Some(1));
                 assert!(stderr.contains("invalid model selection"));

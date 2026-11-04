@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "disc-1793743338597",
+  "topic": "حركة الأقمار",
+  "userIdea": "درس دقيق حول حركة الاقمار في شكل ملف pdf و ليس ويب",
+  "workspacePath": "G:\\xampp-httpdocs\\fly13",
+  "maxRounds": 3,
+  "turnTimeoutSecs": 120,
+  "participants": [
+    {
+      "agentId": "agent-lead-1793287290105",
+      "providerId": "antigravity",
+      "modelId": "gemini-4-argon",
+      "displayName": "Teacher",
+      "role": "custom",
+      "roleDescription": "Primary domain specialist proposing architecture and requirements.",
+      "avatarColor": "#38bdf8",
+      "assignedSkillUris": [],
+      "contextBudgetTokens": 32000,
+      "customAction": {
+        "id": "action-1793287290105-1",
+        "name": "Teacher",
+        "description": "Primary domain specialist proposing architecture and requirements.",
+        "promptDirective": "Explainer and developer for newest and advanced scientific topics"
+      },
+      "customQuery": "Analyze the topic for strategic soundness, feasibility, evidence quality, and potential risks.",
+      "thinkingEnabled": true,
+      "effortLevel": "medium"
+    },
+    {
+      "agentId": "agent-critic-1793287290105",
+      "providerId": "claude-code",
+      "modelId": "claude-opus-5-5",
+      "displayName": "Adversarial Critic",
+      "role": "courses-creator",
+      "roleDescription": "Challenge assumptions, find single points of failure, and expose bottlenecks.",
+      "avatarColor": "#f84d3a",
+      "assignedSkillUris": [],
+      "contextBudgetTokens": 32000,
+      "customAction": {
+        "id": "action-1793287290105-2",
+        "name": "Adversarial Critic",
+        "description": "Challenge assumptions, find single points of failure, and expose bottlenecks.",
+        "promptDirective": "check all other suggestions and plan for the best tools must used to improve the technique suggested by the others."
+      },
+      "customQuery": "Analyze the topic for strategic soundness, feasibility, evidence quality, and potential risks.",
+      "thinkingEnabled": true,
+      "effortLevel": "medium"
+    },
+    {
+      "agentId": "agent-custom-1793670200387",
+      "providerId": "antigravity",
+      "modelId": "gemini-4-argon",
+      "displayName": "Developer",
+      "role": "Product & UX Strategist",
+      "roleDescription": "Specialized analysis and domain verification.",
+      "avatarColor": "#f472b6",
+      "assignedSkillUris": [],
+      "contextBudgetTokens": 16000,
+      "customAction": {
+        "id": "action-1793670200387",
+        "name": "Developer",
+        "description": "Specialized analysis and domain verification.",
+        "promptDirective": "write the full tool can make the debated idea a real world used."
+      },
+      "customQuery": "Analyze the topic for strategic soundness, feasibility, evidence quality, and potential risks.",
+      "thinkingEnabled": true,
+      "effortLevel": "medium"
+    }
+  ],
+  "activeSkillUris": [],
+  "stepMode": false,
+  "includeDefaultSkills": true,
+  "tokenBudgetCap": 50000,
+  "selectedEngines": [
+    "antigravity",
+    "claude-code"
+  ],
+  "repeaterMode": "per_agent",
+  "pauseAtRoundBoundary": false
+}

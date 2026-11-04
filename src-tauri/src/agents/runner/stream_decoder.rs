@@ -7,6 +7,7 @@ use std::process::{ChildStderr, ChildStdout};
 use std::sync::mpsc::{self, Receiver};
 
 /// Mutable streaming decode state accumulated across CLI subprocess output lines.
+#[derive(Debug)]
 pub struct StreamDecodeState {
     pub collected_md: String,
     pub captured_session_id: Option<String>,

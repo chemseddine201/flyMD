@@ -703,4 +703,66 @@ mod tests {
         assert_eq!(r2_slots[0].1.as_deref(), Some("Probe exploit surfaces"));
         assert!(r2_title.contains("Security Auditor"));
     }
+
+    #[test]
+    fn test_shared_round_plan_cases_parity() {
+        #[derive(serde::Deserialize)]
+        struct Expectation {
+            round: u32,
+            #[serde(rename = "expectedTitle")]
+            expected_title: String,
+            #[serde(rename = "expectedObjective")]
+            expected_objective: Option<String>,
+            #[serde(rename = "expectedSlotAgentIds")]
+            expected_slot_agent_ids: Vec<String>,
+            #[serde(rename = "expectedDirectives")]
+            expected_directives: Vec<Option<String>>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct TestCase {
+            scenario: String,
+            config: serde_json::Value,
+            expectations: Vec<Expectation>,
+        }
+
+        let cases_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("discussion")
+            .join("fixtures")
+            .join("round_plan_cases.json");
+        let raw = std::fs::read_to_string(&cases_path)
+            .expect("round_plan_cases.json must exist");
+        let test_cases: Vec<TestCase> = serde_json::from_str(&raw).unwrap();
+
+        for tc in test_cases {
+            let config: DiscussionConfig = serde_json::from_value(tc.config)
+                .unwrap_or_else(|e| panic!("Failed to parse config for scenario {}: {}", tc.scenario, e));
+            for exp in tc.expectations {
+                let (title, objective, slots) = config.resolve_round_plan(exp.round);
+                assert_eq!(
+                    title, exp.expected_title,
+                    "Scenario {} round {} title mismatch",
+                    tc.scenario, exp.round
+                );
+                assert_eq!(
+                    objective, exp.expected_objective,
+                    "Scenario {} round {} objective mismatch",
+                    tc.scenario, exp.round
+                );
+                let agent_ids: Vec<String> = slots.iter().map(|(p, _)| p.agent_id.clone()).collect();
+                assert_eq!(
+                    agent_ids, exp.expected_slot_agent_ids,
+                    "Scenario {} round {} slots agent_id mismatch",
+                    tc.scenario, exp.round
+                );
+                let directives: Vec<Option<String>> = slots.iter().map(|(_, d)| d.clone()).collect();
+                assert_eq!(
+                    directives, exp.expected_directives,
+                    "Scenario {} round {} directives mismatch",
+                    tc.scenario, exp.round
+                );
+            }
+        }
+    }
 }

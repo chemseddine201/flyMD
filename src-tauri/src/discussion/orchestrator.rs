@@ -2229,18 +2229,23 @@ mod tests {
         use crate::discussion::commands::update_discussion_config_on_disk;
         use crate::discussion::golden_tests::RecordingMockProvider;
 
-        let fly13_src = PathBuf::from(r"G:\xampp-httpdocs\fly13\.flymd\discussions\disc-1793743338597");
-        if !fly13_src.exists() {
-            eprintln!("Warning: fly13 directory not found, skipping real disk copy");
-            return;
-        }
+        let session_fixture_src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("discussion")
+            .join("fixtures")
+            .join("disc-1793743338597");
+        assert!(
+            session_fixture_src.exists(),
+            "Checked-in session fixture must exist at {}",
+            session_fixture_src.display()
+        );
 
-        let temp_dir = std::env::temp_dir().join(format!("flymd_fly13_copy_test_{}", now_ms()));
+        let temp_dir = std::env::temp_dir().join(format!("flymd_session_copy_test_{}", now_ms()));
         let temp_session_dir = temp_dir.join(".flymd").join("discussions").join("disc-1793743338597");
         fs::create_dir_all(&temp_session_dir).unwrap();
 
-        // Recursively copy fly13 session files to isolated temp copy
-        for entry in fs::read_dir(&fly13_src).unwrap() {
+        // Recursively copy session fixture files to isolated temp copy
+        for entry in fs::read_dir(&session_fixture_src).unwrap() {
             let entry = entry.unwrap();
             let dest = temp_session_dir.join(entry.file_name());
             if entry.file_type().unwrap().is_file() {

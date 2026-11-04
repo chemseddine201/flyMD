@@ -162,14 +162,33 @@ fn assert_or_record_golden(fixture_filename: &str, actual: &GoldenScenarioData) 
     let path = fixture_path(fixture_filename);
     let serialized_actual = serde_json::to_string_pretty(actual).unwrap();
 
+    let record_mode = std::env::var("FLYMD_RECORD_GOLDEN")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
     if !path.exists() {
+        if !record_mode {
+            panic!(
+                "Golden fixture '{}' is missing at {}. Set FLYMD_RECORD_GOLDEN=1 to record fixtures explicitly.",
+                fixture_filename,
+                path.display()
+            );
+        }
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
         }
         fs::write(&path, &serialized_actual).expect("Failed to write initial golden fixture");
         println!("Recorded new golden fixture: {}", path.display());
-    } else {
-        let expected_raw = fs::read_to_string(&path).expect("Failed to read golden fixture");
+        return;
+    }
+
+    if record_mode {
+        fs::write(&path, &serialized_actual).expect("Failed to update golden fixture in record mode");
+        println!("Updated golden fixture: {}", path.display());
+        return;
+    }
+
+    let expected_raw = fs::read_to_string(&path).expect("Failed to read golden fixture");
         let expected: GoldenScenarioData =
             serde_json::from_str(&expected_raw).expect("Failed to deserialize golden fixture");
 
@@ -244,7 +263,6 @@ fn assert_or_record_golden(fixture_filename: &str, actual: &GoldenScenarioData) 
             );
         }
     }
-}
 
 fn build_golden_participants() -> Vec<DiscussionParticipant> {
     vec![
@@ -857,4 +875,18 @@ fn test_golden_cli_arguments_matrix() {
     };
 
     assert_or_record_golden("golden_cli_arguments.json", &golden);
+}
+
+#[test]
+#[should_panic(expected = "Set FLYMD_RECORD_GOLDEN=1 to record fixtures explicitly")]
+fn test_missing_fixture_fails_without_env_var() {
+    let dummy_data = GoldenScenarioData {
+        scenario_name: "dummy".to_string(),
+        frames_per_turn: Vec::new(),
+        transcript_lines: Vec::new(),
+        events: Vec::new(),
+        final_report: String::new(),
+        cli_arguments: None,
+    };
+    assert_or_record_golden("nonexistent_test_fixture_12345.json", &dummy_data);
 }

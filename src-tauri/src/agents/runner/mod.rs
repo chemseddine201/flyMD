@@ -31,6 +31,342 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
+#[derive(Debug)]
+pub struct CliProcessRunResult {
+    pub exit_status: Option<std::process::ExitStatus>,
+    pub exit_code: Option<i32>,
+    pub decode_state: StreamDecodeState,
+    pub created_files: Vec<String>,
+    pub exited_err: bool,
+    pub retried: bool,
+    pub was_stalled: bool,
+    pub stall_timeout_msg: Option<String>,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_agent_cli_subprocess_loop<FLog, FStreaming, FUpdate>(
+    bin: &str,
+    agent_id: &str,
+    agent_name: &str,
+    exec_dir: &str,
+    prompt_arg: &str,
+    resume_sid: Option<&str>,
+    warm_cli_continue: bool,
+    thinking_on: bool,
+    effort_val: &str,
+    model_val: Option<&str>,
+    env_credentials: Option<(&str, &str)>,
+    task_started_at: i64,
+    intent: &str,
+    task_id: &str,
+    existing_tool_actions: &[AgentToolAction],
+    cancel_flag: &AtomicBool,
+    process_manager: Option<&ProcessTreeManager>,
+    mut emit_log: FLog,
+    mut on_streaming_update: FStreaming,
+    mut update_task: FUpdate,
+) -> Option<CliProcessRunResult>
+where
+    FLog: FnMut(String),
+    FStreaming: FnMut(&StdoutLineOutcome, &StreamDecodeState),
+    FUpdate: FnMut(&dyn Fn(&mut AgentTaskRecord)),
+{
+    let mut fuse_effort = false;
+    let mut attempts = 0;
+    let mut retried = false;
+
+    while attempts < 2 {
+        attempts += 1;
+
+        let mut cmd = crate::agents::runner::cli_builder::build_agent_cli_command_internal(
+            bin,
+            agent_id,
+            exec_dir,
+            prompt_arg,
+            resume_sid,
+            warm_cli_continue,
+            thinking_on,
+            effort_val,
+            model_val,
+            fuse_effort,
+        );
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        cmd.env("PYTHONIOENCODING", "utf-8")
+            .env("PYTHONUTF8", "1")
+            .env("LANG", "en_US.UTF-8")
+            .env("LC_ALL", "en_US.UTF-8")
+            .current_dir(exec_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        if let Some((env_name, api_key)) = env_credentials {
+            if !api_key.trim().is_empty() {
+                cmd.env(env_name, api_key.trim());
+            }
+        }
+
+        if let Ok(mut child) = cmd.spawn() {
+            let child_pid = child.id();
+            if let Some(pm) = process_manager {
+                pm.register_task_process(task_id, child_pid, agent_id, exec_dir);
+            }
+
+            let spawn_msg = if attempts == 1 {
+                format!(
+                    "CLI process running (PID: {}) in `{}` - monitoring live execution...",
+                    child_pid, exec_dir
+                )
+            } else {
+                format!(
+                    "Retried CLI process running (PID: {}) in `{}` with fused model/effort...",
+                    child_pid, exec_dir
+                )
+            };
+            emit_log(format!("[CLI Engine] {}", spawn_msg));
+            update_task(&|t| {
+                t.progress_stage = Some("reasoning".to_string());
+                t.progress_percent = 55;
+                t.thinking_trace.push(spawn_msg.clone());
+                t.logs.push(format!("[CLI Spawn] {}", spawn_msg));
+            });
+
+            let rx = spawn_stdio_reader_threads(child.stdout.take(), child.stderr.take());
+            let mut decode_state = StreamDecodeState::new(
+                resume_sid.map(|s| s.to_string()),
+                format!(
+                    "Spawned {} subprocess (PID: {}) in `{}`",
+                    agent_name, child_pid, exec_dir
+                ),
+                existing_tool_actions,
+            );
+            let mut watchdog = WatchdogTracker::new();
+
+            loop {
+                if cancel_flag.load(Ordering::Relaxed) {
+                    if let Some(pm) = process_manager {
+                        pm.terminate_task_tree(task_id);
+                    }
+                    return None;
+                }
+
+                match rx.recv_timeout(Duration::from_millis(500)) {
+                    Ok((is_stdout, line)) => {
+                        watchdog.note_stream_activity();
+                        if is_stdout {
+                            let outcome = decode_stdout_line(&line, &mut decode_state);
+                            on_streaming_update(&outcome, &decode_state);
+                        } else if !line.trim().is_empty() {
+                            emit_log(format!("[CLI Stderr] {}", line));
+                            let (err_line, is_quota) =
+                                record_stderr_line(&line, &mut decode_state);
+                            update_task(&|t| {
+                                t.logs.push(err_line.clone());
+                                if is_quota {
+                                    t.logs.push(
+                                        "[Notice] CLI provider quota reached (429)."
+                                            .to_string(),
+                                    );
+                                }
+                            });
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        if let Ok(Some(_status)) = child.try_wait() {
+                            let drain_deadline =
+                                Instant::now() + Duration::from_millis(1500);
+                            while Instant::now() < drain_deadline {
+                                match rx.recv_timeout(Duration::from_millis(150)) {
+                                    Ok((is_stdout, line)) => {
+                                        if is_stdout {
+                                            let _ = decode_stdout_line(
+                                                &line,
+                                                &mut decode_state,
+                                            );
+                                        } else if !line.trim().is_empty() {
+                                            let (err_line, _) = record_stderr_line(
+                                                &line,
+                                                &mut decode_state,
+                                            );
+                                            update_task(&|t| {
+                                                t.logs.push(err_line.clone());
+                                            });
+                                        }
+                                    }
+                                    Err(_) => break,
+                                }
+                            }
+                            let snap = decode_state.collected_md.clone();
+                            let sid_snap = decode_state.captured_session_id.clone();
+                            update_task(&|t| {
+                                if sid_snap.is_some() {
+                                    t.cli_session_id = sid_snap.clone();
+                                }
+                                if !snap.is_empty() {
+                                    t.response_markdown = Some(snap.clone());
+                                }
+                            });
+                            break;
+                        }
+
+                        if let Some(tick) = watchdog.poll_heartbeat(
+                            intent,
+                            exec_dir,
+                            task_started_at,
+                            &mut decode_state.last_known_activity,
+                        ) {
+                            emit_log(format!(
+                                "[CLI Heartbeat {}s] {}",
+                                tick.elapsed_sec, tick.status_text
+                            ));
+
+                            update_task(&|t| {
+                                t.progress_percent = tick.current_pct;
+                                t.logs.push(format!(
+                                    "[Heartbeat {}s] {}",
+                                    tick.elapsed_sec, tick.status_text
+                                ));
+                                if t.thinking_trace.len() < 16 {
+                                    t.thinking_trace
+                                        .push(format!("Active: {}", tick.status_text));
+                                }
+                                for lf in &tick.live_files {
+                                    if !t.tool_actions.iter().any(|a| a.label.contains(lf))
+                                    {
+                                        t.tool_actions.push(AgentToolAction::new(
+                                            format!("tool-code-{}", now_ms()),
+                                            "write".to_string(),
+                                            format!("Workspace File `{}`", lf),
+                                            Some(format!("{}\\{}", exec_dir, lf)),
+                                            "done".to_string(),
+                                            now_ms(),
+                                        ));
+                                        t.thinking_trace.push(format!(
+                                            "Live Sync: Generated workspace file `{}`",
+                                            lf
+                                        ));
+                                    }
+                                }
+                            });
+
+                            if let Some(timeout_msg) = tick.stall_timeout_msg {
+                                emit_log(timeout_msg.clone());
+                                update_task(&|t| {
+                                    t.progress_percent = 98;
+                                    t.logs.push(timeout_msg.clone());
+                                    t.thinking_trace.push(timeout_msg.clone());
+                                    t.outcome_reason = Some(timeout_msg.clone());
+                                });
+                                if let Some(pm) = process_manager {
+                                    pm.terminate_task_tree(task_id);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            }
+
+            let exit_status = child.wait().ok();
+            let exit_code = exit_status.and_then(|s| s.code());
+            if let Some(pm) = process_manager {
+                pm.unregister_task_process(task_id);
+            }
+
+            let mut created_files =
+                scan_workspace_modified_files(exec_dir, task_started_at);
+            let exited_err = exit_status.map(|s| !s.success()).unwrap_or(true);
+
+            if (warm_cli_continue || resume_sid.is_some())
+                && exited_err
+                && decode_state.collected_md.trim().is_empty()
+                && created_files.is_empty()
+                && !cancel_flag.load(Ordering::Relaxed)
+            {
+                emit_log("[CLI Cache Fallback] Warm/resume session unavailable; retrying stateless `-p` with cognitive cache envelope...".to_string());
+                let mut fallback_cmd = build_agent_cli_command(
+                    bin,
+                    agent_id,
+                    exec_dir,
+                    prompt_arg,
+                    None,
+                    false,
+                    thinking_on,
+                    effort_val,
+                    model_val,
+                );
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    fallback_cmd.creation_flags(0x08000000);
+                }
+                fallback_cmd
+                    .env("PYTHONIOENCODING", "utf-8")
+                    .env("PYTHONUTF8", "1")
+                    .env("LANG", "en_US.UTF-8")
+                    .env("LC_ALL", "en_US.UTF-8")
+                    .current_dir(exec_dir);
+                if let Ok(out) = fallback_cmd.output() {
+                    let stdout_txt = String::from_utf8_lossy(&out.stdout);
+                    if !stdout_txt.trim().is_empty() {
+                        decode_state.collected_md.push_str(&stdout_txt);
+                    }
+                    created_files = scan_workspace_modified_files(exec_dir, task_started_at);
+                }
+            }
+
+            // Antigravity retry for "invalid model selection" (B2)
+            let is_invalid_model = decode_state
+                .captured_cli_error
+                .as_deref()
+                .unwrap_or("")
+                .contains("invalid model selection")
+                || decode_state
+                    .stderr_lines
+                    .iter()
+                    .any(|l| l.contains("invalid model selection"));
+            let has_model = model_val.map(|m| !m.trim().is_empty()).unwrap_or(false);
+
+            if agent_id == "antigravity"
+                && attempts == 1
+                && has_model
+                && exited_err
+                && is_invalid_model
+                && decode_state.collected_md.trim().is_empty()
+                && created_files.is_empty()
+                && !cancel_flag.load(Ordering::Relaxed)
+            {
+                emit_log("[Antigravity Model Retry] CLI rejected model/effort combination ('invalid model selection'); retrying with `--model <base>-<effort>` without `--effort`...".to_string());
+                fuse_effort = true;
+                retried = true;
+                continue;
+            }
+
+            return Some(CliProcessRunResult {
+                exit_status,
+                exit_code,
+                decode_state,
+                created_files,
+                exited_err,
+                retried,
+                was_stalled: watchdog.was_stalled,
+                stall_timeout_msg: watchdog.stall_timeout_msg,
+            });
+        }
+        break;
+    }
+
+    None
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_agent_execution(
     store: SharedStore,
@@ -241,9 +577,19 @@ pub fn spawn_agent_execution(
                     if thinking_on { "ON" } else { "OFF" }
                 ));
 
-                let mut cmd = build_agent_cli_command(
+                let env_credentials = match (&profile, &user_cred) {
+                    (Some(prof), Some(cred)) => match (&prof.env_key_name, &cred.api_key) {
+                        (Some(k), Some(v)) if !v.trim().is_empty() => Some((k.as_str(), v.as_str())),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let task_started_at = record.started_at.unwrap_or(record.created_at);
+
+                let run_res = run_agent_cli_subprocess_loop(
                     &bin,
                     &agent_id,
+                    &agent_name,
                     &exec_dir,
                     &prompt_arg,
                     resume_sid.as_deref(),
@@ -251,386 +597,63 @@ pub fn spawn_agent_execution(
                     thinking_on,
                     effort_val,
                     model_val,
+                    env_credentials,
+                    task_started_at,
+                    &record.intent,
+                    &task_id,
+                    &record.tool_actions,
+                    &cancel_flag,
+                    Some(&process_manager),
+                    &emit_log,
+                    |outcome, ds| {
+                        let sid_snap = ds.captured_session_id.clone();
+                        let md_snap = if ds.collected_md.is_empty() {
+                            None
+                        } else {
+                            Some(ds.collected_md.clone())
+                        };
+                        update_task_streaming(&|t| {
+                            t.progress_stage = Some("executing".to_string());
+                            t.progress_percent = (t.progress_percent.max(75) + 1).min(96);
+                            if sid_snap.is_some() {
+                                t.cli_session_id = sid_snap.clone();
+                            }
+                            if md_snap.is_some() {
+                                t.response_markdown = md_snap.clone();
+                            }
+                            if !outcome.display_line.is_empty() {
+                                t.logs.push(outcome.display_line.clone());
+                            }
+                            if let Some(ref act) = outcome.new_tool_action {
+                                t.tool_actions.push(act.clone());
+                                if t.thinking_trace.len() < 24 {
+                                    t.thinking_trace.push(format!("Executed {}", act.label));
+                                }
+                            }
+                        });
+                    },
+                    &update_task,
                 );
 
-                #[cfg(target_os = "windows")]
+                if cancel_flag.load(Ordering::Relaxed) {
+                    process_manager.terminate_task_tree(&task_id);
+                    finalize_task(&store, &app, &task_id, "cancelled", None);
+                    return;
+                }
+
+                if let Some(CliProcessRunResult {
+                    exit_status: _,
+                    exit_code,
+                    mut decode_state,
+                    mut created_files,
+                    exited_err,
+                    retried: _,
+                    was_stalled,
+                    stall_timeout_msg,
+                }) = run_res
                 {
-                    use std::os::windows::process::CommandExt;
-                    const CREATE_NO_WINDOW: u32 = 0x08000000;
-                    cmd.creation_flags(CREATE_NO_WINDOW);
-                }
 
-                cmd.env("PYTHONIOENCODING", "utf-8")
-                    .env("PYTHONUTF8", "1")
-                    .env("LANG", "en_US.UTF-8")
-                    .env("LC_ALL", "en_US.UTF-8")
-                    .current_dir(&exec_dir)
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped());
 
-                if let (Some(prof), Some(cred)) = (&profile, &user_cred) {
-                    if let (Some(env_name), Some(api_key)) = (&prof.env_key_name, &cred.api_key) {
-                        if !api_key.trim().is_empty() {
-                            cmd.env(env_name, api_key.trim());
-                        }
-                    }
-                }
-
-                if let Ok(mut child) = cmd.spawn() {
-                    let child_pid = child.id();
-                    process_manager
-                        .register_task_process(&task_id, child_pid, &agent_id, &exec_dir);
-
-                    let spawn_msg = format!(
-                        "CLI process running (PID: {}) in `{}` - monitoring live execution...",
-                        child_pid, exec_dir
-                    );
-                    emit_log(format!("[CLI Engine] {}", spawn_msg));
-                    update_task(&|t| {
-                        t.progress_stage = Some("reasoning".to_string());
-                        t.progress_percent = 55;
-                        t.thinking_trace.push(spawn_msg.clone());
-                        t.logs.push(format!("[CLI Spawn] {}", spawn_msg));
-                    });
-
-                    let rx = spawn_stdio_reader_threads(child.stdout.take(), child.stderr.take());
-                    let mut decode_state = StreamDecodeState::new(
-                        record.cli_session_id.clone(),
-                        format!(
-                            "Spawned {} subprocess (PID: {}) in `{}`",
-                            agent_name, child_pid, exec_dir
-                        ),
-                        &record.tool_actions,
-                    );
-                    let mut watchdog = WatchdogTracker::new();
-                    let task_started_at = record.started_at.unwrap_or(record.created_at);
-
-                    loop {
-                        if cancel_flag.load(Ordering::Relaxed) {
-                            process_manager.terminate_task_tree(&task_id);
-                            finalize_task(&store, &app, &task_id, "cancelled", None);
-                            return;
-                        }
-
-                        match rx.recv_timeout(Duration::from_millis(500)) {
-                            Ok((is_stdout, line)) => {
-                                watchdog.note_stream_activity();
-                                if is_stdout {
-                                    let outcome = decode_stdout_line(&line, &mut decode_state);
-                                    let sid_snap = decode_state.captured_session_id.clone();
-                                    let md_snap = if decode_state.collected_md.is_empty() {
-                                        None
-                                    } else {
-                                        Some(decode_state.collected_md.clone())
-                                    };
-                                    update_task_streaming(&|t| {
-                                        t.progress_stage = Some("executing".to_string());
-                                        t.progress_percent =
-                                            (t.progress_percent.max(75) + 1).min(96);
-                                        if sid_snap.is_some() {
-                                            t.cli_session_id = sid_snap.clone();
-                                        }
-                                        if md_snap.is_some() {
-                                            t.response_markdown = md_snap.clone();
-                                        }
-                                        if !outcome.display_line.is_empty() {
-                                            t.logs.push(outcome.display_line.clone());
-                                        }
-                                        if let Some(ref act) = outcome.new_tool_action {
-                                            t.tool_actions.push(act.clone());
-                                            if t.thinking_trace.len() < 24 {
-                                                t.thinking_trace
-                                                    .push(format!("Executed {}", act.label));
-                                            }
-                                        }
-                                    });
-                                } else if !line.trim().is_empty() {
-                                    emit_log(format!("[CLI Stderr] {}", line));
-                                    let (err_line, is_quota) =
-                                        record_stderr_line(&line, &mut decode_state);
-                                    update_task_streaming(&|t| {
-                                        t.logs.push(err_line.clone());
-                                        if is_quota {
-                                            t.logs.push(
-                                                "[Notice] CLI provider quota reached (429)."
-                                                    .to_string(),
-                                            );
-                                        }
-                                    });
-                                }
-                            }
-                            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                                if let Ok(Some(_status)) = child.try_wait() {
-                                    let drain_deadline =
-                                        Instant::now() + Duration::from_millis(1500);
-                                    while Instant::now() < drain_deadline {
-                                        match rx.recv_timeout(Duration::from_millis(150)) {
-                                            Ok((is_stdout, line)) => {
-                                                if is_stdout {
-                                                    let _ = decode_stdout_line(
-                                                        &line,
-                                                        &mut decode_state,
-                                                    );
-                                                } else if !line.trim().is_empty() {
-                                                    let (err_line, _) = record_stderr_line(
-                                                        &line,
-                                                        &mut decode_state,
-                                                    );
-                                                    update_task(&|t| {
-                                                        t.logs.push(err_line.clone());
-                                                    });
-                                                }
-                                            }
-                                            Err(_) => break,
-                                        }
-                                    }
-                                    let snap = decode_state.collected_md.clone();
-                                    let sid_snap = decode_state.captured_session_id.clone();
-                                    update_task(&|t| {
-                                        if sid_snap.is_some() {
-                                            t.cli_session_id = sid_snap.clone();
-                                        }
-                                        if !snap.is_empty() {
-                                            t.response_markdown = Some(snap.clone());
-                                        }
-                                    });
-                                    break;
-                                }
-
-                                if let Some(tick) = watchdog.poll_heartbeat(
-                                    &record.intent,
-                                    &exec_dir,
-                                    task_started_at,
-                                    &mut decode_state.last_known_activity,
-                                ) {
-                                    emit_log(format!(
-                                        "[CLI Heartbeat {}s] {}",
-                                        tick.elapsed_sec, tick.status_text
-                                    ));
-
-                                    update_task(&|t| {
-                                        t.progress_percent = tick.current_pct;
-                                        t.logs.push(format!(
-                                            "[Heartbeat {}s] {}",
-                                            tick.elapsed_sec, tick.status_text
-                                        ));
-                                        if t.thinking_trace.len() < 16 {
-                                            t.thinking_trace
-                                                .push(format!("Active: {}", tick.status_text));
-                                        }
-                                        for lf in &tick.live_files {
-                                            if !t.tool_actions.iter().any(|a| a.label.contains(lf))
-                                            {
-                                                t.tool_actions.push(AgentToolAction::new(
-                                                    format!("tool-code-{}", now_ms()),
-                                                    "write".to_string(),
-                                                    format!("Workspace File `{}`", lf),
-                                                    Some(format!("{}\\{}", exec_dir, lf)),
-                                                    "done".to_string(),
-                                                    now_ms(),
-                                                ));
-                                                t.thinking_trace.push(format!(
-                                                    "Live Sync: Generated workspace file `{}`",
-                                                    lf
-                                                ));
-                                            }
-                                        }
-                                    });
-
-                                    if let Some(timeout_msg) = tick.stall_timeout_msg {
-                                        emit_log(timeout_msg.clone());
-                                        update_task(&|t| {
-                                            t.progress_percent = 98;
-                                            t.logs.push(timeout_msg.clone());
-                                            t.thinking_trace.push(timeout_msg.clone());
-                                            t.outcome_reason = Some(timeout_msg.clone());
-                                        });
-                                        process_manager.terminate_task_tree(&task_id);
-                                        break;
-                                    }
-                                }
-                            }
-                            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                        }
-                    }
-
-                    let mut exit_status = child.wait().ok();
-                    let mut exit_code = exit_status.and_then(|s| s.code());
-                    process_manager.unregister_task_process(&task_id);
-
-                    let mut created_files =
-                        scan_workspace_modified_files(&exec_dir, task_started_at);
-
-                    let mut exited_err = exit_status.map(|s| !s.success()).unwrap_or(true);
-                    if (warm_cli_continue || resume_sid.is_some())
-                        && exited_err
-                        && decode_state.collected_md.trim().is_empty()
-                        && created_files.is_empty()
-                        && !cancel_flag.load(Ordering::Relaxed)
-                    {
-                        emit_log("[CLI Cache Fallback] Warm/resume session unavailable; retrying stateless `-p` with cognitive cache envelope...".to_string());
-                        let mut fallback_cmd = build_agent_cli_command(
-                            &bin,
-                            &agent_id,
-                            &exec_dir,
-                            &prompt_arg,
-                            None,
-                            false,
-                            thinking_on,
-                            effort_val,
-                            model_val,
-                        );
-                        #[cfg(target_os = "windows")]
-                        {
-                            use std::os::windows::process::CommandExt;
-                            fallback_cmd.creation_flags(0x08000000);
-                        }
-                        fallback_cmd
-                            .env("PYTHONIOENCODING", "utf-8")
-                            .env("PYTHONUTF8", "1")
-                            .current_dir(&exec_dir);
-                        if let Ok(out) = fallback_cmd.output() {
-                            let stdout_txt = String::from_utf8_lossy(&out.stdout);
-                            if !stdout_txt.trim().is_empty() {
-                                decode_state.collected_md.push_str(&stdout_txt);
-                            }
-                            created_files =
-                                scan_workspace_modified_files(&exec_dir, task_started_at);
-                        }
-                    }
-
-                    // Antigravity retry for "invalid model selection" (B2)
-                    let is_invalid_model = decode_state
-                        .captured_cli_error
-                        .as_deref()
-                        .unwrap_or("")
-                        .contains("invalid model selection")
-                        || decode_state
-                            .stderr_lines
-                            .iter()
-                            .any(|l| l.contains("invalid model selection"));
-
-                    if agent_id == "antigravity"
-                        && exited_err
-                        && is_invalid_model
-                        && decode_state.collected_md.trim().is_empty()
-                        && created_files.is_empty()
-                        && !cancel_flag.load(Ordering::Relaxed)
-                    {
-                        emit_log("[Antigravity Model Retry] CLI rejected model/effort combination ('invalid model selection'); retrying with `--model <base>-<effort>` without `--effort`...".to_string());
-                        let mut retry_cmd = crate::agents::runner::cli_builder::build_agent_cli_command_internal(
-                            &bin,
-                            &agent_id,
-                            &exec_dir,
-                            &prompt_arg,
-                            resume_sid.as_deref(),
-                            warm_cli_continue,
-                            thinking_on,
-                            effort_val,
-                            model_val,
-                            true, // fuse_antigravity_effort
-                        );
-                        #[cfg(target_os = "windows")]
-                        {
-                            use std::os::windows::process::CommandExt;
-                            retry_cmd.creation_flags(0x08000000);
-                        }
-                        retry_cmd
-                            .env("PYTHONIOENCODING", "utf-8")
-                            .env("PYTHONUTF8", "1")
-                            .current_dir(&exec_dir)
-                            .stdin(Stdio::null())
-                            .stdout(Stdio::piped())
-                            .stderr(Stdio::piped());
-
-                        if let (Some(prof), Some(cred)) = (&profile, &user_cred) {
-                            if let (Some(env_name), Some(api_key)) = (&prof.env_key_name, &cred.api_key) {
-                                if !api_key.trim().is_empty() {
-                                    retry_cmd.env(env_name, api_key.trim());
-                                }
-                            }
-                        }
-
-                        if let Ok(mut retry_child) = retry_cmd.spawn() {
-                            let retry_pid = retry_child.id();
-                            process_manager.register_task_process(&task_id, retry_pid, &agent_id, &exec_dir);
-                            decode_state = StreamDecodeState::new(
-                                record.cli_session_id.clone(),
-                                format!("Retried {} subprocess (PID: {}) in `{}`", agent_name, retry_pid, exec_dir),
-                                &record.tool_actions,
-                            );
-                            watchdog = WatchdogTracker::new();
-                            let retry_rx = spawn_stdio_reader_threads(retry_child.stdout.take(), retry_child.stderr.take());
-
-                            loop {
-                                if cancel_flag.load(Ordering::Relaxed) {
-                                    process_manager.terminate_task_tree(&task_id);
-                                    finalize_task(&store, &app, &task_id, "cancelled", None);
-                                    return;
-                                }
-
-                                match retry_rx.recv_timeout(Duration::from_millis(500)) {
-                                    Ok((is_stdout, line)) => {
-                                        watchdog.note_stream_activity();
-                                        if is_stdout {
-                                            let outcome = decode_stdout_line(&line, &mut decode_state);
-                                            let sid_snap = decode_state.captured_session_id.clone();
-                                            let md_snap = if decode_state.collected_md.is_empty() {
-                                                None
-                                            } else {
-                                                Some(decode_state.collected_md.clone())
-                                            };
-                                            update_task_streaming(&|t| {
-                                                t.progress_stage = Some("executing".to_string());
-                                                t.progress_percent = (t.progress_percent.max(75) + 1).min(96);
-                                                if sid_snap.is_some() {
-                                                    t.cli_session_id = sid_snap.clone();
-                                                }
-                                                if md_snap.is_some() {
-                                                    t.response_markdown = md_snap.clone();
-                                                }
-                                                if !outcome.display_line.is_empty() {
-                                                    t.logs.push(outcome.display_line.clone());
-                                                }
-                                                if let Some(ref act) = outcome.new_tool_action {
-                                                    t.tool_actions.push(act.clone());
-                                                }
-                                            });
-                                        } else if !line.trim().is_empty() {
-                                            emit_log(format!("[CLI Stderr] {}", line));
-                                            let (err_line, is_quota) = record_stderr_line(&line, &mut decode_state);
-                                            update_task_streaming(&|t| {
-                                                t.logs.push(err_line.clone());
-                                                if is_quota {
-                                                    t.logs.push("[Notice] CLI provider quota reached (429).".to_string());
-                                                }
-                                            });
-                                        }
-                                    }
-                                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                                        if let Ok(Some(_)) = retry_child.try_wait() {
-                                            while let Ok((is_stdout, line)) = retry_rx.try_recv() {
-                                                if is_stdout {
-                                                    decode_stdout_line(&line, &mut decode_state);
-                                                } else if !line.trim().is_empty() {
-                                                    record_stderr_line(&line, &mut decode_state);
-                                                }
-                                            }
-                                            break;
-                                        }
-                                    }
-                                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                                }
-                            }
-
-                            exit_status = retry_child.wait().ok();
-                            exit_code = exit_status.and_then(|s| s.code());
-                            process_manager.unregister_task_process(&task_id);
-                            created_files = scan_workspace_modified_files(&exec_dir, task_started_at);
-                            exited_err = exit_status.map(|s| !s.success()).unwrap_or(true);
-                        }
-                    }
 
                     enforce_role_boundary_and_plan_sync(
                         &record.intent,
@@ -687,7 +710,7 @@ pub fn spawn_agent_execution(
                     );
                     emit_log(format!("[Deliverable Verifier] {}", v_report.summary));
 
-                    let final_status = if watchdog.was_stalled || !v_report.passed {
+                    let final_status = if was_stalled || !v_report.passed {
                         "incomplete"
                     } else {
                         "completed"
@@ -695,8 +718,8 @@ pub fn spawn_agent_execution(
 
                     let error_diagnostic = build_execution_error_diagnostic(DiagnosticInput {
                         final_status,
-                        was_stalled: watchdog.was_stalled,
-                        stall_timeout_msg: watchdog.stall_timeout_msg.as_deref(),
+                        was_stalled,
+                        stall_timeout_msg: stall_timeout_msg.as_deref(),
                         last_known_activity: &decode_state.last_known_activity,
                         captured_cli_error: decode_state.captured_cli_error.as_deref(),
                         stderr_lines: &decode_state.stderr_lines,
@@ -734,7 +757,6 @@ pub fn spawn_agent_execution(
                     let duration_ms = (now_ms() - task_started_at).max(0) as u64;
 
                     let sid_final = decode_state.captured_session_id.clone();
-                    let was_stalled = watchdog.was_stalled;
 
                     update_task(&|t| {
                         t.response_markdown = Some(clean_report_body.clone());
@@ -832,4 +854,225 @@ pub fn spawn_agent_execution(
             );
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicBool;
+
+    #[test]
+    fn test_pipeline_antigravity_retry_works() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_pipe_retry_{}", now_ms()));
+        let bin_dir = temp_dir.join("bin");
+        let ws_dir = temp_dir.join("workspace");
+        let _ = std::fs::create_dir_all(&bin_dir);
+        let _ = std::fs::create_dir_all(&ws_dir);
+
+        #[cfg(target_os = "windows")]
+        let script = bin_dir.join("fake_agy_retry.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script = bin_dir.join("fake_agy_retry.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script,
+            "@echo off\r\n\
+             echo %* | findstr /C:\"--effort\" >nul\r\n\
+             if not errorlevel 1 (\r\n\
+                 echo error: invalid model selection: --effort is not supported 1>&2\r\n\
+                 exit /b 1\r\n\
+             )\r\n\
+             echo Pipeline Recovered via Retry\r\n\
+             exit /b 0\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(
+                &script,
+                "#!/bin/sh\n\
+                 case \"$*\" in\n\
+                   *--effort*)\n\
+                     echo 'error: invalid model selection: --effort not supported' >&2\n\
+                     exit 1;;\n\
+                   *)\n\
+                     echo 'Pipeline Recovered via Retry'\n\
+                     exit 0;;\n\
+                 esac\n",
+            ).unwrap();
+            let mut perms = std::fs::metadata(&script).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script, perms).unwrap();
+        }
+
+        let cancel_flag = AtomicBool::new(false);
+        let run_res = run_agent_cli_subprocess_loop(
+            script.to_str().unwrap(),
+            "antigravity",
+            "Antigravity",
+            ws_dir.to_str().unwrap(),
+            "test prompt",
+            None,
+            false,
+            true,
+            "medium",
+            Some("gemini-4-argon"),
+            None,
+            now_ms(),
+            "test_intent",
+            "task-test-1",
+            &[],
+            &cancel_flag,
+            None,
+            |_| {},
+            |_, _| {},
+            |_| {},
+        );
+
+        assert!(run_res.is_some(), "Execution must return run result");
+        let res = run_res.unwrap();
+        assert!(res.retried, "Must retry when CLI rejects model/effort combination");
+        assert!(!res.exited_err, "Second attempt must succeed");
+        assert_eq!(res.exit_code, Some(0));
+        assert!(res.decode_state.collected_md.contains("Pipeline Recovered via Retry"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_pipeline_antigravity_both_fail() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_pipe_both_fail_{}", now_ms()));
+        let bin_dir = temp_dir.join("bin");
+        let ws_dir = temp_dir.join("workspace");
+        let _ = std::fs::create_dir_all(&bin_dir);
+        let _ = std::fs::create_dir_all(&ws_dir);
+
+        #[cfg(target_os = "windows")]
+        let script = bin_dir.join("fake_agy_both_fail.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script = bin_dir.join("fake_agy_both_fail.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script,
+            "@echo off\r\n\
+             echo error: invalid model selection: model not found 1>&2\r\n\
+             exit /b 1\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(
+                &script,
+                "#!/bin/sh\n\
+                 echo 'error: invalid model selection: model not found' >&2\n\
+                 exit 1\n",
+            ).unwrap();
+            let mut perms = std::fs::metadata(&script).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script, perms).unwrap();
+        }
+
+        let cancel_flag = AtomicBool::new(false);
+        let run_res = run_agent_cli_subprocess_loop(
+            script.to_str().unwrap(),
+            "antigravity",
+            "Antigravity",
+            ws_dir.to_str().unwrap(),
+            "test prompt",
+            None,
+            false,
+            true,
+            "medium",
+            Some("gemini-4-argon"),
+            None,
+            now_ms(),
+            "test_intent",
+            "task-test-2",
+            &[],
+            &cancel_flag,
+            None,
+            |_| {},
+            |_, _| {},
+            |_| {},
+        );
+
+        assert!(run_res.is_some(), "Execution must return run result");
+        let res = run_res.unwrap();
+        assert!(res.retried, "Must attempt retry");
+        assert!(res.exited_err, "Must report error when both attempts fail");
+        assert_eq!(res.exit_code, Some(1));
+        assert!(res.decode_state.stderr_lines.iter().any(|l| l.contains("invalid model selection")));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_pipeline_antigravity_skip_retry_when_no_model() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_pipe_no_model_{}", now_ms()));
+        let bin_dir = temp_dir.join("bin");
+        let ws_dir = temp_dir.join("workspace");
+        let _ = std::fs::create_dir_all(&bin_dir);
+        let _ = std::fs::create_dir_all(&ws_dir);
+
+        #[cfg(target_os = "windows")]
+        let script = bin_dir.join("fake_agy_no_model.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script = bin_dir.join("fake_agy_no_model.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script,
+            "@echo off\r\n\
+             echo error: invalid model selection: model not found 1>&2\r\n\
+             exit /b 1\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(
+                &script,
+                "#!/bin/sh\n\
+                 echo 'error: invalid model selection: model not found' >&2\n\
+                 exit 1\n",
+            ).unwrap();
+            let mut perms = std::fs::metadata(&script).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script, perms).unwrap();
+        }
+
+        let cancel_flag = AtomicBool::new(false);
+        let run_res = run_agent_cli_subprocess_loop(
+            script.to_str().unwrap(),
+            "antigravity",
+            "Antigravity",
+            ws_dir.to_str().unwrap(),
+            "test prompt",
+            None,
+            false,
+            true,
+            "medium",
+            None, // model_val is None -> skip retry!
+            None,
+            now_ms(),
+            "test_intent",
+            "task-test-3",
+            &[],
+            &cancel_flag,
+            None,
+            |_| {},
+            |_, _| {},
+            |_| {},
+        );
+
+        assert!(run_res.is_some(), "Execution must return run result");
+        let res = run_res.unwrap();
+        assert!(!res.retried, "Must skip retry when no model is set");
+        assert!(res.exited_err, "Must preserve original failed exit code");
+        assert_eq!(res.exit_code, Some(1));
+        assert!(res.decode_state.stderr_lines.iter().any(|l| l.contains("invalid model selection")));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }

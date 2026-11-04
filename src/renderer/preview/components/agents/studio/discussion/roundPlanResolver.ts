@@ -1,9 +1,9 @@
-import {
+import type {
   DiscussionConfig,
   DiscussionParticipant,
   DiscussionRoundPlan,
   DiscussionRoundSlot,
-} from '../../../../../../shared/types';
+} from '../../../../../../shared/types.ts';
 
 export interface ResolvedRoundPlan {
   title: string;
@@ -29,11 +29,11 @@ export function resolveRoundPlan(
 ): ResolvedRoundPlan {
   const defaultTitle =
     round === 1
-      ? 'Round 1: Initial Discovery & Position Papers'
+      ? 'Round 1: Discovery & Position Synthesis'
       : round === 2
-      ? 'Round 2: Cross-Examination & Peer Scrutiny'
+      ? 'Round 2: Adversarial Critique & Cross-Examination'
       : round === 3
-      ? 'Round 3: Rebuttal, Trade-Off Analysis & Consensus Synthesis'
+      ? 'Round 3: Rebuttal, Trade-off Resolution & Synthesis'
       : `Round ${round}: Deep Specialist Deliberation`;
 
   const mode = config.repeaterMode || 'auto';
@@ -71,17 +71,17 @@ export function resolveRoundPlan(
           const directive =
             slot.roundDirective && slot.roundDirective.trim()
               ? slot.roundDirective
-              : matchedPlan!.objective && matchedPlan!.objective!.trim()
+              : matchedPlan!.objective && matchedPlan!.objective.trim()
               ? matchedPlan!.objective
               : undefined;
           return {
             slotId: slot.slotId || `slot-r${round}-${idx + 1}`,
             participant: p,
-            roundDirective: directive || '',
+            roundDirective: directive,
           };
         }
       );
-      return { title, objective: matchedPlan.objective, slots };
+      return { title, objective: matchedPlan.objective || undefined, slots };
     }
   } else if (mode === 'per_agent' && (config.participants?.length ?? 0) > 0) {
     const idx = Math.max(0, round - 1) % config.participants.length;
@@ -107,7 +107,7 @@ export function resolveRoundPlan(
     (p, idx) => ({
       slotId: `slot-r${round}-${idx + 1}`,
       participant: { ...p },
-      roundDirective: '',
+      roundDirective: undefined,
     })
   );
   return { title: defaultTitle, objective: undefined, slots: fallbackSlots };
