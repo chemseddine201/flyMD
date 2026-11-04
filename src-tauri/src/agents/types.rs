@@ -246,6 +246,8 @@ pub struct AgentTaskRequest {
     pub model_id: Option<String>,
     #[serde(rename = "tokenUsage", default, skip_serializing_if = "Option::is_none")]
     pub token_usage: Option<TokenUsage>,
+    #[serde(rename = "tokenSaver", default, skip_serializing_if = "Option::is_none")]
+    pub token_saver: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -347,6 +349,8 @@ pub struct AgentTaskRecord {
     pub model_id: Option<String>,
     #[serde(rename = "tokenUsage", default, skip_serializing_if = "Option::is_none")]
     pub token_usage: Option<TokenUsage>,
+    #[serde(rename = "tokenSaver", default, skip_serializing_if = "Option::is_none")]
+    pub token_saver: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

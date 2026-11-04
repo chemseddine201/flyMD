@@ -190,6 +190,7 @@ export interface AgentTaskRequest {
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
   modelId?: string;
+  tokenSaver?: 'off' | 'standard' | 'strict';
 }
 
 
@@ -234,6 +235,10 @@ export interface AgentTokenUsage {
   completionTokens: number;
   reasoningTokens: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd?: number;
+  basis?: 'reported' | 'estimated';
 }
 
 export interface AgentTaskRecord {
@@ -314,6 +319,7 @@ export interface AgentPipelineStep {
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
   modelId?: string;
+  tokenSaver?: 'off' | 'standard' | 'strict';
 }
 
 export interface AgentPipelinePreset {

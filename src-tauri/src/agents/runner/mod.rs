@@ -55,6 +55,7 @@ pub fn run_agent_cli_subprocess_loop<FLog, FStreaming, FUpdate, FUpdateStreaming
     thinking_on: bool,
     effort_val: &str,
     model_val: Option<&str>,
+    token_saver: Option<&str>,
     env_credentials: Option<(&str, &str)>,
     task_started_at: i64,
     intent: &str,
@@ -80,7 +81,7 @@ where
     while attempts < 2 {
         attempts += 1;
 
-        let mut cmd = crate::agents::runner::cli_builder::build_agent_cli_command_internal(
+        let mut cmd = crate::agents::runner::cli_builder::build_agent_cli_command_with_mode(
             bin,
             agent_id,
             exec_dir,
@@ -91,6 +92,8 @@ where
             effort_val,
             model_val,
             fuse_effort,
+            Some(intent),
+            token_saver,
         );
 
         #[cfg(target_os = "windows")]
@@ -423,10 +426,10 @@ pub fn spawn_agent_execution(
                 }
                 drop(lib);
 
-                if let Some(Some(all_tasks)) =
+                if let Some(Some(changed_task)) =
                     store.mutate_agent_task(&task_id, should_flush, should_emit_ipc, mutator)
                 {
-                    app.emit("agent:tasks-updated", &all_tasks).ok();
+                    app.emit("agent:tasks-updated", &changed_task).ok();
                 }
             };
 
@@ -587,6 +590,7 @@ pub fn spawn_agent_execution(
                     _ => None,
                 };
                 let task_started_at = record.started_at.unwrap_or(record.created_at);
+                let last_md_snap = std::sync::Mutex::new(std::time::Instant::now());
 
                 let run_res = run_agent_cli_subprocess_loop(
                     &bin,
@@ -599,6 +603,7 @@ pub fn spawn_agent_execution(
                     thinking_on,
                     effort_val,
                     model_val,
+                    record.token_saver.as_deref(),
                     env_credentials,
                     task_started_at,
                     &record.intent,
@@ -609,11 +614,15 @@ pub fn spawn_agent_execution(
                     &emit_log,
                     |outcome, ds| {
                         let sid_snap = ds.captured_session_id.clone();
-                        let md_snap = if ds.collected_md.is_empty() {
-                            None
-                        } else {
+                        let mut lms = last_md_snap.lock().unwrap_or_else(|e| e.into_inner());
+                        let should_copy_md = lms.elapsed() >= Duration::from_millis(500);
+                        let md_snap = if should_copy_md && !ds.collected_md.is_empty() {
+                            *lms = Instant::now();
                             Some(ds.collected_md.clone())
+                        } else {
+                            None
                         };
+                        drop(lms);
                         update_task_streaming(&|t| {
                             t.progress_stage = Some("executing".to_string());
                             t.progress_percent = (t.progress_percent.max(75) + 1).min(96);
@@ -760,11 +769,15 @@ pub fn spawn_agent_execution(
                     let duration_ms = (now_ms() - task_started_at).max(0) as u64;
 
                     let sid_final = decode_state.captured_session_id.clone();
+                    let usage_final = decode_state.captured_usage.clone();
 
                     update_task(&|t| {
                         t.response_markdown = Some(clean_report_body.clone());
                         t.verification_report = Some(v_report.clone());
                         t.modified_files = effective_files_to_report.clone();
+                        if let Some(u) = usage_final.clone() {
+                            t.token_usage = Some(u);
+                        }
                         if sid_final.is_some() {
                             t.cli_session_id = sid_final.clone();
                         }
@@ -922,6 +935,7 @@ mod tests {
             "medium",
             Some("gemini-4-argon"),
             None,
+            None,
             now_ms(),
             "test_intent",
             "task-test-1",
@@ -991,6 +1005,7 @@ mod tests {
             "medium",
             Some("gemini-4-argon"),
             None,
+            None,
             now_ms(),
             "test_intent",
             "task-test-2",
@@ -1059,6 +1074,7 @@ mod tests {
             true,
             "medium",
             None, // model_val is None -> skip retry!
+            None,
             None,
             now_ms(),
             "test_intent",

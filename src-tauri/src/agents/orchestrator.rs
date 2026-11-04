@@ -140,7 +140,7 @@ impl AgentOrchestrator {
         reply_markdown: &str,
     ) -> Result<AgentTaskRecord, String> {
         let mut report_meta: Option<(Option<String>, String)> = None;
-        let all_tasks = self
+        let updated_task = self
             .store
             .mutate_agent_task(task_id, true, true, |t| {
                 let formatted_report = format!(
@@ -173,12 +173,9 @@ impl AgentOrchestrator {
             fs::write(&r_path, &formatted_report).ok();
         }
 
-        self.app_handle.emit("agent:tasks-updated", &all_tasks).ok();
+        self.app_handle.emit("agent:tasks-updated", &updated_task).ok();
 
-        all_tasks
-            .into_iter()
-            .find(|t| t.id == task_id)
-            .ok_or_else(|| format!("Task not found after update: {}", task_id))
+        Ok(updated_task)
     }
 
     pub fn create_safety_checkpoint(
@@ -313,6 +310,7 @@ impl AgentOrchestrator {
             thinking_enabled: req.thinking_enabled.or(Some(true)),
             model_id: req.model_id.clone(),
             token_usage: None,
+            token_saver: req.token_saver.clone(),
         };
 
         let memory_entry = format!(
@@ -403,14 +401,12 @@ impl AgentOrchestrator {
     }
 
     pub fn clear_task_logs(&self, task_id: &str) -> Vec<AgentTaskRecord> {
-        if let Some(Some(tasks)) = self.store.mutate_agent_task(task_id, true, true, |t| {
+        if let Some(Some(changed_task)) = self.store.mutate_agent_task(task_id, true, true, |t| {
             t.logs.clear();
         }) {
-            self.app_handle.emit("agent:tasks-updated", &tasks).ok();
-            tasks
-        } else {
-            self.store.get_agent_tasks()
+            self.app_handle.emit("agent:tasks-updated", &changed_task).ok();
         }
+        self.store.get_agent_tasks()
     }
 
     pub fn delete_task(&self, task_id: &str) -> Vec<AgentTaskRecord> {

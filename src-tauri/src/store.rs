@@ -378,17 +378,17 @@ impl AppStore {
         &self,
         task_id: &str,
         persist: bool,
-        snapshot_all: bool,
+        snapshot_task: bool,
         f: F,
-    ) -> Option<Option<Vec<crate::agents::AgentTaskRecord>>>
+    ) -> Option<Option<crate::agents::AgentTaskRecord>>
     where
         F: FnOnce(&mut crate::agents::AgentTaskRecord),
     {
         let mut guard = self.data.lock().unwrap_or_else(|e| e.into_inner());
         let pos = guard.agent_tasks.iter().position(|t| t.id == task_id)?;
         f(&mut guard.agent_tasks[pos]);
-        let all_tasks = if snapshot_all {
-            Some(guard.agent_tasks.clone())
+        let changed_task = if snapshot_task {
+            Some(guard.agent_tasks[pos].clone())
         } else {
             None
         };
@@ -398,7 +398,7 @@ impl AppStore {
             self.save();
         }
 
-        Some(all_tasks)
+        Some(changed_task)
     }
 
     pub fn save_agent_tasks(&self, tasks: Vec<crate::agents::AgentTaskRecord>) {
@@ -473,6 +473,7 @@ mod tests {
             thinking_enabled: Some(true),
             model_id: None,
             token_usage: None,
+            token_saver: None,
         }
     }
 
@@ -495,19 +496,19 @@ mod tests {
         });
         assert!(matches!(no_snap, Some(None)));
 
-        // Broadcast mutation (snapshot_all = true) returns full vector snapshot reflecting prior mutations
+        // Broadcast mutation (snapshot_task = true) returns mutated single task record snapshot
         let with_snap = store
             .mutate_agent_task("task-1", true, true, |t| {
                 t.logs.push("line-2".to_string());
                 t.status = "completed".to_string();
             })
             .flatten()
-            .expect("expected task vector snapshot");
+            .expect("expected task record snapshot");
 
-        assert_eq!(with_snap.len(), 2);
-        assert_eq!(with_snap[0].logs, vec!["line-1", "line-2"]);
-        assert_eq!(with_snap[0].progress_percent, 76);
-        assert_eq!(with_snap[0].status, "completed");
+        assert_eq!(with_snap.id, "task-1");
+        assert_eq!(with_snap.logs, vec!["line-1", "line-2"]);
+        assert_eq!(with_snap.progress_percent, 76);
+        assert_eq!(with_snap.status, "completed");
 
         fs::remove_dir_all(&temp_dir).ok();
     }

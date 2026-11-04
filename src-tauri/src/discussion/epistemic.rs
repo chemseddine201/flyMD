@@ -406,6 +406,16 @@ pub fn build_epistemic_prompt_section(
     workspace_path: &Path,
     packet: Option<&CognitiveHandoffPacket>,
 ) -> String {
+    build_epistemic_prompt_section_with_mode(decision, workspace_path, packet, false, false)
+}
+
+pub fn build_epistemic_prompt_section_with_mode(
+    decision: &EpistemicDecision,
+    workspace_path: &Path,
+    packet: Option<&CognitiveHandoffPacket>,
+    agent_has_read_tool: bool,
+    token_saver_on: bool,
+) -> String {
     let mut s = String::new();
     s.push_str(&format!(
         "## Epistemic Handoff Mode: `{}`\n\n",
@@ -431,13 +441,23 @@ pub fn build_epistemic_prompt_section(
                 s.push_str(&format_compact_digest_markdown(pkt, true));
             }
             if !decision.files_to_reread.is_empty() {
-                s.push_str("### Targeted Delta Slices Requiring Fresh Inspection\n\n");
-                s.push_str(&read_targeted_file_slices(
-                    workspace_path,
-                    &decision.files_to_reread,
-                    90,
-                    9000,
-                ));
+                if agent_has_read_tool && token_saver_on {
+                    s.push_str("### Targeted Delta Files Requiring Fresh Inspection\n\n");
+                    for f in &decision.files_to_reread {
+                        let p = workspace_path.join(f);
+                        let bytes = p.metadata().map(|m| m.len()).unwrap_or(0);
+                        s.push_str(&format!("- `{}` ({} bytes on disk — inspect with Read tool)\n", f, bytes));
+                    }
+                    s.push('\n');
+                } else {
+                    s.push_str("### Targeted Delta Slices Requiring Fresh Inspection\n\n");
+                    s.push_str(&read_targeted_file_slices(
+                        workspace_path,
+                        &decision.files_to_reread,
+                        90,
+                        9000,
+                    ));
+                }
             }
         }
         EpistemicMode::BlindIndependentAudit => {
@@ -471,13 +491,23 @@ pub fn build_epistemic_prompt_section(
                  > 3. Apply the complete fix directly to disk and emit updated invariants.\n\n",
             );
             if !decision.files_to_reread.is_empty() {
-                s.push_str("### Raw Suspect File Slices on Disk\n\n");
-                s.push_str(&read_targeted_file_slices(
-                    workspace_path,
-                    &decision.files_to_reread,
-                    110,
-                    12000,
-                ));
+                if agent_has_read_tool && token_saver_on {
+                    s.push_str("### Raw Suspect Files on Disk\n\n");
+                    for f in &decision.files_to_reread {
+                        let p = workspace_path.join(f);
+                        let bytes = p.metadata().map(|m| m.len()).unwrap_or(0);
+                        s.push_str(&format!("- `{}` ({} bytes on disk — inspect with Read tool)\n", f, bytes));
+                    }
+                    s.push('\n');
+                } else {
+                    s.push_str("### Raw Suspect File Slices on Disk\n\n");
+                    s.push_str(&read_targeted_file_slices(
+                        workspace_path,
+                        &decision.files_to_reread,
+                        110,
+                        12000,
+                    ));
+                }
             }
         }
         EpistemicMode::PrimaryMapper | EpistemicMode::IsolatedPosition => {

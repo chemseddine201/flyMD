@@ -397,6 +397,12 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
                 {EFFORT_DESCRIPTIONS[effortLevel]?.desc || ''}
               </span>
             </div>
+
+            {effortLevel === 'high' && (
+              <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium px-0.5">
+                High effort costs ~1.4x medium on debate turns.
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col justify-center h-full min-h-[46px] px-3 py-2 bg-white dark:bg-neutral-950/70 border border-slate-200 dark:border-neutral-800/80 rounded-lg">

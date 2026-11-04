@@ -7,9 +7,14 @@
 
 use crate::discussion::storage::atomic_write_json;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::SystemTime;
+
+static IN_MEMORY_FILE_DIGEST_CACHE: Mutex<Option<HashMap<PathBuf, (Option<SystemTime>, u64, WorkspaceFileDigest)>>> =
+    Mutex::new(None);
 
 pub const COGNITIVE_CACHE_SCHEMA_VERSION: u32 = 1;
 
@@ -440,7 +445,39 @@ pub fn extract_file_contracts_and_symbols(
     (dom_contracts, symbols, summary)
 }
 
+fn compute_and_cache_digest(
+    path: &Path,
+    rel_norm: &str,
+    size: u64,
+    mtime: Option<SystemTime>,
+) -> Option<WorkspaceFileDigest> {
+    let bytes = fs::read(path).ok()?;
+    let sha = sha256_hex(&bytes);
+    let text = String::from_utf8_lossy(&bytes);
+    let line_count = text.lines().count();
+    let (dom_contracts, exported_symbols, summary) =
+        extract_file_contracts_and_symbols(rel_norm, &text);
+
+    let digest = WorkspaceFileDigest {
+        rel_path: rel_norm.to_string(),
+        sha256: sha,
+        lines: line_count,
+        bytes: size,
+        dom_contracts,
+        exported_symbols,
+        summary,
+    };
+
+    let mut guard = IN_MEMORY_FILE_DIGEST_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let map = guard.get_or_insert_with(HashMap::new);
+    map.insert(path.to_path_buf(), (mtime, size, digest.clone()));
+    Some(digest)
+}
+
 /// Scans up to `max_files` indexable source files in `workspace_path` and builds a deterministic SHA-256 map.
+/// Uses size and modified time cache check to hash only changed files.
 pub fn scan_workspace_digest(
     workspace_path: &Path,
     max_files: usize,
@@ -477,32 +514,40 @@ pub fn scan_workspace_digest(
                 }
             } else if path.is_file() && is_indexable_source_file(&path) {
                 let Ok(meta) = path.metadata() else { continue };
-                if meta.len() > 512 * 1024 {
+                let size = meta.len();
+                if size > 512 * 1024 {
                     continue;
                 }
-                let Ok(bytes) = fs::read(&path) else { continue };
+                let mtime = meta.modified().ok();
                 let Ok(rel) = path.strip_prefix(base) else {
                     continue;
                 };
                 let rel_norm = rel.to_string_lossy().replace('\\', "/");
-                let sha = sha256_hex(&bytes);
-                let text = String::from_utf8_lossy(&bytes);
-                let line_count = text.lines().count();
-                let (dom_contracts, exported_symbols, summary) =
-                    extract_file_contracts_and_symbols(&rel_norm, &text);
 
-                out.insert(
-                    rel_norm.clone(),
-                    WorkspaceFileDigest {
-                        rel_path: rel_norm,
-                        sha256: sha,
-                        lines: line_count,
-                        bytes: meta.len(),
-                        dom_contracts,
-                        exported_symbols,
-                        summary,
-                    },
-                );
+                let cached_digest = {
+                    let guard = IN_MEMORY_FILE_DIGEST_CACHE
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    guard
+                        .as_ref()
+                        .and_then(|m| m.get(&path))
+                        .and_then(|(c_mtime, c_size, d)| {
+                            if *c_size == size && (mtime.is_none() || mtime == *c_mtime) {
+                                Some(d.clone())
+                            } else {
+                                None
+                            }
+                        })
+                };
+
+                let digest = match cached_digest {
+                    Some(d) => Some(d),
+                    None => compute_and_cache_digest(&path, &rel_norm, size, mtime),
+                };
+
+                if let Some(d) = digest {
+                    out.insert(rel_norm, d);
+                }
             }
         }
     }

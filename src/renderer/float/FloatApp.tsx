@@ -23,7 +23,7 @@ export const FloatApp: React.FC = () => {
     setHistory(items);
   });
 
-  useIpcEvent<AgentTaskRecord[]>(window.electronAPI.onAgentTasksUpdated, (tasks) => {
+  useIpcEvent<AgentTaskRecord[] | AgentTaskRecord>(window.electronAPI.onAgentTasksUpdated, (tasks) => {
     if (Array.isArray(tasks)) {
       setRunningAgentsCount(tasks.filter((t) => t.status === 'running').length);
     }

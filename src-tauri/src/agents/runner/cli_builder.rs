@@ -102,6 +102,16 @@ pub fn build_agent_cli_command(
     )
 }
 
+/// Resolves minimal necessary tools per intent for token conservation.
+pub fn resolve_intent_tools(intent: &str) -> &'static str {
+    match intent {
+        "build" | "fix-bugs" | "write-tests" => "Read,Edit,Write,Grep,Glob,Bash,PowerShell",
+        "refine-plan" => "Read,Edit,Write,Grep,Glob,Bash,PowerShell,WebFetch,WebSearch",
+        "review" | "explain" => "Read,Grep,Glob,Bash,PowerShell",
+        _ => "",
+    }
+}
+
 /// Constructs a configured CLI `Command` with support for fused `--model <base>-<effort>` retry form.
 #[allow(clippy::too_many_arguments)]
 pub fn build_agent_cli_command_internal(
@@ -115,6 +125,38 @@ pub fn build_agent_cli_command_internal(
     effort_val: &str,
     model_id: Option<&str>,
     fuse_antigravity_effort: bool,
+) -> Command {
+    build_agent_cli_command_with_mode(
+        bin,
+        agent_id,
+        exec_dir,
+        prompt_arg,
+        resume_sid,
+        warm_cli_continue,
+        thinking_on,
+        effort_val,
+        model_id,
+        fuse_antigravity_effort,
+        None,
+        None,
+    )
+}
+
+/// Constructs a configured CLI `Command` with support for per-intent tools and tokenSaver flags.
+#[allow(clippy::too_many_arguments)]
+pub fn build_agent_cli_command_with_mode(
+    bin: &str,
+    agent_id: &str,
+    exec_dir: &str,
+    prompt_arg: &str,
+    resume_sid: Option<&str>,
+    warm_cli_continue: bool,
+    thinking_on: bool,
+    effort_val: &str,
+    model_id: Option<&str>,
+    fuse_antigravity_effort: bool,
+    intent: Option<&str>,
+    token_saver: Option<&str>,
 ) -> Command {
     let bin_lower = bin.to_lowercase();
     let is_batch = bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat");
@@ -191,6 +233,22 @@ pub fn build_agent_cli_command_internal(
                 "--add-dir",
                 exec_dir,
             ]);
+
+            if matches!(token_saver, Some("standard") | Some("strict")) {
+                let tools = intent.map(resolve_intent_tools).unwrap_or("");
+                if !tools.is_empty() {
+                    cmd.args(["--tools", tools]);
+                }
+                if token_saver == Some("strict") {
+                    cmd.args([
+                        "--strict-mcp-config",
+                        "--disable-slash-commands",
+                        "--setting-sources",
+                        "project",
+                    ]);
+                }
+            }
+
             if let Some(model) = sanitized_model {
                 cmd.args(["--model", model]);
             }

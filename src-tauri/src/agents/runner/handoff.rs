@@ -119,21 +119,33 @@ pub fn finalize_task(
 
         // Compute and persist fine-grained token usage telemetry if not already set
         if t.token_usage.is_none() {
-            let prompt_chars = t.custom_prompt.as_deref().map(|p| p.chars().count()).unwrap_or(300)
-                + t.file_path.chars().count();
-            let prompt_tokens = ((prompt_chars as f64) / 3.8).ceil() as u32;
+            let prompt_text = format!("{} {}", t.custom_prompt.as_deref().unwrap_or(""), t.file_path);
+            let prompt_tokens = crate::discussion::memory::MemoryManager::estimate_tokens_with_mode(
+                &prompt_text,
+                t.token_saver.as_deref(),
+            ).max(1);
 
-            let resp_chars = t.response_markdown.as_deref().map(|r| r.chars().count()).unwrap_or(0);
-            let completion_tokens = ((resp_chars as f64) / 3.8).ceil() as u32;
+            let resp_text = t.response_markdown.as_deref().unwrap_or("");
+            let completion_tokens = crate::discussion::memory::MemoryManager::estimate_tokens_with_mode(
+                resp_text,
+                t.token_saver.as_deref(),
+            );
 
-            let reasoning_chars: usize = t.thinking_trace.iter().map(|s| s.chars().count()).sum();
-            let reasoning_tokens = ((reasoning_chars as f64) / 3.8).ceil() as u32;
+            let reasoning_text = t.thinking_trace.join("\n");
+            let reasoning_tokens = crate::discussion::memory::MemoryManager::estimate_tokens_with_mode(
+                &reasoning_text,
+                t.token_saver.as_deref(),
+            );
 
             t.token_usage = Some(crate::discussion::types::TokenUsage {
                 prompt_tokens,
                 completion_tokens,
                 reasoning_tokens,
                 total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_usd: None,
+                basis: Some("estimated".to_string()),
             });
         }
     }) {

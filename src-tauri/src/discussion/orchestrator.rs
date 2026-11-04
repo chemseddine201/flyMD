@@ -1333,6 +1333,7 @@ impl DiscussionOrchestrator {
             thinking_enabled: participant.thinking_enabled,
             effort_level: participant.effort_level.clone(),
             model_id: Some(participant.model_id.clone()),
+            token_saver: self.config.token_saver.clone(),
         };
 
         let stream_sink: Option<Box<dyn StreamSink>> = self.event_listener.as_ref().map(|l| {

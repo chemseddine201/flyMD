@@ -23,11 +23,12 @@ function formatTokens(count: number): string {
 }
 
 const BUDGET_PRESETS = [
-  { label: 'Unlimited', value: 0 },
-  { label: '25k', value: 25_000 },
   { label: '50k', value: 50_000 },
   { label: '100k', value: 100_000 },
   { label: '250k', value: 250_000 },
+  { label: '500k', value: 500_000 },
+  { label: '1M', value: 1_000_000 },
+  { label: 'Unlimited', value: 0 },
 ];
 
 export const TokenQuotaHUD: React.FC = React.memo(() => {
@@ -103,7 +104,7 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
       >
         <Zap size={13} className={`${iconColor} shrink-0`} />
         <span>
-          {formatTokens(sessionMetrics.totalTokens)}
+          {sessionMetrics.basis === 'estimated' ? '~' : ''}{formatTokens(sessionMetrics.totalTokens)}
           <span className="text-[10px] text-slate-500 dark:text-slate-400 ml-0.5">
             / {isUnlimited ? '∞' : formatTokens(tokenQuotaConfig.budgetCap)}
           </span>
@@ -203,6 +204,15 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
                 </div>
               </div>
             </div>
+
+            {Boolean(sessionMetrics.cacheReadTokens && sessionMetrics.cacheReadTokens > 0) && (
+              <div className="flex items-center justify-between text-[10px] bg-slate-50 dark:bg-slate-950/60 px-2 py-1 rounded border border-slate-200 dark:border-slate-800">
+                <span className="text-slate-500 dark:text-slate-400">Cached Read Tokens</span>
+                <span className="font-mono font-bold text-sky-600 dark:text-sky-400">
+                  {formatTokens(sessionMetrics.cacheReadTokens!)}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Budget Presets */}

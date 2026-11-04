@@ -43,6 +43,7 @@ pub struct TurnRequest {
     pub thinking_enabled: bool,
     pub effort_level: Option<String>,
     pub model_id: Option<String>,
+    pub token_saver: Option<String>,
 }
 
 /// Builds provider-specific JSON `messages` array preserving immutable prefix frames at Token 0.
@@ -503,15 +504,64 @@ impl DiscussionProvider for CliProvider {
         let exe_lower = exe_str.to_lowercase();
         let is_batch = exe_lower.ends_with(".cmd") || exe_lower.ends_with(".bat");
 
+        let is_claude = matches!(&self.cli_type, CliType::ClaudeCode);
+        let is_token_saver_on = matches!(
+            request.token_saver.as_deref(),
+            Some("standard") | Some("strict")
+        );
+        let mut claude_fallback_retried = false;
+
+        let mut stdin_prompt = full_prompt.clone();
         let mut retried = false;
         let mut cur_args = if prompt_on_stdin {
-            self.build_cli_args_internal(
+            let mut args = self.build_cli_args_internal(
                 "",
                 request.effort_level.as_deref(),
                 request.thinking_enabled,
                 request.model_id.as_deref(),
                 false,
-            )
+            );
+            if is_claude && is_token_saver_on {
+                let (frame0_content, rest_stdin) = if !request.messages.is_empty() {
+                    let f0 = request.messages[0].content.trim().to_string();
+                    let rest = request
+                        .messages
+                        .iter()
+                        .skip(1)
+                        .map(|m| m.content.trim())
+                        .filter(|c| !c.is_empty())
+                        .collect::<Vec<_>>()
+                        .join("\n\n---\n\n");
+                    (f0, rest)
+                } else if !request.system_prompt.trim().is_empty() {
+                    (
+                        request.system_prompt.trim().to_string(),
+                        request.user_prompt.trim().to_string(),
+                    )
+                } else {
+                    (String::new(), full_prompt.clone())
+                };
+
+                if !frame0_content.is_empty() {
+                    let sp_file = self.sandbox_dir.join("system_prompt.txt");
+                    if std::fs::write(&sp_file, &frame0_content).is_ok() {
+                        args.push("--system-prompt-file".to_string());
+                        args.push(sp_file.to_string_lossy().to_string());
+                        stdin_prompt = rest_stdin;
+                    }
+                }
+                args.push("--output-format".to_string());
+                args.push("stream-json".to_string());
+                args.push("--verbose".to_string());
+                args.push("--include-partial-messages".to_string());
+                if request.token_saver.as_deref() == Some("strict") {
+                    args.push("--strict-mcp-config".to_string());
+                    args.push("--disable-slash-commands".to_string());
+                    args.push("--setting-sources".to_string());
+                    args.push("project".to_string());
+                }
+            }
+            args
         } else {
             self.build_cli_args_internal(
                 &full_prompt,
@@ -522,7 +572,7 @@ impl DiscussionProvider for CliProvider {
             )
         };
 
-        let (output, thinking) = loop {
+        let (output, thinking, final_reported_usage) = loop {
             let mut cmd = if is_batch {
                 let mut c = Command::new("cmd.exe");
                 c.args(["/C", &exe_str]);
@@ -558,7 +608,7 @@ impl DiscussionProvider for CliProvider {
             if prompt_on_stdin {
                 if let Some(mut stdin) = child.stdin.take() {
                     use tokio::io::AsyncWriteExt;
-                    let _ = stdin.write_all(full_prompt.as_bytes()).await;
+                    let _ = stdin.write_all(stdin_prompt.as_bytes()).await;
                     let _ = stdin.shutdown().await;
                 }
             }
@@ -591,9 +641,17 @@ impl DiscussionProvider for CliProvider {
 
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
-            let mut splitter = ThoughtSplitter::new();
+            let is_stream_json = cur_args.iter().any(|a| a == "stream-json");
 
             let run_fut = async {
+                let mut splitter = ThoughtSplitter::new();
+                let mut decode_state = crate::agents::runner::stream_decoder::StreamDecodeState::new(
+                    None,
+                    "Debate Turn".to_string(),
+                    &[],
+                );
+                let mut last_streamed_len = 0;
+
                 while let Ok(Some(line)) = lines.next_line().await {
                     if cancel_flag.load(Ordering::Relaxed) {
                         if let Some(pid) = child_pid {
@@ -602,11 +660,33 @@ impl DiscussionProvider for CliProvider {
                         return Err(ProviderError::Cancelled);
                     }
 
-                    let (think, answer) = splitter.push(&format!("{}\n", line));
+                    if is_stream_json {
+                        let outcome = crate::agents::runner::stream_decoder::decode_stdout_line(
+                            &line,
+                            &mut decode_state,
+                        );
+                        if decode_state.collected_md.len() > last_streamed_len {
+                            let delta = &decode_state.collected_md[last_streamed_len..];
+                            last_streamed_len = decode_state.collected_md.len();
+                            if let Some(ref sink) = stream_sink {
+                                sink.on_chunk(delta).await;
+                            }
+                        }
+                        if !outcome.display_line.is_empty() && outcome.display_line.starts_with('[') {
+                            if let Some(ref sink) = stream_sink {
+                                sink.on_thinking_chunk(&outcome.display_line).await;
+                            }
+                        }
+                    } else {
+                        let (think, answer) = splitter.push(&format!("{}\n", line));
+                        emit_split(&stream_sink, &think, &answer).await;
+                    }
+                }
+
+                if !is_stream_json {
+                    let (think, answer) = splitter.finish();
                     emit_split(&stream_sink, &think, &answer).await;
                 }
-                let (think, answer) = splitter.finish();
-                emit_split(&stream_sink, &think, &answer).await;
 
                 let status = child
                     .wait()
@@ -621,6 +701,8 @@ impl DiscussionProvider for CliProvider {
                 if !status.success() {
                     let final_err = if !err_msg.trim().is_empty() {
                         err_msg
+                    } else if !decode_state.collected_md.trim().is_empty() {
+                        decode_state.collected_md.trim().to_string()
                     } else if !splitter.answer.trim().is_empty() {
                         format!("CLI error output:\n{}", splitter.answer.trim())
                     } else {
@@ -632,12 +714,33 @@ impl DiscussionProvider for CliProvider {
                     });
                 }
 
-                Ok((splitter.answer.trim().to_string(), splitter.thinking_opt()))
+                let (ans, thk) = if is_stream_json {
+                    (decode_state.collected_md.trim().to_string(), None)
+                } else {
+                    (splitter.answer.trim().to_string(), splitter.thinking_opt())
+                };
+
+                Ok((ans, thk, decode_state.captured_usage))
             };
 
             match tokio::time::timeout(timeout_duration, run_fut).await {
-                Ok(Ok(pair)) => break pair,
+                Ok(Ok((ans, thk, captured_u))) => {
+                    break (ans, thk, captured_u);
+                }
                 Ok(Err(ProviderError::ProcessCrashed { exit_code, stderr })) => {
+                    if is_claude && is_token_saver_on && !claude_fallback_retried {
+                        // Flag or system prompt file rejected: fallback cleanly to today's command
+                        claude_fallback_retried = true;
+                        cur_args = self.build_cli_args_internal(
+                            "",
+                            request.effort_level.as_deref(),
+                            request.thinking_enabled,
+                            request.model_id.as_deref(),
+                            false,
+                        );
+                        stdin_prompt = full_prompt.clone();
+                        continue;
+                    }
                     let has_model = request
                         .model_id
                         .as_deref()
@@ -671,18 +774,30 @@ impl DiscussionProvider for CliProvider {
         };
 
         let elapsed = start.elapsed().as_millis() as u64;
-        let prompt_tokens = estimate_tokens(&full_prompt);
-        let reasoning_tokens = thinking.as_deref().map(estimate_tokens).unwrap_or(0);
-        let completion_tokens = estimate_tokens(&output);
 
-        Ok(TurnResponse {
-            raw_markdown: output,
-            usage: TokenUsage {
+        let usage = final_reported_usage.unwrap_or_else(|| {
+            let prompt_tokens = estimate_tokens(&full_prompt);
+            let reasoning_tokens = thinking.as_deref().map(estimate_tokens).unwrap_or(0);
+            let completion_tokens = estimate_tokens(&output);
+            let basis = match request.token_saver.as_deref() {
+                Some("standard") | Some("strict") => Some("estimated".to_string()),
+                _ => None,
+            };
+            TokenUsage {
                 prompt_tokens,
                 completion_tokens,
                 reasoning_tokens,
                 total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
-            },
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_usd: None,
+                basis,
+            }
+        });
+
+        Ok(TurnResponse {
+            raw_markdown: output,
+            usage,
             duration_ms: elapsed,
             model_id: request
                 .model_id
@@ -772,6 +887,7 @@ impl DiscussionProvider for HttpProvider {
         let start = std::time::Instant::now();
         let mut attempts: u32 = 0;
         let max_attempts: u32 = 3;
+        let mut omit_stream_options = false;
         let deadline = start + Duration::from_secs(request.timeout_secs.max(10));
 
         let messages = build_http_messages_json(&request, &self.endpoint_url, self.is_ollama);
@@ -791,12 +907,21 @@ impl DiscussionProvider for HttpProvider {
             let req_builder = if self.is_ollama {
                 let base = self.endpoint_url.trim_end_matches('/');
                 let url = format!("{}/api/chat", base);
+                let prompt_est = if request.messages.is_empty() {
+                    estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
+                } else {
+                    request.messages.iter().map(|m| estimate_tokens(&m.content)).sum()
+                };
+                let mut options = serde_json::json!({ "temperature": 0.6 });
+                if matches!(request.token_saver.as_deref(), Some("standard") | Some("strict")) {
+                    options["num_ctx"] = serde_json::json!((prompt_est + 2048).max(4096));
+                }
                 let body = serde_json::json!({
                     "model": effective_model,
                     "messages": messages,
                     "stream": true,
                     "keep_alive": "15m",
-                    "options": { "temperature": 0.6 }
+                    "options": options
                 });
                 self.client.post(&url).json(&body)
             } else {
@@ -816,12 +941,15 @@ impl DiscussionProvider for HttpProvider {
                         b = b.header("Authorization", format!("Bearer {}", key.trim()));
                     }
                 }
-                let body = serde_json::json!({
+                let mut body = serde_json::json!({
                     "model": effective_model,
                     "messages": messages,
                     "stream": true,
                     "temperature": 0.6
                 });
+                if matches!(request.token_saver.as_deref(), Some("standard") | Some("strict")) && !omit_stream_options {
+                    body["stream_options"] = serde_json::json!({ "include_usage": true });
+                }
                 b.json(&body)
             };
 
@@ -829,6 +957,11 @@ impl DiscussionProvider for HttpProvider {
                 .send()
                 .await
                 .map_err(|e| ProviderError::NetworkError(format!("{} ({})", e, self.endpoint_url)))?;
+
+            if resp.status().as_u16() == 400 && !omit_stream_options && matches!(request.token_saver.as_deref(), Some("standard") | Some("strict")) {
+                omit_stream_options = true;
+                continue;
+            }
 
             if resp.status().as_u16() == 429 {
                 let retry_secs = resp
@@ -870,6 +1003,7 @@ impl DiscussionProvider for HttpProvider {
         let mut native_thinking = String::new();
         let mut reported_prompt: Option<u32> = None;
         let mut reported_completion: Option<u32> = None;
+        let mut reported_cache_read: Option<u64> = None;
 
         let stream_fut = async {
             let mut stream = response.bytes_stream();
@@ -901,6 +1035,9 @@ impl DiscussionProvider for HttpProvider {
                     }
                     if let Some(c) = delta.completion_tokens {
                         reported_completion = Some(c);
+                    }
+                    if let Some(cr) = delta.cache_read_tokens {
+                        reported_cache_read = Some(cr);
                     }
                     if let Some(r) = delta.reasoning.filter(|r| !r.is_empty()) {
                         native_thinking.push_str(&r);
@@ -946,20 +1083,34 @@ impl DiscussionProvider for HttpProvider {
         }
 
         let elapsed = start.elapsed().as_millis() as u64;
-        let prompt_tokens = reported_prompt.unwrap_or_else(|| {
-            if request.messages.is_empty() {
-                estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
-            } else {
-                request
-                    .messages
-                    .iter()
-                    .map(|m| estimate_tokens(&m.content))
-                    .sum()
-            }
-        });
+        let prompt_est_total = if request.messages.is_empty() {
+            estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
+        } else {
+            request.messages.iter().map(|m| estimate_tokens(&m.content)).sum()
+        };
+        let prompt_tokens = reported_prompt.unwrap_or(prompt_est_total);
         let reasoning_tokens = estimate_tokens(&thinking);
         let completion_tokens = reported_completion
             .unwrap_or_else(|| estimate_tokens(&answer));
+
+        let basis = match request.token_saver.as_deref() {
+            Some("standard") | Some("strict") => {
+                if reported_prompt.is_some() || reported_completion.is_some() {
+                    Some("reported".to_string())
+                } else {
+                    Some("estimated".to_string())
+                }
+            }
+            _ => None,
+        };
+
+        let is_truncated = if is_ollama {
+            reported_prompt
+                .map(|rp| prompt_est_total > 100 && rp < (prompt_est_total * 8) / 10)
+                .unwrap_or(false)
+        } else {
+            false
+        };
 
         Ok(TurnResponse {
             raw_markdown: answer,
@@ -968,10 +1119,14 @@ impl DiscussionProvider for HttpProvider {
                 completion_tokens,
                 reasoning_tokens,
                 total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
+                cache_read_tokens: reported_cache_read,
+                cache_write_tokens: None,
+                cost_usd: None,
+                basis,
             },
             duration_ms: elapsed,
             model_id: self.model_name.clone(),
-            context_truncated: false,
+            context_truncated: is_truncated,
             thinking: if thinking.is_empty() { None } else { Some(thinking) },
             simulated: false,
         })
@@ -1247,6 +1402,11 @@ impl DiscussionProvider for MockProvider {
             0
         };
 
+        let basis = match request.token_saver.as_deref() {
+            Some("standard") | Some("strict") => Some("estimated".to_string()),
+            _ => None,
+        };
+
         Ok(TurnResponse {
             raw_markdown: response_body,
             usage: TokenUsage {
@@ -1254,6 +1414,10 @@ impl DiscussionProvider for MockProvider {
                 completion_tokens: tokens,
                 reasoning_tokens,
                 total_tokens: 350 + tokens + reasoning_tokens,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_usd: None,
+                basis,
             },
             duration_ms: elapsed,
             model_id: "adaptive-domain-simulator".to_string(),
@@ -1306,6 +1470,7 @@ mod tests {
             thinking_enabled: true,
             effort_level: Some("medium".to_string()),
             model_id: None,
+            token_saver: None,
         };
 
         let sink = Box::new(CollectingSink {
@@ -1341,6 +1506,7 @@ mod tests {
             thinking_enabled: false,
             effort_level: Some("medium".to_string()),
             model_id: None,
+            token_saver: None,
         };
 
         let err = provider
@@ -1511,6 +1677,7 @@ mod tests {
             thinking_enabled: true,
             effort_level: Some("medium".to_string()),
             model_id: None,
+            token_saver: None,
         };
 
         let openai_msgs = build_http_messages_json(&req, "https://api.deepseek.com", false);
@@ -1552,6 +1719,7 @@ mod tests {
             thinking_enabled: true,
             effort_level: Some("high".to_string()),
             model_id: None,
+            token_saver: None,
         };
 
         let resp = provider.execute_turn(req, cancel_flag, None).await.unwrap();
@@ -1587,6 +1755,7 @@ mod tests {
             thinking_enabled: true,
             effort_level: Some(eff.to_string()),
             model_id: Some(model.to_string()),
+            token_saver: None,
         };
 
         // -------------------------------------------------------------

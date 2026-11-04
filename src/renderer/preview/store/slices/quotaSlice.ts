@@ -12,6 +12,10 @@ export interface WorkspaceTokenMetrics {
   completionTokens: number;
   reasoningTokens: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd?: number;
+  basis?: 'reported' | 'estimated';
 }
 
 const DEFAULT_QUOTA_CONFIG: TokenQuotaConfig = {
@@ -102,6 +106,10 @@ export const createQuotaSlice: StateCreator<QuotaSlice, [], [], QuotaSlice> = (
     const completion = usage.completionTokens || 0;
     const reasoning = usage.reasoningTokens || 0;
     const total = usage.totalTokens || prompt + completion + reasoning;
+    const cacheRead = usage.cacheReadTokens || 0;
+    const cacheWrite = usage.cacheWriteTokens || 0;
+    const cost = usage.costUsd || 0;
+    const basis = usage.basis;
 
     const currentSession = get().sessionTokenMetrics;
     const nextSession: WorkspaceTokenMetrics = {
@@ -109,6 +117,10 @@ export const createQuotaSlice: StateCreator<QuotaSlice, [], [], QuotaSlice> = (
       completionTokens: currentSession.completionTokens + completion,
       reasoningTokens: currentSession.reasoningTokens + reasoning,
       totalTokens: currentSession.totalTokens + total,
+      cacheReadTokens: (currentSession.cacheReadTokens || 0) + cacheRead,
+      cacheWriteTokens: (currentSession.cacheWriteTokens || 0) + cacheWrite,
+      costUsd: (currentSession.costUsd || 0) + cost,
+      basis: basis || currentSession.basis,
     };
 
     const currentCumul = get().cumulativeTokenMetrics;
@@ -117,6 +129,10 @@ export const createQuotaSlice: StateCreator<QuotaSlice, [], [], QuotaSlice> = (
       completionTokens: currentCumul.completionTokens + completion,
       reasoningTokens: currentCumul.reasoningTokens + reasoning,
       totalTokens: currentCumul.totalTokens + total,
+      cacheReadTokens: (currentCumul.cacheReadTokens || 0) + cacheRead,
+      cacheWriteTokens: (currentCumul.cacheWriteTokens || 0) + cacheWrite,
+      costUsd: (currentCumul.costUsd || 0) + cost,
+      basis: basis || currentCumul.basis,
     };
 
     persistCumulativeMetrics(nextCumul);

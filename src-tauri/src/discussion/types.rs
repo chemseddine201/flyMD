@@ -106,7 +106,7 @@ impl AgentRole {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct TokenUsage {
     #[serde(rename = "promptTokens", default)]
     pub prompt_tokens: u32,
@@ -116,6 +116,14 @@ pub struct TokenUsage {
     pub reasoning_tokens: u32,
     #[serde(rename = "totalTokens", default)]
     pub total_tokens: u32,
+    #[serde(rename = "cacheReadTokens", default, skip_serializing_if = "Option::is_none")]
+    pub cache_read_tokens: Option<u64>,
+    #[serde(rename = "cacheWriteTokens", default, skip_serializing_if = "Option::is_none")]
+    pub cache_write_tokens: Option<u64>,
+    #[serde(rename = "costUsd", default, skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
+    #[serde(rename = "basis", default, skip_serializing_if = "Option::is_none")]
+    pub basis: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -363,6 +371,10 @@ pub struct DiscussionConfig {
     pub pause_at_round_boundary: bool,
     #[serde(rename = "attachedFiles", default, skip_serializing_if = "Vec::is_empty")]
     pub attached_files: Vec<DiscussionAttachedFile>,
+    #[serde(rename = "tokenSaver", default, skip_serializing_if = "Option::is_none")]
+    pub token_saver: Option<String>,
+    #[serde(rename = "contextMode", default, skip_serializing_if = "Option::is_none")]
+    pub context_mode: Option<String>,
 }
 
 pub type ResolvedRoundSlot = (DiscussionParticipant, Option<String>);

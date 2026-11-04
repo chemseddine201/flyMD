@@ -1,6 +1,7 @@
 //! Subprocess stdout/stderr stream decoder and live tool action builder for agent CLI runs.
 
 use crate::agents::types::{now_ms, AgentToolAction};
+use crate::discussion::types::TokenUsage;
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::process::{ChildStderr, ChildStdout};
@@ -15,6 +16,7 @@ pub struct StreamDecodeState {
     pub last_known_activity: String,
     pub stderr_lines: Vec<String>,
     pub seen_tool_labels: HashSet<String>,
+    pub captured_usage: Option<TokenUsage>,
 }
 
 impl StreamDecodeState {
@@ -34,6 +36,7 @@ impl StreamDecodeState {
             last_known_activity: initial_activity,
             stderr_lines: Vec::new(),
             seen_tool_labels,
+            captured_usage: None,
         }
     }
 }
@@ -85,6 +88,7 @@ pub fn decode_stdout_line(line: &str, state: &mut StreamDecodeState) -> StdoutLi
         &mut state.captured_session_id,
         &mut state.captured_cli_error,
         &mut state.last_known_activity,
+        &mut state.captured_usage,
     );
 
     let new_tool_action = if let Some((ref t_name, ref t_target)) = tool_info {
@@ -155,6 +159,7 @@ fn parse_raw_stdout_line(
     captured_session_id: &mut Option<String>,
     captured_cli_error: &mut Option<String>,
     last_known_activity: &mut String,
+    captured_usage: &mut Option<TokenUsage>,
 ) -> (String, Option<(String, Option<String>)>) {
     if line.trim_start().starts_with('{') {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
@@ -287,6 +292,35 @@ fn parse_raw_stdout_line(
                             .and_then(|v| v.as_bool())
                             .unwrap_or(false);
                         let res_text = val.get("result").and_then(|v| v.as_str()).unwrap_or("");
+
+                        if let Some(usage_obj) = val.get("usage") {
+                            let input_tokens = usage_obj
+                                .get("input_tokens")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as u32;
+                            let output_tokens = usage_obj
+                                .get("output_tokens")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as u32;
+                            let cache_read = usage_obj
+                                .get("cache_read_input_tokens")
+                                .and_then(|v| v.as_u64());
+                            let cache_write = usage_obj
+                                .get("cache_creation_input_tokens")
+                                .and_then(|v| v.as_u64());
+                            let cost_usd = val.get("total_cost_usd").and_then(|v| v.as_f64());
+                            *captured_usage = Some(TokenUsage {
+                                prompt_tokens: input_tokens,
+                                completion_tokens: output_tokens,
+                                reasoning_tokens: 0,
+                                total_tokens: input_tokens + output_tokens,
+                                cache_read_tokens: cache_read,
+                                cache_write_tokens: cache_write,
+                                cost_usd,
+                                basis: Some("reported".to_string()),
+                            });
+                        }
+
                         if is_err {
                             let err_msg = if !res_text.trim().is_empty() {
                                 res_text.trim().to_string()

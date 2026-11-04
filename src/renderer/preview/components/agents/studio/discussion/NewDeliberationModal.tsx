@@ -143,6 +143,8 @@ export interface NewDeliberationModalProps {
   onAddAttachedFiles?: (files: FileList | File[]) => Promise<void>;
   onRemoveAttachedFile?: (fileId: string) => void;
   attachmentClampedNotice?: boolean;
+  attachmentSendMode?: 'index_and_start' | 'all';
+  onAttachmentSendModeChange?: (mode: 'index_and_start' | 'all') => void;
 
   repeater: RepeaterAndSubscriptionProps;
 }
@@ -162,6 +164,8 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   onAddAttachedFiles,
   onRemoveAttachedFile,
   attachmentClampedNotice,
+  attachmentSendMode = 'index_and_start',
+  onAttachmentSendModeChange,
   turnTimeoutInput,
   setTurnTimeoutInput,
   setTurnTimeoutSecs,
@@ -223,6 +227,20 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
         (attachedFiles && attachedFiles.length > 0)
     );
   }, [newTopic, newIdea, attachedFiles]);
+
+  const totalAttachedTokens = useMemo(() => {
+    if (!attachedFiles || attachedFiles.length === 0) return 0;
+    return attachedFiles.reduce((acc, f) => {
+      if (f.content) {
+        return acc + Math.ceil(f.content.length / 3.5);
+      }
+      return acc + 20;
+    }, 0);
+  }, [attachedFiles]);
+
+  const hasAttachedImages = useMemo(() => {
+    return attachedFiles?.some((f) => f.isImage) || false;
+  }, [attachedFiles]);
 
   const handleRequestClose = () => {
     if (hasUnsavedDraft) {
@@ -404,6 +422,47 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                 <div className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
                   <AlertTriangle size={11} />
                   <span>Maximum 10 files allowed. Additional files were omitted.</span>
+                </div>
+              )}
+
+              {totalAttachedTokens > 8000 && (
+                <div className="mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <AlertTriangle size={13} className="text-amber-500 shrink-0" />
+                    <span>Large Attachment Volume (~{totalAttachedTokens.toLocaleString()} estimated tokens)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                    Sending full file contents repeatedly every round will consume model context budget quickly. Choose delivery format:
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 pt-0.5 text-xs font-semibold">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="attachmentSendMode"
+                        checked={attachmentSendMode === 'index_and_start'}
+                        onChange={() => onAttachmentSendModeChange?.('index_and_start')}
+                        className="text-sky-500 cursor-pointer"
+                      />
+                      <span>Send index and start of each file (Default / Recommended)</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="attachmentSendMode"
+                        checked={attachmentSendMode === 'all'}
+                        onChange={() => onAttachmentSendModeChange?.('all')}
+                        className="text-sky-500 cursor-pointer"
+                      />
+                      <span>Send everything</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {hasAttachedImages && (
+                <div className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <Info size={11} className="text-sky-500 shrink-0" />
+                  <span>Note: Agents receive only the file name of an attached image.</span>
                 </div>
               )}
             </div>
@@ -867,6 +926,32 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                   placeholder="e.g. 50000"
                   className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-slate-900 dark:text-slate-200 text-xs focus:outline-none focus:border-sky-500"
                 />
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {[
+                    { label: '50k', val: '50000' },
+                    { label: '100k', val: '100000' },
+                    { label: '250k', val: '250000' },
+                    { label: '500k', val: '500000' },
+                    { label: '1M', val: '1000000' },
+                    { label: 'Unlimited', val: '' },
+                  ].map((p) => {
+                    const active = (tokenBudgetCapInput || '') === p.val;
+                    return (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => setTokenBudgetCapInput && setTokenBudgetCapInput(p.val)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                          active
+                            ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>

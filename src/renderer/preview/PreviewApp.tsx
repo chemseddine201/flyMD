@@ -178,9 +178,19 @@ export const PreviewApp: React.FC = () => {
     }
   });
 
-  useIpcEvent<AgentTaskRecord[]>(window.electronAPI.onAgentTasksUpdated, (tasks) => {
-    if (Array.isArray(tasks)) {
-      store.setAgentTasks(tasks);
+  useIpcEvent<AgentTaskRecord[] | AgentTaskRecord>(window.electronAPI.onAgentTasksUpdated, (payload) => {
+    if (Array.isArray(payload)) {
+      store.setAgentTasks(payload);
+    } else if (payload && typeof payload === 'object' && 'id' in payload) {
+      const existing = store.agentTasks || [];
+      const idx = existing.findIndex((t) => t.id === payload.id);
+      if (idx >= 0) {
+        const next = [...existing];
+        next[idx] = payload;
+        store.setAgentTasks(next);
+      } else {
+        store.setAgentTasks([payload, ...existing]);
+      }
     }
   });
 

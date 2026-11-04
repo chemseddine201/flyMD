@@ -45,6 +45,48 @@ const PHASE_TITLES = [
   'Security, Performance & Operational Resilience Audit',
 ];
 
+export function formatAttachedFilesForDeliberation(
+  files: DiscussionAttachedFile[],
+  mode: 'index_and_start' | 'all' = 'index_and_start'
+): string {
+  if (!files || files.length === 0) return '';
+  const totalTokens = files.reduce(
+    (acc, f) => acc + (f.content ? Math.ceil(f.content.length / 3.5) : 20),
+    0
+  );
+  const shouldTruncate = mode === 'index_and_start' && totalTokens > 8000;
+
+  const header = `\n\n### Attached Reference Files (${files.length} file${
+    files.length > 1 ? 's' : ''
+  }):\n`;
+  const bodies = files.map((f, idx) => {
+    let block = `\n#### File ${idx + 1}: \`${f.name}\` (${(
+      f.size / 1024
+    ).toFixed(1)} KB)\n`;
+    if (f.content) {
+      const lang = f.extension.replace(/^\./, '') || 'text';
+      if (shouldTruncate) {
+        const lines = f.content.split('\n');
+        const previewLines = lines.slice(0, 60).join('\n');
+        const remaining = lines.length - 60;
+        block += `\`\`\`${lang}\n${previewLines}\n${
+          remaining > 0
+            ? `\n[... ${remaining} remaining lines omitted to conserve tokens. Agents with Read tool can inspect full file on disk ...]`
+            : ''
+        }\n\`\`\`\n`;
+      } else {
+        block += `\`\`\`${lang}\n${f.content.trim()}\n\`\`\`\n`;
+      }
+    } else if (f.isImage) {
+      block += `*(Attached image file: ${f.name})*\n`;
+    } else {
+      block += `*(Attached document/binary file: ${f.name})*\n`;
+    }
+    return block;
+  });
+  return header + bodies.join('\n');
+}
+
 export function useNewDeliberationDraft({
   resolvedWorkspace,
   startNewDiscussion,
@@ -117,6 +159,7 @@ export function useNewDeliberationDraft({
   // Multi-file attachment state (up to 10 files, all allowed extensions)
   const [attachedFiles, setAttachedFiles] = useState<DiscussionAttachedFile[]>([]);
   const [attachmentClampedNotice, setAttachmentClampedNotice] = useState<boolean>(false);
+  const [attachmentSendMode, setAttachmentSendMode] = useState<'index_and_start' | 'all'>('index_and_start');
 
   const handleAddAttachedFiles = useCallback(async (files: FileList | File[]) => {
     setAttachmentClampedNotice(false);
@@ -774,7 +817,7 @@ export function useNewDeliberationDraft({
       thinkingEnabled: p.thinkingEnabled ?? presetThinkingEnabled ?? true,
     }));
 
-    const filesContext = formatAttachedFilesContext(attachedFiles);
+    const filesContext = formatAttachedFilesForDeliberation(attachedFiles, attachmentSendMode);
     const fullUserIdea = filesContext ? `${ideaToUse}${filesContext}` : ideaToUse;
 
     const config: DiscussionConfig = {
@@ -802,6 +845,8 @@ export function useNewDeliberationDraft({
       repeaterMode: effectiveRepeaterMode,
       roundSchedule: finalRoundSchedule,
       attachedFiles: attachedFiles.length > 0 ? attachedFiles : undefined,
+      tokenSaver: 'standard',
+      contextMode: 'classic',
     };
 
     setShowNewModal(false);
@@ -923,5 +968,7 @@ export function useNewDeliberationDraft({
     handleRemoveAttachedFile,
     handleClearAttachedFiles,
     attachmentClampedNotice,
+    attachmentSendMode,
+    setAttachmentSendMode,
   };
 }

@@ -13,10 +13,12 @@ import { slugifySemanticTitle } from '../../../../utils/smartNaming';
 import { DiscussionStageViewTab } from './DiscussionTopToolbar';
 import { ParticipantAgentOption } from './CouncilInterventionBar';
 import { DiscussionRoundGroup } from './DiscussionTimelineView';
-import { useNewDeliberationDraft } from './useNewDeliberationDraft';
+import {
+  useNewDeliberationDraft,
+  formatAttachedFilesForDeliberation,
+} from './useNewDeliberationDraft';
 import {
   processFilesForAttachment,
-  formatAttachedFilesContext,
   MAX_DISCUSSION_ATTACHMENTS,
 } from './discussionAttachmentUtils';
 
@@ -487,7 +489,7 @@ export function useDiscussionStudioController({
     if ((!rawQuery && interventionFiles.length === 0) || !targetedAgentId) return;
     setIsDispatchingTargeted(true);
     try {
-      const filesContext = formatAttachedFilesContext(interventionFiles);
+      const filesContext = formatAttachedFilesForDeliberation(interventionFiles, 'index_and_start');
       const effectiveQuery = rawQuery || 'Analyze and deliberate on the following attached files:';
       const fullQuery = filesContext ? `${effectiveQuery}${filesContext}` : effectiveQuery;
       await dispatchTargetedAction(
@@ -635,7 +637,7 @@ export function useDiscussionStudioController({
   const handleSendGuidance = useCallback(async () => {
     const rawText = guidanceInput.trim();
     if (!rawText && interventionFiles.length === 0) return;
-    const filesContext = formatAttachedFilesContext(interventionFiles);
+    const filesContext = formatAttachedFilesForDeliberation(interventionFiles, 'index_and_start');
     const effectiveText = rawText || 'Deliberate on and integrate these attached reference files:';
     const textToSend = filesContext ? `${effectiveText}${filesContext}` : effectiveText;
     setGuidanceInput('');

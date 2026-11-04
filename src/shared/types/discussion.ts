@@ -47,6 +47,10 @@ export interface DiscussionTokenUsage {
   completionTokens: number;
   reasoningTokens?: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd?: number;
+  basis?: 'reported' | 'estimated';
 }
 
 export interface DiscussionParticipant {
@@ -212,6 +216,8 @@ export interface DiscussionConfig {
   roundSchedule?: DiscussionRoundPlan[];
   pauseAtRoundBoundary?: boolean;
   attachedFiles?: DiscussionAttachedFile[];
+  tokenSaver?: 'off' | 'standard' | 'strict';
+  contextMode?: 'classic' | 'board';
 }
 
 export interface DiscussionMetadata {

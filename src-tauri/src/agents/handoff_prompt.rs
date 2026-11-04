@@ -59,6 +59,27 @@ pub fn prepare_parallel_worktree(
     Some(wt_dir.to_string_lossy().to_string())
 }
 
+/// Strips Section 4 (the raw discussion rounds) from a Discussion Report when token_saver is active.
+pub fn strip_discussion_report_section_4(doc: &str, report_path: &str) -> String {
+    if let Some(start_idx) = doc.find("## 4. ") {
+        if let Some(end_rel) = doc[start_idx..].find("\n## 5. ") {
+            let end_idx = start_idx + end_rel + 1;
+            let before = &doc[..start_idx];
+            let after = &doc[end_idx..];
+            let display_path = if report_path.trim().is_empty() {
+                "deliberation report"
+            } else {
+                report_path
+            };
+            return format!(
+                "{}## 4. Main Arguments, Critiques, Replies, and Revisions\n\n*(Raw deliberation round transcript omitted to conserve tokens. Full unabridged discussion rounds available at `{}`)*\n\n{}",
+                before, display_path, after
+            );
+        }
+    }
+    doc.to_string()
+}
+
 /// Synthesizes the Token-0 prioritized Markdown handoff document, evaluating cross-model cognitive
 /// cache digests, epistemic policy, breakpoint recovery state, peer directives, and shared memory.
 pub fn assemble_task_handoff_package(
@@ -74,7 +95,12 @@ pub fn assemble_task_handoff_package(
         String::new()
     };
 
-    let body_to_process = if let Some(ref items) = req.selected_checklist_items {
+    let is_token_saver_on = matches!(
+        req.token_saver.as_deref(),
+        Some("standard") | Some("strict")
+    );
+
+    let raw_body = if let Some(ref items) = req.selected_checklist_items {
         if !items.is_empty() {
             let mut s = String::from("### Assigned Checklist Steps:\n");
             for item in items {
@@ -92,6 +118,12 @@ pub fn assemble_task_handoff_package(
         req.selected_excerpt
             .clone()
             .unwrap_or_else(|| req.markdown_content.clone())
+    };
+
+    let body_to_process = if is_token_saver_on {
+        strip_discussion_report_section_4(&raw_body, &req.file_path)
+    } else {
+        raw_body
     };
 
     let prior_failed = existing_tasks
@@ -135,10 +167,17 @@ pub fn assemble_task_handoff_package(
         now_ms(),
     );
 
-    let epistemic_section = crate::discussion::epistemic::build_epistemic_prompt_section(
+    let agent_has_read_tool = matches!(
+        req.target_agent_id.as_str(),
+        "claude-code" | "antigravity" | "opencode" | "codex"
+    );
+
+    let epistemic_section = crate::discussion::epistemic::build_epistemic_prompt_section_with_mode(
         &epistemic_decision,
         ws_path,
         cognitive_pkt.as_ref(),
+        agent_has_read_tool,
+        is_token_saver_on,
     );
     let handoff_footer = crate::discussion::epistemic::format_handoff_state_emission_protocol(
         epistemic_decision.requires_blind_self_conclusion(),
@@ -151,6 +190,26 @@ pub fn assemble_task_handoff_package(
             .as_ref()
             .map(|p| !p.trim().is_empty())
             .unwrap_or(false);
+
+    let is_warm_spec_reuse = if is_token_saver_on && warm_cli_continue && req.pipeline_id.is_some() {
+        existing_tasks.iter().any(|t| {
+            t.pipeline_id == req.pipeline_id
+                && t.target_agent_id == req.target_agent_id
+                && t.file_path == req.file_path
+                && t.status == "completed"
+        })
+    } else {
+        false
+    };
+
+    let body_for_prompt = if is_warm_spec_reuse {
+        format!(
+            "*(Project specification body already loaded in active warm session context. Inspect `{}` if needed)*",
+            req.file_path
+        )
+    } else {
+        body_to_process.trim().to_string()
+    };
 
     let resolved_resume_session_id = if req.resume_from_breakpoint {
         req.resume_session_id.clone().or_else(|| {
@@ -252,7 +311,7 @@ pub fn assemble_task_handoff_package(
         handoff_content.push_str(&format!(
             "# Project Specification & Reference Contract (`{}`)\n\n{}\n\n---\n\n",
             req.file_name,
-            body_to_process.trim()
+            body_for_prompt
         ));
     } else {
         handoff_content.push_str(&format!(
@@ -278,7 +337,7 @@ pub fn assemble_task_handoff_package(
         handoff_content.push_str(&format!(
             "# FlyMD Immutable Project Specification & Contract (`{}`)\n\n{}\n\n---\n\n",
             req.file_name,
-            body_to_process.trim()
+            body_for_prompt
         ));
         handoff_content.push_str(&epistemic_section);
         handoff_content.push_str("\n---\n\n");
@@ -308,7 +367,7 @@ pub fn assemble_task_handoff_package(
         handoff_content.push_str("\n\n---\n\n");
     }
 
-    if !is_targeted_directive {
+    if !is_targeted_directive && !is_token_saver_on {
         handoff_content.push_str(&format!(
             "## Active Agent Mission Metadata & Instructions\n\n\
              - **Target Agent**: `{}`\n\
@@ -349,5 +408,51 @@ pub fn assemble_task_handoff_package(
         total_checklists,
         completed_checklists,
         epistemic_log_line,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_discussion_report_section_4() {
+        let sample_report = "\
+# Multi-Agent Architectural Deliberation Report (v1)
+
+## 1. Original Idea and User Goals
+Build caching layer.
+
+## 2. Key Requirements and Constraints
+- High throughput
+
+## 3. Summary of Each Agent's Contribution
+- Architect: turn 1
+
+## 4. Main Arguments, Critiques, Replies, and Revisions
+
+<!-- flymd-round:1:executed -->
+<details>
+<summary>Round 1 Deliberation Summary</summary>
+#### Step 1. Architect Agent
+This is a huge 10,000 token transcript of every turn.
+</details>
+
+## 5. Points of Agreement [Agent Consensus]
+
+| Decision Topic | Agreed Approach |
+| :--- | :--- |
+| Caching | In-memory LRU |
+
+## 6. Unresolved Disagreements
+None.
+";
+
+        let stripped = strip_discussion_report_section_4(sample_report, "reports/ConsensusReport-v1.md");
+        assert!(!stripped.contains("This is a huge 10,000 token transcript"));
+        assert!(stripped.contains("## 4. Main Arguments, Critiques, Replies, and Revisions"));
+        assert!(stripped.contains("*(Raw deliberation round transcript omitted to conserve tokens. Full unabridged discussion rounds available at `reports/ConsensusReport-v1.md`)*"));
+        assert!(stripped.contains("## 5. Points of Agreement [Agent Consensus]"));
+        assert!(stripped.contains("Build caching layer."));
     }
 }

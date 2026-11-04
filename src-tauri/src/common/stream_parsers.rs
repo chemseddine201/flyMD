@@ -7,6 +7,7 @@ pub struct StreamDelta {
     pub reasoning: Option<String>,
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
+    pub cache_read_tokens: Option<u64>,
 }
 
 /// Parses an OpenAI-compatible SSE line. Supports `reasoning_content` (DeepSeek)
@@ -31,11 +32,19 @@ pub fn parse_openai_sse_line(line: &str) -> Option<StreamDelta> {
             .and_then(|x| x.as_u64())
             .map(|n| n as u32)
     };
+    let cache_read = usage
+        .and_then(|u| {
+            u.pointer("/prompt_tokens_details/cached_tokens")
+                .or_else(|| u.get("cached_tokens"))
+        })
+        .and_then(|x| x.as_u64());
+
     Some(StreamDelta {
         content: get_str("content"),
         reasoning: get_str("reasoning_content").or_else(|| get_str("reasoning")),
         prompt_tokens: get_u32("prompt_tokens"),
         completion_tokens: get_u32("completion_tokens"),
+        cache_read_tokens: cache_read,
     })
 }
 
@@ -63,6 +72,7 @@ pub fn parse_ollama_line(line: &str) -> Option<StreamDelta> {
         reasoning: get_str("thinking"),
         prompt_tokens: get_u32("prompt_eval_count"),
         completion_tokens: get_u32("eval_count"),
+        cache_read_tokens: None,
     })
 }
 
