@@ -15,6 +15,9 @@ pub mod skills;
 pub mod storage;
 pub mod types;
 
+#[cfg(test)]
+pub mod golden_tests;
+
 pub use commands::*;
 pub use convergence::*;
 pub use epistemic::*;

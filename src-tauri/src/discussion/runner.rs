@@ -1053,7 +1053,9 @@ impl DiscussionProvider for MockProvider {
                     if cancel_flag.load(Ordering::Relaxed) {
                         return Err(ProviderError::Cancelled);
                     }
-                    tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(4))).await;
+                    if self.simulated_latency_ms > 0 {
+                        tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(4))).await;
+                    }
                     sink.on_thinking_chunk(&format!("{} ", word)).await;
                 }
             }
@@ -1156,10 +1158,12 @@ impl DiscussionProvider for MockProvider {
                 if cancel_flag.load(Ordering::Relaxed) {
                     return Err(ProviderError::Cancelled);
                 }
-                tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(5))).await;
+                if self.simulated_latency_ms > 0 {
+                    tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(5))).await;
+                }
                 sink.on_chunk(&format!("{} ", word)).await;
             }
-        } else {
+        } else if self.simulated_latency_ms > 0 {
             tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms)).await;
         }
 
