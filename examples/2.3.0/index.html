@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quanta: Historical Foundations & Epistemic Ruptures of Quantum Mechanics (1895–1980s)</title>
+  
+  <!-- KaTeX for High-Fidelity Mathematical Typography -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+
+  <!-- Typography & Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Fira+Code:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,300;0,7..72,400;0,7..72,600;1,7..72,400&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-dark">
+  <div id="quanta-app-container">
+    
+    <!-- Top Bar & Header -->
+    <header id="quanta-header">
+      <div class="header-left">
+        <div class="header-badge">GRADUATE TREATISE & COMPUTATIONAL LAB</div>
+        <h1 class="header-title">QUANTA</h1>
+        <p class="header-subtitle">An Epistemological Autopsy of Quantum Ruptures: Analytical Mechanics to Non-Locality (1895–1980s)</p>
+      </div>
+
+      <div class="header-controls">
+        <div class="status-indicator-group">
+          <span class="status-dot online"></span>
+          <span id="lbl-active-pipeline-status" class="status-label">ENGINES CALIBRATED: 60 FPS</span>
+        </div>
+        <button id="btn-theme-toggle" class="btn-secondary" title="Toggle Dark/Light Presentation">
+          <span class="theme-icon">◐</span> <span class="btn-text">Parchment Mode</span>
+        </button>
+        <button id="btn-download-pdf" class="btn-primary" title="Export Canonical Publication PDF (A4 Paged Media)">
+          <svg class="pdf-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          <span class="btn-text">Download Canonical PDF</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Global Epigraph & Notice -->
+    <div class="quanta-epigraph-bar">
+      <blockquote class="epigraph-quote">
+        &ldquo;Die gegenwärtige Lage der theoretischen Physik ist derart, daß man es wohl für aussichtslos halten muß, auf dem Wege kontinuierlicher Theorien zu einer befriedigenden Auffassung der Erscheinungen zu gelangen.&rdquo;
+        <span class="epigraph-author">&mdash; Max Planck, Vorlesungen über die Theorie der Wärmestrahlung (1906)</span>
+      </blockquote>
+    </div>
+
+    <!-- Navigation Tab Bar -->
+    <nav id="quanta-navigation" aria-label="Curriculum Modules">
+      <button id="tab-nav-mod1" class="nav-tab active" data-module="module-planck-radiation">
+        <span class="tab-index">§ 1</span>
+        <span class="tab-label">Planck Radiance &amp; Fluctuations</span>
+      </button>
+      <button id="tab-nav-mod2" class="nav-tab" data-module="module-dispersion-matrix">
+        <span class="tab-index">§ 2</span>
+        <span class="tab-label">Dispersion &amp; Matrix Mechanics</span>
+      </button>
+      <button id="tab-nav-mod3" class="nav-tab" data-module="module-schrodinger-waves">
+        <span class="tab-index">§ 3</span>
+        <span class="tab-label">Hamilton-Jacobi &amp; Wave Mechanics</span>
+      </button>
+      <button id="tab-nav-mod4" class="nav-tab" data-module="module-transformation-axiomatics">
+        <span class="tab-index">§ 4</span>
+        <span class="tab-label">Transformation Theory &amp; Axiomatics</span>
+      </button>
+      <button id="tab-nav-mod5" class="nav-tab" data-module="module-bell-chsh-test">
+        <span class="tab-index">§ 5</span>
+        <span class="tab-label">Realism, EPR &amp; Bell-CHSH</span>
+      </button>
+      <button id="tab-nav-mod6" class="nav-tab" data-module="module-pathintegral-decoherence">
+        <span class="tab-index">§ 6</span>
+        <span class="tab-label">Path Integrals &amp; Einselection</span>
+      </button>
+    </nav>
+
+    <!-- Main Viewport (Curriculum & Simulation Workspace) -->
+    <main id="quanta-main-viewport">
+
+      <!-- ========================================================================= -->
+      <!-- MODULE 1: Thermodynamic Inconsistencies & The Quantum of Action -->
+      <!-- ========================================================================= -->
+      <section id="module-planck-radiation" class="curriculum-module active">
+        <div class="module-header-banner">
+          <div class="module-meta">
+            <span class="module-number">CHAPTER I</span>
+            <span class="module-era">1895–1905</span>
+          </div>
+          <h2 class="module-heading">Thermodynamic Inconsistencies &amp; The Quantum of Action</h2>
+          <p class="module-lead">
+            The ultraviolet catastrophe of classical equipartition and Planck’s thermodynamic interpolation of cavity resonator entropy derivatives $\frac{d^2 S}{dU^2}$.
+          </p>
+        </div>
+
+        <div class="module-grid">
+          <!-- Analytical Column -->
+          <article class="analytical-column">
+            <div class="formal-card">
+              <h3 class="card-title">1.1 The Epistemic Crisis of Classical Equipartition</h3>
+              <p>
+                In classical thermodynamics and electrodynamics, the Rayleigh-Jeans spectral density emerges unconditionally from the equipartition theorem applied to the infinite modes of an electromagnetic cavity of volume $V$:
+              </p>
+              <div class="math-block" data-tex="u_{RJ}(\nu, T)\,d\nu = \frac{8\pi \nu^2}{c^3} k_B T \, d\nu"></div>
+              <p>
+                As frequency $\nu \to \infty$, the total electromagnetic energy density diverges catastrophically:
+              </p>
+              <div class="math-block" data-tex="\mathcal{E}_{total} = \int_0^\infty u_{RJ}(\nu, T)\,d\nu \longrightarrow \infty \quad (\forall T > 0)"></div>
+              <p>
+                Conversely, Wien's 1896 phenomenological empirical law, $u_W(\nu, T) = \alpha \nu^3 \exp(-\beta \nu / T)$, matched high-frequency luminescence data but failed decisively in the far-infrared Rubens-Kurlbaum experiments ($1900$).
+              </p>
+            </div>
+
+            <div class="theorem-block">
+              <div class="theorem-header">
+                <span class="theorem-type">MAX PLANCK'S THERMODYNAMIC DERIVATION (OCTOBER 1900)</span>
+              </div>
+              <p>
+                Planck analyzed the second derivative of the entropy $S$ of a virtual monochromatic Hertzian dipole oscillator of equilibrium internal energy $U$:
+              </p>
+              <div class="math-block" data-tex="\text{Wien Limit } (U \to 0): \quad \frac{d^2 S}{dU^2} \approx -\frac{1}{\beta \nu U}"></div>
+              <div class="math-block" data-tex="\text{Infrared Limit } (U \to \infty): \quad \frac{d^2 S}{dU^2} \approx -\frac{k_B}{U^2}"></div>
+              <p>
+                Planck constructed the simplest rational mathematical interpolation uniting both empirical asymptotes:
+              </p>
+              <div class="math-block" data-tex="\frac{d^2 S}{dU^2} = -\frac{k_B}{U(h\nu + U)} = \frac{1}{h\nu} \left( \frac{k_B}{h\nu + U} - \frac{k_B}{U} \right)"></div>
+              <p>
+                Integrating twice with boundary conditions $\frac{dS}{dU} = \frac{1}{T}$ yields the exact spectral radiance and oscillator energy:
+              </p>
+              <div class="math-block" data-tex="U = \frac{h\nu}{e^{\frac{h\nu}{k_B T}} - 1} \implies u(\nu, T) = \frac{8\pi h \nu^3}{c^3} \frac{1}{e^{\frac{h\nu}{k_B T}} - 1}"></div>
+            </div>
+
+            <div class="formal-card">
+              <h3 class="card-title">1.2 Einstein's 1909 Fluctuation Inversion</h3>
+              <p>
+                Albert Einstein inverted Boltzmann's entropy formula $S = k_B \ln W$ to calculate the mean square energy fluctuations $\langle(\Delta E)^2\rangle$ in a sub-volume $V$ of blackbody radiation:
+              </p>
+              <div class="math-block" data-tex="\langle (\Delta E)^2 \rangle = k_B T^2 \frac{d\langle E \rangle}{dT} = \underbrace{h\nu \langle E \rangle}_{\text{Corpuscular / Shot Noise}} + \underbrace{\frac{c^3}{8\pi \nu^2 V} \langle E \rangle^2}_{\text{Wave Interference Fluctuation}}"></div>
+              <p>
+                This proved incontrovertibly that radiation simultaneously exhibits discrete particle-like quantum fluctuations and continuous classical wave interference.
+              </p>
+            </div>
+          </article>
+
+          <!-- Interactive Simulation & Instrumentation Column -->
+          <aside class="instrumentation-column">
+            <div class="sim-panel">
+              <div class="sim-panel-header">
+                <span class="sim-panel-title">SPECTRAL RADIANCE &amp; FLUCTUATION ENGINE</span>
+                <span class="sim-tag">NUMERICAL SOLVER</span>
+              </div>
+
+              <!-- High-DPI Canvas -->
+              <div class="canvas-wrapper">
+                <canvas id="canvas-planck-spectral" width="800" height="480"></canvas>
+                <div class="canvas-legend">
+                  <span class="legend-item"><span class="legend-color planck-color"></span> Planck Law</span>
+                  <span class="legend-item"><span class="legend-color wien-color"></span> Wien Law</span>
+                  <span class="legend-item"><span class="legend-color rj-color"></span> Rayleigh-Jeans</span>
+                </div>
+              </div>
+
+              <!-- Interactive Controls -->
+              <div class="quanta-interactive-controls">
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-planck-temp">Cavity Temperature ($T$):</label>
+                    <span id="readout-planck-temp" class="slider-value">5500 K</span>
+                  </div>
+                  <input type="range" id="slider-planck-temp" min="1000" max="10000" step="50" value="5500">
+                </div>
+
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-planck-freq-zoom">Frequency Spectrum Range ($\nu_{\max}$):</label>
+                    <span id="readout-planck-freq-zoom" class="slider-value">2.50 &times; 10¹⁵ Hz</span>
+                  </div>
+                  <input type="range" id="slider-planck-freq-zoom" min="0.5" max="5.0" step="0.1" value="2.5">
+                </div>
+
+                <div class="toggle-row">
+                  <label class="checkbox-container">
+                    <input type="checkbox" id="toggle-wien-curve" checked>
+                    <span class="checkbox-custom"></span>
+                    Show Wien Distribution
+                  </label>
+                  <label class="checkbox-container">
+                    <input type="checkbox" id="toggle-rj-curve" checked>
+                    <span class="checkbox-custom"></span>
+                    Show Rayleigh-Jeans Divergence
+                  </label>
+                </div>
+              </div>
+
+              <!-- Dynamic Telemetry Readout -->
+              <div class="telemetry-grid">
+                <div class="telemetry-card">
+                  <div class="telemetry-label">Wien Peak Frequency ($\nu_{\max}$)</div>
+                  <div id="telemetry-planck-peak-freq" class="telemetry-val">3.23 &times; 10¹⁴ Hz</div>
+                  <div class="telemetry-sub">$\nu_{\max} = 2.821\,k_B T / h$</div>
+                </div>
+                <div class="telemetry-card">
+                  <div class="telemetry-label">Peak Radiance $u(\nu_{\max})$</div>
+                  <div id="telemetry-planck-peak-radiance" class="telemetry-val">4.82 &times; 10⁻¹⁵ J/m³·Hz</div>
+                  <div class="telemetry-sub">Stefan-Boltzmann scaling</div>
+                </div>
+                <div class="telemetry-card span-2">
+                  <div class="telemetry-label">Einstein Fluctuation Inversion $\langle(\Delta E)^2\rangle$</div>
+                  <div id="telemetry-planck-fluctuation" class="telemetry-val">Particle Noise: 68.4% | Wave Noise: 31.6%</div>
+                  <div class="telemetry-sub">Calculated for $V = 1.0\times 10^{-6}\text{ m}^3$ at $\nu_{\max}$</div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+
+      <!-- ========================================================================= -->
+      <!-- MODULE 2: Dispersion Theory & The Birth of Matrix Mechanics -->
+      <!-- ========================================================================= -->
+      <section id="module-dispersion-matrix" class="curriculum-module">
+        <div class="module-header-banner">
+          <div class="module-meta">
+            <span class="module-number">CHAPTER II</span>
+            <span class="module-era">1913–1925</span>
+          </div>
+          <h2 class="module-heading">Dispersion Theory &amp; The Birth of Matrix Mechanics</h2>
+          <p class="module-lead">
+            The breakdown of classical Fourier kinematics in Bohr-Sommerfeld orbits, Kramers-Heisenberg dispersion, and Heisenberg's revolutionary <em>Umdeutung</em> coordinate algebra $[X, P] = i\hbar I$.
+          </p>
+        </div>
+
+        <div class="module-grid">
+          <article class="analytical-column">
+            <div class="formal-card">
+              <h3 class="card-title">2.1 The Failure of Classical Fourier Kinematics</h3>
+              <p>
+                In the Old Quantum Theory (Bohr-Sommerfeld-Epstein), electrons revolved in invariant Keplerian orbits quantized by the action integrals:
+              </p>
+              <div class="math-block" data-tex="J_k = \oint p_k \, dq_k = n_k h"></div>
+              <p>
+                Classical electrodynamics dictated that the orbital motion generates radiation at orbital frequency $\omega_{orb}$ and its integer harmonics $m\,\omega_{orb}$. But experimentally, atoms emitted light at <strong>Ritz transition frequencies</strong>:
+              </p>
+              <div class="math-block" data-tex="\nu_{mn} = \frac{E_m - E_n}{h} \neq m \, \omega_{orb}"></div>
+              <p>
+                This fundamental discrepancy led Hendrik Kramers and Werner Heisenberg (1924–1925) to replace the unobservable continuous trajectory $x(t)$ with a two-index quantum amplitude array $X_{mn} e^{i\omega_{mn} t}$.
+              </p>
+            </div>
+
+            <div class="theorem-block">
+              <div class="theorem-header">
+                <span class="theorem-type">KRAMERS-HEISENBERG DISPERSION &amp; THOMAS-REICHE-KUHN SUM RULE</span>
+              </div>
+              <p>
+                By studying atomic dipole scattering of electromagnetic radiation of frequency $\nu$, Kramers and Heisenberg derived the quantum polarizability tensor:
+              </p>
+              <div class="math-block" data-tex="\alpha(\nu) = \frac{e^2}{m} \sum_{k \neq n} \frac{f_{kn}}{\nu_{kn}^2 - \nu^2 - i \gamma_{kn} \nu}"></div>
+              <p>
+                The Thomas-Reiche-Kuhn (TRK) sum rule imposes an exact conservation constraint on oscillator strengths $f_{kn}$:
+              </p>
+              <div class="math-block" data-tex="\sum_{k} f_{kn} = \frac{2m}{\hbar} \sum_k \omega_{kn} |x_{kn}|^2 = 1 \iff [X, P]_{nn} = i\hbar"></div>
+              <p>
+                In June 1925 on Helgoland, Heisenberg realized that multiplying two quantum observable arrays $X$ and $Y$ requires a non-commutative convolution rule:
+              </p>
+              <div class="math-block" data-tex="(XY)_{mn} = \sum_k X_{mk} Y_{kn} \quad \implies \quad XY \neq YX"></div>
+            </div>
+
+            <div class="formal-card">
+              <h3 class="card-title">2.2 The Born-Jordan-Heisenberg Drei-Männer-Arbeit (1925)</h3>
+              <p>
+                Max Born recognized Heisenberg’s multiplication law as Cayley's matrix algebra. Born and Pascual Jordan proved the fundamental canonical commutation relation:
+              </p>
+              <div class="math-block" data-tex="[X, P] = XP - PX = i\hbar I"></div>
+              <p>
+                Taking the trace of both sides over any finite $N \times N$ dimensional matrix space reveals:
+              </p>
+              <div class="math-block" data-tex">\text{Tr}([X, P]) = \text{Tr}(XP - PX) = \text{Tr}(XP) - \text{Tr}(XP) = 0 \neq i\hbar N"></div>
+              <p>
+                Hence, quantum kinematic observables <strong>must be infinite-dimensional unbounded operators</strong>.
+              </p>
+            </div>
+          </article>
+
+          <aside class="instrumentation-column">
+            <div class="sim-panel">
+              <div class="sim-panel-header">
+                <span class="sim-panel-title">DISPERSION &amp; MATRIX COMMUTATOR SOLVER</span>
+                <span class="sim-tag">MATRIX ALGEBRA</span>
+              </div>
+
+              <!-- Dispersion Canvas -->
+              <div class="canvas-wrapper">
+                <canvas id="canvas-dispersion-curve" width="800" height="340"></canvas>
+              </div>
+
+              <!-- Controls -->
+              <div class="quanta-interactive-controls">
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-dispersion-damping">Resonator Damping ($\gamma_k$):</label>
+                    <span id="readout-dispersion-damping" class="slider-value">0.08</span>
+                  </div>
+                  <input type="range" id="slider-dispersion-damping" min="0.01" max="0.40" step="0.01" value="0.08">
+                </div>
+
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-dispersion-strength">Ground-to-Excited Transition $f_{12}$:</label>
+                    <span id="readout-dispersion-strength" class="slider-value">0.65</span>
+                  </div>
+                  <input type="range" id="slider-dispersion-strength" min="0.10" max="0.95" step="0.05" value="0.65">
+                </div>
+              </div>
+
+              <!-- TRK Sum Rule Table -->
+              <div class="data-table-container">
+                <table id="table-trk-sum-rule" class="quanta-table">
+                  <thead>
+                    <tr>
+                      <th>Transition $n \to k$</th>
+                      <th>Energy $\hbar\omega_{kn}$</th>
+                      <th>Dipole $|x_{kn}|^2$</th>
+                      <th>Oscillator $f_{kn}$</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr id="trk-row-1">
+                      <td>$|1\rangle \to |2\rangle$ (Resonance $\omega_1 = 1.2$)</td>
+                      <td>1.200 $\hbar$</td>
+                      <td id="trk-dipole-1">0.2708</td>
+                      <td id="trk-f-1" class="telemetry-highlight">0.6500</td>
+                    </tr>
+                    <tr id="trk-row-2">
+                      <td>$|1\rangle \to |3\rangle$ (Resonance $\omega_2 = 2.8$)</td>
+                      <td>2.800 $\hbar$</td>
+                      <td id="trk-dipole-2">0.0625</td>
+                      <td id="trk-f-2" class="telemetry-highlight">0.3500</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colspan="3"><strong>Total Sum $\sum f_{kn}$ (TRK Rule):</strong></td>
+                      <td id="trk-sum-total" class="telemetry-highlight">1.0000</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              <!-- Matrix Commutator Truncation Heatmap Canvas -->
+              <div class="matrix-viz-header">
+                <span class="matrix-title">TRUNCATED COMMUTATOR $[X_N, P_N]$ HEATMAP ($N=8$)</span>
+              </div>
+              <div class="canvas-wrapper">
+                <canvas id="canvas-heisenberg-matrix" width="800" height="280"></canvas>
+              </div>
+
+              <div class="telemetry-grid">
+                <div class="telemetry-card span-2">
+                  <div class="telemetry-label">Commutator Deviation from Canonical Identity</div>
+                  <div id="telemetry-commutator-norm" class="telemetry-val">$\|[X, P] - i\hbar I\|_{F} = 0.082$ (Edge Truncation Defect)</div>
+                  <div class="telemetry-sub">Vanishes asymptotically as $N \to \infty$ for all interior matrix states</div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+
+      <!-- ========================================================================= -->
+      <!-- MODULE 3: Hamilton-Jacobi Geometry & Wave Mechanics -->
+      <!-- ========================================================================= -->
+      <section id="module-schrodinger-waves" class="curriculum-module">
+        <div class="module-header-banner">
+          <div class="module-meta">
+            <span class="module-number">CHAPTER III</span>
+            <span class="module-era">1923–1926</span>
+          </div>
+          <h2 class="module-heading">Hamilton-Jacobi Geometry &amp; Wave Mechanics</h2>
+          <p class="module-lead">
+            The optical-mechanical analogy of Hamilton, Louis de Broglie’s phase waves, and Erwin Schrödinger’s variational derivation of the wave equation via action variables $S = \hbar \arg \psi$.
+          </p>
+        </div>
+
+        <div class="module-grid">
+          <article class="analytical-column">
+            <div class="formal-card">
+              <h3 class="card-title">3.1 Hamilton's Optical-Mechanical Analogy</h3>
+              <p>
+                In 1834, William Rowan Hamilton revealed that classical trajectory mechanics and geometrical wave optics share identical mathematical topologies. Fermat’s principle of least time in optics corresponds exactly to Maupertuis’ principle of least action in dynamics:
+              </p>
+              <div class="math-block" data-tex="\delta \int n\,ds = 0 \quad \longleftrightarrow \quad \delta \int \sqrt{2m(E - V)}\,ds = 0"></div>
+              <p>
+                The refractive index $n(x)$ corresponds to the local classical momentum $p(x) = \sqrt{2m(E - V(x))}$. Hamilton observed that just as geometric optics is the short-wavelength limit ($\lambda \to 0$) of wave optics, Newtonian mechanics must be the short-wavelength limit of an underlying wave physics.
+              </p>
+            </div>
+
+            <div class="theorem-block">
+              <div class="theorem-header">
+                <span class="theorem-type">SCHRÖDINGER’S 1926 VARIATIONAL DERIVATION</span>
+              </div>
+              <p>
+                Schrödinger substituted Hamilton's principal function $S(x, t) = W(x) - Et$ into the stationary Hamilton-Jacobi equation:
+              </p>
+              <div class="math-block" data-tex="(\nabla S)^2 - 2m(E - V(x)) = 0"></div>
+              <p>
+                Instead of treating $S$ directly, Schrödinger introduced the logarithmic ansatz $S = K \ln \psi$, choosing $K = \hbar$:
+              </p>
+              <div class="math-block" data-tex="\psi(x, t) = \sqrt{\rho(x, t)} \exp\left( \frac{i}{\hbar} S(x, t) \right)"></div>
+              <p>
+                Constructing the action functional $\mathcal{J}[\psi] = \int \left[ \frac{\hbar^2}{2m} |\nabla \psi|^2 + (V(x) - E)|\psi|^2 \right] d^3x$ and asserting Euler-Lagrange stationarity $\delta \mathcal{J} = 0$ yields the celebrated time-dependent wave equation:
+              </p>
+              <div class="math-block" data-tex="i\hbar \frac{\partial \psi(x, t)}{\partial t} = \left( -\frac{\hbar^2}{2m} \nabla^2 + V(x) \right) \psi(x, t)"></div>
+            </div>
+
+            <div class="formal-card">
+              <h3 class="card-title">3.2 Split-Step Fourier Numerical Evolution</h3>
+              <p>
+                To evolve $|\psi(x, t)|^2$ with machine precision and unconditional unitarity, we employ the Strang operator splitting:
+              </p>
+              <div class="math-block" data-tex="\psi(t+\Delta t) = e^{-i \hat{V} \frac{\Delta t}{2\hbar}} \, \mathcal{F}^{-1} \left\{ e^{-i \frac{\hat{p}^2}{2m} \frac{\Delta t}{\hbar}} \, \mathcal{F} \left\{ e^{-i \hat{V} \frac{\Delta t}{2\hbar}} \psi(t) \right\} \right\} + \mathcal{O}(\Delta t^3)"></div>
+              <p>
+                This exact unitary transformation guarantees norm conservation $\int |\psi|^2 dx \equiv 1$ to numerical roundoff ($\sim 10^{-14}$).
+              </p>
+            </div>
+          </article>
+
+          <aside class="instrumentation-column">
+            <div class="sim-panel">
+              <div class="sim-panel-header">
+                <span class="sim-panel-title">SPLIT-STEP SCHRÖDINGER EVOLVER</span>
+                <span class="sim-tag">REAL-TIME PDE SOLVER (512 MESH)</span>
+              </div>
+
+              <!-- Wavepacket Canvas -->
+              <div class="canvas-wrapper">
+                <canvas id="canvas-schrodinger-wavepacket" width="800" height="360"></canvas>
+                <div class="canvas-legend">
+                  <span class="legend-item"><span class="legend-color wave-prob-color"></span> $|\psi(x)|^2$ Density</span>
+                  <span class="legend-item"><span class="legend-color wave-real-color"></span> $\text{Re}\{\psi(x)\}$</span>
+                  <span class="legend-item"><span class="legend-color potential-color"></span> Potential $V(x)$</span>
+                </div>
+              </div>
+
+              <!-- Phase Space / Wigner Canvas -->
+              <div class="canvas-wrapper" style="margin-top: 10px;">
+                <canvas id="canvas-schrodinger-phase" width="800" height="220"></canvas>
+              </div>
+
+              <!-- Controls -->
+              <div class="quanta-interactive-controls">
+                <div class="button-group">
+                  <button id="btn-wavepacket-play-pause" class="btn-control active">Pause Simulation</button>
+                  <button id="btn-wavepacket-reset" class="btn-control">Reset Initial Gaussian</button>
+                </div>
+
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-potential-barrier-height">Potential Barrier Height ($V_0$):</label>
+                    <span id="readout-barrier-height" class="slider-value">2.40</span>
+                  </div>
+                  <input type="range" id="slider-potential-barrier-height" min="0.0" max="6.0" step="0.1" value="2.4">
+                </div>
+
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-packet-initial-momentum">Initial Momentum ($k_0$):</label>
+                    <span id="readout-packet-momentum" class="slider-value">3.20</span>
+                  </div>
+                  <input type="range" id="slider-packet-initial-momentum" min="0.5" max="6.0" step="0.1" value="3.2">
+                </div>
+
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-packet-width">Initial Spatial Dispersion ($\sigma_x$):</label>
+                    <span id="readout-packet-width" class="slider-value">0.75</span>
+                  </div>
+                  <input type="range" id="slider-packet-width" min="0.3" max="1.8" step="0.05" value="0.75">
+                </div>
+              </div>
+
+              <!-- Telemetry -->
+              <div class="telemetry-grid">
+                <div class="telemetry-card">
+                  <div class="telemetry-label">Unitarity Norm $\int |\psi|^2 dx$</div>
+                  <div id="telemetry-packet-norm" class="telemetry-val">1.00000000</div>
+                  <div class="telemetry-sub">Preserved to machine precision</div>
+                </div>
+                <div class="telemetry-card">
+                  <div class="telemetry-label">Tunneling Transmission $T$</div>
+                  <div id="telemetry-packet-tunneling" class="telemetry-val">34.8%</div>
+                  <div class="telemetry-sub">WKB barrier penetration</div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+
+      <!-- ========================================================================= -->
+      <!-- MODULE 4: Transformation Theory & Mathematical Axiomatics -->
+      <!-- ========================================================================= -->
+      <section id="module-transformation-axiomatics" class="curriculum-module">
+        <div class="module-header-banner">
+          <div class="module-meta">
+            <span class="module-number">CHAPTER IV</span>
+            <span class="module-era">1926–1932</span>
+          </div>
+          <h2 class="module-heading">Transformation Theory &amp; Mathematical Axiomatics</h2>
+          <p class="module-lead">
+            The unification of wave and matrix mechanics by Paul Dirac and Pascual Jordan, unbounded self-adjoint operators, and John von Neumann’s rigorous Hilbert space formalization.
+          </p>
+        </div>
+
+        <div class="module-grid">
+          <article class="analytical-column">
+            <div class="formal-card">
+              <h3 class="card-title">4.1 Dirac-Jordan Transformation Calculus</h3>
+              <p>
+                In 1927, Paul Dirac and Pascual Jordan independently demonstrated that Schrödinger’s wavefunctions $\psi(x)$ and Heisenberg’s matrices $X_{mn}$ are simply distinct coordinate representations of abstract state vectors $|\psi\rangle$ living in an infinite-dimensional Hilbert space $\mathcal{H}$:
+              </p>
+              <div class="math-block" data-tex="\psi(x) = \langle x | \psi \rangle, \quad \tilde{\psi}(p) = \langle p | \psi \rangle = \frac{1}{\sqrt{2\pi\hbar}} \int_{-\infty}^{\infty} e^{-\frac{i}{\hbar}px} \psi(x)\,dx"></div>
+              <p>
+                Any two complete orthonormal bases $\{|a\rangle\}$ and $\{|b\rangle\}$ are linked by a unitary transformation operator $\hat{U}$:
+              </p>
+              <div class="math-block" data-tex="\hat{U} = \sum_k |b_k\rangle \langle a_k|, \quad \hat{U}^\dagger \hat{U} = \hat{U} \hat{U}^\dagger = \hat{I}"></div>
+            </div>
+
+            <div class="theorem-block">
+              <div class="theorem-header">
+                <span class="theorem-type">VON NEUMANN’S RIGOROUS FOUNDATIONS (1932)</span>
+              </div>
+              <p>
+                Dirac’s delta function $\delta(x)$ and continuous bras $\langle x |$ lacked rigorous mathematical grounding under classical measure theory. John von Neumann provided the definitive axiomatic formulation:
+              </p>
+              <ol class="rigor-list">
+                <li>States correspond to one-dimensional rays in a complex separable Hilbert space $\mathcal{H}$.</li>
+                <li>Physical observables are <strong>densely defined, unbounded self-adjoint operators</strong> ($\hat{A} = \hat{A}^*$, where domains $\mathcal{D}(\hat{A}) = \mathcal{D}(\hat{A}^*)$).</li>
+                <li>By the <strong>Spectral Theorem</strong>, any self-adjoint operator $\hat{A}$ admits a unique projection-valued measure $E(\lambda)$:
+                  <div class="math-block" data-tex="\hat{A} = \int_{\sigma(\hat{A})} \lambda \, dE(\lambda)"></div>
+                </li>
+              </ol>
+            </div>
+
+            <div class="formal-card">
+              <h3 class="card-title">4.2 The Stone-von Neumann Theorem</h3>
+              <p>
+                Let $(\hat{U}(s), \hat{V}(t))$ be strongly continuous one-parameter unitary groups satisfying the Weyl commutation relation:
+              </p>
+              <div class="math-block" data-tex="\hat{U}(s)\hat{V}(t) = e^{ist} \hat{V}(t)\hat{U}(s)"></div>
+              <p>
+                The Stone-von Neumann theorem proves that for finite degrees of freedom, any irreducible representation of this algebra is <strong>unitarily equivalent</strong> to the Schrödinger position-momentum representation. Wave and matrix mechanics are mathematically isomorphic.
+              </p>
+            </div>
+          </article>
+
+          <aside class="instrumentation-column">
+            <div class="sim-panel">
+              <div class="sim-panel-header">
+                <span class="sim-panel-title">SPECTRAL DECOMPOSITION &amp; BASIS ROTATOR</span>
+                <span class="sim-tag">HILBERT SPACE VISUALIZER</span>
+              </div>
+
+              <!-- Basis Projection Canvas -->
+              <div class="canvas-wrapper">
+                <canvas id="canvas-spectral-decomposition" width="800" height="340"></canvas>
+              </div>
+
+              <!-- Controls -->
+              <div class="quanta-interactive-controls">
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="select-basis-transformation">Transformation Representation Basis:</label>
+                  </div>
+                  <select id="select-basis-transformation" class="quanta-select">
+                    <option value="energy">Energy Eigenbasis (Fock States |n⟩)</option>
+                    <option value="coordinate">Spatial Position Representation ⟨x|</option>
+                    <option value="momentum">Momentum Wavevector Representation ⟨p|</option>
+                    <option value="coherent">Glauber Coherent State |α⟩</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Dynamic Hamiltonian Matrix Representation Grid -->
+              <div class="matrix-representation-container">
+                <div class="matrix-viz-header">
+                  <span id="matrix-title-transformation" class="matrix-title">MATRIX ELEMENTS $\langle n | \hat{H} | m \rangle$ (TRUNCATED HARMONIC OSCILLATOR)</span>
+                </div>
+                <div id="matrix-representation-grid" class="matrix-table-grid">
+                  <!-- Populated by app.js -->
+                </div>
+              </div>
+
+              <div class="telemetry-grid">
+                <div class="telemetry-card span-2">
+                  <div class="telemetry-label">Unitary Invariance Residual $\|U^\dagger U - I\|$</div>
+                  <div id="telemetry-unitarity-residual" class="telemetry-val">1.28 &times; 10⁻¹⁶</div>
+                  <div class="telemetry-sub">Spectral projection completeness verified: $\sum |k\rangle\langle k| = \hat{I}$</div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+
+      <!-- ========================================================================= -->
+      <!-- MODULE 5: Measurement, Non-Locality & Realism Theorems -->
+      <!-- ========================================================================= -->
+      <section id="module-bell-chsh-test" class="curriculum-module">
+        <div class="module-header-banner">
+          <div class="module-meta">
+            <span class="module-number">CHAPTER V</span>
+            <span class="module-era">1935–1967</span>
+          </div>
+          <h2 class="module-heading">Measurement, Non-Locality &amp; Realism Theorems</h2>
+          <p class="module-lead">
+            The Einstein-Podolsky-Rosen reality criterion, Bohm's spin singlet reformulation, John Stewart Bell's inequality, and the experimental CHSH violation.
+          </p>
+        </div>
+
+        <div class="module-grid">
+          <article class="analytical-column">
+            <div class="formal-card">
+              <h3 class="card-title">5.1 The 1935 EPR Paradox &amp; Local Realism</h3>
+              <p>
+                Einstein, Podolsky, and Rosen asserted that an adequate physical theory must satisfy <strong>Local Realism</strong>:
+              </p>
+              <blockquote>
+                &ldquo;If, without in any way disturbing a system, we can predict with certainty the value of a physical quantity, then there exists an element of physical reality corresponding to this quantity.&rdquo;
+              </blockquote>
+              <p>
+                For an entangled singlet state $|\psi^-\rangle = \frac{1}{\sqrt{2}}(|\uparrow\downarrow\rangle - |\downarrow\uparrow\rangle)$, measuring particle $A$ instantly determines particle $B$'s spin with unit certainty across arbitrary spacelike separations. EPR concluded that quantum mechanics must be incomplete, missing "local hidden variables" $\lambda$.
+              </p>
+            </div>
+
+            <div class="theorem-block">
+              <div class="theorem-header">
+                <span class="theorem-type">BELL'S THEOREM &amp; THE CHSH INEQUALITY (1964, 1969)</span>
+              </div>
+              <p>
+                John Stewart Bell demonstrated that <em>any</em> theory founded on local hidden variables $\lambda \in \Lambda$ satisfying:
+              </p>
+              <div class="math-block" data-tex="P(A, B | \vec{a}, \vec{b}) = \int_{\Lambda} A(\vec{a}, \lambda) B(\vec{b}, \lambda) \, \rho(\lambda)\,d\lambda, \quad |A| \le 1, \, |B| \le 1"></div>
+              <p>
+                must obey the Clauser-Horne-Shimony-Holt (CHSH) bound on correlation expectations:
+              </p>
+              <div class="math-block" data-tex="S_{CHSH} = \big| E(\vec{a}, \vec{b}) - E(\vec{a}, \vec{b}') + E(\vec{a}', \vec{b}) + E(\vec{a}', \vec{b}') \big| \le 2"></div>
+              <p>
+                However, quantum mechanics predicts the correlation for a singlet state:
+              </p>
+              <div class="math-block" data-tex="E_{QM}(\vec{a}, \vec{b}) = \langle \psi^- | (\vec{\sigma}_1 \cdot \vec{a}) \otimes (\vec{\sigma}_2 \cdot \vec{b}) | \psi^- \rangle = -\vec{a} \cdot \vec{b} = -\cos(\theta_{ab})"></div>
+              <p>
+                Choosing the optimal configuration $\theta_a = 0, \theta_{a'} = \frac{\pi}{2}, \theta_b = \frac{\pi}{4}, \theta_{b'} = \frac{3\pi}{4}$ yields:
+              </p>
+              <div class="math-block" data-tex="S_{QM} = \left| -\frac{\sqrt{2}}{2} - \frac{\sqrt{2}}{2} - \frac{\sqrt{2}}{2} - \frac{\sqrt{2}}{2} \right| = 2\sqrt{2} \approx 2.8284 > 2"></div>
+              <p>
+                This reaches the ultimate <strong>Tsirelson Bound</strong> $2\sqrt{2}$, decisively refuting local realism in Nature.
+              </p>
+            </div>
+
+            <div class="formal-card">
+              <h3 class="card-title">5.2 Kochen-Specker Contextuality (1967)</h3>
+              <p>
+                In Hilbert spaces of dimension $\dim \mathcal{H} \ge 3$, quantum observables cannot be assigned pre-existing truth values $\{0, 1\}$ independent of the measurement context (commuting co-measured operators). Reality is non-contextually irreconcilable.
+              </p>
+            </div>
+          </article>
+
+          <aside class="instrumentation-column">
+            <div class="sim-panel">
+              <div class="sim-panel-header">
+                <span class="sim-panel-title">BELL-CHSH ENTANGLEMENT ENGINE</span>
+                <span class="sim-tag">MONTE CARLO LAB (10,000 PAIRS)</span>
+              </div>
+
+              <!-- Detector Geometry Canvas -->
+              <div class="canvas-wrapper">
+                <canvas id="canvas-chsh-geometry" width="800" height="340"></canvas>
+              </div>
+
+              <!-- Controls -->
+              <div class="quanta-interactive-controls">
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-angle-a">Detector $A$ Angle ($\alpha$):</label>
+                    <span id="readout-angle-a" class="slider-value">0.0&deg;</span>
+                  </div>
+                  <input type="range" id="slider-angle-a" min="0" max="180" step="1" value="0">
+                </div>
+
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-angle-b">Detector $B$ Angle ($\beta$):</label>
+                    <span id="readout-angle-b" class="slider-value">22.5&deg;</span>
+                  </div>
+                  <input type="range" id="slider-angle-b" min="0" max="180" step="1" value="23">
+                </div>
+
+                <div class="button-group">
+                  <button id="btn-run-bell-trials" class="btn-control active">Simulate 10,000 Entangled Pairs</button>
+                </div>
+              </div>
+
+              <!-- Telemetry -->
+              <div class="telemetry-grid">
+                <div class="telemetry-card">
+                  <div class="telemetry-label">CHSH Correlation Parameter ($S$)</div>
+                  <div id="telemetry-chsh-s-param" class="telemetry-val">2.828</div>
+                  <div class="telemetry-sub">Local Realist Bound: $S \le 2.000$</div>
+                </div>
+                <div class="telemetry-card">
+                  <div class="telemetry-label">Inequality Violation Status</div>
+                  <div id="telemetry-chsh-violation-indicator" class="telemetry-val text-violation">VIOLATED (+16.5 &sigma;)</div>
+                  <div class="telemetry-sub">Tsirelson Bound: $2\sqrt{2} \approx 2.828$</div>
+                </div>
+                <div class="telemetry-card span-2">
+                  <div class="telemetry-label">Individual Pair Correlations</div>
+                  <div id="telemetry-chsh-breakdown" class="telemetry-val">
+                    $E(a,b) = -0.707$ | $E(a,b') = 0.707$ | $E(a',b) = -0.707$ | $E(a',b') = -0.707$
+                  </div>
+                  <div class="telemetry-sub">Monte Carlo sample variance $\sigma < 0.008$</div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+
+      <!-- ========================================================================= -->
+      <!-- MODULE 6: Path Integrals & Open Quantum Systems -->
+      <!-- ========================================================================= -->
+      <section id="module-pathintegral-decoherence" class="curriculum-module">
+        <div class="module-header-banner">
+          <div class="module-meta">
+            <span class="module-number">CHAPTER VI</span>
+            <span class="module-era">1948–1980s</span>
+          </div>
+          <h2 class="module-heading">Path Integrals, Decoherence &amp; Einselection</h2>
+          <p class="module-lead">
+            Richard Feynman’s sum over histories, the classical limit via stationary phase $\delta S = 0$, and Wojciech Zurek's environment-induced superselection (einselection).
+          </p>
+        </div>
+
+        <div class="module-grid">
+          <article class="analytical-column">
+            <div class="formal-card">
+              <h3 class="card-title">6.1 Feynman's Functional Path Integral</h3>
+              <p>
+                In 1948, Richard Feynman revolutionized quantum dynamics by formulating the quantum transition amplitude $K(x_b, t_b; x_a, t_a)$ as a functional integral over all continuous paths $x(t)$:
+              </p>
+              <div class="math-block" data-tex="K(x_b, t_b; x_a, t_a) = \int_{x(t_a)=x_a}^{x(t_b)=x_b} \mathcal{D}[x(t)] \, \exp\left( \frac{i}{\hbar} S[x(t)] \right)"></div>
+              <p>
+                where $S[x(t)] = \int_{t_a}^{t_b} \mathcal{L}(x, \dot{x}, t)\,dt$ is the classical action.
+              </p>
+              <p>
+                In the macroscopic correspondence limit ($\hbar \to 0$ or $S \gg \hbar$), the phase $\frac{S}{\hbar}$ oscillates with violent frequency across non-classical paths, completely canceling via destructive interference. The only surviving trajectory is the stationary point of the action:
+              </p>
+              <div class="math-block" data-tex="\delta S = 0 \implies \frac{\partial \mathcal{L}}{\partial x} - \frac{d}{dt}\frac{\partial \mathcal{L}}{\partial \dot{x}} = 0 \quad (\text{Classical Euler-Lagrange})"></div>
+            </div>
+
+            <div class="theorem-block">
+              <div class="theorem-header">
+                <span class="theorem-type">ENVIRONMENT-INDUCED SUPERSELECTION &amp; DECOHERENCE</span>
+              </div>
+              <p>
+                The measurement problem is resolved without ad-hoc wavepacket collapse via open quantum systems theory (Zeh 1970, Zurek 1981). A central system $\mathcal{S}$ couples to an environmental bath $\mathcal{E}$ via Hamiltonian $\hat{H} = \hat{H}_S + \hat{H}_E + \hat{H}_{int}$.
+              </p>
+              <p>
+                Tracing out the unobserved reservoir degrees of freedom leaves the <strong>reduced density matrix</strong> $\hat{\rho}_S = \text{Tr}_E(\hat{\rho}_{total})$ governed by the Caldeira-Leggett master equation:
+              </p>
+              <div class="math-block" data-tex="\frac{\partial \rho_S(x, x')}{\partial t} = \frac{1}{i\hbar}[\hat{H}_S, \hat{\rho}_S] - \gamma(x - x')\left(\frac{\partial}{\partial x} - \frac{\partial}{\partial x'}\right)\rho_S - \underbrace{\frac{2m\gamma k_B T}{\hbar^2} (x - x')^2 \rho_S}_{\text{Decoherence Rate } \tau_D^{-1}}"></div>
+              <p>
+                The off-diagonal coherence terms decay exponentially at the decoherence rate:
+              </p>
+              <div class="math-block" data-tex="\rho_S(x, x', t) \propto \exp\left( - \Lambda (x - x')^2 t \right) \implies \text{Tr}(\hat{\rho}_S^2) \to \text{Mixed State}"></div>
+            </div>
+          </article>
+
+          <aside class="instrumentation-column">
+            <div class="sim-panel">
+              <div class="sim-panel-header">
+                <span class="sim-panel-title">PATH INTEGRAL &amp; DECOHERENCE ENGINE</span>
+                <span class="sim-tag">FEYNMAN TRAJECTORIES &amp; DENSITY MATRIX</span>
+              </div>
+
+              <!-- Path Integral Histories Canvas -->
+              <div class="canvas-wrapper">
+                <canvas id="canvas-path-integral-histories" width="800" height="300"></canvas>
+              </div>
+
+              <!-- Density Matrix Decay Canvas -->
+              <div class="canvas-wrapper" style="margin-top: 10px;">
+                <canvas id="canvas-density-matrix-decay" width="800" height="260"></canvas>
+              </div>
+
+              <!-- Controls -->
+              <div class="quanta-interactive-controls">
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-hbar-scaling">Action Scale Ratio ($S / \hbar$ &mdash; Classical Limit):</label>
+                    <span id="readout-hbar-scaling" class="slider-value">1.00 (Quantum Interference)</span>
+                  </div>
+                  <input type="range" id="slider-hbar-scaling" min="0.2" max="15.0" step="0.2" value="1.0">
+                </div>
+
+                <div class="quanta-slider-row">
+                  <div class="slider-label-row">
+                    <label for="slider-decoherence-coupling">Bath Coupling Strength ($\Lambda$):</label>
+                    <span id="readout-decoherence-coupling" class="slider-value">0.18</span>
+                  </div>
+                  <input type="range" id="slider-decoherence-coupling" min="0.00" max="0.80" step="0.02" value="0.18">
+                </div>
+              </div>
+
+              <!-- Telemetry -->
+              <div class="telemetry-grid">
+                <div class="telemetry-card">
+                  <div class="telemetry-label">State Purity $\gamma = \text{Tr}(\rho^2)$</div>
+                  <div id="telemetry-purity" class="telemetry-val">0.998</div>
+                  <div class="telemetry-sub">Pure State: 1.00 | Mixed: $\to 0.50$</div>
+                </div>
+                <div class="telemetry-card">
+                  <div class="telemetry-label">Decoherence Timescale $\tau_D$</div>
+                  <div id="telemetry-decoherence-tau" class="telemetry-val">1.24 &times; 10⁻¹² s</div>
+                  <div class="telemetry-sub">Pointer basis einselected</div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Status Bar -->
+    <footer id="quanta-status-bar">
+      <div class="status-cell">
+        <span class="status-cell-key">RUNTIME ENGINE:</span>
+        <span class="status-cell-val">Strang-Fourier / QR Eigensolver / Monte Carlo</span>
+      </div>
+      <div class="status-cell">
+        <span class="status-cell-key">MATH TYPESETTING:</span>
+        <span class="status-cell-val">KaTeX Vector High-DPI Glyphs</span>
+      </div>
+      <div class="status-cell">
+        <span class="status-cell-key">TARGET FORMAT:</span>
+        <span class="status-cell-val">A4 Canonical Master PDF / Standalone Web</span>
+      </div>
+      <div class="status-cell status-fps">
+        <span class="status-cell-key">TELEMETRY:</span>
+        <span id="telemetry-fps-counter" class="status-cell-val">60.0 FPS</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
