@@ -104,13 +104,53 @@ Allow users to specify and select exact models according to their active provide
 
 ---
 
+---
+
+## 🎯 Initiative 6: Deliberation Lifecycle — Failure Recovery, Round Pause/Resume & In-Flight Configuration Editor
+
+### Core Objective
+Provide production-grade resilience and interactive governance for Multi-Agent Deliberations: enable seamless recovery from failed or paused turns, provide granular round-level pause and resume controls, and introduce a session configuration inspector with in-flight modification capabilities during pause.
+
+### Key Capabilities
+
+#### 1. Resume Debate on Failure or Pause (Deterministic Session Healing)
+- **Failure Recovery Engine**: When an agent turn fails (e.g. CLI process crash, engine timeout, rate-limit HTTP 429, or sandbox disconnection):
+  - Do not invalidate or discard previous successful rounds or committed ledgers.
+  - Automatically heal session state by transitioning status from `failed` to `paused` with clear diagnostic logs.
+  - Provide a prominent, one-click **"Resume Debate"** action that re-anchors the Token-0 immutable prefix frames, purges any partial corrupted turn tokens, and resumes directly from the failed participant or round.
+- **Context-Preserved Resume**: When manually paused by the user or triggered by a token budget warning, resuming seamlessly triggers the next scheduled turn with 100% KV-cache consistency.
+
+#### 2. Granular Round-Level Pause & Resume Controls
+- **Round Barrier Synchronization**:
+  - Add an option to pause automatically at round boundaries (e.g. after Round 1 initial proposals, before Round 2 peer critiques) for facilitator review.
+  - Manual on-the-fly pause button during active round execution that halts after the current streaming chunk completes or gracefully aborts without corrupting the transcript.
+- **Interactive In-Pause Inspection**:
+  - During pause, users can inspect intermediate consensus scores, active technical disagreements, and generated token ledgers.
+  - Dual action controls: **"Continue Next Turn"** (step-by-step) and **"Resume Full Round Schedule"** (continuous automatic progression).
+
+#### 3. Sidebar Session Details, Configuration Inspector & In-Flight Editing
+- **Side-by-Side Action Icon in Session Sidebar**:
+  - In `DiscussionSessionSidebar.tsx`, place a new **"Inspect / Modify Configuration"** icon (sliders/settings) directly side-by-side with the delete session icon.
+  - Tooltip: *"View debate configuration & modify upcoming rounds (when paused)"*.
+- **Debate Details & Configuration Modal**:
+  - Clicking the icon opens a comprehensive view of the debate's setup: Topic, User Objective/Idea, Participating Specialists, Engines & Models, Effort Levels, Thinking status, Repeater Mode, and Token Caps.
+- **Controlled In-Flight Modification While Paused**:
+  - **Allowed Modifications (Future Rounds & Parameters)**: When the debate is paused or in failed recovery mode, the user can adjust parameters for upcoming rounds:
+    - Swap models or providers for future rounds (e.g. switch an agent from Claude to Gemini or local Ollama).
+    - Modify effort levels, thinking toggles, or custom query directives for remaining turns.
+    - Add, remove, or re-order future specialist participants or extend maximum rounds.
+  - **Strict Immutability Invariant**: Historical rounds that have already executed, committed ledger blocks, and the currently executing turn remain strictly read-only and immutable to guarantee auditability and KV-cache hardware prefix validity.
+
+---
+
 ## 📋 Execution Order for Next Phase
 
-| Order | Initiative | Impact | Risk Level |
-| :---: | :--- | :--- | :---: |
-| **Step 1** | **System Refactor & Code Splitting** | High Maintainability & Code Quality | Very Low (100% Invariant Parity) |
-| **Step 2** | **Subscription-Aware Model Selection & Side-by-Side Effort Matrix** | Tailored Subscription Flexibility & Token Control | Low |
-| **Step 3** | **Context-Aware Smart Deliverable File Naming** | Immediate Organization & File Safety | Very Low |
-| **Step 4** | **Custom Skills Injection & Directory Linking** | Extensibility & Customization | Low |
-| **Step 5** | **Process Monitor, Token Quota Guards & Circuit-Breaker** | Complete Transparency & Cost Governance | Medium |
+| Order | Initiative | Status | Impact |
+| :---: | :--- | :---: | :--- |
+| **Step 1** | **Deliberation Failure Recovery & Pause/Resume (Initiative 6.1 & 6.2)** | **COMPLETED** | High Resilience & User Control |
+| **Step 2** | **Sidebar Details, Config Inspector & Paused In-Flight Editor (Initiative 6.3)** | **COMPLETED** | Interactive Governance & Flexibility |
+| **Step 3** | **System Refactor & Code Splitting (Initiative 1)** | Next In Queue | High Maintainability & Code Quality |
+| **Step 4** | **Process Monitor, Token Quota Guards & Circuit-Breaker (Initiative 3)** | Planned | Complete Transparency & Cost Governance |
+| **Step 5** | **Custom Skills Injection & Directory Linking (Initiative 2)** | Planned | Extensibility & Customization |
+| **Step 6** | **Context-Aware Smart Deliverable File Naming (Initiative 4)** | Planned | Immediate Organization & File Safety |
 

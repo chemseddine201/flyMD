@@ -335,7 +335,7 @@ pub fn evaluate_pipeline_epistemic_policy_with_override(
                     EpistemicMode::PrimaryMapper
                 }
             }
-            "build" | _ => {
+            _ => {
                 if prior_execution_failed {
                     if files_to_reread.is_empty() {
                         files_to_reread = select_priority_audit_files(workspace_path, 3);
@@ -406,6 +406,16 @@ pub fn build_epistemic_prompt_section(
     workspace_path: &Path,
     packet: Option<&CognitiveHandoffPacket>,
 ) -> String {
+    build_epistemic_prompt_section_with_mode(decision, workspace_path, packet, false, false)
+}
+
+pub fn build_epistemic_prompt_section_with_mode(
+    decision: &EpistemicDecision,
+    workspace_path: &Path,
+    packet: Option<&CognitiveHandoffPacket>,
+    agent_has_read_tool: bool,
+    token_saver_on: bool,
+) -> String {
     let mut s = String::new();
     s.push_str(&format!(
         "## Epistemic Handoff Mode: `{}`\n\n",
@@ -431,13 +441,23 @@ pub fn build_epistemic_prompt_section(
                 s.push_str(&format_compact_digest_markdown(pkt, true));
             }
             if !decision.files_to_reread.is_empty() {
-                s.push_str("### Targeted Delta Slices Requiring Fresh Inspection\n\n");
-                s.push_str(&read_targeted_file_slices(
-                    workspace_path,
-                    &decision.files_to_reread,
-                    90,
-                    9000,
-                ));
+                if agent_has_read_tool && token_saver_on {
+                    s.push_str("### Targeted Delta Files Requiring Fresh Inspection\n\n");
+                    for f in &decision.files_to_reread {
+                        let p = workspace_path.join(f);
+                        let bytes = p.metadata().map(|m| m.len()).unwrap_or(0);
+                        s.push_str(&format!("- `{}` ({} bytes on disk — inspect with Read tool)\n", f, bytes));
+                    }
+                    s.push('\n');
+                } else {
+                    s.push_str("### Targeted Delta Slices Requiring Fresh Inspection\n\n");
+                    s.push_str(&read_targeted_file_slices(
+                        workspace_path,
+                        &decision.files_to_reread,
+                        90,
+                        9000,
+                    ));
+                }
             }
         }
         EpistemicMode::BlindIndependentAudit => {
@@ -471,13 +491,23 @@ pub fn build_epistemic_prompt_section(
                  > 3. Apply the complete fix directly to disk and emit updated invariants.\n\n",
             );
             if !decision.files_to_reread.is_empty() {
-                s.push_str("### Raw Suspect File Slices on Disk\n\n");
-                s.push_str(&read_targeted_file_slices(
-                    workspace_path,
-                    &decision.files_to_reread,
-                    110,
-                    12000,
-                ));
+                if agent_has_read_tool && token_saver_on {
+                    s.push_str("### Raw Suspect Files on Disk\n\n");
+                    for f in &decision.files_to_reread {
+                        let p = workspace_path.join(f);
+                        let bytes = p.metadata().map(|m| m.len()).unwrap_or(0);
+                        s.push_str(&format!("- `{}` ({} bytes on disk — inspect with Read tool)\n", f, bytes));
+                    }
+                    s.push('\n');
+                } else {
+                    s.push_str("### Raw Suspect File Slices on Disk\n\n");
+                    s.push_str(&read_targeted_file_slices(
+                        workspace_path,
+                        &decision.files_to_reread,
+                        110,
+                        12000,
+                    ));
+                }
             }
         }
         EpistemicMode::PrimaryMapper | EpistemicMode::IsolatedPosition => {
@@ -508,6 +538,36 @@ pub fn format_handoff_state_emission_protocol(require_independent_resume: bool) 
          ```xml\n\
          <handoff_state>\n\
          {\"confidence\":\"high\",\"lockedInvariants\":[\"...\"],\"activeDisputes\":[\"...\"],\"unverifiedAssumptions\":[],\"peerMessages\":[{\"toRole\":\"Implementer\",\"kind\":\"directive\",\"message\":\"...\"}]}\n\
+         </handoff_state>\n\
+         ```\n",
+    );
+    s
+}
+
+/// Compact footer instruction asking the agent to emit Debate Board `<handoff_state>`
+/// with position, claims, reacts, and optional needs (Section 3.2).
+pub fn format_board_handoff_state_emission_protocol(require_independent_resume: bool) -> String {
+    let mut s = String::new();
+    if require_independent_resume {
+        s.push_str(
+            "\n\n### Mandatory Self-Conclusion Block\n\
+             Include an `<independent_resume>...</independent_resume>` section containing your independent technical conclusion derived strictly from raw file/spec evidence.\n",
+        );
+    }
+    s.push_str(
+        "\n### Debate Board State Block\n\
+         At the very end of your response, append the `<handoff_state>` JSON block (~400 tokens max, up to 8 claims, 8 reacts):\n\
+         - Refer to board claims by id (`C1`, `C2`, ...). Do not restate them.\n\
+         - Write only what changes the board. State concrete facts, decisions, risks, or questions.\n\
+         - Write in the language of the user's proposal.\n\
+         ```xml\n\
+         <handoff_state>\n\
+         {\n\
+           \"position\": \"latest stance, about 60 words\",\n\
+           \"claims\": [{\"text\": \"one point, about 28 words, exact numbers\", \"kind\": \"decision|risk|fact|question\"}],\n\
+           \"reacts\": [{\"id\": \"C1\", \"stance\": \"agree|object|refine|withdraw\", \"why\": \"about 15 words\"}],\n\
+           \"needs\": [\"C1\"]\n\
+         }\n\
          </handoff_state>\n\
          ```\n",
     );

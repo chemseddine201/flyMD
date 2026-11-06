@@ -2,7 +2,7 @@ use crate::agents::count_markdown_checklists;
 use crate::store::{FolderSupervisionConfig, SharedStore};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -60,39 +60,66 @@ fn is_markdown(name: &str) -> bool {
         || lower.ends_with(".txt")
 }
 
-pub fn is_allowed_file(fname: &str, allowed_exts: &[String]) -> bool {
-    // Never allow hidden files or dotfiles (.git, .DS_Store, etc.)
-    if fname.starts_with('.') {
-        return false;
-    }
+/// Pre-indexed fast extension filter for zero-allocation O(1) checks during directory traversal.
+pub struct AllowedExtensionFilter {
+    is_wildcard: bool,
+    is_empty: bool,
+    exts: HashSet<String>,
+}
 
-    // Wildcard * or *.* allows any non-hidden file
-    if allowed_exts.iter().any(|ext| ext == "*" || ext == "*.*") {
-        return true;
-    }
-
-    // If allowed_exts list is empty, default to markdown
-    if allowed_exts.is_empty() {
-        return is_markdown(fname);
-    }
-
-    let lower_name = fname.to_lowercase();
-    for ext in allowed_exts {
-        let clean = ext.trim().to_lowercase();
-        if clean.is_empty() {
-            continue;
+impl AllowedExtensionFilter {
+    pub fn new(allowed_exts: &[String]) -> Self {
+        if allowed_exts.iter().any(|ext| ext == "*" || ext == "*.*") {
+            return Self {
+                is_wildcard: true,
+                is_empty: false,
+                exts: HashSet::new(),
+            };
         }
-        let dot_ext = if clean.starts_with('.') {
-            clean
-        } else {
-            format!(".{}", clean)
-        };
-        if lower_name.ends_with(&dot_ext) {
+        if allowed_exts.is_empty() {
+            return Self {
+                is_wildcard: false,
+                is_empty: true,
+                exts: HashSet::new(),
+            };
+        }
+        let mut exts = HashSet::with_capacity(allowed_exts.len());
+        for ext in allowed_exts {
+            let clean = ext.trim().trim_start_matches('.').to_lowercase();
+            if !clean.is_empty() {
+                exts.insert(clean);
+            }
+        }
+        Self {
+            is_wildcard: false,
+            is_empty: false,
+            exts,
+        }
+    }
+
+    #[inline]
+    pub fn is_allowed(&self, fname: &str) -> bool {
+        if fname.starts_with('.') {
+            return false;
+        }
+        if self.is_wildcard {
             return true;
         }
+        if self.is_empty {
+            return is_markdown(fname);
+        }
+        if let Some(pos) = fname.rfind('.') {
+            let ext = &fname[pos + 1..];
+            if self.exts.contains(&ext.to_lowercase()) {
+                return true;
+            }
+        }
+        false
     }
+}
 
-    false
+pub fn is_allowed_file(fname: &str, allowed_exts: &[String]) -> bool {
+    AllowedExtensionFilter::new(allowed_exts).is_allowed(fname)
 }
 
 fn is_ignored_dir(name: &str) -> bool {
@@ -144,15 +171,45 @@ fn inspect_markdown_metadata(path: &Path) -> (Option<String>, usize, usize) {
         None
     };
 
-    if let Ok(content) = fs::read_to_string(path) {
-        let (total, done) = count_markdown_checklists(&content);
-        if detected_agent.is_none() {
-            let head: String = content
-                .lines()
-                .take(20)
-                .collect::<Vec<_>>()
-                .join("\n")
-                .to_lowercase();
+    let is_md = is_markdown(&fname_lower);
+
+    if is_md {
+        if let Ok(content) = fs::read_to_string(path) {
+            let (total, done) = count_markdown_checklists(&content);
+            if detected_agent.is_none() {
+                let head: String = content
+                    .lines()
+                    .take(20)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .to_lowercase();
+                if head.contains("antigravity") {
+                    detected_agent = Some("antigravity".to_string());
+                } else if head.contains("claude-code") || head.contains("claude code") {
+                    detected_agent = Some("claude-code".to_string());
+                } else if head.contains("opencode") {
+                    detected_agent = Some("opencode".to_string());
+                } else if head.contains("codex") {
+                    detected_agent = Some("codex".to_string());
+                } else if head.contains("cursor") {
+                    detected_agent = Some("cursor".to_string());
+                } else if head.contains("zcode") {
+                    detected_agent = Some("zcode".to_string());
+                }
+            }
+            return (detected_agent, total, done);
+        }
+    } else if detected_agent.is_none() {
+        // For non-markdown files (e.g. supervised code/json), avoid loading entire large files.
+        // Bounded read of first 20 lines only for agent signature detection.
+        if let Ok(file) = fs::File::open(path) {
+            use std::io::{BufRead, BufReader};
+            let reader = BufReader::new(file);
+            let mut head = String::new();
+            for line in reader.lines().take(20).flatten() {
+                head.push_str(&line.to_lowercase());
+                head.push('\n');
+            }
             if head.contains("antigravity") {
                 detected_agent = Some("antigravity".to_string());
             } else if head.contains("claude-code") || head.contains("claude code") {
@@ -167,10 +224,9 @@ fn inspect_markdown_metadata(path: &Path) -> (Option<String>, usize, usize) {
                 detected_agent = Some("zcode".to_string());
             }
         }
-        (detected_agent, total, done)
-    } else {
-        (detected_agent, 0, 0)
     }
+
+    (detected_agent, 0, 0)
 }
 
 impl WorkspaceManager {
@@ -211,99 +267,63 @@ impl WorkspaceManager {
                 .unwrap_or(&default_exts),
         };
 
+        let ext_filter = AllowedExtensionFilter::new(effective_exts);
         let mut results = Vec::new();
         let is_shallow = scan_mode == "shallow";
+        let max_depth = if is_shallow { 1 } else { usize::MAX };
 
-        if is_shallow {
-            if let Ok(entries) = fs::read_dir(root) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                            if !file_name.starts_with('.') && is_allowed_file(file_name, effective_exts) {
-                                if let Ok(meta) = entry.metadata() {
-                                    let mtime = meta
-                                        .modified()
-                                        .ok()
-                                        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                                        .map(|d| d.as_millis() as i64)
-                                        .unwrap_or(0);
-                                    let ctime = meta
-                                        .created()
-                                        .ok()
-                                        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                                        .map(|d| d.as_millis() as i64)
-                                        .unwrap_or(mtime);
-                                    let is_recent = ctime >= self.session_start_time
-                                        || mtime >= self.session_start_time;
-                                    let (source_agent, checklist_total, checklist_done) =
-                                        inspect_markdown_metadata(&path);
-
-                                    results.push(ScannedMdFile {
-                                        path: path.to_string_lossy().to_string(),
-                                        name: file_name.to_string(),
-                                        relative_path: file_name.to_string(),
-                                        created_at: ctime,
-                                        modified_at: mtime,
-                                        size: meta.len(),
-                                        is_new: is_recent,
-                                        source_agent,
-                                        checklist_total,
-                                        checklist_done,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            let walker = WalkDir::new(root).into_iter().filter_entry(|e| {
+        let walker = WalkDir::new(root)
+            .max_depth(max_depth)
+            .into_iter()
+            .filter_entry(|e| {
                 if e.file_type().is_dir() {
                     let name = e.file_name().to_str().unwrap_or("");
-                    !is_ignored_dir(name)
+                    if e.depth() == 0 {
+                        true
+                    } else {
+                        !is_ignored_dir(name)
+                    }
                 } else {
                     true
                 }
             });
 
-            for entry in walker.flatten() {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                        if is_allowed_file(file_name, effective_exts) {
-                            if let Ok(meta) = entry.metadata() {
-                                let mtime = meta
-                                    .modified()
-                                    .ok()
-                                    .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                                    .map(|d| d.as_millis() as i64)
-                                    .unwrap_or(0);
-                                let ctime = meta
-                                    .created()
-                                    .ok()
-                                    .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                                    .map(|d| d.as_millis() as i64)
-                                    .unwrap_or(mtime);
-                                let rel = path.strip_prefix(root).unwrap_or(path);
-                                let is_recent = ctime >= self.session_start_time
-                                    || mtime >= self.session_start_time;
-                                let (source_agent, checklist_total, checklist_done) =
-                                    inspect_markdown_metadata(path);
+        for entry in walker.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if ext_filter.is_allowed(file_name) {
+                        if let Ok(meta) = entry.metadata() {
+                            let mtime = meta
+                                .modified()
+                                .ok()
+                                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                                .map(|d| d.as_millis() as i64)
+                                .unwrap_or(0);
+                            let ctime = meta
+                                .created()
+                                .ok()
+                                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                                .map(|d| d.as_millis() as i64)
+                                .unwrap_or(mtime);
+                            let rel = path.strip_prefix(root).unwrap_or(path);
+                            let is_recent = ctime >= self.session_start_time
+                                || mtime >= self.session_start_time;
+                            let (source_agent, checklist_total, checklist_done) =
+                                inspect_markdown_metadata(path);
 
-                                results.push(ScannedMdFile {
-                                    path: path.to_string_lossy().to_string(),
-                                    name: file_name.to_string(),
-                                    relative_path: rel.to_string_lossy().to_string(),
-                                    created_at: ctime,
-                                    modified_at: mtime,
-                                    size: meta.len(),
-                                    is_new: is_recent,
-                                    source_agent,
-                                    checklist_total,
-                                    checklist_done,
-                                });
-                            }
+                            results.push(ScannedMdFile {
+                                path: path.to_string_lossy().to_string(),
+                                name: file_name.to_string(),
+                                relative_path: rel.to_string_lossy().to_string(),
+                                created_at: ctime,
+                                modified_at: mtime,
+                                size: meta.len(),
+                                is_new: is_recent,
+                                source_agent,
+                                checklist_total,
+                                checklist_done,
+                            });
                         }
                     }
                 }
@@ -348,7 +368,7 @@ impl WorkspaceManager {
         let session_start = self.session_start_time;
         let known_files = Arc::clone(&self.known_files);
         let debounce_map = Arc::clone(&self.debounce_map);
-        let allowed_exts = config.allowed_extensions.clone();
+        let ext_filter = AllowedExtensionFilter::new(&config.allowed_extensions);
 
         let watcher_res = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
             if let Ok(event) = res {
@@ -362,7 +382,7 @@ impl WorkspaceManager {
                                 Some(n) => n,
                                 None => continue,
                             };
-                            if !is_allowed_file(fname, &allowed_exts) {
+                            if !ext_filter.is_allowed(fname) {
                                 continue;
                             }
 

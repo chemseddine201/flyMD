@@ -2,8 +2,10 @@ export const VIEW_MODES = ['split', 'preview', 'editor', 'wysiwyg', 'agents'] as
 export type ViewMode = (typeof VIEW_MODES)[number];
 
 export const THEMES = [
+  'system',
   'dark',
   'light',
+  'clean-white',
   'tokyo-night',
   'catppuccin',
   'dracula',
@@ -14,8 +16,10 @@ export const THEMES = [
 export type AppTheme = (typeof THEMES)[number];
 
 export const THEME_CLASSES: Record<AppTheme, string> = {
+  system: 'theme-system bg-[#ffffff] dark:bg-[#0d1117] text-[#0f172a] dark:text-[#e6edf3]',
   dark: 'theme-dark bg-[#0d1117] text-[#e6edf3]',
-  light: 'theme-light bg-[#ffffff] text-[#1f2328]',
+  light: 'theme-light bg-[#ffffff] text-[#0f172a]',
+  'clean-white': 'theme-light bg-[#ffffff] text-[#0f172a]',
   'tokyo-night': 'theme-tokyo-night bg-[#1a1b26] text-[#c0caf5]',
   catppuccin: 'theme-catppuccin bg-[#24273a] text-[#cad3f5]',
   dracula: 'theme-dracula bg-[#282a36] text-[#f8f8f2]',

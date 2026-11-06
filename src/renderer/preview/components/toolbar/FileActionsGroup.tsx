@@ -46,15 +46,15 @@ export const FileActionsGroup: React.FC<FileActionsGroupProps> = ({
   };
 
   return (
-    <div className="flex items-center gap-1 pr-2 border-r border-slate-800">
+    <div className="flex items-center gap-1 pr-2 border-r border-slate-200 dark:border-slate-800">
       {onToggleSidebar && (
         <button
           onClick={onToggleSidebar}
           title={isSidebarOpen ? 'Hide Project Explorer (Ctrl+B)' : 'Show Project Explorer (Ctrl+B)'}
           className={`p-1.5 rounded transition ${
             isSidebarOpen
-              ? 'text-sky-400 bg-sky-950/60 border border-sky-500/30'
-              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+              ? 'text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-500/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
           <PanelLeft className="w-4 h-4" />
@@ -63,14 +63,14 @@ export const FileActionsGroup: React.FC<FileActionsGroupProps> = ({
       <button
         onClick={onNew}
         title="New File (Ctrl+N)"
-        className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <FilePlus className="w-4 h-4" />
       </button>
       <button
         onClick={onOpen}
         title="Open Markdown File (Ctrl+O)"
-        className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <FolderOpen className="w-4 h-4" />
       </button>
@@ -78,7 +78,7 @@ export const FileActionsGroup: React.FC<FileActionsGroupProps> = ({
         <button
           onClick={onOpenFolder}
           title="Open & Supervise Project Folder (Ctrl+Shift+O)"
-          className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded transition"
+          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
         >
           <FolderTree className="w-4 h-4" />
         </button>
@@ -86,14 +86,14 @@ export const FileActionsGroup: React.FC<FileActionsGroupProps> = ({
       <button
         onClick={onSave}
         title="Save Document (Ctrl+S)"
-        className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Save className="w-4 h-4" />
       </button>
       <button
         onClick={onSaveAs}
         title="Save As... (Ctrl+Shift+S)"
-        className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <SaveAll className="w-4 h-4" />
       </button>
@@ -106,8 +106,8 @@ export const FileActionsGroup: React.FC<FileActionsGroupProps> = ({
         title={copied ? 'Copied Markdown to clipboard!' : 'Quick Copy Markdown content'}
         className={`p-1.5 rounded transition flex items-center gap-1 ${
           copied
-            ? 'text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 shadow-sm'
-            : 'text-slate-400 hover:text-sky-300 hover:bg-slate-800'
+            ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-500/40 shadow-sm'
+            : 'text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-300 hover:bg-slate-200 dark:hover:bg-slate-800'
         }`}
       >
         {copied ? (

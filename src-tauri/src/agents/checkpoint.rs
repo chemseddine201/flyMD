@@ -2,7 +2,8 @@
 
 use super::types::{now_ms, AgentCheckpoint};
 use crate::store::SharedStore;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 use tauri::{AppHandle, Emitter};
@@ -240,7 +241,7 @@ pub fn restore_checkpoint(
     Ok(format!("Restored safety checkpoint {}: {}", cp.id, summary_detail))
 }
 
-/// Appends an execution entry to the shared `.flymd/MEMORY.md` ledger.
+/// Appends an execution entry to the shared `.flymd/MEMORY.md` ledger using append-only writes.
 pub fn append_project_memory(workspace_path: &str, entry_markdown: &str) {
     let ws = Path::new(workspace_path);
     if !ws.exists() {
@@ -250,37 +251,40 @@ pub fn append_project_memory(workspace_path: &str, entry_markdown: &str) {
     fs::create_dir_all(&flymd_dir).ok();
     let mem_file = flymd_dir.join("MEMORY.md");
 
-    let mut current = if mem_file.exists() {
-        fs::read_to_string(&mem_file).unwrap_or_default()
-    } else {
-        "# FlyMD Shared Agent Memory Ledger\n\n> Auto-maintained context ledger across Antigravity, Claude Code, OpenCode, ZCode, Cursor, Codex, and Custom Agents.\n\n".to_string()
-    };
-
-    current.push_str(entry_markdown);
-    current.push('\n');
-    fs::write(&mem_file, current).ok();
-}
-
-/// Safely returns up to the last `max_bytes` of a UTF-8 string on a valid character boundary.
-pub fn safe_tail_utf8(content: &str, max_bytes: usize) -> String {
-    if content.len() <= max_bytes {
-        return content.to_string();
+    let needs_header =
+        !mem_file.exists() || mem_file.metadata().map(|m| m.len() == 0).unwrap_or(true);
+    if needs_header {
+        let header = "# FlyMD Shared Agent Memory Ledger\n\n> Auto-maintained context ledger across Antigravity, Claude Code, OpenCode, ZCode, Cursor, Codex, and Custom Agents.\n\n";
+        fs::write(&mem_file, header).ok();
     }
-    let min_start = content.len() - max_bytes;
-    let start_idx = content
-        .char_indices()
-        .map(|(idx, _)| idx)
-        .find(|&idx| idx >= min_start)
-        .unwrap_or(content.len());
-    content[start_idx..].to_string()
+
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&mem_file) {
+        let _ = writeln!(file, "{}", entry_markdown);
+    }
 }
 
-/// Reads recent history from `.flymd/MEMORY.md` for cross-agent context synchronization.
+pub use crate::common::utf8::safe_tail_utf8;
+
+/// Reads recent history from `.flymd/MEMORY.md` for cross-agent context synchronization, dropping transient "Dispatched" entries.
 pub fn read_project_memory(workspace_path: &str) -> String {
     let mem_file = Path::new(workspace_path).join(".flymd").join("MEMORY.md");
     if mem_file.exists() {
         let content = fs::read_to_string(&mem_file).unwrap_or_default();
-        safe_tail_utf8(&content, 4000)
+        let filtered: Vec<&str> = content
+            .split("\n### [")
+            .enumerate()
+            .filter_map(|(i, chunk)| {
+                if i == 0 {
+                    Some(chunk)
+                } else if chunk.contains("— Dispatched") {
+                    None
+                } else {
+                    Some(chunk)
+                }
+            })
+            .collect();
+        let cleaned = filtered.join("\n### [");
+        safe_tail_utf8(&cleaned, 4000)
     } else {
         String::new()
     }

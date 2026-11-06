@@ -1,6 +1,6 @@
 {
   "name": "fly-md",
-  "version": "2.1.0",
+  "version": "2.3.0",
   "description": "Ultra-lightweight Tauri v2 Markdown supervisor, Multi-Agent Studio, Evidence-Graded Debate Engine & Epistemic Cache Handoff Hub",
   "main": "dist-electron/main/index.js",
   "author": "FlyMD Team",
@@ -16,7 +16,9 @@
     "dist:linux": "npm run build && electron-builder --linux",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "npm run build && tauri build"
+    "tauri:build": "npm run build && tauri build",
+    "test:round-plan": "node --experimental-strip-types --test src/renderer/preview/components/agents/studio/discussion/roundPlanResolver.test.ts",
+    "lint:contrast": "node scripts/lint_contrast.js"
   },
   "dependencies": {},
   "devDependencies": {

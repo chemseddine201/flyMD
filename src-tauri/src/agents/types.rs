@@ -1,14 +1,12 @@
 //! Data models, task records, and serialization contracts for the FlyMD Multi-Agent system.
 
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
+
+pub use crate::discussion::types::TokenUsage;
 
 /// Returns current timestamp in milliseconds since Unix epoch.
 pub fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    crate::common::time::now_ms()
 }
 
 /// Counts total checklist items (`- [ ]`, `- [x]`) and completed items.
@@ -67,6 +65,10 @@ pub struct AgentCredentialConfig {
     pub default_effort_level: Option<String>,
     #[serde(rename = "defaultThinkingEnabled")]
     pub default_thinking_enabled: Option<bool>,
+    #[serde(rename = "selectedModel", default)]
+    pub selected_model: Option<String>,
+    #[serde(rename = "subscriptionTier", default)]
+    pub subscription_tier: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -108,6 +110,7 @@ impl AgentToolAction {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn with_details(
         id: String,
         kind: String,
@@ -176,9 +179,13 @@ pub struct AgentProfile {
     pub supports_effort: Option<bool>,
     #[serde(rename = "supportsThinking", default)]
     pub supports_thinking: Option<bool>,
+    #[serde(rename = "defaultModelId", default, skip_serializing_if = "Option::is_none")]
+    pub default_model_id: Option<String>,
+    #[serde(rename = "subscriptionTier", default, skip_serializing_if = "Option::is_none")]
+    pub subscription_tier: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AgentTaskRequest {
     #[serde(rename = "targetAgentId")]
     pub target_agent_id: String,
@@ -235,6 +242,12 @@ pub struct AgentTaskRequest {
     pub effort_level: Option<String>,
     #[serde(rename = "thinkingEnabled", default)]
     pub thinking_enabled: Option<bool>,
+    #[serde(rename = "modelId", default)]
+    pub model_id: Option<String>,
+    #[serde(rename = "tokenUsage", default, skip_serializing_if = "Option::is_none")]
+    pub token_usage: Option<TokenUsage>,
+    #[serde(rename = "tokenSaver", default, skip_serializing_if = "Option::is_none")]
+    pub token_saver: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -332,6 +345,12 @@ pub struct AgentTaskRecord {
     pub effort_level: Option<String>,
     #[serde(rename = "thinkingEnabled", default)]
     pub thinking_enabled: Option<bool>,
+    #[serde(rename = "modelId", default)]
+    pub model_id: Option<String>,
+    #[serde(rename = "tokenUsage", default, skip_serializing_if = "Option::is_none")]
+    pub token_usage: Option<TokenUsage>,
+    #[serde(rename = "tokenSaver", default, skip_serializing_if = "Option::is_none")]
+    pub token_saver: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -384,4 +403,26 @@ pub struct CouncilBroadcastResponse {
     pub feedbacks: Vec<CouncilAgentFeedback>,
     pub consensus: String,
     pub summary: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct FetchedAgentModel {
+    pub id: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+    #[serde(rename = "supportsReasoning")]
+    pub supports_reasoning: bool,
+    #[serde(rename = "supportedEffortLevels")]
+    pub supported_effort_levels: Vec<String>,
+    #[serde(rename = "defaultEffortLevel")]
+    pub default_effort_level: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct FetchAgentModelsResult {
+    pub models: Vec<FetchedAgentModel>,
+    pub source: String,
+    pub error: Option<String>,
 }

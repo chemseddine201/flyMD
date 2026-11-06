@@ -30,21 +30,21 @@ const renderFileIcon = (fileName: string, isSelected: boolean) => {
   const ext = lower.split('.').pop() || '';
 
   if (ext === 'html' || ext === 'htm') {
-    return <Globe className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-300' : 'text-amber-400 group-hover:text-amber-300'}`} />;
+    return <Globe className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-700 dark:text-amber-300' : 'text-amber-600 dark:text-amber-400 group-hover:text-amber-700 dark:group-hover:text-amber-300'}`} />;
   }
   if (ext === 'css' || ext === 'scss' || ext === 'less') {
-    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-pink-300' : 'text-pink-400 group-hover:text-pink-300'}`} />;
+    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-pink-700 dark:text-pink-300' : 'text-pink-600 dark:text-pink-400 group-hover:text-pink-700 dark:group-hover:text-pink-300'}`} />;
   }
   if (ext === 'js' || ext === 'jsx' || ext === 'ts' || ext === 'tsx') {
-    return <Code className={`w-3.5 h-3.5 ${isSelected ? 'text-yellow-300' : 'text-yellow-400 group-hover:text-yellow-300'}`} />;
+    return <Code className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-700 dark:text-yellow-300' : 'text-amber-600 dark:text-yellow-400 group-hover:text-amber-700 dark:group-hover:text-yellow-300'}`} />;
   }
   if (ext === 'json' || ext === 'yaml' || ext === 'yml' || ext === 'toml' || ext === 'xml') {
-    return <Braces className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-300' : 'text-emerald-400 group-hover:text-emerald-300'}`} />;
+    return <Braces className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-700 dark:text-emerald-300' : 'text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300'}`} />;
   }
   if (ext === 'py' || ext === 'rs' || ext === 'go' || ext === 'php' || ext === 'sh') {
-    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-cyan-300' : 'text-cyan-400 group-hover:text-cyan-300'}`} />;
+    return <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-cyan-700 dark:text-cyan-300' : 'text-cyan-600 dark:text-cyan-400 group-hover:text-cyan-700 dark:group-hover:text-cyan-300'}`} />;
   }
-  return <FileText className={`w-3.5 h-3.5 ${isSelected ? 'text-sky-400' : 'text-slate-400 group-hover:text-sky-300'}`} />;
+  return <FileText className={`w-3.5 h-3.5 ${isSelected ? 'text-sky-600 dark:text-sky-400' : 'text-slate-600 dark:text-slate-400 group-hover:text-sky-600 dark:group-hover:text-sky-300'}`} />;
 };
 
 export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
@@ -96,9 +96,9 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
           <div
             onClick={() => toggleFolder(node.id)}
             style={{ paddingLeft: `${node.depth * 12 + 6}px` }}
-            className="group flex items-center gap-1.5 py-1 pr-2 rounded-md cursor-pointer text-slate-300 hover:bg-slate-800/75 hover:text-slate-100 transition"
+            className="group flex items-center gap-1.5 py-1 pr-2 rounded-md cursor-pointer text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/75 hover:text-slate-900 dark:hover:text-slate-100 transition"
           >
-            <span className="text-slate-500 group-hover:text-slate-300 shrink-0">
+            <span className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0">
               {isExpanded ? (
                 <ChevronDown className="w-3.5 h-3.5" />
               ) : (
@@ -108,14 +108,14 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
 
             <div className="relative shrink-0">
               {isExpanded ? (
-                <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                <FolderOpen className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
               ) : (
-                <Folder className="w-3.5 h-3.5 text-amber-400/85" />
+                <Folder className="w-3.5 h-3.5 text-amber-500/85 dark:text-amber-400/85" />
               )}
               {node.hasNewDescendant && !isExpanded && (
                 <span
                   title="Contains newly created Markdown file(s)"
-                  className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-slate-900 animate-pulse"
+                  className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900 animate-pulse"
                 />
               )}
             </div>
@@ -123,12 +123,12 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
             <span className="truncate flex-1 font-medium text-[11px]">{node.name}</span>
 
             {node.hasNewDescendant && !isExpanded && colorBlindSafe && (
-              <span className="text-[9px] font-bold px-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+              <span className="text-[9px] font-bold px-1 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40 shrink-0">
                 NEW
               </span>
             )}
 
-            <span className="text-[9px] text-slate-500 font-mono px-1 rounded bg-slate-900/70">
+            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono px-1 rounded bg-slate-200/60 dark:bg-slate-900/70">
               {node.fileCount}
             </span>
           </div>
@@ -137,7 +137,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
             <div className="relative">
               <div
                 style={{ left: `${node.depth * 12 + 13}px` }}
-                className="absolute top-0 bottom-0 w-px bg-slate-800/80 pointer-events-none"
+                className="absolute top-0 bottom-0 w-px bg-slate-200 dark:bg-slate-800/80 pointer-events-none"
               />
               {node.children.map(renderNode)}
             </div>
@@ -178,8 +178,8 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
         title={`${file.relativePath} • Right-click to Open in Directory or Delete`}
         className={`group flex items-center gap-2 py-1 pr-2 rounded-md cursor-pointer transition ${
           isSelected
-            ? 'bg-sky-500/20 text-sky-200 font-semibold border border-sky-500/30'
-            : 'text-slate-300 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent'
+            ? 'bg-sky-50 dark:bg-sky-500/20 text-sky-700 dark:text-sky-200 font-semibold border border-sky-300 dark:border-sky-500/30'
+            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent'
         }`}
       >
         <div className="relative shrink-0">
@@ -187,7 +187,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
           {file.isNew && (
             <span
               title="New / recently created file"
-              className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-slate-900"
+              className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse ring-2 ring-white dark:ring-slate-900"
             />
           )}
         </div>
@@ -222,7 +222,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {allFolderIds.length > 0 && (
-        <div className="px-3 py-1 bg-slate-950/30 border-b border-slate-800/50 flex items-center justify-between text-[10px] text-slate-400">
+        <div className="px-3 py-1 bg-slate-100/70 dark:bg-slate-950/30 border-b border-slate-200 dark:border-slate-800/50 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
           <span className="uppercase tracking-wider font-semibold text-[9px] text-slate-500">
             Explorer Tree
           </span>
@@ -231,7 +231,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
               type="button"
               onClick={expandAll}
               title="Expand All Folders"
-              className="p-0.5 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+              className="p-0.5 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
             >
               <ChevronsUpDown className="w-3 h-3" />
             </button>
@@ -239,7 +239,7 @@ export const AppSystemFolderTree: React.FC<AppSystemFolderTreeProps> = ({
               type="button"
               onClick={collapseAll}
               title="Collapse All Folders"
-              className="p-0.5 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+              className="p-0.5 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
             >
               <ChevronsDownUp className="w-3 h-3" />
             </button>

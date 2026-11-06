@@ -421,31 +421,31 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
     switch (status) {
       case 'idle':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/60">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60">
             <Clock className="w-2.5 h-2.5" /> Idle
           </span>
         );
       case 'debating':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-950/70 text-indigo-400 border border-indigo-700/60 animate-pulse">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border border-indigo-500/30 animate-pulse">
             <Activity className="w-2.5 h-2.5" /> Debating
           </span>
         );
       case 'report_ready':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-700/60">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-500/30">
             <FileText className="w-2.5 h-2.5" /> Report Ready
           </span>
         );
       case 'pipeline_running':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-600/60 animate-pulse">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 animate-pulse">
             <Play className="w-2.5 h-2.5 fill-current" /> Running
           </span>
         );
       case 'completed':
         return (
-          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-600/60">
+          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
             <CheckCircle2 className="w-2.5 h-2.5" /> Done
           </span>
         );
@@ -465,8 +465,8 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
           onClick={() => selectProject(node.id)}
           className={`group flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer transition-all duration-150 ${
             isSelected
-              ? 'bg-indigo-600/25 border border-indigo-500/50 text-slate-100 font-medium shadow-sm'
-              : 'hover:bg-slate-800/60 text-slate-300 border border-transparent'
+              ? 'bg-indigo-50 dark:bg-indigo-600/25 border border-indigo-300 dark:border-indigo-500/50 text-indigo-900 dark:text-slate-100 font-medium shadow-sm'
+              : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300 border border-transparent'
           }`}
           style={{ paddingLeft: `${Math.max(8, depth * 14 + 8)}px` }}
         >
@@ -475,7 +475,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
               <button
                 type="button"
                 onClick={(e) => toggleExpand(node.id, e)}
-                className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+                className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
               >
                 {isExpanded ? (
                   <ChevronDown className="w-3.5 h-3.5" />
@@ -489,7 +489,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
 
             <Boxes
               className={`w-3.5 h-3.5 shrink-0 ${
-                isSelected ? 'text-indigo-400' : 'text-slate-500'
+                isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
               }`}
             />
 
@@ -503,7 +503,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
               type="button"
               title="Add Sub-Project"
               onClick={(e) => handleOpenCreateModal(node.id, e)}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-700/80 text-slate-400 hover:text-indigo-300 transition-all"
+              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700/80 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-all"
             >
               <Plus className="w-3 h-3" />
             </button>
@@ -513,7 +513,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
               title="Delete Project / Sub-Project"
               disabled={isDeleting && pendingDeleteNode?.id === node.id}
               onClick={(e) => handleOpenDeleteModal(node, e)}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-950/80 text-slate-400 hover:text-red-400 transition-all"
+              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/80 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-all"
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -521,7 +521,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
         </div>
 
         {hasChildren && isExpanded && (
-          <div className="flex flex-col border-l border-slate-800/80 ml-3.5 pl-0.5">
+          <div className="flex flex-col border-l border-slate-200 dark:border-slate-800/80 ml-3.5 pl-0.5">
             {node.children.map((child) => renderNode(child, depth + 1))}
           </div>
         )}
@@ -537,7 +537,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
       <aside
         onClick={() => toggleCollapse(false)}
         title="Click to expand Projects Tree"
-        className="w-10 shrink-0 h-full border-r border-slate-800/90 bg-slate-950/80 hover:bg-slate-900/90 cursor-pointer flex flex-col items-center py-3 gap-3 transition-colors select-none group"
+        className="w-10 shrink-0 h-full border-r border-slate-200 dark:border-slate-800/90 bg-slate-50/90 dark:bg-slate-950/80 hover:bg-slate-100 dark:hover:bg-slate-900/90 cursor-pointer flex flex-col items-center py-3 gap-3 transition-colors select-none group"
       >
         <button
           type="button"
@@ -546,20 +546,20 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
             toggleCollapse(false);
           }}
           title="Expand Projects Tree"
-          className="p-1 rounded-md text-slate-400 hover:text-indigo-300 hover:bg-slate-800 transition-colors"
+          className="p-1 rounded-md text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
         >
-          <PanelLeftOpen className="w-4 h-4 text-indigo-400" />
+          <PanelLeftOpen className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
         </button>
 
         <div
           title={`${projectHierarchy.length} Projects Registered`}
-          className="w-5 h-5 rounded-full bg-indigo-950/90 border border-indigo-700/60 text-[10px] text-indigo-300 font-mono flex items-center justify-center font-bold"
+          className="w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950/90 border border-indigo-200 dark:border-indigo-700/60 text-[10px] text-indigo-700 dark:text-indigo-300 font-mono flex items-center justify-center font-bold"
         >
           {projectHierarchy.length}
         </div>
 
         <div
-          className="text-[10px] font-bold uppercase tracking-wider text-slate-500 group-hover:text-slate-300 transition-colors mt-2"
+          className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors mt-2"
           style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
         >
           Projects Tree
@@ -574,13 +574,13 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
   return (
     <div
       style={{ width: `${treeWidth}px` }}
-      className="relative flex flex-col h-full border-r border-slate-800/80 bg-slate-950/60 backdrop-blur-sm shrink-0 select-none"
+      className="relative flex flex-col h-full border-r border-slate-200 dark:border-slate-800/80 bg-white/95 dark:bg-slate-950/60 backdrop-blur-sm shrink-0 select-none"
     >
       {/* Header with Collapsible & Close Controls */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-800/80 bg-slate-900/70">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50/90 dark:bg-slate-900/70">
         <div className="flex items-center gap-2 min-w-0">
-          <FolderTree className="w-4 h-4 text-indigo-400 shrink-0" />
-          <span className="font-semibold text-xs tracking-wider uppercase text-slate-200 truncate">
+          <FolderTree className="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0" />
+          <span className="font-semibold text-xs tracking-wider uppercase text-slate-800 dark:text-slate-200 truncate">
             Projects Tree
           </span>
         </div>
@@ -590,7 +590,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
             type="button"
             onClick={() => handleOpenCreateModal(null)}
             title="Create Master Project"
-            className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-indigo-600/80 hover:bg-indigo-600 text-white shadow-xs transition-colors"
+            className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-colors"
           >
             <FolderPlus className="w-3.5 h-3.5" />
             <span>New</span>
@@ -600,7 +600,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
             type="button"
             onClick={() => toggleCollapse(true)}
             title="Collapse Projects Sidebar"
-            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
           >
             <PanelLeftClose className="w-3.5 h-3.5" />
           </button>
@@ -610,7 +610,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
               type="button"
               onClick={onClose}
               title="Close Projects Navigator"
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-rose-300 transition-colors"
+              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -630,7 +630,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
             <button
               type="button"
               onClick={() => handleOpenCreateModal(null)}
-              className="mt-3 flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 transition-all"
+              className="mt-3 flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-600/30 dark:hover:bg-indigo-600/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 transition-all"
             >
               <Plus className="w-3.5 h-3.5" /> Create Master Project
             </button>
@@ -641,9 +641,9 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
       </div>
 
       {/* Footer Info */}
-      <div className="px-3 py-2 border-t border-slate-800/80 bg-slate-900/40 text-[11px] text-slate-400 flex items-center justify-between">
+      <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/40 text-[11px] text-slate-600 dark:text-slate-400 flex items-center justify-between">
         <span>{projectHierarchy.length} Master Projects</span>
-        <span className="text-[10px] text-slate-500 font-mono">OMH Trees</span>
+        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">OMH Trees</span>
       </div>
 
       {/* Resizable Divider Handle (Drag right/left) */}
@@ -655,31 +655,31 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl p-4 text-slate-100 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-2xl p-4 text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                 {modalParentId ? 'Create Child Sub-Project' : 'Create Master Project'}
               </h3>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {submitError && (
-              <div className="mb-3 p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] leading-relaxed">
+              <div className="mb-3 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] leading-relaxed">
                 {submitError}
               </div>
             )}
 
             <form onSubmit={handleCreateSubmit} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                   Project / Topic Name *
                 </label>
                 <input
@@ -689,43 +689,43 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                   placeholder="e.g. Physics Quantum Lab, Market Research, Book Chapter, System Architecture..."
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               {/* Workspace Directory Selector with Native Folder Picker */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-medium text-slate-400">
+                  <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400">
                     Workspace Directory
                   </label>
-                  <span className="text-[10px] text-slate-500">Auto-detected from opened folder or CWD</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">Auto-detected from opened folder or CWD</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="flex-1 flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus-within:border-indigo-500">
-                    <Folder className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <div className="flex-1 flex items-center gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus-within:border-indigo-500">
+                    <Folder className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
                     <input
                       type="text"
                       placeholder="e.g. G:\xampp-httpdocs\fly4 or . (Current Directory)"
                       value={modalWorkspacePath}
                       onChange={(e) => setModalWorkspacePath(e.target.value)}
-                      className="w-full bg-transparent border-0 focus:outline-none text-xs text-slate-200 font-mono"
+                      className="w-full bg-transparent border-0 focus:outline-none text-xs text-slate-800 dark:text-slate-200 font-mono"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleBrowseModalWorkspace}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs shrink-0 transition"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 text-xs shrink-0 transition"
                     title="Select folder via native dialog..."
                   >
-                    <FolderOpen className="w-3.5 h-3.5 text-sky-400" />
+                    <FolderOpen className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
                     <span>Browse...</span>
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                   Description / Goals &amp; Scope
                 </label>
                 <textarea
@@ -733,34 +733,34 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                   placeholder="Describe the main goal, topic, target audience, or requirements..."
                   value={newProjectDescription}
                   onChange={(e) => setNewProjectDescription(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-medium text-slate-400">
+                  <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400">
                     Scoped Paths (Optional)
                   </label>
-                  <span className="text-[10px] text-slate-500">Comma-separated</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">Comma-separated</span>
                 </div>
                 <input
                   type="text"
                   placeholder="e.g. docs, research, chapters, src (optional)"
                   value={newProjectScope}
                   onChange={(e) => setNewProjectScope(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
-                <p className="text-[10px] text-slate-500 mt-1">
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
                   Optional subfolder or document filters for AI memory recall. Leave blank for full workspace coverage.
                 </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-3 py-1.5 text-xs rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                  className="px-3 py-1.5 text-xs rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   Cancel
                 </button>
@@ -780,18 +780,18 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
 
       {/* Delete Project Confirmation Modal */}
       {showDeleteModal && pendingDeleteNode && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-slate-900 border border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-100 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-300 dark:border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
                   <Trash2 className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-1.5">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                     <span>Delete {pendingDeleteNode.parent_id ? 'Sub-Project' : 'Project'}</span>
                   </h3>
-                  <div className="text-[11px] text-slate-400 truncate max-w-sm font-mono">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-sm font-mono">
                     {pendingDeleteNode.name}
                   </div>
                 </div>
@@ -805,106 +805,106 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                   }
                 }}
                 disabled={isDeleting}
-                className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {deleteError && (
-              <div className="mt-3 p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] leading-relaxed">
+              <div className="mt-3 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/15 border border-rose-300 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] leading-relaxed">
                 {deleteError}
               </div>
             )}
 
             {/* Sub-project warning badge */}
             {childSubprojectCount > 0 && (
-              <div className="mt-3 flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+              <div className="mt-3 flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400 mt-0.5" />
                 <div className="min-w-0">
-                  <div className="font-semibold text-amber-200">
+                  <div className="font-semibold text-amber-800 dark:text-amber-200">
                     Recursive Sub-Project Deletion
                   </div>
-                  <div className="text-[11px] text-amber-300/80 mt-0.5">
+                  <div className="text-[11px] text-amber-700 dark:text-amber-300/80 mt-0.5">
                     This project has <strong>{childSubprojectCount}</strong> nested child sub-project(s). Deletion will cascade to all children and their associated data.
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="mt-3 text-[11px] text-slate-400">
+            <div className="mt-3 text-[11px] text-slate-600 dark:text-slate-400">
               Select what related memory, caches, and files to delete:
             </div>
 
             {/* Checkbox Options List */}
             <div className="mt-2.5 space-y-2 max-h-60 overflow-y-auto pr-1">
               {/* 1. Scoped Memory & Tree */}
-              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800/80 cursor-pointer border border-slate-200 dark:border-slate-700/60 transition-colors">
                 <input
                   type="checkbox"
                   checked={deleteMemoryAndTree}
                   onChange={(e) => setDeleteMemoryAndTree(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  className="mt-0.5 rounded border-slate-400 dark:border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-white dark:bg-slate-900"
                 />
                 <div className="min-w-0">
-                  <div className="font-semibold text-slate-200 text-[11px]">
+                  <div className="font-semibold text-slate-800 dark:text-slate-200 text-[11px]">
                     Delete Project Hierarchy &amp; Scoped Memory
                   </div>
-                  <div className="text-[10px] text-slate-400">
-                    Removes project tree registration and purges scoped memory records under <code className="text-purple-300 font-mono">.flymd/projects/{pendingDeleteNode.id}</code>.
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Removes project tree registration and purges scoped memory records under <code className="text-purple-600 dark:text-purple-300 font-mono">.flymd/projects/{pendingDeleteNode.id}</code>.
                   </div>
                 </div>
               </label>
 
               {/* 2. Linked Debates */}
-              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800/80 cursor-pointer border border-slate-200 dark:border-slate-700/60 transition-colors">
                 <input
                   type="checkbox"
                   checked={deleteLinkedDebates}
                   onChange={(e) => setDeleteLinkedDebates(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  className="mt-0.5 rounded border-slate-400 dark:border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-white dark:bg-slate-900"
                 />
                 <div className="min-w-0">
-                  <div className="font-semibold text-slate-200 text-[11px]">
+                  <div className="font-semibold text-slate-800 dark:text-slate-200 text-[11px]">
                     Delete Linked Debates &amp; Deliberation History
                   </div>
-                  <div className="text-[10px] text-slate-400">
-                    Purges active deliberation transcripts in <code className="text-purple-300 font-mono">.flymd/discussions</code> linked to this project or its sub-projects ({pendingDebateCount} linked).
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Purges active deliberation transcripts in <code className="text-purple-600 dark:text-purple-300 font-mono">.flymd/discussions</code> linked to this project or its sub-projects ({pendingDebateCount} linked).
                   </div>
                 </div>
               </label>
 
               {/* 3. Linked Pipelines */}
-              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800/80 cursor-pointer border border-slate-200 dark:border-slate-700/60 transition-colors">
                 <input
                   type="checkbox"
                   checked={resetLinkedPipelines}
                   onChange={(e) => setResetLinkedPipelines(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  className="mt-0.5 rounded border-slate-400 dark:border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-white dark:bg-slate-900"
                 />
                 <div className="min-w-0">
-                  <div className="font-semibold text-slate-200 text-[11px]">
+                  <div className="font-semibold text-slate-800 dark:text-slate-200 text-[11px]">
                     Reset Linked Workflows &amp; Pipelines
                   </div>
-                  <div className="text-[10px] text-slate-400">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
                     Resets execution steps back to Idle and halts any running pipeline assigned to this project.
                   </div>
                 </div>
               </label>
 
               {/* 4. Close Related Opened Tabs */}
-              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border border-slate-700/60 transition-colors">
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800/80 cursor-pointer border border-slate-200 dark:border-slate-700/60 transition-colors">
                 <input
                   type="checkbox"
                   checked={closeRelatedTabs}
                   onChange={(e) => setCloseRelatedTabs(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  className="mt-0.5 rounded border-slate-400 dark:border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-white dark:bg-slate-900"
                 />
                 <div className="min-w-0">
-                  <div className="font-semibold text-slate-200 text-[11px]">
+                  <div className="font-semibold text-slate-800 dark:text-slate-200 text-[11px]">
                     Close Related Opened Files &amp; Tabs in Editor
                   </div>
-                  <div className="text-[10px] text-slate-400">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
                     Closes open editor tabs pointing to this project's scoped directories or memory files.
                   </div>
                 </div>
@@ -914,8 +914,8 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
               <label
                 className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-colors ${
                   pendingScopePaths.length === 0
-                    ? 'bg-slate-900/40 border-slate-800 opacity-60 cursor-not-allowed'
-                    : 'bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer border-slate-700/60'
+                    ? 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60 cursor-not-allowed'
+                    : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800/80 cursor-pointer border-slate-200 dark:border-slate-700/60'
                 }`}
               >
                 <input
@@ -923,17 +923,17 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                   disabled={pendingScopePaths.length === 0}
                   checked={pendingScopePaths.length > 0 && deleteFilesOnDisk}
                   onChange={(e) => setDeleteFilesOnDisk(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-slate-900"
+                  className="mt-0.5 rounded border-slate-400 dark:border-slate-600 text-rose-500 focus:ring-0 focus:ring-offset-0 bg-white dark:bg-slate-900"
                 />
                 <div className="min-w-0">
-                  <div className="font-semibold text-slate-200 text-[11px]">
+                  <div className="font-semibold text-slate-800 dark:text-slate-200 text-[11px]">
                     Delete Scoped Files &amp; Folders from Disk
                   </div>
-                  <div className="text-[10px] text-slate-400">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
                     {pendingScopePaths.length > 0 ? (
                       <span>
                         Permanently deletes on disk:{' '}
-                        <code className="text-amber-300 font-mono text-[10px]">
+                        <code className="text-amber-600 dark:text-amber-300 font-mono text-[10px]">
                           {pendingScopePaths.join(', ')}
                         </code>
                       </span>
@@ -946,7 +946,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
             </div>
 
             {/* Footer Buttons */}
-            <div className="mt-4 flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="mt-4 flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => {
@@ -954,7 +954,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
                   setPendingDeleteNode(null);
                 }}
                 disabled={isDeleting}
-                className="px-3 py-1.5 text-xs rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-xs rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

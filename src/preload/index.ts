@@ -18,6 +18,7 @@ import {
   DiscussionMetadata,
   DiscussionMessage,
   AvailableProviderInfo,
+  SkillDescriptor,
   ProjectNode,
   ProjectTreeNode,
   CreateProjectRequest,
@@ -171,6 +172,8 @@ const electronAPI = {
   // Multi-Agent Workspace Supervisor
   discoverAgents: (): Promise<AgentProfile[]> =>
     ipcRenderer.invoke('agent:discover'),
+  fetchAgentModels: (agentId: string): Promise<any> =>
+    ipcRenderer.invoke('agent:fetch-models', agentId),
   saveAgentCredential: (agentId: string, credential: AgentCredentialConfig): Promise<AgentProfile[]> =>
     ipcRenderer.invoke('agent:save-credential', agentId, credential),
   getAgentCredentials: (): Promise<AgentCredentialsMap> =>
@@ -224,6 +227,10 @@ const electronAPI = {
     ipcRenderer.invoke('discussion:get-metadata', workspacePath, sessionId),
   getDiscussionReport: (workspacePath: string, sessionId: string, version?: number): Promise<string> =>
     ipcRenderer.invoke('discussion:get-report', workspacePath, sessionId, version),
+  getDiscussionConfig: (workspacePath: string, sessionId: string): Promise<DiscussionConfig> =>
+    ipcRenderer.invoke('discussion:get-config', workspacePath, sessionId),
+  updateDiscussionConfig: (workspacePath: string, sessionId: string, config: DiscussionConfig): Promise<DiscussionMetadata> =>
+    ipcRenderer.invoke('discussion:update-config', workspacePath, sessionId, config),
   listDiscussions: (workspacePath: string): Promise<DiscussionMetadata[]> =>
     ipcRenderer.invoke('discussion:list', workspacePath),
   deleteDiscussion: (workspacePath: string, sessionId: string): Promise<void> =>
@@ -239,6 +246,14 @@ const electronAPI = {
     actionQuery?: string
   ): Promise<DiscussionMessage> =>
     ipcRenderer.invoke('discussion:dispatch-targeted-action', sessionId, agentId, actionName, actionQuery),
+  scanCustomSkillsDir: (path: string): Promise<SkillDescriptor[]> =>
+    ipcRenderer.invoke('discussion:scan-custom-skills-dir', path),
+  getAvailableSkills: (
+    workspacePath: string,
+    customSkillsDir?: string | null,
+    includeDefaultSkills?: boolean
+  ): Promise<SkillDescriptor[]> =>
+    ipcRenderer.invoke('discussion:get-available-skills', workspacePath, customSkillsDir, includeDefaultSkills),
   getAvailableProviders: (): Promise<AvailableProviderInfo[]> =>
     ipcRenderer.invoke('discussion:get-available-providers'),
   onDiscussionEvent: (callback: (event: any) => void) => {

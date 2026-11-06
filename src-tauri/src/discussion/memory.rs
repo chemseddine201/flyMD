@@ -32,6 +32,52 @@ impl MemoryManager {
         ((char_count as f64) / 3.8).ceil() as u32
     }
 
+    /// Script-aware token estimator calibrated from empirical benchmarks (Phase 0.4).
+    /// English / Latin: 3.5 chars/token (French ~2.6)
+    /// Cyrillic: 2.8 chars/token
+    /// Arabic: 1.5 chars/token
+    /// Chinese (CJK): 0.93 chars/token
+    pub fn estimate_tokens_by_script(text: &str) -> u32 {
+        let mut total_tokens = 0.0f64;
+        for ch in text.chars() {
+            if ch.is_whitespace() || ch.is_ascii_punctuation() {
+                total_tokens += 1.0 / 3.5;
+                continue;
+            }
+            let u = ch as u32;
+            if (0x0600..=0x06FF).contains(&u)
+                || (0x0750..=0x077F).contains(&u)
+                || (0x08A0..=0x08FF).contains(&u)
+                || (0xFB50..=0xFDFF).contains(&u)
+                || (0xFE70..=0xFEFF).contains(&u)
+            {
+                total_tokens += 1.0 / 1.5;
+            } else if (0x4E00..=0x9FFF).contains(&u)
+                || (0x3400..=0x4DBF).contains(&u)
+                || (0x20000..=0x2A6DF).contains(&u)
+                || (0xF900..=0xFAFF).contains(&u)
+                || (0x3000..=0x303F).contains(&u)
+            {
+                total_tokens += 1.0 / 0.93;
+            } else if (0x0400..=0x04FF).contains(&u) || (0x0500..=0x052F).contains(&u) {
+                total_tokens += 1.0 / 2.8;
+            } else if (0x00C0..=0x024F).contains(&u) {
+                total_tokens += 1.0 / 2.6;
+            } else {
+                total_tokens += 1.0 / 3.5;
+            }
+        }
+        total_tokens.ceil() as u32
+    }
+
+    /// Resolves token estimator according to active tokenSaver policy.
+    pub fn estimate_tokens_with_mode(text: &str, token_saver: Option<&str>) -> u32 {
+        match token_saver {
+            Some("standard") | Some("strict") => Self::estimate_tokens_by_script(text),
+            _ => Self::estimate_tokens(text),
+        }
+    }
+
     /// Loads the active decision ledger from `decisions.json`.
     pub fn load_decisions(&self) -> Vec<DecisionItem> {
         let path = self.session_dir.join("decisions.json");
@@ -402,6 +448,7 @@ impl MemoryManager {
     /// - Frame 0 (`system`, anchored): 100% shared immutable protocol + spec + workspace SHA-256 index
     /// - Frames `1..round-1` (`user`, anchored): append-only frozen round ledgers
     /// - Final Frame (`user`, dynamic): active role persona, `@Role` peer inbox, epistemic gate & turn directive
+    #[allow(clippy::too_many_arguments)]
     pub fn assemble_prefix_pinned_frames(
         &self,
         participant: &DiscussionParticipant,
@@ -588,7 +635,7 @@ mod tests {
     fn test_token_estimation() {
         let text = "Hello world, this is a test of token estimation for markdown code blocks.";
         let tokens = MemoryManager::estimate_tokens(text);
-        assert!(tokens >= 15 && tokens <= 25);
+        assert!((15..=25).contains(&tokens));
     }
 
     #[test]

@@ -2,6 +2,52 @@
 
 All notable changes to **FlyMD** are documented in this file.
 
+## [2.3.0] - 2026-11-02
+
+### Added
+- **Early Debate Convergence & Skipped Turns Ledger (`convergence.rs`, `orchestrator.rs`, `DeliberationTurnCard.tsx`)**:
+  - Automatically analyzes consecutive turn summaries using token Dice + UTF-8 character trigram Dice similarity.
+  - When two successive agents in the same round (or across consecutive round boundaries) reach equivalent summaries (`>= 0.82`) with zero newly opened disputes, immediately skips remaining turns in the round and all subsequent scheduled rounds.
+  - Escaped turns within a converged round are recorded as `SkippedConsensus` (0 queries burned).
+  - Escaped future rounds are recorded in `metadata.roundLedger` as `ignored_consensus` and displayed as Duplicated / Ignored rounds.
+- **Dynamic Subscription-Aware Agent & Model Fetching (`useSubscriptionAgents.ts`, `discovery.rs`, `provider_registry.rs`)**:
+  - Dynamically discovers all installed CLI agents, API endpoints, Ollama models, and custom user agents, eliminating all static hardcoded agent lists across the application.
+  - Respects user subscription tiers (`Pro`, `Advanced`, `Plus`, `Team`, `Local`) from credentials to filter models and default effort tiers.
+  - Integrated 1-click "Refresh Subscriptions" button and direct link to Manage Logins.
+- **Untrimmed Collapsible Reports with Locked Ignored Rounds (`report.rs`, `CollapsibleReportRoundsView.tsx`)**:
+  - Full untrimmed markdown rendering in consensus reports, removing all arbitrary 3-line and 240-char truncation limits.
+  - Executed rounds are rendered in `<details>` disclosure cards collapsed by default for clean executive readability, expandable on click.
+  - Skipped/ignored rounds are rendered as non-expandable/locked `Round N — Duplicated / Ignored` cards.
+- **Multi-Engine Selection, Round Repeater & Specialist Roles Library (`DebateRoundRepeaterBuilder.tsx`, `customRoleRepository.ts`)**:
+  - Multi-engine subscription pool enabling multiple AI engines to debate collaboratively.
+  - Cycle repeater mode and per-round split mode with 1-click auto-distribution of engines and roles across phases.
+  - Built-in specialist roles plus full UI CRUD for user-defined custom roles with experience profiles, directives, and custom skill bindings.
+
+## [2.2.0] - 2026-11-02
+
+### Added
+- **Token Usage Telemetry & Quota Governance (`quotaSlice.ts`, `TokenQuotaHUD.tsx`, `runner.rs`)**:
+  - Live per-task, per-step, and per-session token metrics breakdown: Prompt Tokens, Completion Tokens, and Reasoning/Thinking Tokens.
+  - Interactive Studio Token Quota HUD with adaptive status coloring (Sky < 80%, Amber 80–99%, Rose >= 100%), session budget presets (Unlimited, 25k, 50k, 100k, 250k), and boundary pause policy toggles.
+  - Safe application-level quota boundary pauses at turn and step boundaries without risk of mid-write file truncation or invoking OS process killers.
+  - Token budget cap configuration in Deliberation modal and pipeline runners.
+- **Custom Skills Injection & Tool Isolation Switch (`skills.rs`, `NewDeliberationModal.tsx`)**:
+  - Connect arbitrary local directories containing `SKILL.md` or standalone `.md` files to multi-agent deliberations.
+  - Precedence hierarchy: `agent:` (0) > `custom:` (1) > `master:` (2) > `global:` (3).
+  - Interactive "Include Default Built-in Tool Skills" switch supporting Shared Mode (augment built-ins) and Isolated Mode (strict domain isolation).
+- **Context-Aware Smart Deliverable File Naming (`naming.rs`, `smartNaming.ts`)**:
+  - Replaces generic filenames with semantic pattern `[Project]_[SubProject]_[Topic]_[Kind].md`.
+  - Arabic-to-English semantic transliteration with ASCII slugification.
+  - Safe anti-collision sequencing (`-v2.md`, `-v3.md`).
+- **Subscription-Aware Model Selection & Dynamic Side-by-Side Effort Matrix (`models.ts`, `ModelEffortSideBySidePicker.tsx`)**:
+  - Structured subscription tiers (Claude Pro/Team/Max, OpenAI Plus/Team/API, Gemini Advanced, Ollama, DeepSeek).
+  - Side-by-side model selector and dynamic reasoning effort controls (`low`, `medium`, `high`, `xhigh`, `max`) with automatic parameter adaptation.
+
+### Refactored
+- **Full System Refactor & Code Splitting**:
+  - Decomposed monolithic controllers into single-responsibility modules with memoized O(1) selectors and O(Δ) delta log cursor streaming.
+  - Clean separation across discussion runners, agent executors, and project tree navigation with zero functional regressions.
+
 ## [2.1.0] - 2026-10-31
 
 ### Added

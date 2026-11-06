@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Plus,
@@ -22,6 +22,7 @@ import {
   CustomActionIconKey,
 } from '../../../../../shared/types';
 import { STARTER_CUSTOM_PIPELINE_ACTIONS } from '../../../../../shared/constants';
+import { UnsavedChangesModal } from '../../common/UnsavedChangesModal';
 
 interface CustomPipelineActionsModalProps {
   isOpen: boolean;
@@ -162,33 +163,71 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
     }
   };
 
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const isDirty = useMemo(() => {
+    if (!selectedAction) return false;
+    return (
+      formName !== selectedAction.name ||
+      formShortLabel !== selectedAction.shortLabel ||
+      formDescription !== selectedAction.description ||
+      formPromptTemplate !== selectedAction.promptTemplate ||
+      formOutputFileHint !== (selectedAction.outputFileHint || '') ||
+      formEpistemicPolicy !== selectedAction.epistemicPolicy ||
+      formIconKey !== selectedAction.iconKey
+    );
+  }, [
+    selectedAction,
+    formName,
+    formShortLabel,
+    formDescription,
+    formPromptTemplate,
+    formOutputFileHint,
+    formEpistemicPolicy,
+    formIconKey,
+  ]);
+
+  const handleRequestClose = () => {
+    if (isDirty) {
+      setShowDiscardAlert(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn select-none">
+      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden text-slate-900 dark:text-slate-100 transition-colors duration-150">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+            <div className="p-2 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30">
               <Sliders size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 Custom Pipeline Actions Library
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
                   {customActions.length} Actions
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Define reusable steps (like Report or Security Audit) with custom prompt directives and epistemic cache modes.
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            onClick={handleRequestClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="Close modal"
           >
             <X size={18} />
@@ -196,11 +235,11 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
         </div>
 
         {/* Body Split: Master List on Left, Editor on Right */}
-        <div className="flex-1 flex min-h-0 overflow-hidden divide-x divide-slate-800">
+        <div className="flex-1 flex min-h-0 overflow-hidden divide-x divide-slate-200 dark:divide-slate-800">
           {/* Left: Saved Actions & Starter Templates */}
-          <div className="w-72 p-4 flex flex-col gap-3 bg-slate-950/40 overflow-y-auto shrink-0">
+          <div className="w-72 p-4 flex flex-col gap-3 bg-slate-50/60 dark:bg-slate-950/40 overflow-y-auto shrink-0">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                 Your Saved Actions
               </span>
               <button
@@ -223,19 +262,19 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                     onClick={() => handleSelectAction(action)}
                     className={`w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${
                       isSelected
-                        ? 'bg-indigo-950/70 border-indigo-500/80 text-white shadow-sm ring-1 ring-indigo-500/40'
-                        : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 text-slate-300'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/70 border-indigo-500 text-slate-900 dark:text-white shadow-xs ring-1 ring-indigo-500/40'
+                        : 'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-indigo-400 shrink-0">
+                      <span className="text-indigo-600 dark:text-indigo-400 shrink-0">
                         {renderCustomActionIcon(action.iconKey)}
                       </span>
                       <div className="min-w-0 truncate">
                         <div className="text-xs font-bold truncate">
                           {action.shortLabel}
                         </div>
-                        <div className="text-[10px] text-slate-400 truncate">
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                           {action.name}
                         </div>
                       </div>
@@ -243,8 +282,8 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                     <span
                       className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
                         action.epistemicPolicy === 'independent-audit'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                          : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                          ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                          : 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30'
                       }`}
                     >
                       {action.epistemicPolicy === 'independent-audit'
@@ -257,9 +296,9 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
             </div>
 
             {/* Quick Starter Templates */}
-            <div className="pt-3 border-t border-slate-800 space-y-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                <Sparkles size={11} className="text-indigo-400" />
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                <Sparkles size={11} className="text-indigo-600 dark:text-indigo-400" />
                 Quick Starter Templates
               </span>
               <div className="space-y-1">
@@ -268,13 +307,13 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                     key={tpl.id}
                     type="button"
                     onClick={() => handleApplyTemplate(tpl)}
-                    className="w-full text-left p-2 rounded-lg bg-slate-900/40 border border-slate-800/80 hover:border-slate-700 text-slate-300 hover:text-white text-xs flex items-center justify-between group transition"
+                    className="w-full text-left p-2 rounded-lg bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs flex items-center justify-between group transition"
                   >
                     <div className="flex items-center gap-1.5 truncate">
-                      {renderCustomActionIcon(tpl.iconKey, 'w-3 h-3 text-slate-400 group-hover:text-indigo-400')}
+                      {renderCustomActionIcon(tpl.iconKey, 'w-3 h-3 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400')}
                       <span className="truncate">{tpl.shortLabel}</span>
                     </div>
-                    <span className="text-[10px] text-indigo-400 opacity-70 group-hover:opacity-100 flex items-center gap-0.5">
+                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 opacity-70 group-hover:opacity-100 flex items-center gap-0.5">
                       <Copy size={10} />
                       Use
                     </span>
@@ -287,15 +326,15 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
           {/* Right: Form Editor */}
           <form
             onSubmit={handleSaveCurrent}
-            className="flex-1 p-6 flex flex-col justify-between overflow-y-auto space-y-4"
+            className="flex-1 p-6 flex flex-col justify-between overflow-y-auto space-y-4 bg-white dark:bg-slate-900"
           >
             <div className="space-y-4">
               {/* Short Label and Full Name */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Short Label <span className="text-rose-400">*</span>
-                    <span className="text-[10px] font-normal text-slate-400 ml-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Short Label <span className="text-rose-500">*</span>
+                    <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 ml-1">
                       (Shown in Step Pill, max 14 chars)
                     </span>
                   </label>
@@ -306,12 +345,12 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                     value={formShortLabel}
                     onChange={(e) => setFormShortLabel(e.target.value)}
                     placeholder="e.g. Report"
-                    className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500 font-bold"
+                    className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-bold"
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Action Name <span className="text-rose-400">*</span>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Action Name <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -319,7 +358,7 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
                     placeholder="e.g. Comprehensive Project & Delivery Report"
-                    className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
@@ -327,7 +366,7 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
               {/* Icon & Output File Hint */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Step Icon
                   </label>
                   <div className="flex items-center gap-2">
@@ -347,8 +386,8 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                         onClick={() => setFormIconKey(k)}
                         className={`p-2 rounded-xl border transition ${
                           formIconKey === k
-                            ? 'bg-indigo-600 text-white border-indigo-400 shadow-sm'
-                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                            ? 'bg-indigo-600 text-white border-indigo-400 shadow-xs'
+                            : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white'
                         }`}
                         title={k}
                       >
@@ -359,7 +398,7 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Target Deliverable File (Optional)
                   </label>
                   <input
@@ -367,14 +406,14 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                     value={formOutputFileHint}
                     onChange={(e) => setFormOutputFileHint(e.target.value)}
                     placeholder="e.g. PROJECT_REPORT.md"
-                    className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-indigo-300 font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-indigo-700 dark:text-indigo-300 font-mono focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Description / Purpose
                 </label>
                 <input
@@ -382,15 +421,15 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   placeholder="e.g. Generates an executive Markdown report documenting architecture and deliverables."
-                  className="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               {/* Epistemic Policy Selector */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
                   <span>Multi-Agent Epistemic & Cognitive Cache Policy</span>
-                  <span className="text-[10px] text-slate-400">Controls context handoff & cost</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Controls context handoff & cost</span>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
@@ -398,16 +437,16 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                     onClick={() => setFormEpistemicPolicy('collaborative')}
                     className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 ${
                       formEpistemicPolicy === 'collaborative'
-                        ? 'bg-sky-950/60 border-sky-500/80 text-white shadow-sm ring-1 ring-sky-500/40'
-                        : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300'
+                        ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-500/80 text-slate-900 dark:text-white shadow-xs ring-1 ring-sky-500/40'
+                        : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    <Zap size={16} className="text-sky-400 shrink-0 mt-0.5" />
+                    <Zap size={16} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                     <div className="text-xs">
-                      <div className="font-bold text-sky-200">
+                      <div className="font-bold text-sky-800 dark:text-sky-200">
                         ⚡ Inherit Verified Cache (Fast & Economical)
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                      <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">
                         DirectInherit: Passes .flymd/cache digest. Saves ~80% tokens by skipping full-repo file rescans. Ideal for reports, docs, and summaries.
                       </div>
                     </div>
@@ -418,16 +457,16 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                     onClick={() => setFormEpistemicPolicy('independent-audit')}
                     className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 ${
                       formEpistemicPolicy === 'independent-audit'
-                        ? 'bg-amber-950/60 border-amber-500/80 text-white shadow-sm ring-1 ring-amber-500/40'
-                        : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300'
+                        ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500/80 text-slate-900 dark:text-white shadow-xs ring-1 ring-amber-500/40'
+                        : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    <Shield size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                    <Shield size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <div className="text-xs">
-                      <div className="font-bold text-amber-200">
+                      <div className="font-bold text-amber-800 dark:text-amber-200">
                         🛡️ Blind Independent Audit (Anti-Bias Rigor)
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                      <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">
                         Withholds upstream praise; forces agent to inspect raw code on disk and conclude its own &lt;independent_resume&gt;. Ideal for security & QA audits.
                       </div>
                     </div>
@@ -437,9 +476,9 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
 
               {/* Prompt Template Directive */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Prompt Instructions Directive <span className="text-rose-400">*</span>
-                  <span className="text-[10px] font-normal text-slate-400 ml-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Prompt Instructions Directive <span className="text-rose-500">*</span>
+                  <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 ml-1">
                     (Injected into agent when executing this step)
                   </span>
                 </label>
@@ -449,34 +488,26 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
                   value={formPromptTemplate}
                   onChange={(e) => setFormPromptTemplate(e.target.value)}
                   placeholder="Enter detailed directives for the agent executing this action..."
-                  className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono leading-relaxed resize-y"
+                  className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono leading-relaxed resize-y"
                 />
               </div>
             </div>
 
             {/* Bottom Form Actions */}
-            <div className="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/80 dark:bg-slate-900">
               <div className="flex items-center gap-2">
                 {customActions.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (selectedAction) {
-                        onDeleteAction(selectedAction.id);
-                        const remaining = customActions.filter(
-                          (a) => a.id !== selectedAction.id
-                        );
-                        if (remaining[0]) handleSelectAction(remaining[0]);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-500/40 text-rose-300 hover:bg-rose-500/20 text-xs font-medium transition"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-500/40 text-rose-600 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/20 text-xs font-medium transition"
                   >
                     <Trash2 size={13} />
                     <span>Delete</span>
                   </button>
                 )}
                 {savedNotice && (
-                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 animate-fadeIn">
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 animate-fadeIn">
                     <CheckCircle2 size={13} /> Saved!
                   </span>
                 )}
@@ -485,8 +516,8 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                  onClick={handleRequestClose}
+                  className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium transition"
                 >
                   Close
                 </button>
@@ -502,6 +533,51 @@ export const CustomPipelineActionsModal: React.FC<CustomPipelineActionsModalProp
           </form>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Discard Action Changes?"
+        message="You have unsaved modifications in this pipeline action template. If you close now, your edits will be discarded."
+        confirmLabel="Discard Edits"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
+      />
+
+      {showDeleteConfirm && selectedAction && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 size={18} />
+              <h4 className="text-sm font-bold">Delete Custom Action?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to permanently delete custom action <span className="font-semibold">{selectedAction.name}</span>? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteAction(selectedAction.id);
+                  const remaining = customActions.filter((a) => a.id !== selectedAction.id);
+                  if (remaining[0]) handleSelectAction(remaining[0]);
+                  setShowDeleteConfirm(false);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

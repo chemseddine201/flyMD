@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   AgentProfile,
   AgentCredentialConfig,
   AgentCredentialsMap,
   AgentEffortLevel,
 } from '../../../../shared/types';
+import { ModelEffortSideBySidePicker } from './common/ModelEffortSideBySidePicker';
+import { SUBSCRIPTION_TIERS } from '../../../../shared/constants/models';
+import { UnsavedChangesModal } from '../common/UnsavedChangesModal';
 import {
   X,
   KeyRound,
@@ -104,6 +107,31 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
   const [newCustomDesc, setNewCustomDesc] = useState('');
   const [newCustomColor, setNewCustomColor] = useState('#10b981');
   const [hidePredefinedOnCreate, setHidePredefinedOnCreate] = useState(false);
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+  const [pendingDeleteCustomProfile, setPendingDeleteCustomProfile] = useState<AgentProfile | null>(null);
+
+  const hasUnsavedData = useMemo(() => {
+    if (isCreatingCustom && Boolean(newCustomName.trim() || newCustomCliCmd.trim())) {
+      return true;
+    }
+    return false;
+  }, [isCreatingCustom, newCustomName, newCustomCliCmd]);
+
+  const handleRequestClose = () => {
+    if (hasUnsavedData) {
+      setShowDiscardAlert(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    setIsCreatingCustom(false);
+    setNewCustomName('');
+    setNewCustomCliCmd('');
+    onClose();
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -325,19 +353,19 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-5xl lg:max-w-6xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden text-slate-100 text-xs">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-slate-950/85 backdrop-blur-md p-4 animate-in fade-in duration-150 select-none">
+      <div className="w-full max-w-5xl lg:max-w-6xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden text-slate-900 dark:text-slate-100 text-xs">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-800/90 border-b border-slate-700/60 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700/60 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-500 dark:text-emerald-400">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Manage AI Agents, Browser Login &amp; Custom Agents
               </h2>
-              <p className="text-[11px] text-slate-300">
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
                 Use built-in agents or create your own Custom Agents. Sign in via your normal Web Browser (Free Tier) or local CLI.
               </p>
             </div>
@@ -347,7 +375,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
             <button
               type="button"
               onClick={() => setIsCreatingCustom(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-md transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Custom Agent</span>
@@ -356,15 +384,15 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
               type="button"
               onClick={handleRescan}
               disabled={isScanning}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600/80 text-slate-200 transition"
+              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600/80 text-slate-700 dark:text-slate-200 transition"
               title="Refresh Agents"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin text-sky-400' : ''}`} />
             </button>
             <button
               type="button"
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition"
+              onClick={handleRequestClose}
+              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
             >
               <X className="w-4 h-4" />
             </button>
@@ -372,8 +400,8 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
         </div>
 
         {statusBanner && (
-          <div className="px-6 py-2.5 bg-emerald-500/15 border-b border-emerald-500/30 text-emerald-200 flex items-center gap-2 text-xs font-medium">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div className="px-6 py-2.5 bg-emerald-500/15 border-b border-emerald-500/30 text-emerald-800 dark:text-emerald-200 flex items-center gap-2 text-xs font-medium">
+            <ShieldCheck className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
             <span>{statusBanner}</span>
           </div>
         )}
@@ -381,14 +409,14 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
         {/* Body */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar: Agent List + Quick Filter Buttons */}
-          <div className="w-72 border-r border-slate-800 bg-slate-950/60 p-3 flex flex-col gap-2 overflow-y-auto shrink-0">
+          <div className="w-72 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 p-3 flex flex-col gap-2 overflow-y-auto shrink-0">
             <button
               type="button"
               onClick={() => setIsCreatingCustom(true)}
               className={`w-full p-2.5 rounded-xl border text-left font-bold flex items-center justify-center gap-1.5 transition ${
                 isCreatingCustom
-                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg'
-                  : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30'
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg'
+                  : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
               }`}
             >
               <Plus className="w-4 h-4" />
@@ -396,23 +424,23 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
             </button>
 
             <div className="flex items-center justify-between px-1 pt-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Your Agents ({profiles.filter((p) => p.enabled).length} active)
               </span>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={handleUseOnlyCustomAgents}
-                  className="text-[10px] text-emerald-400 hover:underline"
+                  className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline"
                   title="Hide predefined agents and show only your Custom Agents"
                 >
                   Custom Only
                 </button>
-                <span className="text-slate-600">•</span>
+                <span className="text-slate-400 dark:text-slate-600">•</span>
                 <button
                   type="button"
                   onClick={handleShowAllAgents}
-                  className="text-[10px] text-sky-400 hover:underline"
+                  className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline"
                 >
                   Show All
                 </button>
@@ -431,10 +459,10 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     }}
                     className={`w-full text-left p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2 ${
                       isSelected
-                        ? 'bg-slate-800/95 border-sky-500/60 shadow-md'
+                        ? 'bg-slate-200 dark:bg-slate-800/95 border-sky-500/60 shadow-md'
                         : agent.enabled
-                        ? 'bg-slate-900/60 border-slate-800 hover:bg-slate-800/40'
-                        : 'bg-slate-950/40 border-slate-900 opacity-50 hover:opacity-80'
+                        ? 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/40'
+                        : 'bg-slate-100/60 dark:bg-slate-950/40 border-slate-200 dark:border-slate-900 opacity-50 hover:opacity-80'
                     }`}
                   >
                     <div className="min-w-0 flex-1">
@@ -443,16 +471,16 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                           className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: agent.accentColor }}
                         />
-                        <span className="font-bold text-slate-100 truncate">
+                        <span className="font-bold text-slate-900 dark:text-slate-100 truncate">
                           {agent.name}
                         </span>
                         {agent.isCustom && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-semibold">
                             Custom
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                         {agent.webUrl || agent.loginCommand || agent.vendor}
                       </div>
                     </div>
@@ -470,8 +498,8 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                       }
                       className={`p-1.5 rounded-lg border transition ${
                         agent.enabled
-                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                          : 'bg-slate-900 border-slate-800 text-slate-500'
+                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500'
                       }`}
                     >
                       {agent.enabled ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
@@ -486,13 +514,13 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
           <div className="flex-1 p-6 overflow-y-auto">
             {isCreatingCustom ? (
               <form onSubmit={handleCreateCustomAgent} className="space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                   <div>
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-emerald-400" />
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                       Add Your Own Custom AI Agent
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       Add any web AI chat (DeepSeek, Perplexity, Bolt, v0, Qwen, local web UI) or any local CLI/IDE tool.
                     </p>
                   </div>
@@ -500,7 +528,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
 
                 {/* 1-Click Quick Templates */}
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
                     Quick 1-Click Templates (Optional — Click to Fill)
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -516,15 +544,15 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                           setNewCustomDesc(preset.description);
                           setNewCustomColor(preset.accentColor);
                         }}
-                        className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-left transition flex items-center gap-2"
+                        className="p-2.5 rounded-xl bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-left transition flex items-center gap-2"
                       >
                         <span
                           className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: preset.accentColor }}
                         />
                         <div className="min-w-0">
-                          <div className="font-bold text-white truncate">{preset.name}</div>
-                          <div className="text-[10px] text-slate-400 truncate">{preset.vendor}</div>
+                          <div className="font-bold text-slate-900 dark:text-white truncate">{preset.name}</div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{preset.vendor}</div>
                         </div>
                       </button>
                     ))}
@@ -533,7 +561,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-slate-200 font-semibold mb-1">
+                    <label className="block text-slate-700 dark:text-slate-200 font-semibold mb-1">
                       Agent Name *
                     </label>
                     <input
@@ -542,12 +570,12 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                       value={newCustomName}
                       onChange={(e) => setNewCustomName(e.target.value)}
                       placeholder="e.g. DeepSeek Chat, My Custom Bot, Windsurf..."
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-400"
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-400"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-200 font-semibold mb-1">
+                    <label className="block text-slate-700 dark:text-slate-200 font-semibold mb-1">
                       Provider / Label
                     </label>
                     <input
@@ -555,13 +583,13 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                       value={newCustomVendor}
                       onChange={(e) => setNewCustomVendor(e.target.value)}
                       placeholder="e.g. Custom Web Agent, Local Agent..."
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-400"
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-400"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-200 font-semibold mb-1">
+                  <label className="block text-slate-700 dark:text-slate-200 font-semibold mb-1">
                     Web Chat URL (Opens in your default browser for Free Tier)
                   </label>
                   <input
@@ -569,12 +597,12 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     value={newCustomWebUrl}
                     onChange={(e) => setNewCustomWebUrl(e.target.value)}
                     placeholder="https://chat.deepseek.com or http://localhost:3000"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-400"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-400"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-200 font-semibold mb-1">
+                  <label className="block text-slate-700 dark:text-slate-200 font-semibold mb-1">
                     Local CLI Command or Executable Path (Optional)
                   </label>
                   <input
@@ -582,13 +610,13 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     value={newCustomCliCmd}
                     onChange={(e) => setNewCustomCliCmd(e.target.value)}
                     placeholder="Leave blank if using Web Browser mode, or enter e.g. aider / windsurf"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-400"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-400"
                   />
                 </div>
 
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <label className="block text-slate-200 font-semibold mb-1.5">
+                    <label className="block text-slate-700 dark:text-slate-200 font-semibold mb-1.5">
                       Badge Color
                     </label>
                     <div className="flex items-center gap-2">
@@ -599,7 +627,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                           onClick={() => setNewCustomColor(col)}
                           className={`w-6 h-6 rounded-full border-2 transition ${
                             newCustomColor === col
-                              ? 'border-white scale-110'
+                              ? 'border-slate-900 dark:border-white scale-110'
                               : 'border-transparent opacity-70'
                           }`}
                           style={{ backgroundColor: col }}
@@ -608,7 +636,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     </div>
                   </div>
 
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-200 bg-slate-950 px-3.5 py-2.5 rounded-xl border border-slate-800">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
                     <input
                       type="checkbox"
                       checked={hidePredefinedOnCreate}
@@ -619,17 +647,17 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                   </label>
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setIsCreatingCustom(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-lg shadow-emerald-500/20"
+                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-600/20"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Save &amp; Add Custom Agent</span>
@@ -639,21 +667,21 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
             ) : selectedProfile ? (
               <div className="space-y-5">
                 {/* Selected Agent Header */}
-                <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-800">
+                <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                   <div>
                     <div className="flex items-center gap-2.5">
                       <span
                         className="w-3.5 h-3.5 rounded-full"
                         style={{ backgroundColor: selectedProfile.accentColor }}
                       />
-                      <h3 className="text-base font-bold text-white">
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
                         {selectedProfile.name}
                       </h3>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
                         ({selectedProfile.vendor})
                       </span>
                     </div>
-                    <p className="text-slate-300 mt-1 text-xs">
+                    <p className="text-slate-600 dark:text-slate-300 mt-1 text-xs">
                       {selectedProfile.description}
                     </p>
                   </div>
@@ -664,8 +692,8 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                       onClick={() => handleToggleAgentEnabled(selectedProfile)}
                       className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
                         selectedProfile.enabled
-                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
                       }`}
                     >
                       {selectedProfile.enabled ? (
@@ -682,8 +710,8 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     {selectedProfile.isCustom && (
                       <button
                         type="button"
-                        onClick={() => handleDeleteCustomAgent(selectedProfile)}
-                        className="p-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300"
+                        onClick={() => setPendingDeleteCustomProfile(selectedProfile)}
+                        className="p-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-700 dark:text-rose-300"
                         title="Delete Custom Agent"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -693,27 +721,27 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                 </div>
 
                 {/* Method 1: System Default Browser Sign-In (Free Tier) */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-950 to-sky-950/40 border border-emerald-500/40 space-y-3">
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-50 to-sky-500/10 dark:from-emerald-950/50 dark:via-slate-950 dark:to-sky-950/40 border border-emerald-500/40 space-y-3">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
-                          <Globe className="w-4 h-4 text-emerald-400" />
+                        <h4 className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
+                          <Globe className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                           1. Use in System Default Browser (Free Tier • Easiest)
                         </h4>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
                           No CMD • Free Tier
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-300 mt-1">
-                        Opens <code className="text-emerald-300">{selectedProfile.webUrl || 'https://claude.ai'}</code> directly in your system default browser (Chrome, Edge, Brave, Firefox) where your free account is already signed in!
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                        Opens <code className="text-emerald-700 dark:text-emerald-300">{selectedProfile.webUrl || 'https://claude.ai'}</code> directly in your system default browser (Chrome, Edge, Brave, Firefox) where your free account is already signed in!
                       </p>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => handleBrowserWebLogin(selectedProfile)}
-                      className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-lg shadow-emerald-500/20 transition flex items-center gap-2 shrink-0"
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-600/20 transition flex items-center gap-2 shrink-0"
                     >
                       <Globe className="w-4 h-4" />
                       <span>Open {selectedProfile.shortName} in Browser</span>
@@ -722,15 +750,15 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                 </div>
 
                 {/* Method 2: Interactive CLI Login Terminal */}
-                <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-4 flex-wrap">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 flex-wrap">
                   <div>
-                    <h4 className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
-                      <Terminal className="w-4 h-4 text-sky-400" />
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                      <Terminal className="w-4 h-4 text-sky-500 dark:text-sky-400" />
                       2. Official CLI Terminal Login (For Local CLI Users)
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                       Opens an interactive terminal window to run{' '}
-                      <code className="text-sky-300">
+                      <code className="text-sky-600 dark:text-sky-300">
                         {selectedProfile.loginCommand || selectedProfile.binaryNames[0] || 'CLI login'}
                       </code>
                       .
@@ -740,7 +768,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleCliTerminalLogin(selectedProfile)}
-                    className="px-4 py-2 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 font-bold transition flex items-center gap-1.5 shrink-0"
+                    className="px-4 py-2 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-700 dark:text-sky-300 font-bold transition flex items-center gap-1.5 shrink-0"
                   >
                     <Terminal className="w-3.5 h-3.5" />
                     <span>Launch CLI Login Window</span>
@@ -750,16 +778,16 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                 {/* Method 3: Customize Web URL, CLI Command & Optional API Key */}
                 <form
                   onSubmit={handleSaveCredential}
-                  className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3"
+                  className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 space-y-3"
                 >
-                  <h4 className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                     3. Customize Agent URL, CLI Command or API Key
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-slate-400 text-[11px] block mb-1">
+                      <label className="text-slate-500 dark:text-slate-400 text-[11px] block mb-1">
                         Web Chat URL (Opened in Default Browser)
                       </label>
                       <input
@@ -767,12 +795,12 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                         value={currentCred.customWebUrl ?? selectedProfile.webUrl ?? ''}
                         onChange={(e) => updateCredField({ customWebUrl: e.target.value })}
                         placeholder="https://claude.ai/new"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono"
+                        className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono"
                       />
                     </div>
 
                     <div>
-                      <label className="text-slate-400 text-[11px] block mb-1">
+                      <label className="text-slate-500 dark:text-slate-400 text-[11px] block mb-1">
                         CLI Login / Launch Command
                       </label>
                       <input
@@ -786,14 +814,14 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                           updateCredField({ customLoginCommand: e.target.value })
                         }
                         placeholder="e.g. claude login"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono"
+                        className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-slate-400 text-[11px] block mb-1">
+                      <label className="text-slate-500 dark:text-slate-400 text-[11px] block mb-1">
                         Custom Executable Path (Optional)
                       </label>
                       <input
@@ -806,12 +834,12 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                           selectedProfile.detectedBinaryPath ||
                           'Auto-detected from PATH'
                         }
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono"
+                        className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono"
                       />
                     </div>
 
                     <div>
-                      <label className="text-slate-400 text-[11px] block mb-1">
+                      <label className="text-slate-500 dark:text-slate-400 text-[11px] block mb-1">
                         Developer API Key (Optional)
                       </label>
                       <input
@@ -819,60 +847,58 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                         value={currentCred.apiKey || ''}
                         onChange={(e) => updateCredField({ apiKey: e.target.value })}
                         placeholder="Not needed for Browser Free Tier"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono"
+                        className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 font-mono"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="text-slate-400 text-[11px] block mb-1">
-                        Default Reasoning Effort Level
+                  {/* Subscription Plan Tier */}
+                  {SUBSCRIPTION_TIERS[selectedProfile.id] && (
+                    <div className="pt-1">
+                      <label className="text-slate-500 dark:text-slate-400 text-[11px] block mb-1 font-semibold">
+                        Provider Subscription Plan Tier
                       </label>
                       <select
-                        value={currentCred.defaultEffortLevel || 'medium'}
-                        onChange={(e) =>
-                          updateCredField({
-                            defaultEffortLevel: e.target.value as AgentEffortLevel,
-                          })
-                        }
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sky-300 font-bold"
+                        value={currentCred.subscriptionTier || 'pro'}
+                        onChange={(e) => updateCredField({ subscriptionTier: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-emerald-600 dark:text-emerald-300 font-bold text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
                       >
-                        <option value="low">Low (Fast • Minimal Tokens)</option>
-                        <option value="medium">Medium (Default • Balanced)</option>
-                        <option value="high">High (Deep Verification)</option>
-                        <option value="xhigh">X-High (Exhaustive Architecture)</option>
-                        <option value="max">Max (Maximum Effort)</option>
+                        {SUBSCRIPTION_TIERS[selectedProfile.id].map((t) => (
+                          <option key={t.id} value={t.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                            {t.label} — {t.description}
+                          </option>
+                        ))}
                       </select>
                     </div>
+                  )}
 
-                    <div>
-                      <label className="text-slate-400 text-[11px] block mb-1">
-                        Default Thinking Mode (CoT)
-                      </label>
-                      <select
-                        value={
-                          currentCred.defaultThinkingEnabled === false
-                            ? 'disabled'
-                            : 'enabled'
-                        }
-                        onChange={(e) =>
-                          updateCredField({
-                            defaultThinkingEnabled: e.target.value === 'enabled',
-                          })
-                        }
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-indigo-300 font-bold"
-                      >
-                        <option value="enabled">Enabled (Thinking ON)</option>
-                        <option value="disabled">Disabled (Direct Output • Saves Tokens)</option>
-                      </select>
-                    </div>
+                  {/* Side-by-Side Default Model & Reasoning Effort Matrix */}
+                  <div className="pt-1">
+                    <label className="text-slate-500 dark:text-slate-400 text-[11px] block mb-1 font-semibold">
+                      Default Model & Reasoning Effort Matrix
+                    </label>
+                    <ModelEffortSideBySidePicker
+                      agentId={selectedProfile.id}
+                      selectedModel={currentCred.selectedModel || selectedProfile.defaultModelId}
+                      onChangeModel={(m) => updateCredField({ selectedModel: m })}
+                      effortLevel={currentCred.defaultEffortLevel || 'medium'}
+                      onChangeEffortLevel={(eff) => updateCredField({ defaultEffortLevel: eff })}
+                      thinkingEnabled={currentCred.defaultThinkingEnabled ?? true}
+                      onToggleThinking={() =>
+                        updateCredField({
+                          defaultThinkingEnabled: !(currentCred.defaultThinkingEnabled ?? true),
+                        })
+                      }
+                      subscriptionTier={currentCred.subscriptionTier || selectedProfile.subscriptionTier}
+                      dynamicModels={selectedProfile.defaultModelId ? [selectedProfile.defaultModelId] : undefined}
+                      compact={false}
+                    />
                   </div>
 
                   <div className="flex items-center justify-end pt-2">
                     <button
                       type="submit"
-                      className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl shadow-sm transition"
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-sm transition"
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>Save Agent Settings</span>
@@ -884,6 +910,50 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
           </div>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Discard Custom Agent Draft?"
+        message="You have unsaved custom agent configuration. If you close now, your draft will be discarded."
+        confirmLabel="Discard Draft"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
+      />
+
+      {pendingDeleteCustomProfile && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-2">
+              <Trash2 className="w-5 h-5" />
+              <h4 className="text-sm font-bold">Delete Custom Agent?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to delete custom agent <span className="font-semibold text-slate-800 dark:text-slate-200">{pendingDeleteCustomProfile.name}</span>? Any custom CLI integration commands associated with it will be removed.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteCustomProfile(null)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const target = pendingDeleteCustomProfile;
+                  setPendingDeleteCustomProfile(null);
+                  await handleDeleteCustomAgent(target);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

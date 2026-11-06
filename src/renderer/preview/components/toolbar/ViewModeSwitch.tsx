@@ -12,13 +12,13 @@ export const ViewModeSwitch: React.FC<ViewModeSwitchProps> = ({
   onChangeViewMode,
 }) => {
   return (
-    <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800" title="Document View Types">
+    <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800" title="Document View Types">
       <button
         type="button"
         onClick={() => onChangeViewMode('wysiwyg')}
         title="WYSIWYG Visual Editor (Live Rich-Text editing)"
         className={`p-1.5 rounded flex items-center justify-center transition ${
-          viewMode === 'wysiwyg' ? 'bg-sky-600 text-white font-medium shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          viewMode === 'wysiwyg' ? 'bg-sky-600 text-white font-medium shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
         }`}
       >
         <PenLine className="w-3.5 h-3.5" />
@@ -28,7 +28,7 @@ export const ViewModeSwitch: React.FC<ViewModeSwitchProps> = ({
         onClick={() => onChangeViewMode('split')}
         title="Split View (Editor + Preview)"
         className={`p-1.5 rounded flex items-center justify-center transition ${
-          viewMode === 'split' ? 'bg-sky-600 text-white font-medium shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          viewMode === 'split' ? 'bg-sky-600 text-white font-medium shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
         }`}
       >
         <Columns2 className="w-3.5 h-3.5" />
@@ -38,7 +38,7 @@ export const ViewModeSwitch: React.FC<ViewModeSwitchProps> = ({
         onClick={() => onChangeViewMode('preview')}
         title="Preview Only"
         className={`p-1.5 rounded flex items-center justify-center transition ${
-          viewMode === 'preview' ? 'bg-sky-600 text-white font-medium shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          viewMode === 'preview' ? 'bg-sky-600 text-white font-medium shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
         }`}
       >
         <Eye className="w-3.5 h-3.5" />
@@ -48,7 +48,7 @@ export const ViewModeSwitch: React.FC<ViewModeSwitchProps> = ({
         onClick={() => onChangeViewMode('editor')}
         title="Source Code Editor Only"
         className={`p-1.5 rounded flex items-center justify-center transition ${
-          viewMode === 'editor' ? 'bg-sky-600 text-white font-medium shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          viewMode === 'editor' ? 'bg-sky-600 text-white font-medium shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
         }`}
       >
         <Code2 className="w-3.5 h-3.5" />

@@ -26,24 +26,24 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   return (
     <div
       style={{ WebkitAppRegion: 'drag' } as any}
-      className="h-9 w-full flex items-center justify-between px-3 bg-slate-950/90 border-b border-slate-800
-                 text-slate-300 select-none z-50 text-xs shrink-0"
+      className="h-9 w-full flex items-center justify-between px-3 bg-slate-100/90 dark:bg-slate-950/90 border-b border-slate-200 dark:border-slate-800
+                 text-slate-700 dark:text-slate-300 select-none z-50 text-xs shrink-0 transition-colors duration-150"
     >
       {/* Left: App Logo & Current File */}
       <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as any}>
         <AppLogo size={22} className="shrink-0 drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]" />
-        <span className="font-bold text-sky-400 text-xs tracking-wider">FlyMD</span>
-        <span className="text-slate-600 font-mono">|</span>
-        <span className="font-semibold text-slate-100 truncate">
+        <span className="font-bold text-sky-600 dark:text-sky-400 text-xs tracking-wider">FlyMD</span>
+        <span className="text-slate-400 dark:text-slate-600 font-mono">|</span>
+        <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">
           {fileName || 'Untitled.md'}
         </span>
         {isDirty && (
-          <span title="Unsaved changes" className="flex items-center text-amber-400">
+          <span title="Unsaved changes" className="flex items-center text-amber-500">
             <Circle className="w-2 h-2 fill-current" />
           </span>
         )}
         {filePath && (
-          <span className="text-[10px] text-slate-500 truncate max-w-sm hidden sm:inline" title={filePath}>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-sm hidden sm:inline" title={filePath}>
             — {filePath}
           </span>
         )}
@@ -57,11 +57,11 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           title={isPinned ? 'Always on Top (Active) — Click to unpin' : 'Pin Always on Top'}
           className={`flex items-center gap-1 px-2 py-1 rounded transition text-[11px] font-medium ${
             isPinned
-              ? 'text-sky-300 bg-sky-500/25 border border-sky-400/50 shadow-sm shadow-sky-500/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              ? 'text-sky-600 dark:text-sky-300 bg-sky-500/20 border border-sky-400/50 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
-          <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-sky-400 text-sky-400' : ''}`} />
+          <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-sky-500 text-sky-500 dark:fill-sky-400 dark:text-sky-400' : ''}`} />
           <span className="text-[10px] hidden sm:inline">{isPinned ? 'Pinned' : 'Pin'}</span>
         </button>
 
@@ -69,7 +69,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         <button
           onClick={onMinimize}
           title="Minimize"
-          className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
         >
           <Minus className="w-3.5 h-3.5" />
         </button>
@@ -78,7 +78,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         <button
           onClick={onMaximize}
           title="Maximize / Restore"
-          className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
         >
           <Square className="w-3.5 h-3.5" />
         </button>
@@ -87,7 +87,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         <button
           onClick={onClose}
           title="Close"
-          className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/60 rounded transition"
+          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/60 rounded transition"
         >
           <X className="w-3.5 h-3.5" />
         </button>

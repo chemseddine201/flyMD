@@ -140,7 +140,7 @@ export const AgentDock: React.FC = () => {
   };
 
   return (
-    <div className="shrink-0 border-t border-slate-800/90 bg-slate-950/95 px-3 py-1.5 flex items-center justify-between gap-2 select-none z-20">
+    <div className="shrink-0 border-t border-slate-200 dark:border-slate-800/90 bg-white/95 dark:bg-slate-950/95 px-3 py-1.5 flex items-center justify-between gap-2 select-none z-20">
       {/* Left Label */}
       <div className="flex items-center gap-2 shrink-0">
         <button
@@ -150,20 +150,20 @@ export const AgentDock: React.FC = () => {
           }
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
             viewMode === 'agents'
-              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-              : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+              ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40'
+              : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
           }`}
           title="Open Multi-Agent Supervisor Control Center"
         >
-          <Bot size={14} className="text-sky-400" />
+          <Bot size={14} className="text-sky-500 dark:text-sky-400" />
           <span className="hidden sm:inline">Agents Dock</span>
           {runningTasks.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-sky-500 text-slate-950 text-[10px] font-extrabold animate-pulse">
+            <span className="px-1.5 py-0.2 rounded-full bg-sky-600 text-white text-[10px] font-extrabold animate-pulse">
               {runningTasks.length}
             </span>
           )}
         </button>
-        <span className="text-[10px] text-slate-500 hidden xl:inline">
+        <span className="text-[10px] text-slate-500 dark:text-slate-400 hidden xl:inline">
           Drag any .md file or click an agent to hand off:
         </span>
       </div>
@@ -203,10 +203,10 @@ export const AgentDock: React.FC = () => {
               title={`Click or Drop Markdown file to assign to ${agent.name} (${agent.vendor})`}
               className={`group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shrink-0 ${
                 isDragOver
-                  ? 'scale-105 bg-sky-500/25 border-sky-400 text-white shadow-lg shadow-sky-500/20'
+                  ? 'scale-105 bg-sky-500/25 border-sky-400 text-slate-900 dark:text-white shadow-lg shadow-sky-500/20'
                   : isRunning
-                  ? 'bg-slate-900 border-sky-500/60 text-white'
-                  : 'bg-slate-900/80 border-slate-800/90 text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-800/80'
+                  ? 'bg-slate-100 dark:bg-slate-900 border-sky-500/60 text-slate-900 dark:text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800 dark:bg-slate-900/80 dark:hover:bg-slate-800 dark:border-slate-800/90 dark:text-slate-200'
               }`}
             >
               {/* Status or Running Dot */}
@@ -229,7 +229,7 @@ export const AgentDock: React.FC = () => {
               <span>{agent.shortName}</span>
 
               {isDragOver && (
-                <span className="text-[10px] font-bold text-sky-300 ml-1">
+                <span className="text-[10px] font-bold text-sky-600 dark:text-sky-300 ml-1">
                   Drop File!
                 </span>
               )}
@@ -241,7 +241,7 @@ export const AgentDock: React.FC = () => {
           type="button"
           onClick={() => setShowAgentAccountsModal(true)}
           title="Add a Custom Agent or manage shown agents"
-          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-[11px] font-semibold shrink-0 transition-colors"
+          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-300 text-[11px] font-semibold shrink-0 transition-colors"
         >
           <Plus size={12} />
           <span className="hidden md:inline">Custom Agent</span>
@@ -256,7 +256,7 @@ export const AgentDock: React.FC = () => {
             disabled={restoringId === latestUnrestoredCheckpoint.id}
             onClick={handleQuickUndo}
             title={`Safety Time-Machine: Undo changes from "${latestUnrestoredCheckpoint.label}"`}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[11px] font-semibold transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 dark:border-rose-500/30 dark:text-rose-300 text-[11px] font-semibold transition-colors"
           >
             <RotateCcw size={12} />
             <span className="hidden md:inline">
@@ -269,7 +269,7 @@ export const AgentDock: React.FC = () => {
           type="button"
           onClick={() => setShowCouncilModal(true)}
           title="Council of Agents: Broadcast current file to multiple agents simultaneously"
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-semibold transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:border-amber-500/30 dark:text-amber-300 text-[11px] font-semibold transition-colors"
         >
           <Users size={12} />
           <span className="hidden md:inline">Council</span>
@@ -279,9 +279,9 @@ export const AgentDock: React.FC = () => {
           type="button"
           onClick={() => setShowAgentAccountsModal(true)}
           title="Connect Agent Accounts & API Keys"
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[11px] font-medium transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-medium transition-colors"
         >
-          <KeyRound size={12} className="text-sky-400" />
+          <KeyRound size={12} className="text-sky-500 dark:text-sky-400" />
           <span className="hidden lg:inline">Accounts</span>
         </button>
 
@@ -291,7 +291,7 @@ export const AgentDock: React.FC = () => {
             setViewMode(viewMode === 'agents' ? 'preview' : 'agents')
           }
           title="Toggle Full Multi-Agent Supervisor Dashboard"
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 text-[11px] font-semibold transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-800 dark:bg-indigo-500/15 dark:hover:bg-indigo-500/25 dark:border-indigo-500/30 dark:text-indigo-300 text-[11px] font-semibold transition-colors"
         >
           <Activity size={12} />
           <span className="hidden lg:inline">Supervisor</span>

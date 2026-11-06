@@ -2,8 +2,10 @@ import { LLMConfig } from './llm';
 import { TextDirection } from '../utils/direction';
 
 export type AppTheme =
+  | 'system'
   | 'dark'
   | 'light'
+  | 'clean-white'
   | 'tokyo-night'
   | 'catppuccin'
   | 'dracula'
@@ -36,6 +38,7 @@ export interface AppSettings {
   previewWidthMode?: PreviewWidthMode;
   a11yConfig?: AccessibilityConfig;
   defaultAllowedExtensions?: string[];
+  tokenSaver?: 'off' | 'standard' | 'strict';
 }
 
 export interface WindowState {

@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod common;
 pub mod discussion;
 pub mod files;
 pub mod llm;
@@ -124,11 +125,10 @@ pub fn run() {
             for arg in &argv[1..] {
                 if !arg.starts_with('-')
                     && (arg.ends_with(".md") || arg.ends_with(".markdown") || arg.ends_with(".txt"))
+                    && Path::new(arg).exists()
                 {
-                    if Path::new(arg).exists() {
-                        open_file_in_preview_helper(app, arg);
-                        return;
-                    }
+                    open_file_in_preview_helper(app, arg);
+                    return;
                 }
             }
             if let Some(win) = app.get_webview_window("float") {
@@ -249,11 +249,10 @@ pub fn run() {
             for arg in &args[1..] {
                 if !arg.starts_with('-')
                     && (arg.ends_with(".md") || arg.ends_with(".markdown") || arg.ends_with(".txt"))
+                    && Path::new(arg).exists()
                 {
-                    if Path::new(arg).exists() {
-                        open_file_in_preview_helper(app.handle(), arg);
-                        break;
-                    }
+                    open_file_in_preview_helper(app.handle(), arg);
+                    break;
                 }
             }
 
@@ -309,6 +308,7 @@ pub fn run() {
             cmd_clear_agent_task_logs,
             cmd_delete_agent_task,
             cmd_clear_workspace_cache,
+            cmd_fetch_agent_models,
             cmd_reveal_in_explorer,
             cmd_delete_file_path,
             cmd_open_external_path,
@@ -320,11 +320,15 @@ pub fn run() {
             cmd_get_discussion_transcript,
             cmd_get_discussion_metadata,
             cmd_get_discussion_report,
+            cmd_get_discussion_config,
+            cmd_update_discussion_config,
             cmd_list_discussions,
             cmd_delete_discussion,
             cmd_clear_all_discussions,
             cmd_set_discussion_step_mode,
             cmd_dispatch_targeted_action,
+            cmd_scan_custom_skills_dir,
+            cmd_get_available_skills,
             cmd_get_available_providers,
             cmd_get_cwd,
             cmd_list_projects,

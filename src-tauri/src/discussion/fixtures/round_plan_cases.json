@@ -1,0 +1,206 @@
+[
+  {
+    "scenario": "per_agent_cycling_3_participants",
+    "config": {
+      "sessionId": "s-per-agent",
+      "topic": "Test Topic",
+      "userIdea": "Test Idea",
+      "workspacePath": ".",
+      "repeaterMode": "per_agent",
+      "participants": [
+        {
+          "agentId": "agent-1",
+          "providerId": "antigravity",
+          "modelId": "gemini-3.8-flash",
+          "displayName": "Teacher",
+          "role": "Architect",
+          "customQuery": "Explain clearly"
+        },
+        {
+          "agentId": "agent-2",
+          "providerId": "claude-code",
+          "modelId": "claude-opus-5-5",
+          "displayName": "Critic",
+          "role": "Critic",
+          "customQuery": null
+        },
+        {
+          "agentId": "agent-3",
+          "providerId": "antigravity",
+          "modelId": "gemini-4-argon",
+          "displayName": "Developer",
+          "role": "Implementer",
+          "customQuery": "Build it"
+        }
+      ],
+      "roundSchedule": []
+    },
+    "expectations": [
+      {
+        "round": 1,
+        "expectedTitle": "Round 1: Teacher Deliberation",
+        "expectedObjective": null,
+        "expectedSlotAgentIds": ["agent-1"],
+        "expectedDirectives": ["Explain clearly"]
+      },
+      {
+        "round": 2,
+        "expectedTitle": "Round 2: Critic Deliberation",
+        "expectedObjective": null,
+        "expectedSlotAgentIds": ["agent-2"],
+        "expectedDirectives": ["Apply specialized domain experience as Critic."]
+      },
+      {
+        "round": 3,
+        "expectedTitle": "Round 3: Developer Deliberation",
+        "expectedObjective": null,
+        "expectedSlotAgentIds": ["agent-3"],
+        "expectedDirectives": ["Build it"]
+      },
+      {
+        "round": 4,
+        "expectedTitle": "Round 4: Teacher Deliberation",
+        "expectedObjective": null,
+        "expectedSlotAgentIds": ["agent-1"],
+        "expectedDirectives": ["Explain clearly"]
+      }
+    ]
+  },
+  {
+    "scenario": "fallback_default_titles_and_all_participants",
+    "config": {
+      "sessionId": "s-fallback",
+      "topic": "Test Topic",
+      "userIdea": "Test Idea",
+      "workspacePath": ".",
+      "repeaterMode": "off",
+      "participants": [
+        {
+          "agentId": "agent-1",
+          "providerId": "antigravity",
+          "modelId": "gemini-3.8-flash",
+          "displayName": "Teacher",
+          "role": "Architect"
+        },
+        {
+          "agentId": "agent-2",
+          "providerId": "claude-code",
+          "modelId": "claude-opus-5-5",
+          "displayName": "Critic",
+          "role": "Critic"
+        }
+      ],
+      "roundSchedule": []
+    },
+    "expectations": [
+      {
+        "round": 1,
+        "expectedTitle": "Round 1: Discovery & Position Synthesis",
+        "expectedObjective": null,
+        "expectedSlotAgentIds": ["agent-1", "agent-2"],
+        "expectedDirectives": [null, null]
+      },
+      {
+        "round": 2,
+        "expectedTitle": "Round 2: Adversarial Critique & Cross-Examination",
+        "expectedObjective": null,
+        "expectedSlotAgentIds": ["agent-1", "agent-2"],
+        "expectedDirectives": [null, null]
+      },
+      {
+        "round": 3,
+        "expectedTitle": "Round 3: Rebuttal, Trade-off Resolution & Synthesis",
+        "expectedObjective": null,
+        "expectedSlotAgentIds": ["agent-1", "agent-2"],
+        "expectedDirectives": [null, null]
+      },
+      {
+        "round": 4,
+        "expectedTitle": "Round 4: Deep Specialist Deliberation",
+        "expectedObjective": null,
+        "expectedSlotAgentIds": ["agent-1", "agent-2"],
+        "expectedDirectives": [null, null]
+      }
+    ]
+  },
+  {
+    "scenario": "explicit_schedule_with_fallback_cycle_and_title_override",
+    "config": {
+      "sessionId": "s-cycle",
+      "topic": "Test Topic",
+      "userIdea": "Test Idea",
+      "workspacePath": ".",
+      "repeaterMode": "cycle",
+      "participants": [
+        {
+          "agentId": "agent-1",
+          "providerId": "antigravity",
+          "modelId": "gemini-3.8-flash",
+          "displayName": "Teacher",
+          "role": "Architect"
+        }
+      ],
+      "roundSchedule": [
+        {
+          "roundNumber": 1,
+          "title": "Custom Discovery Phase",
+          "objective": "Map landscape",
+          "slots": [
+            {
+              "slotId": "s1",
+              "participant": {
+                "agentId": "agent-1",
+                "providerId": "antigravity",
+                "modelId": "gemini-3.8-flash",
+                "displayName": "Teacher",
+                "role": "Architect"
+              },
+              "roundDirective": "Provide foundational analysis"
+            }
+          ]
+        },
+        {
+          "roundNumber": 2,
+          "title": "",
+          "objective": "Deep critique",
+          "slots": [
+            {
+              "slotId": "s2",
+              "participant": {
+                "agentId": "agent-1",
+                "providerId": "antigravity",
+                "modelId": "gemini-3.8-flash",
+                "displayName": "Teacher",
+                "role": "Architect"
+              },
+              "roundDirective": null
+            }
+          ]
+        }
+      ]
+    },
+    "expectations": [
+      {
+        "round": 1,
+        "expectedTitle": "Custom Discovery Phase",
+        "expectedObjective": "Map landscape",
+        "expectedSlotAgentIds": ["agent-1"],
+        "expectedDirectives": ["Provide foundational analysis"]
+      },
+      {
+        "round": 2,
+        "expectedTitle": "Round 2: Adversarial Critique & Cross-Examination",
+        "expectedObjective": "Deep critique",
+        "expectedSlotAgentIds": ["agent-1"],
+        "expectedDirectives": ["Deep critique"]
+      },
+      {
+        "round": 3,
+        "expectedTitle": "Custom Discovery Phase",
+        "expectedObjective": "Map landscape",
+        "expectedSlotAgentIds": ["agent-1"],
+        "expectedDirectives": ["Provide foundational analysis"]
+      }
+    ]
+  }
+]

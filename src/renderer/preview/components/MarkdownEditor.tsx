@@ -35,10 +35,14 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     ];
   }, [resolvedDir]);
 
+  const isDarkDoc = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const isLight = theme === 'light' || theme === 'clean-white' || (theme === 'system' && !isDarkDoc);
+
   return (
     <div
       dir={resolvedDir}
-      className={`h-full w-full flex flex-col bg-slate-950 overflow-hidden ${
+      data-theme={isLight ? 'light' : 'dark'}
+      className={`h-full w-full flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-150 ${
         resolvedDir === 'rtl' ? 'direction-rtl' : 'direction-ltr'
       }`}
     >
@@ -46,7 +50,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         value={value}
         height="100%"
         className={`h-full ${resolvedDir === 'rtl' ? 'text-right' : 'text-left'}`}
-        theme={theme === 'light' ? 'light' : oneDark}
+        theme={isLight ? 'light' : oneDark}
         extensions={extensions}
         onChange={onChange}
         onCreateEditor={(view) => {

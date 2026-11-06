@@ -118,6 +118,7 @@ pub fn cmd_get_project_memory(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn cmd_append_project_memory(
     projects: State<'_, SharedProjectManager>,
     workspace_path: String,

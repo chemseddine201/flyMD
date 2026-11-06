@@ -42,6 +42,25 @@ pub struct TurnRequest {
     pub action_query: Option<String>,
     pub thinking_enabled: bool,
     pub effort_level: Option<String>,
+    pub model_id: Option<String>,
+    pub token_saver: Option<String>,
+}
+
+/// Returns true if the provider or model has native internal reasoning / thinking,
+/// so explicit prompt-level `<thinking>` protocol should be omitted (Section 3.8).
+pub fn has_native_thinking(provider_id: &str, model_id: &str) -> bool {
+    let p = provider_id.to_ascii_lowercase();
+    let m = model_id.to_ascii_lowercase();
+    p.contains("claude")
+        || p.contains("antigravity")
+        || p.contains("codex")
+        || p.contains("openai")
+        || m.contains("claude")
+        || m.contains("antigravity")
+        || m.contains("o1")
+        || m.contains("o3")
+        || m.contains("deepseek-r1")
+        || m.contains("thinking")
 }
 
 /// Builds provider-specific JSON `messages` array preserving immutable prefix frames at Token 0.
@@ -232,7 +251,7 @@ async fn emit_split(sink: &Option<Box<dyn StreamSink>>, think: &str, answer: &st
 
 #[async_trait]
 pub trait DiscussionProvider: Send + Sync {
-    fn provider_id(&self) -> &'static str;
+    fn provider_id(&self) -> &str;
     fn context_window_limit(&self) -> u32;
 
     async fn execute_turn(
@@ -254,34 +273,25 @@ pub fn check_denylist_violation(text: &str) -> Option<&'static str> {
         ".pem",
         ".key",
     ];
-    for pattern in &forbidden {
-        if lower.contains(pattern) {
-            return Some(pattern);
-        }
-    }
-    None
+    forbidden
+        .iter()
+        .find(|&&pattern| lower.contains(pattern))
+        .copied()
 }
 
 /// Terminates an entire Windows process tree (including grandchild processes like node.exe/python.exe) (TC-10).
-pub fn kill_process_tree(pid: u32) {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .output();
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = std::process::Command::new("kill")
-            .args(["-9", &pid.to_string()])
-            .output();
-    }
-}
+pub use crate::common::process::kill_process_tree;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CliType {
     ClaudeCode,
     AntigravityGemini,
+    OpenCode,
+    Codex,
+    GenericCli {
+        agent_id: String,
+        custom_args: Option<String>,
+    },
 }
 
 /// Production CLI Adapter: invokes external agent CLIs in strict read-only / plan-only sandbox.
@@ -294,9 +304,11 @@ pub struct CliProvider {
 
 impl CliProvider {
     pub fn new(cli_type: CliType, executable_path: PathBuf, sandbox_dir: PathBuf) -> Self {
-        let context_limit = match cli_type {
+        let context_limit = match &cli_type {
             CliType::ClaudeCode => 64000,
             CliType::AntigravityGemini => 128000,
+            CliType::OpenCode | CliType::Codex => 64000,
+            CliType::GenericCli { .. } => 32000,
         };
         Self {
             cli_type,
@@ -306,22 +318,53 @@ impl CliProvider {
         }
     }
 
-    /// Generates strict read-only command-line flags (TC-03) with user-selected effort & thinking control.
-    pub fn build_cli_args(&self, prompt: &str, effort_level: Option<&str>, thinking_enabled: bool) -> Vec<String> {
+    /// Generates strict read-only command-line flags (TC-03) with user-selected effort, thinking, and model control.
+    pub fn build_cli_args(
+        &self,
+        prompt: &str,
+        effort_level: Option<&str>,
+        thinking_enabled: bool,
+        model_id: Option<&str>,
+    ) -> Vec<String> {
+        self.build_cli_args_internal(prompt, effort_level, thinking_enabled, model_id, false)
+    }
+
+    /// Internal CLI argument builder with support for fused `--model <base>-<effort>` retry form.
+    pub fn build_cli_args_internal(
+        &self,
+        prompt: &str,
+        effort_level: Option<&str>,
+        thinking_enabled: bool,
+        model_id: Option<&str>,
+        fuse_antigravity_effort: bool,
+    ) -> Vec<String> {
         let raw_effort = effort_level.unwrap_or("medium").to_lowercase();
         let eff = match raw_effort.as_str() {
             "low" | "medium" | "high" | "xhigh" | "max" => raw_effort.as_str(),
             _ => "medium",
         };
 
-        match self.cli_type {
+        let sanitized_model = model_id.and_then(|m| {
+            let t = m.trim();
+            if t.is_empty() || t == "default" {
+                None
+            } else {
+                Some(t)
+            }
+        });
+
+        match &self.cli_type {
             CliType::ClaudeCode => {
-                let mut args = vec![
-                    "-p".to_string(),
-                    prompt.to_string(),
-                    "--tools".to_string(),
-                    "".to_string(),
-                ];
+                let mut args = vec!["-p".to_string()];
+                if !prompt.is_empty() {
+                    args.push(prompt.to_string());
+                }
+                args.push("--tools".to_string());
+                args.push("".to_string());
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
+                }
                 if thinking_enabled {
                     args.push("--effort".to_string());
                     args.push(eff.to_string());
@@ -341,12 +384,65 @@ impl CliProvider {
                     "plan".to_string(),
                     "--sandbox".to_string(),
                 ];
-                if thinking_enabled {
-                    args.push("--effort".to_string());
-                    args.push(eff.to_string());
+                let (norm_model, norm_effort) =
+                    crate::agents::runner::cli_builder::normalize_antigravity_model_and_effort(
+                        sanitized_model,
+                        eff,
+                        thinking_enabled,
+                    );
+                if fuse_antigravity_effort {
+                    let fused = match norm_model {
+                        Some(ref m) => format!("{}-{}", m, norm_effort),
+                        None => norm_effort.clone(),
+                    };
+                    args.push("--model".to_string());
+                    args.push(fused);
+                    // Omit --effort in fused retry form to recover from CLI "invalid model selection" rejection
                 } else {
+                    if let Some(m) = norm_model {
+                        args.push("--model".to_string());
+                        args.push(m);
+                    }
                     args.push("--effort".to_string());
-                    args.push("low".to_string());
+                    args.push(norm_effort);
+                }
+                args
+            }
+            CliType::OpenCode => {
+                let mut args = vec!["run".to_string(), prompt.to_string()];
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
+                }
+                args
+            }
+            CliType::Codex => {
+                let mut args = vec![
+                    "--quiet".to_string(),
+                    "--approval-mode".to_string(),
+                    "suggest".to_string(),
+                ];
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
+                }
+                args.push(prompt.to_string());
+                args
+            }
+            CliType::GenericCli { custom_args, .. } => {
+                let mut args = Vec::new();
+                if let Some(extra) = custom_args {
+                    for part in extra.split_whitespace() {
+                        if !part.is_empty() {
+                            args.push(part.to_string());
+                        }
+                    }
+                }
+                args.push("-p".to_string());
+                args.push(prompt.to_string());
+                if let Some(m) = sanitized_model {
+                    args.push("--model".to_string());
+                    args.push(m.to_string());
                 }
                 args
             }
@@ -356,10 +452,13 @@ impl CliProvider {
 
 #[async_trait]
 impl DiscussionProvider for CliProvider {
-    fn provider_id(&self) -> &'static str {
-        match self.cli_type {
+    fn provider_id(&self) -> &str {
+        match &self.cli_type {
             CliType::ClaudeCode => "claude-code",
-            CliType::AntigravityGemini => "gemini-antigravity",
+            CliType::AntigravityGemini => "antigravity",
+            CliType::OpenCode => "opencode",
+            CliType::Codex => "codex",
+            CliType::GenericCli { agent_id, .. } => agent_id.as_str(),
         }
     }
 
@@ -391,11 +490,17 @@ impl DiscussionProvider for CliProvider {
         }
 
         let full_prompt = if request.messages.is_empty() {
-            format!(
-                "{}\n\n{}",
-                request.system_prompt.trim(),
-                request.user_prompt.trim()
-            )
+            if request.system_prompt.trim().is_empty() {
+                request.user_prompt.trim().to_string()
+            } else if request.user_prompt.trim().is_empty() {
+                request.system_prompt.trim().to_string()
+            } else {
+                format!(
+                    "{}\n\n{}",
+                    request.system_prompt.trim(),
+                    request.user_prompt.trim()
+                )
+            }
         } else {
             request
                 .messages
@@ -406,186 +511,330 @@ impl DiscussionProvider for CliProvider {
                 .join("\n\n---\n\n")
         };
 
-        let args = self.build_cli_args(&full_prompt, request.effort_level.as_deref(), request.thinking_enabled);
+        let prompt_on_stdin = matches!(&self.cli_type, CliType::ClaudeCode);
         let start = std::time::Instant::now();
 
         // Ensure sandbox dir exists
         let _ = std::fs::create_dir_all(&self.sandbox_dir);
 
-        let mut cmd = Command::new(&self.executable_path);
-        cmd.args(&args)
-            .current_dir(&self.sandbox_dir)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        let exe_str = self.executable_path.to_string_lossy().to_string();
+        let exe_lower = exe_str.to_lowercase();
+        let is_batch = exe_lower.ends_with(".cmd") || exe_lower.ends_with(".bat");
 
-        #[cfg(target_os = "windows")]
-        {
-            // CREATE_NO_WINDOW flag
-            cmd.creation_flags(0x08000000);
-        }
+        let is_claude = matches!(&self.cli_type, CliType::ClaudeCode);
+        let is_token_saver_on = matches!(
+            request.token_saver.as_deref(),
+            Some("standard") | Some("strict")
+        );
+        let mut claude_fallback_retried = false;
 
-        let mut child = cmd.spawn().map_err(|e| ProviderError::ProcessCrashed {
-            exit_code: None,
-            stderr: format!("Failed to spawn CLI process: {}", e),
-        })?;
+        let mut stdin_prompt = full_prompt.clone();
+        let mut retried = false;
+        let mut cur_args = if prompt_on_stdin {
+            let mut args = self.build_cli_args_internal(
+                "",
+                request.effort_level.as_deref(),
+                request.thinking_enabled,
+                request.model_id.as_deref(),
+                false,
+            );
+            if is_claude && is_token_saver_on {
+                let (frame0_content, rest_stdin) = if !request.messages.is_empty() {
+                    let f0 = request.messages[0].content.trim().to_string();
+                    let rest = request
+                        .messages
+                        .iter()
+                        .skip(1)
+                        .map(|m| m.content.trim())
+                        .filter(|c| !c.is_empty())
+                        .collect::<Vec<_>>()
+                        .join("\n\n---\n\n");
+                    (f0, rest)
+                } else if !request.system_prompt.trim().is_empty() {
+                    (
+                        request.system_prompt.trim().to_string(),
+                        request.user_prompt.trim().to_string(),
+                    )
+                } else {
+                    (String::new(), full_prompt.clone())
+                };
 
-        let child_pid = child.id();
-        let timeout_duration = Duration::from_secs(request.timeout_secs);
+                if !frame0_content.is_empty() {
+                    let sp_file = self.sandbox_dir.join("system_prompt.txt");
+                    if std::fs::write(&sp_file, &frame0_content).is_ok() {
+                        args.push("--system-prompt-file".to_string());
+                        args.push(sp_file.to_string_lossy().to_string());
+                        stdin_prompt = rest_stdin;
+                    }
+                }
+                args.push("--output-format".to_string());
+                args.push("stream-json".to_string());
+                args.push("--verbose".to_string());
+                args.push("--include-partial-messages".to_string());
+                if request.token_saver.as_deref() == Some("strict") {
+                    args.push("--strict-mcp-config".to_string());
+                    args.push("--disable-slash-commands".to_string());
+                    args.push("--setting-sources".to_string());
+                    args.push("project".to_string());
+                }
+            }
+            args
+        } else {
+            self.build_cli_args_internal(
+                &full_prompt,
+                request.effort_level.as_deref(),
+                request.thinking_enabled,
+                request.model_id.as_deref(),
+                false,
+            )
+        };
 
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| ProviderError::ProcessCrashed {
+        let (output, thinking, final_reported_usage) = loop {
+            let mut cmd = if is_batch {
+                let mut c = Command::new("cmd.exe");
+                c.args(["/C", &exe_str]);
+                c
+            } else {
+                Command::new(&self.executable_path)
+            };
+            cmd.args(&cur_args)
+                .current_dir(&self.sandbox_dir)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            if prompt_on_stdin {
+                cmd.stdin(Stdio::piped());
+            } else {
+                cmd.stdin(Stdio::null());
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                // CREATE_NO_WINDOW flag
+                cmd.creation_flags(0x08000000);
+            }
+
+            let mut child = cmd.spawn().map_err(|e| ProviderError::ProcessCrashed {
                 exit_code: None,
-                stderr: "Child stdout was None".to_string(),
+                stderr: format!("Failed to spawn CLI process: {}", e),
             })?;
 
-        let reader = BufReader::new(stdout);
-        let mut lines = reader.lines();
-        let mut splitter = ThoughtSplitter::new();
+            let child_pid = child.id();
+            let timeout_duration = Duration::from_secs(request.timeout_secs);
 
-        let run_fut = async {
-            while let Ok(Some(line)) = lines.next_line().await {
-                if cancel_flag.load(Ordering::Relaxed) {
+            if prompt_on_stdin {
+                if let Some(mut stdin) = child.stdin.take() {
+                    use tokio::io::AsyncWriteExt;
+                    let _ = stdin.write_all(stdin_prompt.as_bytes()).await;
+                    let _ = stdin.shutdown().await;
+                }
+            }
+
+            let stdout = child
+                .stdout
+                .take()
+                .ok_or_else(|| ProviderError::ProcessCrashed {
+                    exit_code: None,
+                    stderr: "Child stdout was None".to_string(),
+                })?;
+
+            // Concurrently drain stderr to prevent OS pipe buffer deadlocks (4KB limit on Windows)
+            let stderr = child.stderr.take();
+            let stderr_handle = tokio::spawn(async move {
+                let mut buf = String::new();
+                if let Some(mut err_stream) = stderr {
+                    let mut reader = BufReader::new(&mut err_stream);
+                    let mut line = String::new();
+                    while let Ok(n) = reader.read_line(&mut line).await {
+                        if n == 0 {
+                            break;
+                        }
+                        buf.push_str(&line);
+                        line.clear();
+                    }
+                }
+                buf
+            });
+
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+            let is_stream_json = cur_args.iter().any(|a| a == "stream-json");
+
+            let run_fut = async {
+                let mut splitter = ThoughtSplitter::new();
+                let mut decode_state = crate::agents::runner::stream_decoder::StreamDecodeState::new(
+                    None,
+                    "Debate Turn".to_string(),
+                    &[],
+                );
+                let mut last_streamed_len = 0;
+
+                while let Ok(Some(line)) = lines.next_line().await {
+                    if cancel_flag.load(Ordering::Relaxed) {
+                        if let Some(pid) = child_pid {
+                            kill_process_tree(pid);
+                        }
+                        return Err(ProviderError::Cancelled);
+                    }
+
+                    if is_stream_json {
+                        let outcome = crate::agents::runner::stream_decoder::decode_stdout_line(
+                            &line,
+                            &mut decode_state,
+                        );
+                        if decode_state.collected_md.len() > last_streamed_len {
+                            let delta = &decode_state.collected_md[last_streamed_len..];
+                            last_streamed_len = decode_state.collected_md.len();
+                            if let Some(ref sink) = stream_sink {
+                                sink.on_chunk(delta).await;
+                            }
+                        }
+                        if !outcome.display_line.is_empty() && outcome.display_line.starts_with('[') {
+                            if let Some(ref sink) = stream_sink {
+                                sink.on_thinking_chunk(&outcome.display_line).await;
+                            }
+                        }
+                    } else {
+                        let (think, answer) = splitter.push(&format!("{}\n", line));
+                        emit_split(&stream_sink, &think, &answer).await;
+                    }
+                }
+
+                if !is_stream_json {
+                    let (think, answer) = splitter.finish();
+                    emit_split(&stream_sink, &think, &answer).await;
+                }
+
+                let status = child
+                    .wait()
+                    .await
+                    .map_err(|e| ProviderError::ProcessCrashed {
+                        exit_code: None,
+                        stderr: format!("Child wait error: {}", e),
+                    })?;
+
+                let err_msg = stderr_handle.await.unwrap_or_default();
+
+                if !status.success() {
+                    let final_err = if !err_msg.trim().is_empty() {
+                        err_msg
+                    } else if !decode_state.collected_md.trim().is_empty() {
+                        decode_state.collected_md.trim().to_string()
+                    } else if !splitter.answer.trim().is_empty() {
+                        format!("CLI error output:\n{}", splitter.answer.trim())
+                    } else {
+                        "Process crashed with non-zero exit code and produced no output".to_string()
+                    };
+                    return Err(ProviderError::ProcessCrashed {
+                        exit_code: status.code(),
+                        stderr: final_err,
+                    });
+                }
+
+                let (ans, thk) = if is_stream_json {
+                    (decode_state.collected_md.trim().to_string(), None)
+                } else {
+                    (splitter.answer.trim().to_string(), splitter.thinking_opt())
+                };
+
+                Ok((ans, thk, decode_state.captured_usage))
+            };
+
+            match tokio::time::timeout(timeout_duration, run_fut).await {
+                Ok(Ok((ans, thk, captured_u))) => {
+                    break (ans, thk, captured_u);
+                }
+                Ok(Err(ProviderError::ProcessCrashed { exit_code, stderr })) => {
+                    if is_claude && is_token_saver_on && !claude_fallback_retried {
+                        // Flag or system prompt file rejected: fallback cleanly to today's command
+                        claude_fallback_retried = true;
+                        cur_args = self.build_cli_args_internal(
+                            "",
+                            request.effort_level.as_deref(),
+                            request.thinking_enabled,
+                            request.model_id.as_deref(),
+                            false,
+                        );
+                        stdin_prompt = full_prompt.clone();
+                        continue;
+                    }
+                    let has_model = request
+                        .model_id
+                        .as_deref()
+                        .map(|m| !m.trim().is_empty())
+                        .unwrap_or(false);
+                    if matches!(&self.cli_type, CliType::AntigravityGemini)
+                        && !retried
+                        && has_model
+                        && stderr.contains("invalid model selection")
+                    {
+                        retried = true;
+                        cur_args = self.build_cli_args_internal(
+                            if prompt_on_stdin { "" } else { &full_prompt },
+                            request.effort_level.as_deref(),
+                            request.thinking_enabled,
+                            request.model_id.as_deref(),
+                            true, // fuse_antigravity_effort
+                        );
+                        continue;
+                    }
+                    return Err(ProviderError::ProcessCrashed { exit_code, stderr });
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
                     if let Some(pid) = child_pid {
                         kill_process_tree(pid);
                     }
-                    return Err(ProviderError::Cancelled);
+                    return Err(ProviderError::Timeout(request.timeout_secs));
                 }
-
-                let (think, answer) = splitter.push(&format!("{}\n", line));
-                emit_split(&stream_sink, &think, &answer).await;
             }
-            let (think, answer) = splitter.finish();
-            emit_split(&stream_sink, &think, &answer).await;
-
-            let status = child
-                .wait()
-                .await
-                .map_err(|e| ProviderError::ProcessCrashed {
-                    exit_code: None,
-                    stderr: format!("Child wait error: {}", e),
-                })?;
-
-            if !status.success() {
-                let mut err_msg = String::new();
-                if let Some(mut stderr) = child.stderr.take() {
-                    let err_reader = BufReader::new(&mut stderr);
-                    let mut err_lines = err_reader.lines();
-                    while let Ok(Some(el)) = err_lines.next_line().await {
-                        err_msg.push_str(&el);
-                        err_msg.push('\n');
-                    }
-                }
-                return Err(ProviderError::ProcessCrashed {
-                    exit_code: status.code(),
-                    stderr: err_msg,
-                });
-            }
-
-            Ok((splitter.answer.trim().to_string(), splitter.thinking_opt()))
         };
 
-        match tokio::time::timeout(timeout_duration, run_fut).await {
-            Ok(Ok((output, thinking))) => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                let prompt_tokens = estimate_tokens(&full_prompt);
-                let completion_tokens = estimate_tokens(&output)
-                    + thinking.as_deref().map(estimate_tokens).unwrap_or(0);
+        let elapsed = start.elapsed().as_millis() as u64;
 
-                Ok(TurnResponse {
-                    raw_markdown: output,
-                    usage: TokenUsage {
-                        prompt_tokens,
-                        completion_tokens,
-                        total_tokens: prompt_tokens + completion_tokens,
-                    },
-                    duration_ms: elapsed,
-                    model_id: match self.cli_type {
-                        CliType::ClaudeCode => "claude-code-cli".to_string(),
-                        CliType::AntigravityGemini => "antigravity-agy-cli".to_string(),
-                    },
-                    context_truncated: false,
-                    thinking,
-                    simulated: false,
-                })
+        let usage = final_reported_usage.unwrap_or_else(|| {
+            let prompt_tokens = estimate_tokens(&full_prompt);
+            let reasoning_tokens = thinking.as_deref().map(estimate_tokens).unwrap_or(0);
+            let completion_tokens = estimate_tokens(&output);
+            let basis = match request.token_saver.as_deref() {
+                Some("standard") | Some("strict") => Some("estimated".to_string()),
+                _ => None,
+            };
+            TokenUsage {
+                prompt_tokens,
+                completion_tokens,
+                reasoning_tokens,
+                total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_usd: None,
+                basis,
             }
-            Ok(Err(e)) => Err(e),
-            Err(_) => {
-                if let Some(pid) = child_pid {
-                    kill_process_tree(pid);
-                }
-                Err(ProviderError::Timeout(request.timeout_secs))
-            }
-        }
-    }
-}
-
-/// One parsed streaming delta from an HTTP LLM endpoint.
-#[derive(Debug, Default, PartialEq)]
-pub struct StreamDelta {
-    pub content: Option<String>,
-    pub reasoning: Option<String>,
-    pub prompt_tokens: Option<u32>,
-    pub completion_tokens: Option<u32>,
-}
-
-/// Parses an OpenAI-compatible SSE line. Supports `reasoning_content` (DeepSeek)
-/// and `reasoning` (OpenRouter-style) deltas plus a trailing `usage` object.
-pub fn parse_openai_sse_line(line: &str) -> Option<StreamDelta> {
-    let payload = line.strip_prefix("data:")?.trim();
-    if payload.is_empty() || payload == "[DONE]" {
-        return None;
-    }
-    let v: serde_json::Value = serde_json::from_str(payload).ok()?;
-    let delta = v.pointer("/choices/0/delta");
-    let get_str = |key: &str| {
-        delta
-            .and_then(|d| d.get(key))
-            .and_then(|x| x.as_str())
-            .map(|s| s.to_string())
-    };
-    let usage = v.get("usage");
-    let get_u32 = |key: &str| {
-        usage
-            .and_then(|u| u.get(key))
-            .and_then(|x| x.as_u64())
-            .map(|n| n as u32)
-    };
-    Some(StreamDelta {
-        content: get_str("content"),
-        reasoning: get_str("reasoning_content").or_else(|| get_str("reasoning")),
-        prompt_tokens: get_u32("prompt_tokens"),
-        completion_tokens: get_u32("completion_tokens"),
-    })
-}
-
-/// Parses an Ollama `/api/chat` NDJSON line (`message.thinking` on newer builds,
-/// `<think>` tags in `message.content` on older builds are handled by the splitter).
-pub fn parse_ollama_line(line: &str) -> Option<StreamDelta> {
-    let v: serde_json::Value = serde_json::from_str(line).ok()?;
-    if let Some(err) = v.get("error").and_then(|e| e.as_str()) {
-        return Some(StreamDelta {
-            content: Some(format!("\n\n> Ollama error: {}\n", err)),
-            ..Default::default()
         });
+
+        Ok(TurnResponse {
+            raw_markdown: output,
+            usage,
+            duration_ms: elapsed,
+            model_id: request
+                .model_id
+                .clone()
+                .filter(|m| !m.trim().is_empty())
+                .unwrap_or_else(|| match &self.cli_type {
+                    CliType::ClaudeCode => "claude-code-cli".to_string(),
+                    CliType::AntigravityGemini => "antigravity-agy-cli".to_string(),
+                    CliType::OpenCode => "opencode-cli".to_string(),
+                    CliType::Codex => "codex-cli".to_string(),
+                    CliType::GenericCli { agent_id, .. } => format!("{}-cli", agent_id),
+                }),
+            context_truncated: false,
+            thinking,
+            simulated: false,
+        })
     }
-    let msg = v.get("message");
-    let get_str = |key: &str| {
-        msg.and_then(|m| m.get(key))
-            .and_then(|x| x.as_str())
-            .map(|s| s.to_string())
-    };
-    let get_u32 = |key: &str| v.get(key).and_then(|x| x.as_u64()).map(|n| n as u32);
-    Some(StreamDelta {
-        content: get_str("content").or_else(|| {
-            v.get("response").and_then(|x| x.as_str()).map(|s| s.to_string())
-        }),
-        reasoning: get_str("thinking"),
-        prompt_tokens: get_u32("prompt_eval_count"),
-        completion_tokens: get_u32("eval_count"),
-    })
 }
+
+pub use crate::common::stream_parsers::{parse_ollama_line, parse_openai_sse_line, StreamDelta};
 
 /// Production HTTP Adapter: handles OpenAI-compatible completions and Ollama endpoints with HTTP 429 exponential backoff.
 pub struct HttpProvider {
@@ -621,8 +870,8 @@ impl HttpProvider {
 
 #[async_trait]
 impl DiscussionProvider for HttpProvider {
-    fn provider_id(&self) -> &'static str {
-        "http-llm"
+    fn provider_id(&self) -> &str {
+        &self.provider_name
     }
 
     fn context_window_limit(&self) -> u32 {
@@ -655,9 +904,16 @@ impl DiscussionProvider for HttpProvider {
         let start = std::time::Instant::now();
         let mut attempts: u32 = 0;
         let max_attempts: u32 = 3;
+        let mut omit_stream_options = false;
         let deadline = start + Duration::from_secs(request.timeout_secs.max(10));
 
         let messages = build_http_messages_json(&request, &self.endpoint_url, self.is_ollama);
+        let effective_model = request
+            .model_id
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&self.model_name);
 
         let response = loop {
             attempts += 1;
@@ -668,12 +924,21 @@ impl DiscussionProvider for HttpProvider {
             let req_builder = if self.is_ollama {
                 let base = self.endpoint_url.trim_end_matches('/');
                 let url = format!("{}/api/chat", base);
+                let prompt_est = if request.messages.is_empty() {
+                    estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
+                } else {
+                    request.messages.iter().map(|m| estimate_tokens(&m.content)).sum()
+                };
+                let mut options = serde_json::json!({ "temperature": 0.6 });
+                if matches!(request.token_saver.as_deref(), Some("standard") | Some("strict")) {
+                    options["num_ctx"] = serde_json::json!((prompt_est + 2048).max(4096));
+                }
                 let body = serde_json::json!({
-                    "model": self.model_name,
+                    "model": effective_model,
                     "messages": messages,
                     "stream": true,
                     "keep_alive": "15m",
-                    "options": { "temperature": 0.6 }
+                    "options": options
                 });
                 self.client.post(&url).json(&body)
             } else {
@@ -693,12 +958,15 @@ impl DiscussionProvider for HttpProvider {
                         b = b.header("Authorization", format!("Bearer {}", key.trim()));
                     }
                 }
-                let body = serde_json::json!({
-                    "model": self.model_name,
+                let mut body = serde_json::json!({
+                    "model": effective_model,
                     "messages": messages,
                     "stream": true,
                     "temperature": 0.6
                 });
+                if matches!(request.token_saver.as_deref(), Some("standard") | Some("strict")) && !omit_stream_options {
+                    body["stream_options"] = serde_json::json!({ "include_usage": true });
+                }
                 b.json(&body)
             };
 
@@ -706,6 +974,11 @@ impl DiscussionProvider for HttpProvider {
                 .send()
                 .await
                 .map_err(|e| ProviderError::NetworkError(format!("{} ({})", e, self.endpoint_url)))?;
+
+            if resp.status().as_u16() == 400 && !omit_stream_options && matches!(request.token_saver.as_deref(), Some("standard") | Some("strict")) {
+                omit_stream_options = true;
+                continue;
+            }
 
             if resp.status().as_u16() == 429 {
                 let retry_secs = resp
@@ -747,6 +1020,8 @@ impl DiscussionProvider for HttpProvider {
         let mut native_thinking = String::new();
         let mut reported_prompt: Option<u32> = None;
         let mut reported_completion: Option<u32> = None;
+        let mut reported_cache_read: Option<u64> = None;
+        let mut reported_cache_write: Option<u64> = None;
 
         let stream_fut = async {
             let mut stream = response.bytes_stream();
@@ -778,6 +1053,12 @@ impl DiscussionProvider for HttpProvider {
                     }
                     if let Some(c) = delta.completion_tokens {
                         reported_completion = Some(c);
+                    }
+                    if let Some(cr) = delta.cache_read_tokens {
+                        reported_cache_read = Some(cr);
+                    }
+                    if let Some(cw) = delta.cache_write_tokens {
+                        reported_cache_write = Some(cw);
                     }
                     if let Some(r) = delta.reasoning.filter(|r| !r.is_empty()) {
                         native_thinking.push_str(&r);
@@ -823,30 +1104,52 @@ impl DiscussionProvider for HttpProvider {
         }
 
         let elapsed = start.elapsed().as_millis() as u64;
-        let prompt_tokens = reported_prompt.unwrap_or_else(|| {
-            if request.messages.is_empty() {
-                estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
-            } else {
-                request
-                    .messages
-                    .iter()
-                    .map(|m| estimate_tokens(&m.content))
-                    .sum()
-            }
-        });
+        let prompt_est_total = if request.messages.is_empty() {
+            estimate_tokens(&request.system_prompt) + estimate_tokens(&request.user_prompt)
+        } else {
+            request.messages.iter().map(|m| estimate_tokens(&m.content)).sum()
+        };
+        let cache_write_u32 = reported_cache_write.unwrap_or(0) as u32;
+        let prompt_tokens = reported_prompt.unwrap_or(prompt_est_total) + cache_write_u32;
+        let reasoning_tokens = estimate_tokens(&thinking);
         let completion_tokens = reported_completion
-            .unwrap_or_else(|| estimate_tokens(&answer) + estimate_tokens(&thinking));
+            .unwrap_or_else(|| estimate_tokens(&answer));
+        let total_tokens = prompt_tokens + completion_tokens + reasoning_tokens;
+
+        let basis = match request.token_saver.as_deref() {
+            Some("standard") | Some("strict") => {
+                if reported_prompt.is_some() || reported_completion.is_some() {
+                    Some("reported".to_string())
+                } else {
+                    Some("estimated".to_string())
+                }
+            }
+            _ => None,
+        };
+
+        let is_truncated = if is_ollama {
+            reported_prompt
+                .map(|rp| prompt_est_total > 100 && rp < (prompt_est_total * 8) / 10)
+                .unwrap_or(false)
+        } else {
+            false
+        };
 
         Ok(TurnResponse {
             raw_markdown: answer,
             usage: TokenUsage {
                 prompt_tokens,
                 completion_tokens,
-                total_tokens: prompt_tokens + completion_tokens,
+                reasoning_tokens,
+                total_tokens,
+                cache_read_tokens: reported_cache_read,
+                cache_write_tokens: reported_cache_write,
+                cost_usd: None,
+                basis,
             },
             duration_ms: elapsed,
             model_id: self.model_name.clone(),
-            context_truncated: false,
+            context_truncated: is_truncated,
             thinking: if thinking.is_empty() { None } else { Some(thinking) },
             simulated: false,
         })
@@ -874,8 +1177,8 @@ impl MockProvider {
 
 #[async_trait]
 impl DiscussionProvider for MockProvider {
-    fn provider_id(&self) -> &'static str {
-        "mock"
+    fn provider_id(&self) -> &str {
+        &self.provider_name
     }
 
     fn context_window_limit(&self) -> u32 {
@@ -984,7 +1287,9 @@ impl DiscussionProvider for MockProvider {
                     if cancel_flag.load(Ordering::Relaxed) {
                         return Err(ProviderError::Cancelled);
                     }
-                    tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(4))).await;
+                    if self.simulated_latency_ms > 0 {
+                        tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(4))).await;
+                    }
                     sink.on_thinking_chunk(&format!("{} ", word)).await;
                 }
             }
@@ -1087,38 +1392,73 @@ impl DiscussionProvider for MockProvider {
                 if cancel_flag.load(Ordering::Relaxed) {
                     return Err(ProviderError::Cancelled);
                 }
-                tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(5))).await;
+                if self.simulated_latency_ms > 0 {
+                    tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms.min(5))).await;
+                }
                 sink.on_chunk(&format!("{} ", word)).await;
             }
-        } else {
+        } else if self.simulated_latency_ms > 0 {
             tokio::time::sleep(Duration::from_millis(self.simulated_latency_ms)).await;
         }
 
         // Append structured cross-model handoff envelope & independent résumé on adversarial roles
-        let peer_handoff_footer = match &request.role {
-            AgentRole::Architect => format!(
-                "\n\n- @Implementer: Adopt decoupled state-machine contracts directly without re-scanning verified files.\n- @Critic: Stress-test recovery guards for `{}`.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Decoupled domain state machine with deterministic transition guards\"],\"activeDisputes\":[\"Formal state-machine boundaries vs reactive local state\"],\"unverifiedAssumptions\":[],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"directive\",\"message\":\"Bind view handlers strictly to exported core state actions.\"}},{{\"toRole\":\"Critic\",\"kind\":\"question\",\"message\":\"Verify edge-case recovery under rapid concurrent user events?\"}}]}}</handoff_state>",
-                topic_clean.replace('"', "'")
-            ),
-            AgentRole::Critic | AgentRole::Auditor => format!(
-                "\n\n<independent_resume>Independent raw audit of `{}` confirms boundary guards and error fallbacks are required before sign-off.</independent_resume>\n- @Implementer: Add explicit fallback guards for interrupted writes and sleep throttling.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Defensive runtime error boundaries and storage fallbacks\"],\"activeDisputes\":[\"Abstraction overhead vs sub-16ms runtime simplicity\"],\"unverifiedAssumptions\":[\"Concurrent write recovery under abrupt process termination\"],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"challenge\",\"message\":\"Ensure zero unhandled exceptions on malformed input or storage quota failure.\"}}]}}</handoff_state>",
-                topic_clean.replace('"', "'")
-            ),
-            AgentRole::Implementer => "\n\n- @Critic: Pure-function state reducer implemented with deterministic fallback recovery.\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Pure-function state engine with sub-16ms reactive view bindings\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[{\"toRole\":\"Critic\",\"kind\":\"contract\",\"message\":\"All state mutations route through pure reducer functions with unit assertions.\"}]}</handoff_state>".to_string(),
-            _ => "\n\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Deterministic barrier synchronization\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[]}</handoff_state>".to_string(),
+        let is_board_prompt = request.user_prompt.contains("Debate Board")
+            || request.system_prompt.contains("Debate Board");
+
+        let peer_handoff_footer = if is_board_prompt {
+            match &request.role {
+                AgentRole::Architect => format!(
+                    "\n\n- @Implementer: Adopt decoupled state-machine contracts directly without re-scanning verified files.\n- @Critic: Stress-test recovery guards for `{}`.\n<handoff_state>{{\"position\":\"Advocates for decoupled state-machine architecture with strict invariant guarantees.\",\"claims\":[{{\"text\":\"State updates must remain unidirectional and predictable\",\"kind\":\"decision\"}},{{\"text\":\"Unhandled exceptions risk process crash\",\"kind\":\"risk\"}}],\"reacts\":[{{\"id\":\"C2\",\"stance\":\"agree\",\"why\":\"Defensive fallbacks are necessary\"}}],\"needs\":[]}}</handoff_state>",
+                    topic_clean.replace('"', "'")
+                ),
+                AgentRole::Critic | AgentRole::Auditor => format!(
+                    "\n\n<independent_resume>Independent raw audit of `{}` confirms boundary guards and error fallbacks are required before sign-off.</independent_resume>\n- @Implementer: Add explicit fallback guards for interrupted writes and sleep throttling.\n<handoff_state>{{\"position\":\"Demands defensive fallbacks for storage quota exceptions and background sleep throttling.\",\"claims\":[{{\"text\":\"Defensive fallbacks for background sleep must remain mandatory\",\"kind\":\"decision\"}}],\"reacts\":[{{\"id\":\"C1\",\"stance\":\"agree\",\"why\":\"Predictable unidirectional updates reduce race conditions\"}}],\"needs\":[\"C1\"]}}</handoff_state>",
+                    topic_clean.replace('"', "'")
+                ),
+                AgentRole::Implementer => "\n\n- @Critic: Pure-function state reducer implemented with deterministic fallback recovery.\n<handoff_state>{\"position\":\"Pure-function state engine with sub-16ms reactive view bindings.\",\"claims\":[{\"text\":\"Pure-function state engine guarantees sub-16ms reactive view bindings\",\"kind\":\"fact\"}],\"reacts\":[{\"id\":\"C1\",\"stance\":\"agree\",\"why\":\"Matches pure reducer design\"},{\"id\":\"C2\",\"stance\":\"agree\",\"why\":\"Error boundaries implemented\"}],\"needs\":[]}</handoff_state>".to_string(),
+                _ => "\n\n<handoff_state>{\"position\":\"Balanced domain evaluation.\",\"claims\":[],\"reacts\":[],\"needs\":[]}</handoff_state>".to_string(),
+            }
+        } else {
+            match &request.role {
+                AgentRole::Architect => format!(
+                    "\n\n- @Implementer: Adopt decoupled state-machine contracts directly without re-scanning verified files.\n- @Critic: Stress-test recovery guards for `{}`.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Decoupled domain state machine with deterministic transition guards\"],\"activeDisputes\":[\"Formal state-machine boundaries vs reactive local state\"],\"unverifiedAssumptions\":[],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"directive\",\"message\":\"Bind view handlers strictly to exported core state actions.\"}},{{\"toRole\":\"Critic\",\"kind\":\"question\",\"message\":\"Verify edge-case recovery under rapid concurrent user events?\"}}]}}</handoff_state>",
+                    topic_clean.replace('"', "'")
+                ),
+                AgentRole::Critic | AgentRole::Auditor => format!(
+                    "\n\n<independent_resume>Independent raw audit of `{}` confirms boundary guards and error fallbacks are required before sign-off.</independent_resume>\n- @Implementer: Add explicit fallback guards for interrupted writes and sleep throttling.\n<handoff_state>{{\"confidence\":\"high\",\"lockedInvariants\":[\"Defensive runtime error boundaries and storage fallbacks\"],\"activeDisputes\":[\"Abstraction overhead vs sub-16ms runtime simplicity\"],\"unverifiedAssumptions\":[\"Concurrent write recovery under abrupt process termination\"],\"peerMessages\":[{{\"toRole\":\"Implementer\",\"kind\":\"challenge\",\"message\":\"Ensure zero unhandled exceptions on malformed input or storage quota failure.\"}}]}}</handoff_state>",
+                    topic_clean.replace('"', "'")
+                ),
+                AgentRole::Implementer => "\n\n- @Critic: Pure-function state reducer implemented with deterministic fallback recovery.\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Pure-function state engine with sub-16ms reactive view bindings\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[{\"toRole\":\"Critic\",\"kind\":\"contract\",\"message\":\"All state mutations route through pure reducer functions with unit assertions.\"}]}</handoff_state>".to_string(),
+                _ => "\n\n<handoff_state>{\"confidence\":\"high\",\"lockedInvariants\":[\"Deterministic barrier synchronization\"],\"activeDisputes\":[],\"unverifiedAssumptions\":[],\"peerMessages\":[]}</handoff_state>".to_string(),
+            }
         };
         response_body.push_str(&peer_handoff_footer);
 
         let elapsed = start.elapsed().as_millis() as u64;
         let char_count = response_body.chars().count();
         let tokens = ((char_count as f64) / 3.8).ceil() as u32;
+        let reasoning_tokens = if request.thinking_enabled {
+            ((thinking_body.chars().count() as f64) / 3.8).ceil() as u32
+        } else {
+            0
+        };
+
+        let basis = match request.token_saver.as_deref() {
+            Some("standard") | Some("strict") => Some("estimated".to_string()),
+            _ => None,
+        };
 
         Ok(TurnResponse {
             raw_markdown: response_body,
             usage: TokenUsage {
                 prompt_tokens: 350,
                 completion_tokens: tokens,
-                total_tokens: 350 + tokens,
+                reasoning_tokens,
+                total_tokens: 350 + tokens + reasoning_tokens,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                cost_usd: None,
+                basis,
             },
             duration_ms: elapsed,
             model_id: "adaptive-domain-simulator".to_string(),
@@ -1170,6 +1510,8 @@ mod tests {
             action_query: None,
             thinking_enabled: true,
             effort_level: Some("medium".to_string()),
+            model_id: None,
+            token_saver: None,
         };
 
         let sink = Box::new(CollectingSink {
@@ -1204,6 +1546,8 @@ mod tests {
             action_query: None,
             thinking_enabled: false,
             effort_level: Some("medium".to_string()),
+            model_id: None,
+            token_saver: None,
         };
 
         let err = provider
@@ -1241,10 +1585,13 @@ mod tests {
             PathBuf::from("claude.exe"),
             PathBuf::from("sandbox"),
         );
-        let claude_args_high = claude_adapter.build_cli_args("Debate topic", Some("high"), true);
+        let claude_args_high = claude_adapter.build_cli_args("Debate topic", Some("high"), true, None);
         assert_eq!(claude_args_high, vec!["-p", "Debate topic", "--tools", "", "--effort", "high"]);
 
-        let claude_args_no_think = claude_adapter.build_cli_args("Debate topic", Some("high"), false);
+        let claude_args_with_model = claude_adapter.build_cli_args("Debate topic", Some("high"), true, Some("claude-3-7-sonnet"));
+        assert_eq!(claude_args_with_model, vec!["-p", "Debate topic", "--tools", "", "--model", "claude-3-7-sonnet", "--effort", "high"]);
+
+        let claude_args_no_think = claude_adapter.build_cli_args("Debate topic", Some("high"), false, None);
         assert_eq!(
             claude_args_no_think,
             vec!["-p", "Debate topic", "--tools", "", "--effort", "low", "--settings", "{\"alwaysThinkingEnabled\":false}"]
@@ -1255,13 +1602,19 @@ mod tests {
             PathBuf::from("agy.exe"),
             PathBuf::from("sandbox"),
         );
-        let gemini_args_med = gemini_adapter.build_cli_args("Debate topic", Some("medium"), true);
+        let gemini_args_med = gemini_adapter.build_cli_args("Debate topic", Some("medium"), true, None);
         assert_eq!(
             gemini_args_med,
             vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--effort", "medium"]
         );
 
-        let gemini_args_no_think = gemini_adapter.build_cli_args("Debate topic", Some("medium"), false);
+        let gemini_args_with_model = gemini_adapter.build_cli_args("Debate topic", Some("medium"), true, Some("gemini-2.5-pro"));
+        assert_eq!(
+            gemini_args_with_model,
+            vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--model", "gemini-4-argon", "--effort", "medium"]
+        );
+
+        let gemini_args_no_think = gemini_adapter.build_cli_args("Debate topic", Some("medium"), false, None);
         assert_eq!(
             gemini_args_no_think,
             vec!["-p", "Debate topic", "--mode", "plan", "--sandbox", "--effort", "low"]
@@ -1364,6 +1717,8 @@ mod tests {
             action_query: None,
             thinking_enabled: true,
             effort_level: Some("medium".to_string()),
+            model_id: None,
+            token_saver: None,
         };
 
         let openai_msgs = build_http_messages_json(&req, "https://api.deepseek.com", false);
@@ -1381,5 +1736,225 @@ mod tests {
             "ephemeral"
         );
         assert_eq!(a_arr[2]["content"], "DYNAMIC_CRITIC_TAIL");
+    }
+
+    #[tokio::test]
+    async fn test_token_usage_breakdown_with_reasoning_tokens() {
+        let provider = MockProvider::new("test-mock");
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+
+        let req = TurnRequest {
+            session_id: "test-tokens".to_string(),
+            round_number: 1,
+            agent_id: "agent-test".to_string(),
+            role: AgentRole::Architect,
+            system_prompt: "Sys".to_string(),
+            user_prompt: "User".to_string(),
+            messages: vec![],
+            context_summary: String::new(),
+            timeout_secs: 5,
+            topic: "Test Topic".to_string(),
+            user_idea: "Test Idea".to_string(),
+            action_name: None,
+            action_query: None,
+            thinking_enabled: true,
+            effort_level: Some("high".to_string()),
+            model_id: None,
+            token_saver: None,
+        };
+
+        let resp = provider.execute_turn(req, cancel_flag, None).await.unwrap();
+        assert!(resp.usage.prompt_tokens > 0);
+        assert!(resp.usage.completion_tokens > 0);
+        assert!(resp.usage.reasoning_tokens > 0);
+        assert_eq!(
+            resp.usage.total_tokens,
+            resp.usage.prompt_tokens + resp.usage.completion_tokens + resp.usage.reasoning_tokens
+        );
+    }
+
+    #[tokio::test]
+    async fn test_antigravity_cli_invalid_model_selection_retry() {
+        let temp_dir = std::env::temp_dir().join(format!("flymd_b2_cli_test_{}", crate::common::time::now_ms()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        let build_req = |model: &str, eff: &str| TurnRequest {
+            session_id: "test-b2-session".to_string(),
+            round_number: 1,
+            agent_id: "antigravity".to_string(),
+            role: AgentRole::Architect,
+            system_prompt: String::new(),
+            user_prompt: "User".to_string(),
+            messages: vec![],
+            context_summary: String::new(),
+            timeout_secs: 10,
+            topic: "Architecture".to_string(),
+            user_idea: "Debate".to_string(),
+            action_name: None,
+            action_query: None,
+            thinking_enabled: true,
+            effort_level: Some(eff.to_string()),
+            model_id: Some(model.to_string()),
+            token_saver: None,
+        };
+
+        // -------------------------------------------------------------
+        // Case 1: First form works (standard exit 0)
+        // -------------------------------------------------------------
+        #[cfg(target_os = "windows")]
+        let script_first_works = temp_dir.join("fake_agy_first_works.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script_first_works = temp_dir.join("fake_agy_first_works.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script_first_works,
+            "@echo off\r\necho ### Position Paper by Antigravity (First Form Works)\r\nexit /b 0\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(&script_first_works, "#!/bin/sh\necho '### Position Paper by Antigravity (First Form Works)'\nexit 0\n").unwrap();
+            let mut perms = std::fs::metadata(&script_first_works).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script_first_works, perms).unwrap();
+        }
+
+        let provider_first = CliProvider {
+            cli_type: CliType::AntigravityGemini,
+            executable_path: script_first_works,
+            sandbox_dir: temp_dir.clone(),
+            context_limit: 32000,
+        };
+
+        let res_first = provider_first
+            .execute_turn(build_req("gemini-4-argon", "medium"), cancel_flag.clone(), None)
+            .await;
+        assert!(res_first.is_ok(), "First form must succeed cleanly");
+        assert!(res_first.unwrap().raw_markdown.contains("First Form Works"));
+
+        // -------------------------------------------------------------
+        // Case 2: First form fails with "invalid model selection", retry succeeds!
+        // -------------------------------------------------------------
+        #[cfg(target_os = "windows")]
+        let script_retry_works = temp_dir.join("fake_agy_retry_works.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script_retry_works = temp_dir.join("fake_agy_retry_works.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script_retry_works,
+            "@echo off\r\n\
+             echo %* | findstr /C:\"--effort\" >nul\r\n\
+             if errorlevel 1 goto RETRY_OK\r\n\
+             echo error: invalid model selection (--model \"gemini-4-argon\" --effort \"medium\"): --effort is not supported for model \"gemini-4-argon\" 1>&2\r\n\
+             exit /b 1\r\n\
+             :RETRY_OK\r\n\
+             echo ### Position Paper by Antigravity (Recovered via Retry)\r\n\
+             exit /b 0\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(
+                &script_retry_works,
+                "#!/bin/sh\n\
+                 if echo \"$@\" | grep -q -- \"--effort\"; then\n\
+                   echo 'error: invalid model selection (--model \"gemini-4-argon\" --effort \"medium\"): --effort is not supported for model \"gemini-4-argon\"' >&2\n\
+                   exit 1\n\
+                 else\n\
+                   echo '### Position Paper by Antigravity (Recovered via Retry)'\n\
+                   exit 0\n\
+                 fi\n",
+            ).unwrap();
+            let mut perms = std::fs::metadata(&script_retry_works).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script_retry_works, perms).unwrap();
+        }
+
+        let provider_retry = CliProvider {
+            cli_type: CliType::AntigravityGemini,
+            executable_path: script_retry_works,
+            sandbox_dir: temp_dir.clone(),
+            context_limit: 32000,
+        };
+
+        let res_retry = provider_retry
+            .execute_turn(build_req("gemini-4-argon", "medium"), cancel_flag.clone(), None)
+            .await;
+        if let Err(ref e) = res_retry {
+            eprintln!("DEBUG res_retry error: {:?}", e);
+        }
+        assert!(res_retry.is_ok(), "Retry form must recover and succeed: {:?}", res_retry);
+        assert!(res_retry.unwrap().raw_markdown.contains("Recovered via Retry"));
+
+        // -------------------------------------------------------------
+        // Case 3: Both forms fail (keeps failed state and preserves error)
+        // -------------------------------------------------------------
+        #[cfg(target_os = "windows")]
+        let script_both_fail = temp_dir.join("fake_agy_both_fail.cmd");
+        #[cfg(not(target_os = "windows"))]
+        let script_both_fail = temp_dir.join("fake_agy_both_fail.sh");
+
+        #[cfg(target_os = "windows")]
+        std::fs::write(
+            &script_both_fail,
+            "@echo off\r\n\
+             echo error: invalid model selection: model not found 1>&2\r\n\
+             exit /b 1\r\n",
+        ).unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(
+                &script_both_fail,
+                "#!/bin/sh\n\
+                 echo 'error: invalid model selection: model not found' >&2\n\
+                 exit 1\n",
+            ).unwrap();
+            let mut perms = std::fs::metadata(&script_both_fail).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script_both_fail, perms).unwrap();
+        }
+
+        let provider_fail = CliProvider {
+            cli_type: CliType::AntigravityGemini,
+            executable_path: script_both_fail,
+            sandbox_dir: temp_dir.clone(),
+            context_limit: 32000,
+        };
+
+        let res_fail = provider_fail
+            .execute_turn(build_req("gemini-4-argon", "medium"), cancel_flag.clone(), None)
+            .await;
+        assert!(res_fail.is_err(), "Must report failure if both attempts fail");
+        match res_fail.unwrap_err() {
+            ProviderError::ProcessCrashed { exit_code, stderr } => {
+                assert_eq!(exit_code, Some(1));
+                assert!(stderr.contains("invalid model selection"));
+            }
+            other => panic!("Expected ProcessCrashed, got: {:?}", other),
+        }
+
+        // -------------------------------------------------------------
+        // Case 4: Skip retry when no model is set (model_id is None)
+        // -------------------------------------------------------------
+        let mut req_no_model = build_req("gemini-4-argon", "medium");
+        req_no_model.model_id = None;
+
+        let res_no_model = provider_retry
+            .execute_turn(req_no_model, cancel_flag.clone(), None)
+            .await;
+        assert!(res_no_model.is_err(), "Must skip retry when no model is set and keep original error");
+        match res_no_model.unwrap_err() {
+            ProviderError::ProcessCrashed { exit_code, stderr } => {
+                assert_eq!(exit_code, Some(1));
+                assert!(stderr.contains("invalid model selection"));
+            }
+            other => panic!("Expected ProcessCrashed, got: {:?}", other),
+        }
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

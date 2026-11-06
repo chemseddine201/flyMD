@@ -180,7 +180,7 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
               <div
                 onMouseDown={handleSplitterMouseDown}
                 title="Drag to resize panels"
-                className="w-1.5 h-full bg-slate-800 hover:bg-sky-500 cursor-col-resize z-20 transition-colors shrink-0"
+                className="w-1.5 h-full bg-slate-200 dark:bg-slate-800 hover:bg-sky-500 cursor-col-resize z-20 transition-colors shrink-0"
               />
             )}
 

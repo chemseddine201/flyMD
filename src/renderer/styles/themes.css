@@ -22,24 +22,32 @@
   --link-color: #58a6ff;
 }
 
-[data-theme="github-light"], [data-theme="light"] {
+html.light,
+body.light,
+html:not(.dark),
+body:not(.dark),
+[data-theme="github-light"],
+[data-theme="light"],
+[data-theme="clean-white"],
+.theme-light,
+.theme-system:not(.dark) {
   --bg-canvas: #ffffff;
-  --bg-surface: #f6f8fa;
-  --bg-surface-hover: #eaeef2;
-  --border-default: #d0d7de;
-  --border-subtle: #e1e4e8;
-  --text-primary: #1f2328;
-  --text-secondary: #656d76;
-  --text-muted: #8c959f;
+  --bg-surface: #f9f9f9;
+  --bg-surface-hover: #f1f5f9;
+  --border-default: #e2e8f0;
+  --border-subtle: #edf2f7;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
   --accent-primary: #0969da;
   --accent-hover: #218bff;
-  --code-bg: #f6f8fa;
-  --code-border: #d0d7de;
-  --quote-bg: rgba(9, 105, 218, 0.06);
+  --code-bg: #f8fafc;
+  --code-border: #e2e8f0;
+  --quote-bg: rgba(9, 105, 218, 0.05);
   --quote-border: #0969da;
-  --table-border: #d0d7de;
-  --table-header-bg: #f6f8fa;
-  --table-stripe: #f6f8fa;
+  --table-border: #e2e8f0;
+  --table-header-bg: #f8fafc;
+  --table-stripe: #f9f9f9;
   --link-color: #0969da;
 }
 
@@ -219,4 +227,403 @@
   outline: 2px solid var(--accent-primary) !important;
   outline-offset: 2px !important;
 }
+
+/* CodeMirror Editor Dual-Theme Elevation */
+html:not(.dark) .cm-editor,
+html.light .cm-editor,
+[data-theme="light"] .cm-editor,
+[data-theme="clean-white"] .cm-editor {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) .cm-gutters,
+html.light .cm-gutters,
+[data-theme="light"] .cm-gutters,
+[data-theme="clean-white"] .cm-gutters {
+  background-color: #f9f9f9 !important;
+  color: #64748b !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+html:not(.dark) .cm-activeLine,
+html.light .cm-activeLine,
+[data-theme="light"] .cm-activeLine,
+[data-theme="clean-white"] .cm-activeLine {
+  background-color: #f1f5f9 !important;
+}
+
+html:not(.dark) .cm-activeLineGutter,
+html.light .cm-activeLineGutter,
+[data-theme="light"] .cm-activeLineGutter,
+[data-theme="clean-white"] .cm-activeLineGutter {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* =========================================================================
+   COMPATIBLE COLOR SYSTEM: LIGHT-BACKGROUND DARKENING & DARK-BACKGROUND LIGHTENING
+   ========================================================================= */
+
+/* 1. LIGHT DESIGNS CONTRAST GUARD: Darken lighten/pastel text on light backgrounds */
+html:not(.dark) .text-slate-100,
+html.light .text-slate-100,
+[data-theme="light"] .text-slate-100,
+[data-theme="clean-white"] .text-slate-100,
+[data-theme="sepia"] .text-slate-100,
+html:not(.dark) .text-slate-200,
+html.light .text-slate-200,
+[data-theme="light"] .text-slate-200,
+[data-theme="clean-white"] .text-slate-200,
+[data-theme="sepia"] .text-slate-200,
+html:not(.dark) .text-neutral-100,
+html.light .text-neutral-100,
+[data-theme="light"] .text-neutral-100,
+[data-theme="clean-white"] .text-neutral-100,
+[data-theme="sepia"] .text-neutral-100,
+html:not(.dark) .text-neutral-200,
+html.light .text-neutral-200,
+[data-theme="light"] .text-neutral-200,
+[data-theme="clean-white"] .text-neutral-200,
+[data-theme="sepia"] .text-neutral-200,
+html:not(.dark) .text-zinc-100,
+html.light .text-zinc-100,
+[data-theme="light"] .text-zinc-100,
+[data-theme="clean-white"] .text-zinc-100,
+[data-theme="sepia"] .text-zinc-100,
+html:not(.dark) .text-zinc-200,
+html.light .text-zinc-200,
+[data-theme="light"] .text-zinc-200,
+[data-theme="clean-white"] .text-zinc-200,
+[data-theme="sepia"] .text-zinc-200 {
+  color: #0f172a;
+}
+
+html:not(.dark) .text-slate-300,
+html.light .text-slate-300,
+[data-theme="light"] .text-slate-300,
+[data-theme="clean-white"] .text-slate-300,
+[data-theme="sepia"] .text-slate-300,
+html:not(.dark) .text-neutral-300,
+html.light .text-neutral-300,
+[data-theme="light"] .text-neutral-300,
+[data-theme="clean-white"] .text-neutral-300,
+[data-theme="sepia"] .text-neutral-300,
+html:not(.dark) .text-zinc-300,
+html.light .text-zinc-300,
+[data-theme="light"] .text-zinc-300,
+[data-theme="clean-white"] .text-zinc-300,
+[data-theme="sepia"] .text-zinc-300 {
+  color: #1e293b;
+}
+
+html:not(.dark) .text-slate-400,
+html.light .text-slate-400,
+[data-theme="light"] .text-slate-400,
+[data-theme="clean-white"] .text-slate-400,
+[data-theme="sepia"] .text-slate-400,
+html:not(.dark) .text-neutral-400,
+html.light .text-neutral-400,
+[data-theme="light"] .text-neutral-400,
+[data-theme="clean-white"] .text-neutral-400,
+[data-theme="sepia"] .text-neutral-400,
+html:not(.dark) .text-zinc-400,
+html.light .text-zinc-400,
+[data-theme="light"] .text-zinc-400,
+[data-theme="clean-white"] .text-zinc-400,
+[data-theme="sepia"] .text-zinc-400 {
+  color: #334155;
+}
+
+html:not(.dark) .text-slate-500,
+html.light .text-slate-500,
+[data-theme="light"] .text-slate-500,
+[data-theme="clean-white"] .text-slate-500,
+[data-theme="sepia"] .text-slate-500,
+html:not(.dark) .text-neutral-500,
+html.light .text-neutral-500,
+[data-theme="light"] .text-neutral-500,
+[data-theme="clean-white"] .text-neutral-500,
+[data-theme="sepia"] .text-neutral-500,
+html:not(.dark) .text-zinc-500,
+html.light .text-zinc-500,
+[data-theme="light"] .text-zinc-500,
+[data-theme="clean-white"] .text-zinc-500,
+[data-theme="sepia"] .text-zinc-500 {
+  color: #475569;
+}
+
+/* Yellow & Amber on light surfaces: Darken to deep rich amber / warm brown */
+html:not(.dark) .text-yellow-100,
+html:not(.dark) .text-yellow-200,
+html:not(.dark) .text-yellow-300,
+html:not(.dark) .text-yellow-400,
+html:not(.dark) .text-yellow-500,
+html:not(.dark) [class*="text-yellow-"],
+html.light .text-yellow-100,
+html.light .text-yellow-200,
+html.light .text-yellow-300,
+html.light .text-yellow-400,
+html.light .text-yellow-500,
+html.light [class*="text-yellow-"],
+[data-theme="light"] .text-yellow-100,
+[data-theme="light"] .text-yellow-200,
+[data-theme="light"] .text-yellow-300,
+[data-theme="light"] .text-yellow-400,
+[data-theme="light"] [class*="text-yellow-"],
+[data-theme="clean-white"] .text-yellow-100,
+[data-theme="clean-white"] .text-yellow-200,
+[data-theme="clean-white"] .text-yellow-300,
+[data-theme="clean-white"] .text-yellow-400,
+[data-theme="clean-white"] [class*="text-yellow-"],
+[data-theme="sepia"] .text-yellow-100,
+[data-theme="sepia"] .text-yellow-200,
+[data-theme="sepia"] .text-yellow-300,
+[data-theme="sepia"] .text-yellow-400,
+[data-theme="sepia"] [class*="text-yellow-"],
+html:not(.dark) .text-amber-100,
+html:not(.dark) .text-amber-200,
+html:not(.dark) .text-amber-300,
+html:not(.dark) .text-amber-400,
+html:not(.dark) [class*="text-amber-2"],
+html:not(.dark) [class*="text-amber-3"],
+html.light .text-amber-100,
+html.light .text-amber-200,
+html.light .text-amber-300,
+html.light .text-amber-400,
+html.light [class*="text-amber-2"],
+html.light [class*="text-amber-3"],
+[data-theme="light"] .text-amber-100,
+[data-theme="light"] .text-amber-200,
+[data-theme="light"] .text-amber-300,
+[data-theme="light"] .text-amber-400,
+[data-theme="clean-white"] .text-amber-100,
+[data-theme="clean-white"] .text-amber-200,
+[data-theme="clean-white"] .text-amber-300,
+[data-theme="clean-white"] .text-amber-400,
+[data-theme="sepia"] .text-amber-100,
+[data-theme="sepia"] .text-amber-200,
+[data-theme="sepia"] .text-amber-300,
+[data-theme="sepia"] .text-amber-400 {
+  color: #92400e;
+}
+
+html:not(.dark) .text-rose-100,
+html:not(.dark) .text-rose-200,
+html:not(.dark) .text-rose-300,
+html.light .text-rose-100,
+html.light .text-rose-200,
+html.light .text-rose-300,
+[data-theme="light"] .text-rose-100,
+[data-theme="light"] .text-rose-200,
+[data-theme="light"] .text-rose-300,
+[data-theme="clean-white"] .text-rose-100,
+[data-theme="clean-white"] .text-rose-200,
+[data-theme="clean-white"] .text-rose-300,
+[data-theme="sepia"] .text-rose-100,
+[data-theme="sepia"] .text-rose-200,
+[data-theme="sepia"] .text-rose-300 {
+  color: #be123c;
+}
+
+html:not(.dark) .text-emerald-100,
+html:not(.dark) .text-emerald-200,
+html:not(.dark) .text-emerald-300,
+html.light .text-emerald-100,
+html.light .text-emerald-200,
+html.light .text-emerald-300,
+[data-theme="light"] .text-emerald-100,
+[data-theme="light"] .text-emerald-200,
+[data-theme="light"] .text-emerald-300,
+[data-theme="clean-white"] .text-emerald-100,
+[data-theme="clean-white"] .text-emerald-200,
+[data-theme="clean-white"] .text-emerald-300,
+[data-theme="sepia"] .text-emerald-100,
+[data-theme="sepia"] .text-emerald-200,
+[data-theme="sepia"] .text-emerald-300 {
+  color: #047857;
+}
+
+html:not(.dark) .text-sky-100,
+html:not(.dark) .text-sky-200,
+html:not(.dark) .text-sky-300,
+html.light .text-sky-100,
+html.light .text-sky-200,
+html.light .text-sky-300,
+[data-theme="light"] .text-sky-100,
+[data-theme="light"] .text-sky-200,
+[data-theme="light"] .text-sky-300,
+[data-theme="clean-white"] .text-sky-100,
+[data-theme="clean-white"] .text-sky-200,
+[data-theme="clean-white"] .text-sky-300,
+[data-theme="sepia"] .text-sky-100,
+[data-theme="sepia"] .text-sky-200,
+[data-theme="sepia"] .text-sky-300 {
+  color: #0369a1;
+}
+
+html:not(.dark) .text-purple-100,
+html:not(.dark) .text-purple-200,
+html:not(.dark) .text-purple-300,
+html.light .text-purple-100,
+html.light .text-purple-200,
+html.light .text-purple-300,
+[data-theme="light"] .text-purple-100,
+[data-theme="light"] .text-purple-200,
+[data-theme="light"] .text-purple-300,
+[data-theme="clean-white"] .text-purple-100,
+[data-theme="clean-white"] .text-purple-200,
+[data-theme="clean-white"] .text-purple-300,
+[data-theme="sepia"] .text-purple-100,
+[data-theme="sepia"] .text-purple-200,
+[data-theme="sepia"] .text-purple-300 {
+  color: #6d28d9;
+}
+
+html:not(.dark) .text-indigo-100,
+html:not(.dark) .text-indigo-200,
+html:not(.dark) .text-indigo-300,
+html.light .text-indigo-100,
+html.light .text-indigo-200,
+html.light .text-indigo-300,
+[data-theme="light"] .text-indigo-100,
+[data-theme="light"] .text-indigo-200,
+[data-theme="light"] .text-indigo-300,
+[data-theme="clean-white"] .text-indigo-100,
+[data-theme="clean-white"] .text-indigo-200,
+[data-theme="clean-white"] .text-indigo-300,
+[data-theme="sepia"] .text-indigo-100,
+[data-theme="sepia"] .text-indigo-200,
+[data-theme="sepia"] .text-indigo-300 {
+  color: #4338ca;
+}
+
+/* 2. SOLID DARKENED BUTTONS LIGHTENING GUARD:
+   Only solid, fully-opaque dark/saturated buttons get lighten text.
+   Never use broad wildcards that collide with low-opacity/tinted pills (e.g. /10, /15, /20, /80). */
+/* 2. UNIVERSAL SOLID COLORED FILL CONTRAST RULE:
+   Any element with a solid, opaque colored background fill gets white text and white icons.
+   Never matches low-opacity/tinted pills (/10, /15, /20, etc.) or dark: gradients on light banners.
+   Keeps slate/zinc/black scoped to button only so panels remain untouched. */
+:is(button, a, div, span, label, input):is(
+  .bg-blue-600, .bg-blue-700, .bg-blue-800, .bg-blue-900,
+  .bg-sky-600, .bg-sky-700, .bg-sky-800, .bg-sky-900,
+  .bg-indigo-600, .bg-indigo-700, .bg-indigo-800, .bg-indigo-900,
+  .bg-violet-600, .bg-violet-700, .bg-violet-800, .bg-violet-900,
+  .bg-purple-600, .bg-purple-700, .bg-purple-800, .bg-purple-900,
+  .bg-fuchsia-600, .bg-fuchsia-700, .bg-fuchsia-800, .bg-fuchsia-900,
+  .bg-pink-600, .bg-pink-700, .bg-pink-800, .bg-pink-900,
+  .bg-rose-600, .bg-rose-700, .bg-rose-800, .bg-rose-900,
+  .bg-red-600, .bg-red-700, .bg-red-800, .bg-red-900,
+  .bg-orange-600, .bg-orange-700, .bg-orange-800, .bg-orange-900,
+  .bg-amber-600, .bg-amber-700, .bg-amber-800, .bg-amber-900,
+  .bg-yellow-600, .bg-yellow-700, .bg-yellow-800, .bg-yellow-900,
+  .bg-lime-600, .bg-lime-700, .bg-lime-800, .bg-lime-900,
+  .bg-green-600, .bg-green-700, .bg-green-800, .bg-green-900,
+  .bg-emerald-600, .bg-emerald-700, .bg-emerald-800, .bg-emerald-900,
+  .bg-teal-600, .bg-teal-700, .bg-teal-800, .bg-teal-900,
+  .bg-cyan-600, .bg-cyan-700, .bg-cyan-800, .bg-cyan-900,
+  .btn-solid-primary, .btn-solid-dark
+),
+button:is(
+  .bg-slate-800, .bg-slate-900, .bg-zinc-800, .bg-zinc-900, .bg-black
+),
+:is(button, a, div, span, label, input):not([class*="dark:bg-gradient"]):is(
+  [class*="from-sky-600"][class*="to-"],
+  [class*="from-blue-600"][class*="to-"],
+  [class*="from-indigo-600"][class*="to-"],
+  [class*="from-purple-600"][class*="to-"],
+  [class*="from-emerald-600"][class*="to-"],
+  [class*="from-rose-600"][class*="to-"]
+):not([class*="/10"]):not([class*="/15"]):not([class*="/20"]):not([class*="/30"]):not([class*="/50"]):not([class*="/60"]) {
+  color: #ffffff !important;
+}
+
+/* Light icons inside solid colored fills */
+:is(button, a, div, span, label):is(
+  .bg-blue-600, .bg-blue-700, .bg-blue-800, .bg-blue-900,
+  .bg-sky-600, .bg-sky-700, .bg-sky-800, .bg-sky-900,
+  .bg-indigo-600, .bg-indigo-700, .bg-indigo-800, .bg-indigo-900,
+  .bg-violet-600, .bg-violet-700, .bg-violet-800, .bg-violet-900,
+  .bg-purple-600, .bg-purple-700, .bg-purple-800, .bg-purple-900,
+  .bg-fuchsia-600, .bg-fuchsia-700, .bg-fuchsia-800, .bg-fuchsia-900,
+  .bg-pink-600, .bg-pink-700, .bg-pink-800, .bg-pink-900,
+  .bg-rose-600, .bg-rose-700, .bg-rose-800, .bg-rose-900,
+  .bg-red-600, .bg-red-700, .bg-red-800, .bg-red-900,
+  .bg-orange-600, .bg-orange-700, .bg-orange-800, .bg-orange-900,
+  .bg-amber-600, .bg-amber-700, .bg-amber-800, .bg-amber-900,
+  .bg-yellow-600, .bg-yellow-700, .bg-yellow-800, .bg-yellow-900,
+  .bg-lime-600, .bg-lime-700, .bg-lime-800, .bg-lime-900,
+  .bg-green-600, .bg-green-700, .bg-green-800, .bg-green-900,
+  .bg-emerald-600, .bg-emerald-700, .bg-emerald-800, .bg-emerald-900,
+  .bg-teal-600, .bg-teal-700, .bg-teal-800, .bg-teal-900,
+  .bg-cyan-600, .bg-cyan-700, .bg-cyan-800, .bg-cyan-900,
+  .btn-solid-primary, .btn-solid-dark
+) svg,
+button:is(.bg-slate-800, .bg-slate-900, .bg-zinc-800, .bg-zinc-900, .bg-black) svg,
+button.text-white svg {
+  stroke: #ffffff !important;
+  color: #ffffff !important;
+}
+
+/* Children inherit light text unless they define their own background or specific colored text */
+:is(button, a, div, span, label):is(
+  .bg-blue-600, .bg-blue-700, .bg-blue-800, .bg-blue-900,
+  .bg-sky-600, .bg-sky-700, .bg-sky-800, .bg-sky-900,
+  .bg-indigo-600, .bg-indigo-700, .bg-indigo-800, .bg-indigo-900,
+  .bg-violet-600, .bg-violet-700, .bg-violet-800, .bg-violet-900,
+  .bg-purple-600, .bg-purple-700, .bg-purple-800, .bg-purple-900,
+  .bg-fuchsia-600, .bg-fuchsia-700, .bg-fuchsia-800, .bg-fuchsia-900,
+  .bg-pink-600, .bg-pink-700, .bg-pink-800, .bg-pink-900,
+  .bg-rose-600, .bg-rose-700, .bg-rose-800, .bg-rose-900,
+  .bg-red-600, .bg-red-700, .bg-red-800, .bg-red-900,
+  .bg-orange-600, .bg-orange-700, .bg-orange-800, .bg-orange-900,
+  .bg-amber-600, .bg-amber-700, .bg-amber-800, .bg-amber-900,
+  .bg-yellow-600, .bg-yellow-700, .bg-yellow-800, .bg-yellow-900,
+  .bg-lime-600, .bg-lime-700, .bg-lime-800, .bg-lime-900,
+  .bg-green-600, .bg-green-700, .bg-green-800, .bg-green-900,
+  .bg-emerald-600, .bg-emerald-700, .bg-emerald-800, .bg-emerald-900,
+  .bg-teal-600, .bg-teal-700, .bg-teal-800, .bg-teal-900,
+  .bg-cyan-600, .bg-cyan-700, .bg-cyan-800, .bg-cyan-900,
+  .btn-solid-primary, .btn-solid-dark
+) :is(
+  .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-800, .text-slate-900, .text-slate-950,
+  .text-gray-500, .text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900, .text-gray-950,
+  .text-zinc-500, .text-zinc-600, .text-zinc-700, .text-zinc-800, .text-zinc-900, .text-zinc-950,
+  .text-neutral-500, .text-neutral-600, .text-neutral-700, .text-neutral-800, .text-neutral-900, .text-neutral-950,
+  .text-black,
+  .text-slate-100, .text-slate-200, .text-slate-300, .text-slate-400,
+  .text-zinc-100, .text-zinc-200, .text-zinc-300, .text-zinc-400,
+  .text-neutral-100, .text-neutral-200, .text-neutral-300, .text-neutral-400
+):not([class*="bg-"]):not([class*="text-emerald-"]):not([class*="text-rose-"]):not([class*="text-amber-"]):not([class*="text-sky-"]):not([class*="text-indigo-"]):not([class*="text-purple-"]):not([class*="text-blue-"]):not([class*="text-teal-"]):not([class*="text-green-"]):not([class*="text-yellow-"]):not([class*="text-red-"]) {
+  color: #ffffff !important;
+}
+
+/* 3. Markdown Document Body Base Text */
+html:not(.dark) .markdown-body,
+html.light .markdown-body,
+[data-theme="light"] .markdown-body,
+[data-theme="clean-white"] .markdown-body {
+  color: #0f172a;
+}
+
+html:not(.dark) .markdown-body h1,
+html:not(.dark) .markdown-body h2,
+html:not(.dark) .markdown-body h3,
+html:not(.dark) .markdown-body h4,
+html:not(.dark) .markdown-body strong,
+[data-theme="light"] .markdown-body h1,
+[data-theme="light"] .markdown-body h2,
+[data-theme="light"] .markdown-body h3,
+[data-theme="light"] .markdown-body h4,
+[data-theme="light"] .markdown-body strong,
+[data-theme="clean-white"] .markdown-body h1,
+[data-theme="clean-white"] .markdown-body h2,
+[data-theme="clean-white"] .markdown-body h3,
+[data-theme="clean-white"] .markdown-body h4,
+[data-theme="clean-white"] .markdown-body strong {
+  color: #0f172a;
+}
+
+
 

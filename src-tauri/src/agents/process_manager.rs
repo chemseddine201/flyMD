@@ -112,31 +112,7 @@ impl ProcessTreeManager {
 /// Terminate a process tree starting at `root_pid`.
 /// On Windows, `taskkill /PID <pid> /T /F` cleanly forces termination of the root
 /// and all child subprocesses (`uvx`, `conhost`, `python`, etc.) without touching any sibling processes.
-pub fn kill_process_tree(pid: u32) {
-    if pid == 0 {
-        return;
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        use std::process::Command;
-
-        // CREATE_NO_WINDOW = 0x08000000
-        let _ = Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .creation_flags(0x08000000)
-            .output();
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        use std::process::Command;
-        let _ = Command::new("kill")
-            .args(["-9", &pid.to_string()])
-            .output();
-    }
-}
+pub use crate::common::process::kill_process_tree;
 
 /// Check if a PID is alive on the operating system.
 pub fn is_pid_alive(pid: u32) -> bool {

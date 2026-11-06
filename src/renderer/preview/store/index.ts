@@ -6,5 +6,7 @@ export * from './slices/settingsSlice';
 export * from './slices/agentsSlice';
 export * from './slices/discussionSlice';
 export * from './slices/projectsSlice';
+export * from './slices/quotaSlice';
+export * from './selectors/agentSelectors';
 export * from './model/tabReducers';
 

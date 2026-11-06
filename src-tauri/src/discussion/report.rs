@@ -3,7 +3,10 @@
 
 use super::memory::MemoryManager;
 use super::storage::{atomic_write_file, read_transcript_with_recovery, save_metadata};
-use super::types::{now_ms, DisagreementStatus, DiscussionConfig, DiscussionMetadata};
+use super::types::{
+    now_ms, DisagreementStatus, DiscussionConfig, DiscussionMessageKind, DiscussionMetadata,
+    RoundExecutionStatus,
+};
 use regex::Regex;
 use std::fs;
 use std::path::PathBuf;
@@ -58,14 +61,7 @@ pub fn redact_secrets(input: &str) -> String {
     redacted
 }
 
-/// Truncates a UTF-8 string safely at a character boundary (never slicing mid-codepoint on
-/// multi-byte Arabic, CJK, or emoji sequences), appending `"..."` if truncated.
-pub fn truncate_utf8_chars(s: &str, max_chars: usize) -> String {
-    match s.char_indices().nth(max_chars) {
-        Some((byte_idx, _)) => format!("{}...", &s[..byte_idx]),
-        None => s.to_string(),
-    }
-}
+pub use crate::common::utf8::truncate_utf8_chars;
 
 pub struct ReportGenerator {
     pub session_dir: PathBuf,
@@ -104,13 +100,30 @@ impl ReportGenerator {
         ));
         report.push_str(&format!("- **Discussion Topic**: {}\n", config.topic));
         report.push_str(&format!("- **Session ID**: `{}`\n", config.session_id));
+        let all_participants = config.all_scheduled_participants();
         report.push_str(&format!(
             "- **Deliberation Rounds**: {} of {}\n",
             metadata.current_round, config.max_rounds
         ));
+        if let Some(conv_round) = metadata.converged_at_round {
+            if conv_round < config.max_rounds {
+                report.push_str(&format!(
+                    "- **Early Convergence Status**: Converged at Round {} of {} (Rounds {}–{} ignored/skipped to save queries)\n",
+                    conv_round,
+                    config.max_rounds,
+                    conv_round + 1,
+                    config.max_rounds
+                ));
+            } else {
+                report.push_str(&format!(
+                    "- **Early Convergence Status**: Successive summary consensus settled in Round {}\n",
+                    conv_round
+                ));
+            }
+        }
         report.push_str(&format!(
-            "- **Participating Agents**: {}\n",
-            config.participants.len()
+            "- **Participating Specialist Roles / Engines**: {}\n",
+            all_participants.len()
         ));
         report.push_str(&format!(
             "- **Total Messages Exchanged**: {}\n",
@@ -137,10 +150,14 @@ impl ReportGenerator {
 
         // Section 3: Summary of Each Agent's Contribution
         report.push_str("## 3. Summary of Each Agent's Contribution\n\n");
-        for p in &config.participants {
+        for p in &all_participants {
             let msg_count = transcript
                 .iter()
-                .filter(|m| m.author_agent_id == p.agent_id)
+                .filter(|m| {
+                    (m.author_agent_id == p.agent_id
+                        || m.author_agent_id.starts_with(&format!("{}-slot", p.agent_id)))
+                        && m.message_kind != DiscussionMessageKind::SkippedConsensus
+                })
                 .count();
             report.push_str(&format!(
                 "### {} (`{}` - {})\n- **Provider / Model**: {} (`{}`)\n- **Assigned Role Responsibilities**: {}\n- **Deliberation Contributions**: {} turns submitted.\n\n",
@@ -148,62 +165,137 @@ impl ReportGenerator {
             ));
         }
 
-        // Section 4: Main Arguments, Critiques, Replies, and Revisions
+        // Section 4: Main Arguments, Critiques, Replies, and Revisions (Full Untrimmed Markdown, Collapsible Rounds)
         report.push_str("## 4. Main Arguments, Critiques, Replies, and Revisions\n\n");
-        for round in 1..=metadata.current_round {
+        let total_rounds_to_render = config.max_rounds.max(metadata.current_round);
+        for round in 1..=total_rounds_to_render {
             let round_msgs: Vec<_> = transcript
                 .iter()
                 .filter(|m| m.round_number == round)
                 .collect();
+            let ledger_entry = metadata
+                .round_ledger
+                .iter()
+                .find(|r| r.round_number == round);
+            let (round_title, round_objective, _) = config.resolve_round_plan(round);
+
+            let is_ignored_round = ledger_entry
+                .map(|r| r.status == RoundExecutionStatus::IgnoredConsensus)
+                .unwrap_or(false)
+                || (metadata
+                    .converged_at_round
+                    .map(|cr| round > cr)
+                    .unwrap_or(false)
+                    && round_msgs.is_empty());
+
+            if is_ignored_round {
+                let ref_round = ledger_entry
+                    .and_then(|r| r.converged_from_round)
+                    .or(metadata.converged_at_round)
+                    .unwrap_or_else(|| round.saturating_sub(1).max(1));
+
+                report.push_str(&format!(
+                    "<!-- flymd-round:{}:ignored:{} -->\n",
+                    round, ref_round
+                ));
+                report.push_str(&format!(
+                    "### Round {} — Duplicated / Ignored (Same as Round {} Debate Round)\n\n",
+                    round, ref_round
+                ));
+                report.push_str(&format!(
+                    "> _Skipped automatically to save user queries — debate already reached successive summary consensus in Round {}._\n\n",
+                    ref_round
+                ));
+                report.push_str(&format!("<!-- /flymd-round:{} -->\n\n", round));
+                continue;
+            }
+
             if round_msgs.is_empty() {
                 continue;
             }
-            report.push_str(&format!("### Round {} Deliberation Summary\n\n", round));
-            for m in round_msgs {
-                let substantive_lines: Vec<&str> = m
-                    .content
-                    .lines()
-                    .map(|l| l.trim())
-                    .filter(|l| {
-                        !l.is_empty()
-                            && !l.starts_with('#')
-                            && !l.starts_with("**Domain Analysis")
-                            && !l.starts_with("**Critique Target")
-                            && !l.starts_with("**Adversarial Challenge")
-                            && !l.starts_with("**Systems Engineering")
-                            && !l.starts_with("**Zero-Trust Security")
-                            && !l.starts_with("**Topic Refinement")
-                            && !l.starts_with("**Topic Context")
-                    })
-                    .take(3)
-                    .collect();
 
-                let summary = if substantive_lines.is_empty() {
-                    m.content
-                        .lines()
-                        .find(|l| !l.trim().is_empty())
-                        .unwrap_or("Deliberation turn completed.")
-                        .trim()
-                        .to_string()
-                } else {
-                    substantive_lines.join(" ")
-                };
+            let executed_count = round_msgs
+                .iter()
+                .filter(|m| m.message_kind != DiscussionMessageKind::SkippedConsensus)
+                .count();
+            let ignored_step_count = round_msgs
+                .iter()
+                .filter(|m| m.message_kind == DiscussionMessageKind::SkippedConsensus)
+                .count();
+            let round_tokens: u32 = round_msgs
+                .iter()
+                .map(|m| m.token_usage.as_ref().map(|u| u.total_tokens).unwrap_or(0))
+                .sum();
 
-                let clean_summary = if summary.chars().count() > 240 {
-                    truncate_utf8_chars(&summary, 237)
-                } else {
-                    summary
-                };
+            let early_badge = if ignored_step_count > 0
+                || metadata.converged_at_round == Some(round)
+            {
+                " • Early Consensus Settled"
+            } else {
+                ""
+            };
 
-                let display_name = m.author_display_name.as_deref().unwrap_or(&m.author_agent_id);
-                report.push_str(&format!(
-                    "- **{}** ({}): {}\n",
-                    display_name,
-                    m.author_role,
-                    clean_summary
-                ));
+            report.push_str(&format!("<!-- flymd-round:{}:executed -->\n", round));
+            report.push_str("<details>\n");
+            report.push_str(&format!(
+                "<summary><strong>Round {} Deliberation Summary</strong> — {} ({} {}, {} tokens{})</summary>\n\n",
+                round,
+                round_title,
+                executed_count,
+                if executed_count == 1 { "turn" } else { "turns" },
+                round_tokens,
+                early_badge
+            ));
+
+            if let Some(obj) = round_objective.filter(|o| !o.trim().is_empty()) {
+                report.push_str(&format!("> **Round Focus**: {}\n\n", obj.trim()));
             }
-            report.push('\n');
+
+            for (idx, m) in round_msgs.iter().enumerate() {
+                let display_name = m
+                    .author_display_name
+                    .as_deref()
+                    .unwrap_or(&m.author_agent_id);
+
+                if m.message_kind == DiscussionMessageKind::SkippedConsensus {
+                    report.push_str(&format!(
+                        "#### Step {}. {} (`{}`) — Ignored Step (Duplicate Summary Consensus)\n\n{}\n\n",
+                        idx + 1,
+                        display_name,
+                        m.author_role,
+                        m.content.trim()
+                    ));
+                } else {
+                    let model_label = m
+                        .model_id
+                        .as_deref()
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or(&m.author_provider);
+                    let tok_label = m
+                        .token_usage
+                        .as_ref()
+                        .map(|u| format!(" • {} tokens", u.total_tokens))
+                        .unwrap_or_default();
+
+                    report.push_str(&format!(
+                        "#### Step {}. {} (`{}` • `{}` / `{}`{})\n\n{}\n\n",
+                        idx + 1,
+                        display_name,
+                        m.author_role,
+                        m.author_provider,
+                        model_label,
+                        tok_label,
+                        m.content.trim()
+                    ));
+                }
+
+                if idx + 1 < round_msgs.len() {
+                    report.push_str("---\n\n");
+                }
+            }
+
+            report.push_str("</details>\n");
+            report.push_str(&format!("<!-- /flymd-round:{} -->\n\n", round));
         }
 
         // Section 5: Points of Agreement [Agent Consensus]
@@ -261,7 +353,7 @@ impl ReportGenerator {
         report.push_str("## 8. Alternatives Considered\n\n");
         report.push_str(&format!("1. **Monolithic Single-Tier Design**: Rejected due to high coupling and difficulty isolating business state from UI rendering in {}.\n", config.topic));
         report.push_str(&format!("2. **Heavyweight Multi-Process Overhead**: Considered by Critic, but rejected as excessive complexity for the target scope of {}.\n", config.topic));
-        report.push_str(&format!("3. **Decoupled Modular Architecture (Selected)**: Unanimously adopted to maximize responsiveness, testability, and clarity.\n\n"));
+        report.push_str("3. **Decoupled Modular Architecture (Selected)**: Unanimously adopted to maximize responsiveness, testability, and clarity.\n\n");
 
         // Section 9: Recommended Approach and Epistemic Rationale
         report.push_str("## 9. Recommended Approach and Epistemic Rationale\n\n");
@@ -314,6 +406,16 @@ impl ReportGenerator {
         // Also write latest alias: reports/final-report-latest.md
         let latest_path = reports_dir.join("final-report-latest.md");
         atomic_write_file(&latest_path, scrubbed_report.as_bytes())?;
+
+        // Context-aware smart deliverable alias: reports/{Topic}_ConsensusReport-v{}.md
+        let smart_title_slug = crate::common::slugify_semantic_title(&config.topic, 35);
+        let smart_filename = if smart_title_slug.is_empty() {
+            format!("ConsensusReport-v{}.md", version)
+        } else {
+            format!("{}_ConsensusReport-v{}.md", smart_title_slug, version)
+        };
+        let smart_report_path = reports_dir.join(&smart_filename);
+        let _ = atomic_write_file(&smart_report_path, scrubbed_report.as_bytes());
 
         // Update metadata
         metadata.latest_report_version = version;
@@ -368,6 +470,10 @@ mod tests {
             }],
             active_skill_uris: Vec::new(),
             step_mode: false,
+            custom_skills_dir: None,
+            include_default_skills: true,
+            token_budget_cap: None,
+            ..Default::default()
         };
 
         let mut metadata = DiscussionMetadata {
@@ -386,6 +492,7 @@ mod tests {
             active_disagreements_count: 0,
             decisions_count: 0,
             latest_report_version: 0,
+            ..Default::default()
         };
 
         let gen = ReportGenerator::new(temp_dir.clone());
@@ -459,6 +566,10 @@ mod tests {
             }],
             active_skill_uris: Vec::new(),
             step_mode: false,
+            custom_skills_dir: None,
+            include_default_skills: true,
+            token_budget_cap: None,
+            ..Default::default()
         };
 
         // Exact message structure from FLY5 where byte index 237 landed mid-character inside 'ى' (0xD9 0x89)
@@ -509,6 +620,7 @@ mod tests {
             active_disagreements_count: 0,
             decisions_count: 0,
             latest_report_version: 0,
+            ..Default::default()
         };
 
         let gen = ReportGenerator::new(temp_dir.clone());
@@ -518,6 +630,132 @@ mod tests {
         let content = fs::read_to_string(&report_path).unwrap();
         assert!(content.contains("درس في الفيزياء النظرية و التطبيقية"));
         assert!(content.contains("Round 1 Deliberation Summary"));
+        // Verify full untrimmed content is preserved (never truncated at 240 chars!)
+        assert!(content.contains("Coordinate role specialization with deterministic barrier synchronization."));
+        assert!(content.contains("<details>"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_untrimmed_collapsible_rounds_and_ignored_duplicated_rounds() {
+        use crate::discussion::storage::append_transcript_message;
+        use crate::discussion::types::{DiscussionMessage, RoundExecutionRecord};
+
+        let temp_dir = std::env::temp_dir().join(format!("flymd_rep_collapse_{}", now_ms()));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let long_detail_paragraph = "UNTRIMMED_TAIL_MARKER: Every single code block, architectural proof, and edge-case paragraph past character 600 must remain 100% intact without truncation.";
+        let full_turn_md = format!(
+            "### Deep Architectural Analysis\n\n{}\n\n```rust\npub fn verify_invariant() -> bool {{ true }}\n```\n\n{}",
+            "Detailed reasoning line explaining distributed consensus trade-offs. ".repeat(10),
+            long_detail_paragraph
+        );
+
+        let config = DiscussionConfig {
+            schema_version: 1,
+            session_id: "disc-collapse-test".to_string(),
+            topic: "Collapsible Untrimmed Report".to_string(),
+            user_idea: "Ensure 0% trimming and locked ignored rounds.".to_string(),
+            workspace_path: temp_dir.to_string_lossy().to_string(),
+            max_rounds: 4,
+            turn_timeout_secs: 60,
+            participants: vec![DiscussionParticipant {
+                agent_id: "a1".to_string(),
+                provider_id: "claude-code".to_string(),
+                model_id: "claude-3-7-sonnet".to_string(),
+                display_name: "Architect".to_string(),
+                role: AgentRole::Architect,
+                role_description: "System design".to_string(),
+                avatar_color: "#38bdf8".to_string(),
+                assigned_skill_uris: vec![],
+                context_budget_tokens: 16000,
+                custom_action: None,
+                custom_query: None,
+                thinking_enabled: true,
+                effort_level: Some("high".to_string()),
+            }],
+            ..Default::default()
+        };
+
+        append_transcript_message(
+            &temp_dir,
+            &DiscussionMessage {
+                id: "m-r1".to_string(),
+                session_id: "disc-collapse-test".to_string(),
+                round_number: 1,
+                turn_index: 1,
+                author_agent_id: "a1".to_string(),
+                author_role: "Architect".to_string(),
+                author_provider: "claude-code".to_string(),
+                message_kind: DiscussionMessageKind::InitialAnalysis,
+                target_peer_ids: vec![],
+                content: full_turn_md,
+                timestamp: now_ms(),
+                token_usage: None,
+                duration_ms: 800,
+                truncated: false,
+                thinking_content: None,
+                action_name: None,
+                model_id: Some("claude-3-7-sonnet".to_string()),
+                simulated: false,
+                author_display_name: Some("Architect".to_string()),
+            },
+        )
+        .unwrap();
+
+        let mut metadata = DiscussionMetadata {
+            schema_version: 1,
+            session_id: "disc-collapse-test".to_string(),
+            topic: Some(config.topic.clone()),
+            status: super::super::types::DiscussionStatus::AwaitingReview,
+            current_round: 2,
+            created_at: now_ms(),
+            started_at: Some(now_ms()),
+            updated_at: now_ms(),
+            completed_at: None,
+            total_messages: 1,
+            total_tokens: 1200,
+            error_message: None,
+            active_disagreements_count: 0,
+            decisions_count: 1,
+            latest_report_version: 0,
+            converged_at_round: Some(2),
+            round_ledger: vec![
+                RoundExecutionRecord {
+                    round_number: 3,
+                    title: "Round 3".to_string(),
+                    status: RoundExecutionStatus::IgnoredConsensus,
+                    converged_from_round: Some(2),
+                    reason: Some("Converged in Round 2".to_string()),
+                    skipped_agent_names: vec!["Architect".to_string()],
+                },
+                RoundExecutionRecord {
+                    round_number: 4,
+                    title: "Round 4".to_string(),
+                    status: RoundExecutionStatus::IgnoredConsensus,
+                    converged_from_round: Some(2),
+                    reason: Some("Converged in Round 2".to_string()),
+                    skipped_agent_names: vec!["Architect".to_string()],
+                },
+            ],
+            ..Default::default()
+        };
+
+        let gen = ReportGenerator::new(temp_dir.clone());
+        let report_path = gen.generate_report(&config, &mut metadata).unwrap();
+        let content = fs::read_to_string(&report_path).unwrap();
+
+        // 1. Zero trimming: tail marker past 600 chars + Rust code block are 100% intact
+        assert!(content.contains(long_detail_paragraph));
+        assert!(content.contains("pub fn verify_invariant() -> bool"));
+        // 2. Executed round is collapsed by default (`<details>` without `open`)
+        assert!(content.contains("<!-- flymd-round:1:executed -->\n<details>"));
+        assert!(!content.contains("<details open"));
+        // 3. Ignored rounds 3 and 4 are marked ignored and have NO `<details>` expandable block
+        assert!(content.contains("<!-- flymd-round:3:ignored:2 -->"));
+        assert!(content.contains("Round 3 — Duplicated / Ignored (Same as Round 2 Debate Round)"));
+        assert!(content.contains("<!-- flymd-round:4:ignored:2 -->"));
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

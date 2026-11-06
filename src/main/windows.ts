@@ -107,6 +107,9 @@ export class WindowManager {
     const savedBounds = store.getPreviewBounds();
     const isAlwaysOnTop = store.getSettings().previewAlwaysOnTop;
 
+    const savedTheme = store.getSettings().theme;
+    const isLightCanvas = savedTheme === 'light' || savedTheme === 'clean-white';
+
     this.previewWindow = new BrowserWindow({
       width: (savedBounds.width && savedBounds.width >= 1350) ? savedBounds.width : 1440,
       height: (savedBounds.height && savedBounds.height >= 850) ? savedBounds.height : 920,
@@ -117,7 +120,7 @@ export class WindowManager {
       frame: false,
       show: false,
       alwaysOnTop: isAlwaysOnTop,
-      backgroundColor: '#0f172a',
+      backgroundColor: isLightCanvas ? '#ffffff' : '#0f172a',
       icon: getAppIconPath() || undefined,
       webPreferences: {
         preload: path.join(__dirname, '../preload/index.js'),

@@ -90,6 +90,12 @@ impl LlmManager {
     }
 }
 
+impl Default for LlmManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub type SharedLlmManager = Arc<LlmManager>;
 
 fn normalize_base_url(endpoint: &str) -> String {
@@ -583,44 +589,15 @@ pub async fn cmd_llm_start_translation(
                                     continue;
                                 }
 
-                                if line.starts_with("data: ") {
-                                    let data_str = line[6..].trim();
-                                    if data_str == "[DONE]" {
-                                        break;
-                                    }
-
-                                    #[derive(Deserialize)]
-                                    struct OpenAiDelta {
-                                        content: Option<String>,
-                                    }
-                                    #[derive(Deserialize)]
-                                    struct OpenAiChoice {
-                                        delta: Option<OpenAiDelta>,
-                                    }
-                                    #[derive(Deserialize)]
-                                    struct OpenAiStreamResponse {
-                                        choices: Option<Vec<OpenAiChoice>>,
-                                    }
-
-                                    if let Ok(data) =
-                                        serde_json::from_str::<OpenAiStreamResponse>(data_str)
-                                    {
-                                        if let Some(choices) = data.choices {
-                                            if let Some(first) = choices.first() {
-                                                if let Some(delta) = &first.delta {
-                                                    if let Some(content) = &delta.content {
-                                                        if !content.is_empty() {
-                                                            full_text.push_str(content);
-                                                            app_clone
-                                                                .emit(
-                                                                    "llm:translate:chunk",
-                                                                    content,
-                                                                )
-                                                                .ok();
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                if let Some(delta) =
+                                    crate::common::stream_parsers::parse_openai_sse_line(&line)
+                                {
+                                    if let Some(content) = delta.content {
+                                        if !content.is_empty() {
+                                            full_text.push_str(&content);
+                                            app_clone
+                                                .emit("llm:translate:chunk", &content)
+                                                .ok();
                                         }
                                     }
                                 }

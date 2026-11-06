@@ -3,10 +3,11 @@
 use serde::{Deserialize, Serialize};
 
 /// Operational status of a project or sub-project node in the hierarchy.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectStatus {
     /// Idle project, awaiting initial definition or debate.
+    #[default]
     Idle,
     /// Multi-agent deliberation and architecture debate in progress.
     Debating,
@@ -16,12 +17,6 @@ pub enum ProjectStatus {
     PipelineRunning,
     /// Work delivered, verified by evidence, and rolled up to Master Memory.
     Completed,
-}
-
-impl Default for ProjectStatus {
-    fn default() -> Self {
-        ProjectStatus::Idle
-    }
 }
 
 /// Represents a single project or sub-project node in the arbitrary depth hierarchy.
@@ -109,9 +104,6 @@ pub struct RecallPack {
 }
 
 pub fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
+    crate::common::time::now_ms()
 }
 

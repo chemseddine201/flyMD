@@ -212,22 +212,22 @@ export const TranslationModal: React.FC<OllamaModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm select-none">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm select-none">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl md:max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="h-14 px-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 shrink-0">
+        <div className="h-14 px-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+            <div className="p-2 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
               <Languages className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <span>AI Markdown Translator</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-sky-400 font-mono border border-slate-700">
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-sky-600 dark:text-sky-400 font-mono border border-slate-200 dark:border-slate-700">
                   {provider.toUpperCase()} : {activeModelName}
                 </span>
               </h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Preserves math (KaTeX), code blocks, and markdown structure
               </p>
             </div>
@@ -235,14 +235,14 @@ export const TranslationModal: React.FC<OllamaModalProps> = ({
 
           <div className="flex items-center gap-2">
             {/* View Switcher Tabs */}
-            <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
               <button
                 type="button"
                 onClick={() => setActiveTab('translate')}
                 className={`px-3 py-1 rounded-lg transition font-medium flex items-center gap-1.5 ${
                   activeTab === 'translate'
                     ? 'bg-sky-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 <Languages className="w-3.5 h-3.5" />
@@ -254,7 +254,7 @@ export const TranslationModal: React.FC<OllamaModalProps> = ({
                 className={`px-3 py-1 rounded-lg transition font-medium flex items-center gap-1.5 ${
                   activeTab === 'config'
                     ? 'bg-sky-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 <Server className="w-3.5 h-3.5" />
@@ -265,7 +265,7 @@ export const TranslationModal: React.FC<OllamaModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition"
+              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -275,8 +275,8 @@ export const TranslationModal: React.FC<OllamaModalProps> = ({
         {/* Modal Body */}
         <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-4">
           {errorMsg && (
-            <div className="flex items-center gap-2 p-3 bg-rose-950/50 border border-rose-500/40 rounded-xl text-xs text-rose-300">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-500/40 rounded-xl text-xs text-rose-700 dark:text-rose-300">
+              <AlertCircle className="w-4 h-4 text-rose-500 dark:text-rose-400 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}

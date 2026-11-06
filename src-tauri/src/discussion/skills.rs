@@ -244,6 +244,82 @@ impl SkillsManager {
         results
     }
 
+    /// Discovers Custom Skills from a user-linked external directory.
+    pub fn discover_custom_skills(
+        &mut self,
+        dir_path: &Path,
+        namespace: Option<&str>,
+    ) -> Vec<SkillDescriptor> {
+        let mut results = Vec::new();
+        if !dir_path.exists() || !dir_path.is_dir() {
+            return results;
+        }
+
+        let default_slug = dir_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("custom");
+        let dir_slug = namespace.unwrap_or(default_slug);
+
+        if let Ok(entries) = fs::read_dir(dir_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let skill_file = if path.is_dir() {
+                    path.join("SKILL.md")
+                } else if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                    path.clone()
+                } else {
+                    continue;
+                };
+
+                if skill_file.is_file() {
+                    let slug = path
+                        .file_stem()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unnamed");
+                    if let Ok(skill) = self.parse_skill_file(
+                        &skill_file,
+                        "custom",
+                        dir_slug,
+                        slug,
+                        SkillLifecycleState::Enabled,
+                    ) {
+                        results.push(skill);
+                    }
+                }
+            }
+        }
+
+        for s in &results {
+            self.registry.insert(s.uri.clone(), s.clone());
+        }
+
+        results
+    }
+
+    /// Discovers all available skills across tiers given optional custom directory and isolation policy.
+    pub fn discover_all_skills(
+        &mut self,
+        workspace_path: &str,
+        custom_skills_dir: Option<&str>,
+        include_default_skills: bool,
+    ) -> Vec<SkillDescriptor> {
+        if include_default_skills {
+            self.discover_global_skills();
+        }
+        if !workspace_path.trim().is_empty() {
+            self.discover_project_master_skills(workspace_path);
+        }
+        if let Some(custom_dir) = custom_skills_dir {
+            if !custom_dir.trim().is_empty() {
+                self.discover_custom_skills(Path::new(custom_dir), None);
+            }
+        }
+        let mut all: Vec<SkillDescriptor> = self.registry.values().cloned().collect();
+        all.sort_by(|a, b| a.uri.cmp(&b.uri));
+        all
+    }
+
     /// Parses a skill markdown file with YAML frontmatter.
     pub fn parse_skill_file(
         &self,
@@ -286,6 +362,7 @@ impl SkillsManager {
         provider_id: &str,
         model_id: &str,
         requested_uris: &[String],
+        include_default_skills: bool,
     ) -> Vec<SkillDescriptor> {
         let mut active_map: HashMap<String, SkillDescriptor> = HashMap::new();
         let mut replaced_uris: HashSet<String> = HashSet::new();
@@ -295,6 +372,9 @@ impl SkillsManager {
             .registry
             .values()
             .filter(|s| {
+                if !include_default_skills && s.uri.starts_with("global:") {
+                    return false;
+                }
                 if !requested_uris.is_empty() {
                     requested_uris.contains(&s.uri)
                 } else {
@@ -304,14 +384,16 @@ impl SkillsManager {
             .cloned()
             .collect();
 
-        // 2. Sort by tier precedence (Agent > Master > Global)
+        // 2. Sort by tier precedence (Agent > Custom > Master > Global)
         candidates.sort_by_key(|s| {
             if s.uri.starts_with("agent:") {
                 0
-            } else if s.uri.starts_with("master:") {
+            } else if s.uri.starts_with("custom:") {
                 1
-            } else {
+            } else if s.uri.starts_with("master:") {
                 2
+            } else {
+                3
             }
         });
 
@@ -378,6 +460,12 @@ impl SkillsManager {
     }
 }
 
+impl Default for SkillsManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Helper to parse YAML frontmatter from a markdown string.
 fn parse_yaml_frontmatter(content: &str, default_name: &str) -> (SkillFrontmatter, String) {
     let trimmed = content.trim_start();
@@ -400,7 +488,7 @@ fn parse_yaml_frontmatter(content: &str, default_name: &str) -> (SkillFrontmatte
     if let Some(end_idx) = rest.find("\n---") {
         let yaml_str = &rest[..end_idx];
         let body = rest[end_idx + 4..]
-            .trim_start_matches(|c| c == '\r' || c == '\n')
+            .trim_start_matches(['\r', '\n'])
             .to_string();
 
         let mut name = default_name.to_string();
@@ -413,31 +501,31 @@ fn parse_yaml_frontmatter(content: &str, default_name: &str) -> (SkillFrontmatte
 
         for line in yaml_str.lines() {
             let l = line.trim();
-            if l.starts_with("name:") {
-                let val = l[5..].trim().trim_matches('"').trim_matches('\'');
+            if let Some(stripped) = l.strip_prefix("name:") {
+                let val = stripped.trim().trim_matches('"').trim_matches('\'');
                 if !val.is_empty() {
                     name = val.to_string();
                 }
-            } else if l.starts_with("description:") {
-                description = l[12..]
+            } else if let Some(stripped) = l.strip_prefix("description:") {
+                description = stripped
                     .trim()
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
-            } else if l.starts_with("version:") {
-                version = l[8..]
+            } else if let Some(stripped) = l.strip_prefix("version:") {
+                version = stripped
                     .trim()
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
-            } else if l.starts_with("author:") {
-                author = l[7..]
+            } else if let Some(stripped) = l.strip_prefix("author:") {
+                author = stripped
                     .trim()
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
-            } else if l.starts_with("compatibility:") {
-                let raw = l[14..].trim();
+            } else if let Some(stripped) = l.strip_prefix("compatibility:") {
+                let raw = stripped.trim();
                 if raw.starts_with('[') && raw.ends_with(']') {
                     compatibility = raw[1..raw.len() - 1]
                         .split(',')
@@ -445,8 +533,8 @@ fn parse_yaml_frontmatter(content: &str, default_name: &str) -> (SkillFrontmatte
                         .filter(|s| !s.is_empty())
                         .collect();
                 }
-            } else if l.starts_with("replaces:") {
-                let raw = l[9..].trim();
+            } else if let Some(stripped) = l.strip_prefix("replaces:") {
+                let raw = stripped.trim();
                 if raw.starts_with('[') && raw.ends_with(']') {
                     replaces = raw[1..raw.len() - 1]
                         .split(',')
@@ -541,9 +629,68 @@ mod tests {
             "claude-code",
             "claude-3-7-sonnet",
             &[],
+            true,
         );
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].uri, "agent:claude-code:strict-arch");
+    }
+
+    #[test]
+    fn test_custom_skills_precedence_and_isolation() {
+        let mut mgr = SkillsManager::new();
+
+        let global_skill = SkillDescriptor {
+            uri: "global:antigravity:code-reviewer".to_string(),
+            name: "code-reviewer".to_string(),
+            description: "Default global reviewer".to_string(),
+            version: "1.0.0".to_string(),
+            author: "antigravity".to_string(),
+            compatibility: vec!["*".to_string()],
+            tags: vec![],
+            replaces: vec![],
+            markdown_body: "Global review rules".to_string(),
+            source_path: "builtin/skills/code-reviewer/SKILL.md".to_string(),
+            state: SkillLifecycleState::Enabled,
+        };
+
+        let custom_skill = SkillDescriptor {
+            uri: "custom:my-team:code-reviewer".to_string(),
+            name: "code-reviewer".to_string(),
+            description: "Custom team reviewer".to_string(),
+            version: "2.0.0".to_string(),
+            author: "team".to_string(),
+            compatibility: vec!["*".to_string()],
+            tags: vec![],
+            replaces: vec!["global:antigravity:code-reviewer".to_string()],
+            markdown_body: "Custom review rules".to_string(),
+            source_path: "custom/code-reviewer/SKILL.md".to_string(),
+            state: SkillLifecycleState::Enabled,
+        };
+
+        mgr.registry.insert(global_skill.uri.clone(), global_skill);
+        mgr.registry.insert(custom_skill.uri.clone(), custom_skill);
+
+        // When include_default_skills is true, custom overrides global via precedence/replacement
+        let resolved_shared = mgr.resolve_skills_for_participant(
+            "test-agent",
+            "claude",
+            "claude-3-7-sonnet",
+            &[],
+            true,
+        );
+        assert_eq!(resolved_shared.len(), 1);
+        assert_eq!(resolved_shared[0].uri, "custom:my-team:code-reviewer");
+
+        // When include_default_skills is false (isolated), global is excluded
+        let resolved_isolated = mgr.resolve_skills_for_participant(
+            "test-agent",
+            "claude",
+            "claude-3-7-sonnet",
+            &[],
+            false,
+        );
+        assert_eq!(resolved_isolated.len(), 1);
+        assert_eq!(resolved_isolated[0].uri, "custom:my-team:code-reviewer");
     }
 
     #[test]

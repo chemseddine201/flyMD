@@ -59,10 +59,13 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
 
     const mermaidCodes = viewerRef.current.querySelectorAll('pre code.language-mermaid');
     if (mermaidCodes.length > 0) {
+      const isDarkDoc = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+      const isLightEffective = theme === 'light' || theme === 'clean-white' || (theme === 'system' && !isDarkDoc);
+
       import('mermaid').then(({ default: mermaid }) => {
         mermaid.initialize({
           startOnLoad: false,
-          theme: theme === 'light' ? 'default' : 'dark',
+          theme: isLightEffective ? 'default' : 'dark',
           securityLevel: 'loose',
         });
         mermaidCodes.forEach(async (codeElement, idx) => {
@@ -74,12 +77,12 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
           try {
             const { svg } = await mermaid.render(diagramId, codeText);
             const container = document.createElement('div');
-            container.className = 'mermaid-container my-5 flex flex-col items-center justify-center p-3 rounded-xl border border-slate-800/80 hover:border-sky-500/50 hover:bg-slate-800/30 transition-all cursor-pointer group relative';
+            container.className = 'mermaid-container my-5 flex flex-col items-center justify-center p-3 rounded-xl border border-slate-200 dark:border-slate-800/80 hover:border-sky-500/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all cursor-pointer group relative';
             container.title = 'Click flowchart to open interactive preview with zoom & export';
             container.innerHTML = svg;
 
             const zoomPill = document.createElement('div');
-            zoomPill.className = 'absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/95 border border-slate-700/80 text-sky-400 text-xs font-medium shadow-xl pointer-events-none select-none';
+            zoomPill.className = 'absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700/80 text-sky-600 dark:text-sky-400 text-xs font-medium shadow-xl pointer-events-none select-none';
             zoomPill.innerHTML = `
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"/>
@@ -121,7 +124,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
 
       if (lang && lang !== 'plaintext') {
         const langBadge = document.createElement('span');
-        langBadge.className = 'text-[10px] font-mono uppercase text-slate-400 font-semibold px-1.5 py-0.5 rounded bg-slate-900/80 border border-slate-700/80 shadow-sm';
+        langBadge.className = 'text-[10px] font-mono uppercase text-slate-500 dark:text-slate-400 font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700/80 shadow-xs';
         langBadge.textContent = lang;
         toolbar.appendChild(langBadge);
       }
@@ -129,7 +132,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
       const copyBtn = document.createElement('button');
       copyBtn.type = 'button';
       copyBtn.title = 'Copy code snippet';
-      copyBtn.className = 'copy-code-btn flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white text-xs transition border border-slate-700/80 shadow-sm cursor-pointer';
+      copyBtn.className = 'copy-code-btn flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs transition border border-slate-200 dark:border-slate-700/80 shadow-xs cursor-pointer';
       copyBtn.innerHTML = `
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
@@ -165,9 +168,15 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
     });
   }, [renderedHtml, theme]);
 
+  const isDarkDoc = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const effectiveTheme = theme === 'system' ? (isDarkDoc ? 'dark' : 'light') : (theme === 'clean-white' ? 'light' : theme);
+
   const getThemeClass = () => {
     switch (theme) {
+      case 'system':
+        return 'bg-white dark:bg-[#0d1117] text-slate-900 dark:text-[#e6edf3]';
       case 'light':
+      case 'clean-white':
         return 'bg-white text-slate-900';
       case 'tokyo-night':
         return 'bg-[#1a1b26] text-[#c0caf5]';
@@ -203,7 +212,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
     <>
       <div
         ref={containerRef as any}
-        data-theme={theme}
+        data-theme={effectiveTheme}
         data-a11y-high-contrast={a11yConfig?.highContrast ? 'true' : 'false'}
         data-a11y-dyslexic={a11yConfig?.dyslexicFont ? 'true' : 'false'}
         data-a11y-large-print={a11yConfig?.largePrint ? 'true' : 'false'}

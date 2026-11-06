@@ -38,16 +38,44 @@ import { useFileDrop } from '../shared/hooks/useFileDrop';
 import { useIpcEvent } from '../shared/hooks/useIpcEvent';
 import { THEME_CLASSES } from '../../shared/constants';
 import { undo, redo } from '@codemirror/commands';
+import { Loader2 } from 'lucide-react';
 import { scheduleBadgeClear } from './store/utils/badgeTimers';
 
 export const PreviewApp: React.FC = () => {
-  const store = usePreviewStore();
-  const activeTab = selectActiveTab(store);
+  // Targeted selectors: isolate PreviewApp from agent & debate streaming token storms
+  const settings = usePreviewStore((s) => s.settings);
+  const activeTab = usePreviewStore(selectActiveTab);
+  const tabs = usePreviewStore((s) => s.tabs);
+  const viewMode = usePreviewStore((s) => s.viewMode);
+  const isPinned = usePreviewStore((s) => s.isPinned);
+  const statusMessage = usePreviewStore((s) => s.statusMessage);
+  const folderPath = usePreviewStore((s) => s.folderPath);
+  const folderName = usePreviewStore((s) => s.folderName);
+  const folderFiles = usePreviewStore((s) => s.folderFiles);
+  const supervisionConfig = usePreviewStore((s) => s.supervisionConfig);
+  const sidebarCollapsed = usePreviewStore((s) => s.sidebarCollapsed);
+  const sidebarExplorerMode = usePreviewStore((s) => s.sidebarExplorerMode);
+  const outlineOpen = usePreviewStore((s) => s.outlineOpen);
+  const outlinePinned = usePreviewStore((s) => s.outlinePinned);
+  const showAgentAccountsModal = usePreviewStore((s) => s.showAgentAccountsModal);
+  const agentProfiles = usePreviewStore((s) => s.agentProfiles);
+  const showOllamaModal = usePreviewStore((s) => s.showOllamaModal);
+  const showSettings = usePreviewStore((s) => s.showSettings);
+
+  // Stable action dispatcher reading latest state without full-store subscription
+  const store = React.useMemo(() => {
+    return new Proxy({} as ReturnType<typeof usePreviewStore.getState>, {
+      get: (_, prop: string | symbol) => {
+        return (usePreviewStore.getState() as any)[prop];
+      },
+    });
+  }, []);
 
   const editorRef = useRef<any>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [isSupervisionModalOpen, setIsSupervisionModalOpen] = useState(false);
   const [isA11yModalOpen, setIsA11yModalOpen] = useState(false);
+  const [themeSwitchingName, setThemeSwitchingName] = useState<string | null>(null);
 
   const [saveExportModal, setSaveExportModal] = useState<{
     isOpen: boolean;
@@ -150,9 +178,19 @@ export const PreviewApp: React.FC = () => {
     }
   });
 
-  useIpcEvent<AgentTaskRecord[]>(window.electronAPI.onAgentTasksUpdated, (tasks) => {
-    if (Array.isArray(tasks)) {
-      store.setAgentTasks(tasks);
+  useIpcEvent<AgentTaskRecord[] | AgentTaskRecord>(window.electronAPI.onAgentTasksUpdated, (payload) => {
+    if (Array.isArray(payload)) {
+      usePreviewStore.getState().setAgentTasks(payload);
+    } else if (payload && typeof payload === 'object' && 'id' in payload) {
+      const existing = usePreviewStore.getState().agentTasks || [];
+      const idx = existing.findIndex((t) => t.id === payload.id);
+      if (idx >= 0) {
+        const next = [...existing];
+        next[idx] = payload;
+        usePreviewStore.getState().setAgentTasks(next);
+      } else {
+        usePreviewStore.getState().setAgentTasks([payload, ...existing]);
+      }
     }
   });
 
@@ -295,8 +333,45 @@ export const PreviewApp: React.FC = () => {
   };
 
   useEffect(() => {
-    const theme = store.settings.theme || 'dark';
-    document.documentElement.setAttribute('data-theme', theme);
+    const rawTheme: AppTheme = (store.settings.theme as AppTheme) || 'system';
+
+    const resolveIsDark = (): boolean => {
+      if (rawTheme === 'system') {
+        return Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      }
+      return rawTheme !== 'light' && rawTheme !== 'clean-white' && rawTheme !== 'sepia';
+    };
+
+    const applyTheme = () => {
+      const isDark = resolveIsDark();
+      const effectiveDataTheme =
+        rawTheme === 'system' ? (isDark ? 'dark' : 'light') : rawTheme;
+
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        document.body.classList.add('dark');
+        document.body.classList.remove('light');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        document.body.classList.remove('dark');
+        document.body.classList.add('light');
+      }
+      document.documentElement.setAttribute('data-theme', effectiveDataTheme);
+      document.body.setAttribute('data-theme', effectiveDataTheme);
+    };
+
+    applyTheme();
+
+    let cleanUpListener: (() => void) | undefined;
+    if (rawTheme === 'system' && window.matchMedia) {
+      const mql = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = () => applyTheme();
+      mql.addEventListener('change', listener);
+      cleanUpListener = () => mql.removeEventListener('change', listener);
+    }
+
     const a11y = store.settings.a11yConfig;
     if (a11y?.highContrast) {
       document.documentElement.setAttribute('data-a11y-high-contrast', 'true');
@@ -323,12 +398,31 @@ export const PreviewApp: React.FC = () => {
     } else {
       document.documentElement.removeAttribute('data-a11y-color-blind');
     }
+
+    return () => {
+      if (cleanUpListener) cleanUpListener();
+    };
   }, [store.settings.theme, store.settings.a11yConfig]);
+
+  const THEME_NAMES: Record<AppTheme, string> = {
+    system: 'System Adaptive',
+    dark: 'GitHub Dark',
+    light: 'GitHub Light',
+    'clean-white': 'Pure Clean White',
+    'tokyo-night': 'Tokyo Night',
+    catppuccin: 'Catppuccin Macchiato',
+    dracula: 'Dracula Dark',
+    sepia: 'Warm Sepia',
+    cyber: 'Cyberpunk Neon',
+    'high-contrast': 'High Contrast (WCAG AAA)',
+  };
 
   const handleToggleTheme = () => {
     const themes: AppTheme[] = [
+      'system',
       'dark',
       'light',
+      'clean-white',
       'tokyo-night',
       'catppuccin',
       'dracula',
@@ -336,14 +430,18 @@ export const PreviewApp: React.FC = () => {
       'cyber',
       'high-contrast',
     ];
-    const curIdx = themes.indexOf(store.settings.theme as AppTheme);
+    const curIdx = themes.indexOf((store.settings.theme as AppTheme) || 'system');
     const nextTheme = themes[(curIdx + 1) % themes.length];
+    setThemeSwitchingName(THEME_NAMES[nextTheme] || nextTheme);
+    setTimeout(() => setThemeSwitchingName(null), 250);
+    store.updateSettings({ theme: nextTheme });
     window.electronAPI.saveSettings({ theme: nextTheme });
   };
 
   const handleIncreaseFont = () => {
     const cur = store.settings.fontSize || 15;
     if (cur < 32) {
+      store.updateSettings({ fontSize: cur + 1 });
       window.electronAPI.saveSettings({ fontSize: cur + 1 });
     }
   };
@@ -351,30 +449,35 @@ export const PreviewApp: React.FC = () => {
   const handleDecreaseFont = () => {
     const cur = store.settings.fontSize || 15;
     if (cur > 11) {
+      store.updateSettings({ fontSize: cur - 1 });
       window.electronAPI.saveSettings({ fontSize: cur - 1 });
     }
   };
 
   const handleResetFont = () => {
+    store.updateSettings({ fontSize: 15 });
     window.electronAPI.saveSettings({ fontSize: 15 });
   };
 
   const handleChangeWidthMode = (mode: PreviewWidthMode) => {
+    store.updateSettings({ previewWidthMode: mode });
     window.electronAPI.saveSettings({ previewWidthMode: mode });
   };
 
   const handleUpdateA11yConfig = (patch: Partial<AccessibilityConfig>) => {
+    const nextA11y = {
+      ...(store.settings.a11yConfig || {
+        highContrast: false,
+        dyslexicFont: false,
+        largePrint: false,
+        reducedMotion: false,
+        colorBlindSafe: false,
+      }),
+      ...patch,
+    };
+    store.updateSettings({ a11yConfig: nextA11y });
     window.electronAPI.saveSettings({
-      a11yConfig: {
-        ...(store.settings.a11yConfig || {
-          highContrast: false,
-          dyslexicFont: false,
-          largePrint: false,
-          reducedMotion: false,
-          colorBlindSafe: false,
-        }),
-        ...patch,
-      },
+      a11yConfig: nextA11y,
     });
   };
 
@@ -467,8 +570,16 @@ export const PreviewApp: React.FC = () => {
         onCloseTabsToRight={(id) => store.closeTabsToRight(id)}
         onNewTab={() => store.addTab()}
         onAssignTabToAgent={(tab) => {
+          // Resolve the first enabled + connected subscription agent instead of a hardcoded default.
+          // An empty id lets AgentDispatchModal pick the live preferred agent after discovery.
+          const readyStates = ['connected', 'api-key-ready', 'web-connected', 'ready'];
+          const enabled = store.agentProfiles.filter((a) => a.enabled);
+          const preferred =
+            enabled.find((a) => a.installed && readyStates.includes(a.authStatus)) ||
+            enabled.find((a) => a.installed) ||
+            enabled[0];
           store.openDispatchModal({
-            targetAgentId: 'claude-code',
+            targetAgentId: preferred?.id || '',
             sourceFilePath: tab.filePath,
             sourceFileName: tab.fileName,
             markdownContent: tab.content,
@@ -476,9 +587,14 @@ export const PreviewApp: React.FC = () => {
         }}
         colorBlindSafe={store.settings.a11yConfig?.colorBlindSafe}
         isAgentsMode={store.viewMode === 'agents'}
-        onToggleAgentsStudio={() =>
-          store.setViewMode(store.viewMode === 'agents' ? 'wysiwyg' : 'agents')
-        }
+        onToggleAgentsStudio={() => {
+          if (store.viewMode !== 'agents') {
+            store.setAgentLifecycleStage('debate');
+            store.setViewMode('agents');
+          } else {
+            store.setViewMode('wysiwyg');
+          }
+        }}
       />
 
       <Toolbar
@@ -643,7 +759,10 @@ export const PreviewApp: React.FC = () => {
         fileName={activeTab?.fileName || 'Document.md'}
         defaultModel={store.settings.llmConfig?.model || store.settings.ollamaModel}
         initialLlmConfig={store.settings.llmConfig}
-        onSaveSettings={(patch) => window.electronAPI.saveSettings(patch)}
+        onSaveSettings={(patch) => {
+          store.updateSettings(patch);
+          window.electronAPI.saveSettings(patch);
+        }}
         onOpenAsNewTab={store.openTranslationAsNewTab}
         onReplaceContent={store.updateActiveContent}
         onInsertBelow={(newText) => {
@@ -658,7 +777,10 @@ export const PreviewApp: React.FC = () => {
         isOpen={store.showSettings}
         onClose={() => store.setShowSettings(false)}
         settings={store.settings}
-        onSave={(patch) => window.electronAPI.saveSettings(patch)}
+        onSave={(patch) => {
+          store.updateSettings(patch);
+          window.electronAPI.saveSettings(patch);
+        }}
       />
 
       <AccessibilityModal
@@ -673,6 +795,15 @@ export const PreviewApp: React.FC = () => {
         }}
         onUpdateConfig={handleUpdateA11yConfig}
       />
+
+      {themeSwitchingName && (
+        <div className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center animate-in fade-in duration-100">
+          <div className="bg-slate-900/90 dark:bg-white/90 text-white dark:text-slate-900 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/60 dark:border-slate-200/60 flex items-center gap-2.5 text-xs font-bold tracking-wide">
+            <Loader2 className="w-4 h-4 animate-spin text-sky-400 dark:text-sky-600" />
+            <span>Applying {themeSwitchingName}...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

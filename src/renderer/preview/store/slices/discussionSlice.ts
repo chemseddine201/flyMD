@@ -5,6 +5,7 @@ import {
   DiscussionMessage,
   DiscussionStreamEvent,
   AvailableProviderInfo,
+  SkillDescriptor,
 } from '../../../../shared/types';
 
 export interface DiscussionSlice {
@@ -20,9 +21,24 @@ export interface DiscussionSlice {
   isDiscussionRunning: boolean;
   discussionError: string | null;
   isStepMode: boolean;
+  customSkillsDir: string | null;
+  includeDefaultSkills: boolean;
+  availableSkills: SkillDescriptor[];
+  activeDiscussionConfig: DiscussionConfig | null;
+
+  setCustomSkillsDir: (dir: string | null) => void;
+  setIncludeDefaultSkills: (inc: boolean) => void;
+  scanCustomSkills: (dirPath: string) => Promise<SkillDescriptor[]>;
+  loadAvailableSkills: (
+    workspacePath: string,
+    customSkillsDir?: string | null,
+    includeDefaultSkills?: boolean
+  ) => Promise<SkillDescriptor[]>;
 
   loadDiscussions: (workspacePath: string) => Promise<void>;
   selectDiscussion: (workspacePath: string, sessionId: string) => Promise<void>;
+  loadDiscussionConfig: (workspacePath: string, sessionId: string) => Promise<DiscussionConfig | null>;
+  updateDiscussionConfig: (workspacePath: string, sessionId: string, config: DiscussionConfig) => Promise<DiscussionMetadata | null>;
   loadAvailableProviders: () => Promise<void>;
   startNewDiscussion: (config: DiscussionConfig) => Promise<void>;
   pauseCurrentDiscussion: () => Promise<void>;
@@ -96,6 +112,46 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
   isDiscussionRunning: false,
   discussionError: null,
   isStepMode: false,
+  customSkillsDir: null,
+  includeDefaultSkills: true,
+  availableSkills: [],
+  activeDiscussionConfig: null,
+
+  setCustomSkillsDir: (dir: string | null) => set({ customSkillsDir: dir }),
+  setIncludeDefaultSkills: (inc: boolean) => set({ includeDefaultSkills: inc }),
+
+  scanCustomSkills: async (dirPath: string) => {
+    if (!window.electronAPI?.scanCustomSkillsDir) return [];
+    try {
+      const skills = await window.electronAPI.scanCustomSkillsDir(dirPath);
+      return skills || [];
+    } catch (e: any) {
+      console.warn('[DiscussionSlice] Failed to scan custom skills dir:', e);
+      return [];
+    }
+  },
+
+  loadAvailableSkills: async (
+    workspacePath: string,
+    customSkillsDir?: string | null,
+    includeDefaultSkills?: boolean
+  ) => {
+    if (!window.electronAPI?.getAvailableSkills) return [];
+    try {
+      const skills = await window.electronAPI.getAvailableSkills(
+        workspacePath,
+        customSkillsDir !== undefined ? customSkillsDir : get().customSkillsDir,
+        includeDefaultSkills !== undefined
+          ? includeDefaultSkills
+          : get().includeDefaultSkills
+      );
+      set({ availableSkills: skills || [] });
+      return skills || [];
+    } catch (e: any) {
+      console.warn('[DiscussionSlice] Failed to load available skills:', e);
+      return [];
+    }
+  },
 
   loadDiscussions: async (workspacePath: string) => {
     if (!window.electronAPI?.listDiscussions) return;
@@ -112,10 +168,20 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     if (!window.electronAPI) return;
     try {
       (window as any)._flymd_last_workspace = workspacePath;
-      set({ activeSessionId: sessionId, discussionError: null, streamingChunks: {}, streamingThinking: {} });
+      const { activeSessionId } = get();
+      const isSwitchingSession = activeSessionId !== sessionId;
+      if (isSwitchingSession) {
+        set({
+          activeSessionId: sessionId,
+          discussionError: null,
+          streamingChunks: {},
+          streamingThinking: {},
+        });
+      }
       const meta = await window.electronAPI.getDiscussionMetadata(workspacePath, sessionId);
       const transcript = await window.electronAPI.getDiscussionTranscript(workspacePath, sessionId);
       set({
+        activeSessionId: sessionId,
         activeDiscussionMeta: meta,
         activeTranscript: transcript || [],
         isDiscussionRunning: meta?.status === 'running',
@@ -139,6 +205,30 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
       set({ availableProviders: list || [] });
     } catch (e: any) {
       console.error('[DiscussionSlice] Failed to load available providers:', e);
+    }
+  },
+
+  loadDiscussionConfig: async (workspacePath: string, sessionId: string) => {
+    if (!window.electronAPI?.getDiscussionConfig) return null;
+    try {
+      const cfg = await window.electronAPI.getDiscussionConfig(workspacePath, sessionId);
+      set({ activeDiscussionConfig: cfg });
+      return cfg;
+    } catch (e: any) {
+      console.error('[DiscussionSlice] Failed to load discussion config:', e);
+      return null;
+    }
+  },
+
+  updateDiscussionConfig: async (workspacePath: string, sessionId: string, config: DiscussionConfig) => {
+    if (!window.electronAPI?.updateDiscussionConfig) return null;
+    try {
+      const meta = await window.electronAPI.updateDiscussionConfig(workspacePath, sessionId, config);
+      set({ activeDiscussionMeta: meta, activeDiscussionConfig: config, discussionError: null });
+      return meta;
+    } catch (e: any) {
+      set({ discussionError: String(e) });
+      throw e;
     }
   },
 
@@ -168,6 +258,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     const { activeSessionId } = get();
     if (!activeSessionId || !window.electronAPI?.pauseDiscussion) return;
     try {
+      set({ isDiscussionRunning: false });
       const meta = await window.electronAPI.pauseDiscussion(activeSessionId);
       set({ activeDiscussionMeta: meta, isDiscussionRunning: false });
     } catch (e: any) {
@@ -192,6 +283,7 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
     const { activeSessionId } = get();
     if (!activeSessionId || !window.electronAPI?.cancelDiscussion) return;
     try {
+      set({ isDiscussionRunning: false });
       const meta = await window.electronAPI.cancelDiscussion(activeSessionId);
       set({ activeDiscussionMeta: meta, isDiscussionRunning: false });
     } catch (e: any) {
@@ -352,6 +444,61 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
         }
         break;
       }
+      case 'RoundBarrierPaused': {
+        set((state) => ({
+          isDiscussionRunning: false,
+          streamingChunks: {},
+          streamingThinking: {},
+          activeDiscussionMeta: state.activeDiscussionMeta
+            ? { ...state.activeDiscussionMeta, status: 'paused' }
+            : null,
+        }));
+        if (workspace && sessionId && window.electronAPI) {
+          syncDiscussionFromBackend(set, get, workspace, sessionId, 'paused');
+        }
+        break;
+      }
+      case 'ConfigUpdated': {
+        if (workspace && sessionId && window.electronAPI) {
+          syncDiscussionFromBackend(set, get, workspace, sessionId);
+          get().loadDiscussionConfig(workspace, sessionId);
+        }
+        break;
+      }
+      case 'QuotaLimitReached': {
+        const total = payload.total_tokens ?? payload.totalTokens;
+        const cap = payload.token_budget_cap ?? payload.tokenBudgetCap ?? payload.cap;
+        set((state) => ({
+          isDiscussionRunning: false,
+          streamingChunks: {},
+          streamingThinking: {},
+          discussionError: `Token quota budget reached (${total?.toLocaleString()} / ${cap?.toLocaleString()} tokens). Paused at safe turn boundary.`,
+          activeDiscussionMeta: state.activeDiscussionMeta
+            ? { ...state.activeDiscussionMeta, status: 'paused' }
+            : null,
+        }));
+        if (workspace && sessionId && window.electronAPI) {
+          syncDiscussionFromBackend(set, get, workspace, sessionId, 'paused');
+        }
+        break;
+      }
+      case 'ConvergenceReached': {
+        set((state) => ({
+          streamingChunks: {},
+          streamingThinking: {},
+          activeDiscussionMeta: state.activeDiscussionMeta
+            ? {
+                ...state.activeDiscussionMeta,
+                convergedAtRound: payload.converged_round,
+                convergenceReason: payload.reason,
+              }
+            : null,
+        }));
+        if (workspace && sessionId && window.electronAPI) {
+          syncDiscussionFromBackend(set, get, workspace, sessionId);
+        }
+        break;
+      }
       case 'GuidanceInjected': {
         if (workspace && sessionId && window.electronAPI) {
           syncDiscussionFromBackend(set, get, workspace, sessionId);
@@ -388,6 +535,15 @@ export const createDiscussionSlice: StateCreator<DiscussionSlice> = (set, get) =
           delete nextThinking[key];
           return { streamingChunks: nextChunks, streamingThinking: nextThinking };
         });
+
+        if (payload?.usage && (get() as any).recordTokenUsage) {
+          (get() as any).recordTokenUsage({
+            promptTokens: payload.usage.prompt_tokens ?? payload.usage.promptTokens,
+            completionTokens: payload.usage.completion_tokens ?? payload.usage.completionTokens,
+            reasoningTokens: payload.usage.reasoning_tokens ?? payload.usage.reasoningTokens,
+            totalTokens: payload.usage.total_tokens ?? payload.usage.totalTokens,
+          });
+        }
 
         // Sequence-guarded sync from backend
         if (workspace && sessionId && window.electronAPI) {

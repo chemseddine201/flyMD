@@ -165,14 +165,28 @@ export const WysiwygEditor: React.FC<WysiwygEditorProps> = ({
     editorRef.current = editorApi;
   }, [editorRef, handleInput]);
 
+  const isDarkDoc = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const isLight = theme === 'light' || theme === 'clean-white' || (theme === 'system' && !isDarkDoc);
+
   const getThemeClass = () => {
     switch (theme) {
+      case 'system':
+        return 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100';
       case 'light':
-        return 'bg-white text-slate-800';
+      case 'clean-white':
+        return 'bg-white text-slate-900';
       case 'cyber':
         return 'bg-black text-emerald-300';
       case 'sepia':
         return 'bg-[#fbf0d9] text-[#433422]';
+      case 'high-contrast':
+        return 'bg-black text-white';
+      case 'tokyo-night':
+        return 'bg-[#1a1b26] text-[#c0caf5]';
+      case 'catppuccin':
+        return 'bg-[#24273a] text-[#cad3f5]';
+      case 'dracula':
+        return 'bg-[#282a36] text-[#f8f8f2]';
       case 'dark':
       default:
         return 'bg-slate-900 text-slate-100';
@@ -182,6 +196,7 @@ export const WysiwygEditor: React.FC<WysiwygEditorProps> = ({
   return (
     <div
       dir={resolvedDir}
+      data-theme={isLight ? 'light' : 'dark'}
       className={`h-full w-full flex flex-col overflow-y-auto px-6 py-6 transition-colors duration-200 outline-none select-text ${getThemeClass()} ${
         resolvedDir === 'rtl' ? 'direction-rtl text-right' : 'direction-ltr text-left'
       }`}

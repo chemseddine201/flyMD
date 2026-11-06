@@ -2,9 +2,15 @@
 
 use super::types::{now_ms, DiscussionMessage, DiscussionMetadata};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::SystemTime;
+
+static IN_MEMORY_TRANSCRIPT_CACHE: Mutex<Option<HashMap<PathBuf, (u64, Option<SystemTime>, Vec<DiscussionMessage>, bool)>>> =
+    Mutex::new(None);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SessionLockData {
@@ -93,34 +99,7 @@ pub fn atomic_write_json<T: Serialize>(target: &Path, value: &T) -> Result<(), S
 }
 
 /// Check if a process ID is currently running on the system.
-pub fn is_pid_alive(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        use std::process::Command;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        // Exact CSV second-column PID match without flashing a console window
-        if let Ok(output) = Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-        {
-            let text = String::from_utf8_lossy(&output.stdout);
-            let needle = format!("\"{}\"", pid);
-            return text
-                .lines()
-                .any(|line| line.split(',').nth(1).map(|col| col.trim()) == Some(needle.as_str()));
-        }
-        false
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Path::new(&format!("/proc/{}", pid)).exists()
-    }
-}
+pub use crate::common::process::is_pid_alive;
 
 /// Returns `true` only if `.session.lock` exists and belongs to a different live OS process.
 /// Automatically prunes stale locks left behind by dead/crashed processes.
@@ -215,12 +194,36 @@ pub fn append_transcript_message(
 }
 
 /// Reads canonical transcript from `transcript.jsonl`, recovering from trailing partial writes.
+/// Caches parsed records in-memory, re-reading from disk only if file byte length or mtime changes.
 pub fn read_transcript_with_recovery(
     session_dir: &Path,
 ) -> Result<(Vec<DiscussionMessage>, bool), String> {
     let transcript_path = session_dir.join("transcript.jsonl");
     if !transcript_path.exists() {
         return Ok((Vec::new(), false));
+    }
+
+    let meta = transcript_path.metadata().ok();
+    let file_len = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+    let mtime = meta.and_then(|m| m.modified().ok());
+
+    let cached = {
+        let guard = IN_MEMORY_TRANSCRIPT_CACHE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        guard
+            .as_ref()
+            .and_then(|m| m.get(&transcript_path))
+            .and_then(|(len, mt, msgs, part)| {
+                if *len == file_len && (mtime.is_none() || mtime == *mt) {
+                    Some((msgs.clone(), *part))
+                } else {
+                    None
+                }
+            })
+    };
+    if let Some(res) = cached {
+        return Ok(res);
     }
 
     let file = File::open(&transcript_path)
@@ -257,6 +260,17 @@ pub fn read_transcript_with_recovery(
                 }
             }
         }
+    }
+
+    {
+        let mut guard = IN_MEMORY_TRANSCRIPT_CACHE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let map = guard.get_or_insert_with(HashMap::new);
+        map.insert(
+            transcript_path,
+            (file_len, mtime, messages.clone(), partial_detected),
+        );
     }
 
     Ok((messages, partial_detected))

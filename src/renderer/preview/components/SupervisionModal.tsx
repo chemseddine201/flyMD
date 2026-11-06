@@ -169,35 +169,35 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-      <div className="relative w-full max-w-xl max-h-[90vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 text-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-in fade-in duration-150 select-none">
+      <div className="relative w-full max-w-xl max-h-[90vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 text-xs transition-colors duration-150">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 bg-slate-800/90 border-b border-slate-700/60 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 bg-slate-50/90 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700/60 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
               <FolderTree className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100">Folder Scanning &amp; Supervision</h2>
-              <p className="text-[11px] text-slate-400 truncate max-w-[340px] font-mono">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Folder Scanning &amp; Supervision</h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[340px] font-mono">
                 {folderName}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition"
+            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+        <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1 bg-white dark:bg-slate-900">
           {/* Question 1: Scanning Scope Mode (Full Tree vs. Specified Folder Only) */}
-          <div className="space-y-2 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800">
-            <div className="flex items-center gap-1.5 font-semibold text-slate-200">
-              <Layers className="w-3.5 h-3.5 text-amber-400" />
+          <div className="space-y-2 bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+              <Layers className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               <span>Scanning Scope:</span>
             </div>
 
@@ -206,8 +206,8 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                 onClick={() => setScanMode('full-tree')}
                 className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition ${
                   scanMode === 'full-tree'
-                    ? 'bg-sky-500/15 border-sky-500/50 text-slate-100'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                    ? 'bg-sky-500/15 border-sky-500/50 text-slate-900 dark:text-slate-100 ring-1 ring-sky-500/30'
+                    : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900'
                 }`}
               >
                 <input
@@ -218,10 +218,10 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                   className="mt-0.5 accent-sky-500"
                 />
                 <div>
-                  <span className="font-semibold block text-slate-200">
+                  <span className="font-semibold block text-slate-800 dark:text-slate-200">
                     🌳 Full Tree (Recursive)
                   </span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5 leading-snug">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5 leading-snug">
                     Scan across all nested folders.
                   </span>
                 </div>
@@ -231,8 +231,8 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                 onClick={() => setScanMode('shallow')}
                 className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition ${
                   scanMode === 'shallow'
-                    ? 'bg-sky-500/15 border-sky-500/50 text-slate-100'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                    ? 'bg-sky-500/15 border-sky-500/50 text-slate-900 dark:text-slate-100 ring-1 ring-sky-500/30'
+                    : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900'
                 }`}
               >
                 <input
@@ -243,10 +243,10 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                   className="mt-0.5 accent-sky-500"
                 />
                 <div>
-                  <span className="font-semibold block text-slate-200">
+                  <span className="font-semibold block text-slate-800 dark:text-slate-200">
                     📁 Root Level Only
                   </span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5 leading-snug">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5 leading-snug">
                     Scan direct files only, skipping subfolders.
                   </span>
                 </div>
@@ -255,10 +255,10 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
           </div>
 
           {/* Question 2: Supervised File Types & Extension Picker */}
-          <div className="space-y-3 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800">
+          <div className="space-y-3 bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 font-semibold text-slate-200">
-                <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+              <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                <FileCode className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>Supervised File Types &amp; Extensions:</span>
               </div>
               <span className="text-[10px] text-slate-500">Default: .md only</span>
@@ -273,8 +273,8 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                   !isAllFiles &&
                   allowedExtensions.length <= 2 &&
                   allowedExtensions.every((e) => e === '.md' || e === '.markdown')
-                    ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
-                    : 'bg-slate-900 border-slate-700/70 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                    ? 'bg-indigo-600/20 border-indigo-500 text-indigo-700 dark:text-indigo-200'
+                    : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700/70 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-600'
                 }`}
               >
                 📝 Markdown Only (Default)
@@ -287,8 +287,8 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                   !isAllFiles &&
                   allowedExtensions.includes('.html') &&
                   allowedExtensions.includes('.js')
-                    ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
-                    : 'bg-slate-900 border-slate-700/70 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                    ? 'bg-indigo-600/20 border-indigo-500 text-indigo-700 dark:text-indigo-200'
+                    : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700/70 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-600'
                 }`}
               >
                 🌐 Web Dev (.html, .css, .js, .ts)
@@ -299,33 +299,33 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                 onClick={handleToggleAllFiles}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition flex items-center gap-1 ${
                   isAllFiles
-                    ? 'bg-amber-600/30 border-amber-500 text-amber-200'
-                    : 'bg-slate-900 border-slate-700/70 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                    ? 'bg-amber-600/20 border-amber-500 text-amber-700 dark:text-amber-200'
+                    : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700/70 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-600'
                 }`}
               >
-                <Asterisk className="w-3 h-3 text-amber-400" />
+                <Asterisk className="w-3 h-3 text-amber-500 dark:text-amber-400" />
                 <span>All Files (*.*)</span>
               </button>
             </div>
 
             {/* Active Extension Chips */}
-            <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800/80">
-              <div className="text-[10px] text-slate-400 mb-1.5 flex items-center justify-between">
+            <div className="p-2.5 bg-white dark:bg-slate-900/80 rounded-lg border border-slate-200 dark:border-slate-800/80">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mb-1.5 flex items-center justify-between">
                 <span>Active Extensions ({isAllFiles ? 'All Files' : allowedExtensions.length}):</span>
                 {isAllFiles && (
-                  <span className="text-amber-400 font-medium">All non-hidden files supervised</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">All non-hidden files supervised</span>
                 )}
               </div>
 
               {isAllFiles ? (
                 <div className="flex items-center gap-2 py-1">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-[11px] font-semibold">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300 font-mono text-[11px] font-semibold">
                     *.* (Any file extension)
                   </span>
                   <button
                     type="button"
                     onClick={handleSetMarkdownOnly}
-                    className="text-[11px] text-slate-400 hover:text-slate-200 underline"
+                    className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 underline"
                   >
                     Reset to Markdown only
                   </button>
@@ -335,14 +335,14 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                   {allowedExtensions.map((ext) => (
                     <span
                       key={ext}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-mono text-[11px]"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 font-mono text-[11px]"
                     >
                       <span>{ext}</span>
                       <button
                         type="button"
                         onClick={() => handleRemoveExtension(ext)}
                         title={`Remove ${ext}`}
-                        className="hover:text-rose-400 text-slate-400 p-0.5 rounded transition"
+                        className="hover:text-rose-500 dark:hover:text-rose-400 text-slate-400 p-0.5 rounded transition"
                       >
                         <X className="w-2.5 h-2.5" />
                       </button>
@@ -355,7 +355,7 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
             {/* Quick Click Preset Pills */}
             {!isAllFiles && (
               <div className="space-y-1.5">
-                <span className="text-[10px] text-slate-400 block">Click to quickly add/remove:</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Click to quickly add/remove:</span>
                 <div className="flex flex-wrap gap-1">
                   {COMMON_PRESETS.map((p) => {
                     const isSelected = allowedExtensions.includes(p.ext);
@@ -366,13 +366,13 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                         onClick={() => handleTogglePreset(p.ext)}
                         className={`px-2 py-0.5 rounded text-[10px] font-mono transition flex items-center gap-1 border ${
                           isSelected
-                            ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-200'
-                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-700 dark:text-indigo-200'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                       >
                         <span>{p.icon}</span>
                         <span>{p.ext}</span>
-                        {isSelected && <Check className="w-2.5 h-2.5 text-indigo-400" />}
+                        {isSelected && <Check className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />}
                       </button>
                     );
                   })}
@@ -394,7 +394,7 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                   placeholder="Custom extension (e.g. py, tsx, yaml, sql, cpp...)"
                   value={customExtInput}
                   onChange={(e) => setCustomExtInput(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-200 font-mono placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="flex-1 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 rounded-lg text-xs text-slate-900 dark:text-slate-200 font-mono placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
                 />
                 <button
                   type="submit"
@@ -409,7 +409,7 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
           </div>
 
           {/* Question 3: Live Supervision Toggle & Behavior */}
-          <div className="space-y-3 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800">
+          <div className="space-y-3 bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -418,10 +418,10 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                 className="mt-0.5 w-4 h-4 accent-sky-500 rounded"
               />
               <div>
-                <span className="font-semibold text-slate-100 block">
+                <span className="font-semibold text-slate-900 dark:text-slate-100 block">
                   Enable Live Folder Supervision
                 </span>
-                <span className="text-[11px] text-slate-400 block mt-0.5">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
                   Watches for newly generated or modified files matching allowed extensions in real-time.
                 </span>
               </div>
@@ -429,12 +429,12 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
 
             {/* Sub-options for when supervision is enabled */}
             {enabled && (
-              <div className="pl-7 pt-2 border-t border-slate-800/80 space-y-2.5">
-                <p className="text-[11px] font-semibold text-sky-400">
+              <div className="pl-7 pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-2.5">
+                <p className="text-[11px] font-semibold text-sky-600 dark:text-sky-400">
                   When new matching files are generated:
                 </p>
 
-                <label className="flex items-center gap-2 cursor-pointer text-slate-200">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-200">
                   <input
                     type="radio"
                     name="new-file-behavior"
@@ -445,7 +445,7 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
                   <span>Auto-open newest files in a new tab</span>
                 </label>
 
-                <label className="flex items-center gap-2 cursor-pointer text-slate-200">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-200">
                   <input
                     type="radio"
                     name="new-file-behavior"
@@ -461,10 +461,10 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-800/60 border-t border-slate-800 shrink-0">
+        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800 shrink-0">
           <button
             onClick={handleOpenWithoutSupervision}
-            className="text-[11px] text-slate-400 hover:text-slate-200 underline transition"
+            className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 underline transition"
           >
             Open without supervision
           </button>
@@ -472,13 +472,13 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-3 py-1.5 text-slate-400 hover:text-slate-200 transition"
+              className="px-3 py-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition"
             >
               Cancel
             </button>
             <button
               onClick={handleStartSupervision}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg shadow-sm shadow-sky-600/30 transition"
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-lg shadow-sm shadow-sky-600/30 transition"
             >
               <Check className="w-3.5 h-3.5" />
               <span>Apply &amp; Open Folder</span>

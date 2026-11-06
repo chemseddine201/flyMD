@@ -24,7 +24,7 @@ export const DEFAULT_A11Y_CONFIG: AccessibilityConfig = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'dark',
+  theme: 'light',
   floatAlwaysOnTop: true,
   previewAlwaysOnTop: false,
   ollamaUrl: 'http://127.0.0.1:11434',
@@ -43,4 +43,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   previewWidthMode: 'wide',
   a11yConfig: DEFAULT_A11Y_CONFIG,
   defaultAllowedExtensions: ['.md', '.markdown'],
+  tokenSaver: 'standard',
 };

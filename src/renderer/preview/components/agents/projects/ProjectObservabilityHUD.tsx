@@ -114,25 +114,25 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
     switch (kind) {
       case 'decision':
         return (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-950/70 text-blue-300 border border-blue-700/60">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/30">
             Decision
           </span>
         );
       case 'invariant':
         return (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-950/70 text-purple-300 border border-purple-700/60">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30">
             Invariant
           </span>
         );
       case 'deliverable':
         return (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-700/60">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
             Deliverable
           </span>
         );
       case 'audit_note':
         return (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-700/60">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
             Audit Note
           </span>
         );
@@ -140,20 +140,20 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
   };
 
   return (
-    <div className="flex flex-col h-full border-l border-slate-800/80 bg-slate-950/70 backdrop-blur-md w-96 shrink-0 text-slate-200">
+    <div className="flex flex-col h-full border-l border-slate-200 dark:border-slate-800/80 bg-white/95 dark:bg-slate-950/70 backdrop-blur-md w-96 shrink-0 text-slate-800 dark:text-slate-200 transition-colors duration-150">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-800/80 bg-slate-900/70">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50/90 dark:bg-slate-900/70">
         <div className="flex items-center gap-2">
-          <Brain className="w-4 h-4 text-purple-400" />
-          <span className="font-semibold text-xs tracking-wider uppercase text-slate-100">
-            Memory & Observability HUD
+          <Brain className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          <span className="font-semibold text-xs tracking-wider uppercase text-slate-900 dark:text-slate-100">
+            Memory &amp; Observability HUD
           </span>
         </div>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -161,14 +161,14 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center border-b border-slate-800/80 bg-slate-900/40 px-2 pt-1 gap-1">
+      <div className="flex items-center border-b border-slate-200 dark:border-slate-800/80 bg-slate-100/70 dark:bg-slate-900/40 px-2 pt-1 gap-1">
         <button
           type="button"
           onClick={() => setActiveTab('master')}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-t-md transition-colors ${
             activeTab === 'master'
-              ? 'bg-slate-800 text-indigo-300 border-t-2 border-indigo-500'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+              ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border-t-2 border-indigo-500 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-850'
           }`}
         >
           <Brain className="w-3.5 h-3.5" />
@@ -180,14 +180,14 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
           onClick={() => setActiveTab('scoped')}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-t-md transition-colors ${
             activeTab === 'scoped'
-              ? 'bg-slate-800 text-indigo-300 border-t-2 border-indigo-500'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+              ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border-t-2 border-indigo-500 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-850'
           }`}
         >
           <Database className="w-3.5 h-3.5" />
           <span>Scoped</span>
           {scopedList.length > 0 && (
-            <span className="text-[10px] bg-slate-700 text-slate-300 px-1 rounded-full">
+            <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1 rounded-full">
               {scopedList.length}
             </span>
           )}
@@ -198,8 +198,8 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
           onClick={() => setActiveTab('evidence')}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-t-md transition-colors ${
             activeTab === 'evidence'
-              ? 'bg-slate-800 text-indigo-300 border-t-2 border-indigo-500'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+              ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border-t-2 border-indigo-500 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-850'
           }`}
         >
           <ShieldCheck className="w-3.5 h-3.5" />
@@ -211,8 +211,8 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
           onClick={() => setActiveTab('recall')}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-t-md transition-colors ${
             activeTab === 'recall'
-              ? 'bg-slate-800 text-indigo-300 border-t-2 border-indigo-500'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+              ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border-t-2 border-indigo-500 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-850'
           }`}
         >
           <Package className="w-3.5 h-3.5" />
@@ -225,14 +225,14 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
         {/* Tab 1: Master Memory */}
         {activeTab === 'master' && (
           <div className="flex flex-col h-full space-y-2">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
               <span>Global Invariants (`.flymd/MASTER_MEMORY.md`)</span>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => loadMasterMemory(workspacePath)}
                   title="Reload Master Memory"
-                  className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
@@ -251,7 +251,7 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
             <textarea
               value={editedMasterMemory}
               onChange={(e) => setEditedMasterMemory(e.target.value)}
-              className="flex-1 w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-[11px] text-slate-300 focus:outline-none focus:border-indigo-500/70 resize-none leading-relaxed"
+              className="flex-1 w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 font-mono text-[11px] text-slate-800 dark:text-slate-300 focus:outline-none focus:border-indigo-500/70 resize-none leading-relaxed"
               placeholder="# Master System Architecture & Global Memory Ledger..."
             />
           </div>
@@ -260,7 +260,7 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
         {/* Tab 2: Scoped Memory */}
         {activeTab === 'scoped' && (
           <div className="flex flex-col h-full space-y-3">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
               <span className="truncate">
                 {activeProject ? `Project: ${activeProject.name}` : 'Select a Project Node'}
               </span>
@@ -268,7 +268,7 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
                 <button
                   type="button"
                   onClick={() => setShowAddEntry(!showAddEntry)}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 transition-colors"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-600/15 hover:bg-indigo-600/30 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 transition-colors"
                 >
                   <Plus className="w-3 h-3" />
                   <span>Add Entry</span>
@@ -280,13 +280,13 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
             {showAddEntry && activeProject && (
               <form
                 onSubmit={handleAddMemoryEntry}
-                className="bg-slate-900 border border-slate-700/80 rounded-lg p-2.5 space-y-2 animate-in fade-in duration-150"
+                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-lg p-2.5 space-y-2 animate-in fade-in duration-150"
               >
                 <div className="flex items-center gap-2">
                   <select
                     value={newEntryKind}
                     onChange={(e) => setNewEntryKind(e.target.value as MemoryEntryKind)}
-                    className="bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-200"
+                    className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-800 dark:text-slate-200"
                   >
                     <option value="decision">Decision</option>
                     <option value="invariant">Invariant</option>
@@ -299,7 +299,7 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
                     placeholder="Author / Role"
                     value={newEntryAuthor}
                     onChange={(e) => setNewEntryAuthor(e.target.value)}
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-200"
+                    className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200"
                   />
                 </div>
 
@@ -309,7 +309,7 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
                   placeholder="Summary of decision or invariant..."
                   value={newEntrySummary}
                   onChange={(e) => setNewEntrySummary(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-200"
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200"
                 />
 
                 <textarea
@@ -317,7 +317,7 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
                   placeholder="Additional context or contract details..."
                   value={newEntryDetails}
                   onChange={(e) => setNewEntryDetails(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-200 resize-none"
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200 resize-none"
                 />
 
                 <input
@@ -325,14 +325,14 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
                   placeholder="Tags (comma-separated, e.g. api, jwt, auth)"
                   value={newEntryTags}
                   onChange={(e) => setNewEntryTags(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-200"
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200"
                 />
 
                 <div className="flex justify-end gap-1.5">
                   <button
                     type="button"
                     onClick={() => setShowAddEntry(false)}
-                    className="px-2 py-0.5 rounded text-[11px] text-slate-400 hover:bg-slate-800"
+                    className="px-2 py-0.5 rounded text-[11px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800"
                   >
                     Cancel
                   </button>
@@ -348,15 +348,15 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
 
             {/* List */}
             {!activeProject ? (
-              <div className="flex flex-col items-center justify-center h-48 text-center text-slate-500">
-                <Database className="w-8 h-8 mb-2 stroke-[1.5] text-slate-600" />
+              <div className="flex flex-col items-center justify-center h-48 text-center text-slate-400">
+                <Database className="w-8 h-8 mb-2 stroke-[1.5] text-slate-400 dark:text-slate-600" />
                 <p>Select a project from the left tree to view its scoped memory ledger.</p>
               </div>
             ) : scopedList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-center text-slate-500">
-                <Database className="w-8 h-8 mb-2 stroke-[1.5] text-slate-600" />
+              <div className="flex flex-col items-center justify-center h-48 text-center text-slate-400">
+                <Database className="w-8 h-8 mb-2 stroke-[1.5] text-slate-400 dark:text-slate-600" />
                 <p>No memory records yet for this project.</p>
-                <p className="text-[10px] text-slate-600 mt-1">
+                <p className="text-[10px] text-slate-500 mt-1">
                   Decisions during debates or commits will be recorded here.
                 </p>
               </div>
@@ -365,16 +365,16 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
                 {scopedList.map((rec) => (
                   <div
                     key={rec.id}
-                    className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-colors"
+                    className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
                         {getKindBadge(rec.kind)}
-                        <span className="text-[11px] text-slate-400 font-medium">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                           {rec.author_role}
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-500">
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
                         {new Date(rec.timestamp).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
@@ -382,9 +382,9 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
                       </span>
                     </div>
 
-                    <p className="text-slate-200 font-medium mb-1">{rec.summary}</p>
+                    <p className="text-slate-900 dark:text-slate-200 font-medium mb-1">{rec.summary}</p>
                     {rec.details && (
-                      <p className="text-slate-400 text-[11px] whitespace-pre-wrap leading-relaxed">
+                      <p className="text-slate-600 dark:text-slate-400 text-[11px] whitespace-pre-wrap leading-relaxed">
                         {rec.details}
                       </p>
                     )}
@@ -394,7 +394,7 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
                         {rec.tags.map((tag) => (
                           <span
                             key={tag}
-                            className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 flex items-center gap-0.5"
+                            className="text-[9px] px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center gap-0.5"
                           >
                             <Tag className="w-2.5 h-2.5" />
                             {tag}
@@ -412,41 +412,41 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
         {/* Tab 3: Evidence Receipts */}
         {activeTab === 'evidence' && (
           <div className="space-y-3">
-            <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800">
-              <h4 className="font-semibold text-slate-200 flex items-center gap-1.5 mb-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+              <h4 className="font-semibold text-slate-900 dark:text-slate-200 flex items-center gap-1.5 mb-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 Evidence-Before-Done Receipts (OMH)
               </h4>
-              <p className="text-[11px] text-slate-400 mb-3">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
                 Strict guarantees ensuring code cannot be marked completed without empirical proof.
               </p>
 
               <div className="space-y-2 text-[11px]">
-                <div className="flex items-start gap-2 p-2 rounded bg-slate-950/60 border border-slate-800/80">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 p-2 rounded bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-medium text-slate-200">1. Architectural Contract Gate</span>
-                    <p className="text-slate-400 text-[10px]">
+                    <span className="font-medium text-slate-900 dark:text-slate-200">1. Architectural Contract Gate</span>
+                    <p className="text-slate-500 dark:text-slate-400 text-[10px]">
                       Deliberation debate completed with synthesized Checklist Report.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 p-2 rounded bg-slate-950/60 border border-slate-800/80">
-                  <FileCode className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 p-2 rounded bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                  <FileCode className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-medium text-slate-200">2. Real Files Modified in Workspace</span>
-                    <p className="text-slate-400 text-[10px]">
+                    <span className="font-medium text-slate-900 dark:text-slate-200">2. Real Files Modified in Workspace</span>
+                    <p className="text-slate-500 dark:text-slate-400 text-[10px]">
                       Filesystem audit confirms actual deliverable files written inside bounded scope.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 p-2 rounded bg-slate-950/60 border border-slate-800/80">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 p-2 rounded bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-medium text-slate-200">3. Process Settlement & PID Isolation</span>
-                    <p className="text-slate-400 text-[10px]">
+                    <span className="font-medium text-slate-900 dark:text-slate-200">3. Process Settlement &amp; PID Isolation</span>
+                    <p className="text-slate-500 dark:text-slate-400 text-[10px]">
                       Sub-process terminated via Job Object tree manager without lingering handles.
                     </p>
                   </div>
@@ -456,21 +456,21 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
 
             {/* Recent Tool Receipts */}
             <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-slate-400">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                 Recent Task Evidence Receipts
               </span>
               {agentTasks.slice(0, 3).map((task) => (
                 <div
                   key={task.id}
-                  className="p-2 rounded bg-slate-900 border border-slate-800 text-[11px]"
+                  className="p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-slate-200">@{task.targetAgentId}</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">@{task.targetAgentId}</span>
                     <span className="text-[10px] text-slate-500">
                       {task.status.toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-slate-400 text-[10px] truncate">{task.fileName}</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-[10px] truncate">{task.fileName}</p>
                 </div>
               ))}
             </div>
@@ -480,13 +480,13 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
         {/* Tab 4: Recall Pack */}
         {activeTab === 'recall' && (
           <div className="flex flex-col h-full space-y-2">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
               <span>Token-Budgeted Recall Pack</span>
               <button
                 type="button"
                 onClick={handleRefreshRecallPack}
                 disabled={isGeneratingRecall || !selectedProjectId}
-                className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 transition-colors"
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-600/15 hover:bg-indigo-600/30 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 transition-colors"
               >
                 <RefreshCw
                   className={`w-3 h-3 ${isGeneratingRecall ? 'animate-spin' : ''}`}
@@ -496,20 +496,20 @@ export const ProjectObservabilityHUD: React.FC<ProjectObservabilityHUDProps> = (
             </div>
 
             {!activeRecallPack ? (
-              <div className="flex flex-col items-center justify-center h-48 text-center text-slate-500">
-                <Package className="w-8 h-8 mb-2 stroke-[1.5] text-slate-600" />
+              <div className="flex flex-col items-center justify-center h-48 text-center text-slate-400">
+                <Package className="w-8 h-8 mb-2 stroke-[1.5] text-slate-400 dark:text-slate-600" />
                 <p>Select a project to inspect its tailored Recall Pack.</p>
               </div>
             ) : (
               <div className="flex flex-col h-full space-y-2">
-                <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-900 border border-slate-800 text-[11px]">
-                  <span className="text-slate-400">Estimated Tokens:</span>
-                  <span className="font-mono font-medium text-indigo-400">
+                <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]">
+                  <span className="text-slate-500 dark:text-slate-400">Estimated Tokens:</span>
+                  <span className="font-mono font-medium text-indigo-600 dark:text-indigo-400">
                     ~{activeRecallPack.estimated_tokens} tokens
                   </span>
                 </div>
 
-                <div className="flex-1 w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-[11px] text-slate-300 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                <div className="flex-1 w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 font-mono text-[11px] text-slate-800 dark:text-slate-300 overflow-y-auto whitespace-pre-wrap leading-relaxed">
                   {activeRecallPack.rendered_markdown}
                 </div>
               </div>

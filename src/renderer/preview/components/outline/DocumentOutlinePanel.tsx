@@ -131,15 +131,15 @@ export const DocumentOutlinePanel: React.FC<DocumentOutlinePanelProps> = ({
           style={{ paddingLeft: `${Math.max(4, depth * 14 + 4)}px` }}
           className={`group flex items-center gap-1.5 py-1 pr-2 rounded-lg cursor-pointer transition text-xs ${
             isActive
-              ? 'bg-sky-500/20 text-sky-200 font-semibold border-l-2 border-sky-400'
-              : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+              ? 'bg-sky-50 dark:bg-sky-500/20 text-sky-700 dark:text-sky-200 font-semibold border-l-2 border-sky-500'
+              : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80'
           }`}
         >
           {hasChildren ? (
             <button
               type="button"
               onClick={(e) => toggleCollapse(node.id, e)}
-              className="p-0.5 text-slate-500 hover:text-slate-200 rounded transition"
+              className="p-0.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded transition"
             >
               {isCollapsed ? (
                 <ChevronRight className="w-3 h-3" />
@@ -149,13 +149,13 @@ export const DocumentOutlinePanel: React.FC<DocumentOutlinePanelProps> = ({
             </button>
           ) : (
             <span className="w-4 h-4 flex items-center justify-center shrink-0">
-              <Hash className="w-2.5 h-2.5 text-slate-600" />
+              <Hash className="w-2.5 h-2.5 text-slate-400 dark:text-slate-600" />
             </span>
           )}
 
           <span
             className={`text-[9px] font-mono px-1 py-0.2 rounded border shrink-0 ${
-              levelBadgeColor[node.level] || 'text-slate-400 bg-slate-800 border-slate-700'
+              levelBadgeColor[node.level] || 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
             }`}
           >
             H{node.level}
@@ -176,13 +176,13 @@ export const DocumentOutlinePanel: React.FC<DocumentOutlinePanelProps> = ({
   };
 
   return (
-    <div className="h-full w-64 border-l border-slate-800 shrink-0 bg-slate-900/95 flex flex-col z-20 select-none overflow-hidden">
+    <div className="h-full w-64 border-l border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900/95 flex flex-col z-20 select-none overflow-hidden transition-colors duration-150">
       {/* Header */}
-      <div className="h-9 px-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-1.5 text-slate-200 font-semibold">
-          <ListTree className="w-3.5 h-3.5 text-sky-400" />
+      <div className="h-9 px-3 bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-1.5 text-slate-900 dark:text-slate-200 font-semibold">
+          <ListTree className="w-3.5 h-3.5 text-sky-500" />
           <span className="text-xs">Document Outline</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
             {headings.length}
           </span>
         </div>
@@ -200,8 +200,8 @@ export const DocumentOutlinePanel: React.FC<DocumentOutlinePanelProps> = ({
               }
               className={`p-1 rounded transition ${
                 isPinned
-                  ? 'text-sky-400 bg-sky-950/80 border border-sky-500/40'
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                  ? 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/80 border border-sky-300 dark:border-sky-500/40'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
               {isPinned ? <Pin className="w-3.5 h-3.5" /> : <PinOff className="w-3.5 h-3.5" />}
@@ -214,7 +214,7 @@ export const DocumentOutlinePanel: React.FC<DocumentOutlinePanelProps> = ({
               type="button"
               onClick={onClose}
               title="Close outline panel"
-              className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition"
+              className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -223,7 +223,7 @@ export const DocumentOutlinePanel: React.FC<DocumentOutlinePanelProps> = ({
       </div>
 
       {/* Subtitle / Tip */}
-      <div className="px-3 py-1 bg-slate-950/40 border-b border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500">
+      <div className="px-3 py-1 bg-slate-100/70 dark:bg-slate-950/40 border-b border-slate-200 dark:border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
         <span>{headings.length} headings detected</span>
         <span>Click to jump</span>
       </div>

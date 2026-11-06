@@ -220,6 +220,9 @@
     discoverAgents: function () {
       return invoke('cmd_discover_agents');
     },
+    fetchAgentModels: function (agentId) {
+      return invoke('cmd_fetch_agent_models', { agentId: agentId });
+    },
     saveAgentCredential: function (agentId, credential) {
       return invoke('cmd_save_agent_credential', { agentId: agentId, credential: credential });
     },
@@ -325,6 +328,19 @@
         version: version || null,
       });
     },
+    getDiscussionConfig: function (workspacePath, sessionId) {
+      return invoke('cmd_get_discussion_config', {
+        workspacePath: workspacePath,
+        sessionId: sessionId,
+      });
+    },
+    updateDiscussionConfig: function (workspacePath, sessionId, config) {
+      return invoke('cmd_update_discussion_config', {
+        workspacePath: workspacePath,
+        sessionId: sessionId,
+        config: config,
+      });
+    },
     listDiscussions: function (workspacePath) {
       return invoke('cmd_list_discussions', { workspacePath: workspacePath });
     },
@@ -352,6 +368,16 @@
         agentId: agentId,
         actionName: actionName || null,
         actionQuery: actionQuery,
+      });
+    },
+    scanCustomSkillsDir: function (path) {
+      return invoke('cmd_scan_custom_skills_dir', { path: path });
+    },
+    getAvailableSkills: function (workspacePath, customSkillsDir, includeDefaultSkills) {
+      return invoke('cmd_get_available_skills', {
+        workspacePath: workspacePath,
+        customSkillsDir: customSkillsDir || null,
+        includeDefaultSkills: typeof includeDefaultSkills === 'boolean' ? includeDefaultSkills : null,
       });
     },
     getAvailableProviders: function () {

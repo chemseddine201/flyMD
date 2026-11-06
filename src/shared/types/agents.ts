@@ -120,6 +120,8 @@ export interface AgentProfile {
   isCustom?: boolean;
   supportsEffort?: boolean;
   supportsThinking?: boolean;
+  defaultModelId?: string;
+  subscriptionTier?: string;
 }
 
 export interface AgentCredentialConfig {
@@ -140,6 +142,8 @@ export interface AgentCredentialConfig {
   disabled?: boolean;
   defaultEffortLevel?: AgentEffortLevel;
   defaultThinkingEnabled?: boolean;
+  selectedModel?: string;
+  subscriptionTier?: string;
 }
 
 export type AgentCredentialsMap = Record<string, AgentCredentialConfig>;
@@ -185,6 +189,8 @@ export interface AgentTaskRequest {
   previousFailedTaskId?: string;
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
+  modelId?: string;
+  tokenSaver?: 'off' | 'standard' | 'strict';
 }
 
 
@@ -222,6 +228,17 @@ export interface AgentErrorDiagnostic {
   modifiedFiles: string[];
   canResumeFromBreakpoint: boolean;
   timestamp: number;
+}
+
+export interface AgentTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd?: number;
+  basis?: 'reported' | 'estimated';
 }
 
 export interface AgentTaskRecord {
@@ -263,6 +280,8 @@ export interface AgentTaskRecord {
   modifiedFiles?: string[];
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
+  modelId?: string;
+  tokenUsage?: AgentTokenUsage;
 }
 
 export interface AgentCheckpoint {
@@ -299,6 +318,8 @@ export interface AgentPipelineStep {
   completedAt?: number;
   effortLevel?: AgentEffortLevel;
   thinkingEnabled?: boolean;
+  modelId?: string;
+  tokenSaver?: 'off' | 'standard' | 'strict';
 }
 
 export interface AgentPipelinePreset {
@@ -306,4 +327,13 @@ export interface AgentPipelinePreset {
   name: string;
   description: string;
   steps: AgentPipelineStep[];
+}
+
+export interface FetchedAgentModel {
+  id: string;
+  displayName: string;
+  supportsReasoning: boolean;
+  supportedEffortLevels: AgentEffortLevel[];
+  defaultEffortLevel: AgentEffortLevel;
+  description?: string;
 }

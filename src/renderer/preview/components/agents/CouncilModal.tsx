@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   Users,
@@ -8,15 +8,19 @@ import {
   FileText,
   Sparkles,
   Brain,
+  RefreshCw,
 } from 'lucide-react';
 import { usePreviewStore, selectActiveTab } from '../../store';
 import { AGENT_INTENT_PRESETS } from '../../../../shared/constants';
 import { AgentId, AgentTaskIntent, AgentEffortLevel } from '../../../../shared/types';
+import { useSubscriptionAgents } from '../../hooks/useSubscriptionAgents';
+import { UnsavedChangesModal } from '../common/UnsavedChangesModal';
+
+const READY_AUTH_STATES = ['connected', 'api-key-ready', 'web-connected', 'ready'];
 
 export const CouncilModal: React.FC = () => {
   const showCouncilModal = usePreviewStore((s) => s.showCouncilModal);
   const setShowCouncilModal = usePreviewStore((s) => s.setShowCouncilModal);
-  const agentProfiles = usePreviewStore((s) => s.agentProfiles);
   const setAgentTasks = usePreviewStore((s) => s.setAgentTasks);
   const setAgentCheckpoints = usePreviewStore((s) => s.setAgentCheckpoints);
   const setViewMode = usePreviewStore((s) => s.setViewMode);
@@ -24,24 +28,62 @@ export const CouncilModal: React.FC = () => {
   const folderPath = usePreviewStore((s) => s.folderPath);
   const supervisionConfig = usePreviewStore((s) => s.supervisionConfig);
 
-  const [selectedAgents, setSelectedAgents] = useState<AgentId[]>([
-    'antigravity',
-    'claude-code',
-    'opencode',
-  ]);
+  const {
+    enabledAgentProfiles,
+    isRefreshing,
+    refreshSubscriptionAgents,
+    getSubscriptionTierForAgent,
+  } = useSubscriptionAgents(false);
+
+  const [selectedAgents, setSelectedAgents] = useState<AgentId[]>([]);
+  const userTouchedSelection = useRef(false);
   const [intent, setIntent] = useState<AgentTaskIntent>('review');
   const [customPrompt, setCustomPrompt] = useState('');
   const [safeParallelMode, setSafeParallelMode] = useState(true);
   const [effortLevel, setEffortLevel] = useState<AgentEffortLevel>('medium');
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
   const [broadcasting, setBroadcasting] = useState(false);
+  const [showDiscardAlert, setShowDiscardAlert] = useState(false);
+
+  const handleRequestClose = () => {
+    if (customPrompt.trim().length > 0) {
+      setShowDiscardAlert(true);
+    } else {
+      setShowCouncilModal(false);
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardAlert(false);
+    setCustomPrompt('');
+    setShowCouncilModal(false);
+  };
+
+  // Re-scan subscriptions each time the council opens
+  useEffect(() => {
+    if (showCouncilModal) {
+      userTouchedSelection.current = false;
+      refreshSubscriptionAgents();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCouncilModal]);
+
+  // Default the council to every connected subscription agent (until the user edits the selection)
+  useEffect(() => {
+    if (!showCouncilModal || userTouchedSelection.current) return;
+    const connected = enabledAgentProfiles
+      .filter((a) => a.installed && READY_AUTH_STATES.includes(a.authStatus))
+      .map((a) => a.id);
+    const fallback = enabledAgentProfiles.slice(0, 2).map((a) => a.id);
+    setSelectedAgents(connected.length > 0 ? connected : fallback);
+  }, [showCouncilModal, enabledAgentProfiles]);
 
   if (!showCouncilModal) return null;
 
-  const enabledProfiles = agentProfiles.filter((a) => a.enabled);
-  const visibleAgents = enabledProfiles.length > 0 ? enabledProfiles : agentProfiles;
+  const visibleAgents = enabledAgentProfiles;
 
   const toggleAgent = (agentId: AgentId) => {
+    userTouchedSelection.current = true;
     setSelectedAgents((prev) =>
       prev.includes(agentId)
         ? prev.filter((id) => id !== agentId)
@@ -90,59 +132,76 @@ export const CouncilModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
-      <div className="relative w-full max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col rounded-2xl border border-slate-700/80 bg-slate-900 text-slate-100 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-fade-in select-none">
+      <div className="relative w-full max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl overflow-hidden transition-colors duration-150">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/95">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/95">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
               <Users size={20} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 Council of Agents — Multi-Agent Broadcast
-                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                   Parallel Compare
                 </span>
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Send the current Markdown file to multiple agents simultaneously and compare their insights or solutions side-by-side.
               </p>
             </div>
           </div>
 
           <button
-            onClick={() => setShowCouncilModal(false)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            onClick={handleRequestClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5 max-h-[78vh] overflow-y-auto">
+        <div className="p-6 space-y-5 max-h-[78vh] overflow-y-auto bg-white dark:bg-slate-900">
           {/* Active File Banner */}
-          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800">
+          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2 text-xs">
-              <FileText size={14} className="text-sky-400" />
-              <span className="text-slate-400">Broadcasting File:</span>
-              <span className="font-bold text-white">
+              <FileText size={14} className="text-sky-600 dark:text-sky-400" />
+              <span className="text-slate-500 dark:text-slate-400">Broadcasting File:</span>
+              <span className="font-bold text-slate-800 dark:text-white">
                 {activeTab ? activeTab.fileName : 'No active Markdown file open'}
               </span>
             </div>
-            <span className="text-[11px] text-amber-300 font-semibold">
+            <span className="text-[11px] text-amber-700 dark:text-amber-300 font-semibold">
               {selectedAgents.length} Agents Selected
             </span>
           </div>
 
           {/* Select Council Members */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-              1. Select Council Members (2 or more recommended)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                1. Select Council Members (2 or more recommended)
+              </label>
+              <button
+                type="button"
+                onClick={() => refreshSubscriptionAgents()}
+                disabled={isRefreshing}
+                className="text-[11px] text-sky-600 dark:text-sky-400 hover:text-sky-500 flex items-center gap-1 font-semibold"
+              >
+                <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
+                Refresh Subscriptions
+              </button>
+            </div>
+            {visibleAgents.length === 0 && (
+              <div className="text-[11px] text-amber-700 dark:text-amber-300 mb-2">
+                No agents discovered yet. Connect a subscription in Manage Logins, then refresh.
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {visibleAgents.map((agent) => {
                 const isSelected = selectedAgents.includes(agent.id);
+                const tier = getSubscriptionTierForAgent(agent.id);
                 return (
                   <button
                     key={agent.id}
@@ -150,8 +209,8 @@ export const CouncilModal: React.FC = () => {
                     onClick={() => toggleAgent(agent.id)}
                     className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
                       isSelected
-                        ? 'bg-slate-800 border-amber-400/70 ring-1 ring-amber-400/30'
-                        : 'bg-slate-950/60 border-slate-800 opacity-70 hover:opacity-100'
+                        ? 'bg-amber-500/10 dark:bg-slate-800 border-amber-500 dark:border-amber-400/70 ring-1 ring-amber-500/30'
+                        : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 opacity-75 hover:opacity-100 hover:border-slate-300 dark:hover:border-slate-700'
                     }`}
                   >
                     <div className="min-w-0">
@@ -160,21 +219,26 @@ export const CouncilModal: React.FC = () => {
                           className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: agent.accentColor }}
                         />
-                        <span className="text-xs font-bold text-white truncate">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                           {agent.name}
                         </span>
                         {agent.isCustom && (
-                          <span className="text-[9px] font-bold uppercase px-1 rounded bg-violet-500/25 text-violet-300">
+                          <span className="text-[9px] font-bold uppercase px-1 rounded bg-violet-500/20 text-violet-700 dark:text-violet-300">
                             Custom
                           </span>
                         )}
+                        {tier && (
+                          <span className="text-[9px] font-bold uppercase px-1 rounded bg-sky-500/20 text-sky-700 dark:text-sky-300">
+                            {tier}
+                          </span>
+                        )}
                       </div>
-                      <span className="text-[10px] text-slate-400 block truncate mt-0.5">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate mt-0.5">
                         {agent.vendor}
                       </span>
                     </div>
                     {isSelected && (
-                      <CheckCircle2 size={15} className="text-amber-400 shrink-0" />
+                      <CheckCircle2 size={15} className="text-amber-500 dark:text-amber-400 shrink-0" />
                     )}
                   </button>
                 );
@@ -184,7 +248,7 @@ export const CouncilModal: React.FC = () => {
 
           {/* Shared Council Mission */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
               2. Council Mission
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -197,15 +261,15 @@ export const CouncilModal: React.FC = () => {
                     onClick={() => setIntent(preset.id)}
                     className={`p-2.5 rounded-xl border text-left transition-all ${
                       active
-                        ? 'bg-amber-500/15 border-amber-500/50 text-white'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                        ? 'bg-amber-500/15 border-amber-500/50 text-slate-900 dark:text-white'
+                        : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
                     }`}
                   >
                     <div className="text-xs font-bold flex items-center gap-1.5">
-                      <Sparkles size={12} className="text-amber-400" />
+                      <Sparkles size={12} className="text-amber-500 dark:text-amber-400" />
                       {preset.title}
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                       {preset.nonDevLabel}
                     </div>
                   </button>
@@ -217,14 +281,14 @@ export const CouncilModal: React.FC = () => {
               onChange={(e) => setCustomPrompt(e.target.value)}
               rows={2}
               placeholder="Optional instructions for all selected agents..."
-              className="mt-2.5 w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+              className="mt-2.5 w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-amber-500"
             />
           </div>
 
           {/* Effort & Thinking Control */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800">
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
                 Reasoning Effort Level
               </label>
               <select
@@ -232,7 +296,7 @@ export const CouncilModal: React.FC = () => {
                 onChange={(e) =>
                   setEffortLevel(e.target.value as AgentEffortLevel)
                 }
-                className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-500 cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-amber-700 dark:text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-500 cursor-pointer"
                 title="Reasoning effort level applied to all council agents"
               >
                 <option value="low">Low (Fastest • Minimal Tokens)</option>
@@ -244,7 +308,7 @@ export const CouncilModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
                 Thinking Mode (CoT)
               </label>
               <button
@@ -252,14 +316,14 @@ export const CouncilModal: React.FC = () => {
                 onClick={() => setThinkingEnabled((prev) => !prev)}
                 className={`w-full px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
                   thinkingEnabled
-                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 shadow-xs'
-                    : 'bg-slate-900 border-slate-700 text-slate-400 line-through'
+                    ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-700 dark:text-indigo-300 shadow-xs'
+                    : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-400 line-through'
                 }`}
               >
                 <Brain
                   size={14}
                   className={
-                    thinkingEnabled ? 'text-indigo-400' : 'text-slate-500'
+                    thinkingEnabled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
                   }
                 />
                 <span>
@@ -274,12 +338,12 @@ export const CouncilModal: React.FC = () => {
           {/* Safe Parallel Mode Info */}
           <div className="flex items-center justify-between p-3 rounded-xl bg-violet-500/10 border border-violet-500/30">
             <div className="flex items-center gap-2.5">
-              <GitBranch size={16} className="text-violet-400 shrink-0" />
+              <GitBranch size={16} className="text-violet-600 dark:text-violet-400 shrink-0" />
               <div>
-                <div className="text-xs font-bold text-white">
+                <div className="text-xs font-bold text-slate-900 dark:text-white">
                   Isolated Parallel Worktrees Enabled
                 </div>
-                <div className="text-[11px] text-slate-300">
+                <div className="text-[11px] text-slate-600 dark:text-slate-300">
                   Each agent runs in its own isolated sandbox so they never overwrite each other&apos;s files.
                 </div>
               </div>
@@ -288,17 +352,17 @@ export const CouncilModal: React.FC = () => {
               type="checkbox"
               checked={safeParallelMode}
               onChange={(e) => setSafeParallelMode(e.target.checked)}
-              className="rounded border-slate-700 bg-slate-900 text-violet-500"
+              className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-violet-500"
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2.5 px-6 py-3.5 border-t border-slate-800 bg-slate-900/95">
+        <div className="flex items-center justify-end gap-2.5 px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/95">
           <button
             type="button"
-            onClick={() => setShowCouncilModal(false)}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300"
+            onClick={handleRequestClose}
+            className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300"
           >
             Cancel
           </button>
@@ -306,7 +370,7 @@ export const CouncilModal: React.FC = () => {
             type="button"
             disabled={!activeTab || selectedAgents.length === 0 || broadcasting}
             onClick={handleBroadcast}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20 transition-all"
+            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-xs font-bold text-white shadow-lg shadow-amber-600/20 transition-all"
           >
             <Send size={14} />
             {broadcasting
@@ -315,6 +379,16 @@ export const CouncilModal: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showDiscardAlert}
+        title="Discard Council Instructions?"
+        message="You have entered custom instructions for the council that have not been broadcast. Discard instructions?"
+        confirmLabel="Discard Instructions"
+        cancelLabel="Keep Editing"
+        onConfirmDiscard={handleConfirmDiscard}
+        onCancelKeepEditing={() => setShowDiscardAlert(false)}
+      />
     </div>
   );
 };
