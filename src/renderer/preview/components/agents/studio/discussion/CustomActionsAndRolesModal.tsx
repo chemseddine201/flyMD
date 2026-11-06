@@ -79,6 +79,7 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
   const [pendingDeletePresetId, setPendingDeletePresetId] = useState<string | null>(null);
   const [pendingDeleteRoleId, setPendingDeleteRoleId] = useState<string | null>(null);
+  const [showResetDefaultsConfirm, setShowResetDefaultsConfirm] = useState(false);
 
   const hasUnsavedChanges = useMemo(() => {
     if (showNewRoleForm && Boolean(newRoleName.trim() || newRoleKey.trim() || newRoleDesc.trim() || newRoleDirective.trim())) {
@@ -128,20 +129,18 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
     setShowNewRoleForm(false);
   };
 
-  const handleExportJSON = () => {
+  const handleExportJSON = async () => {
     const data = {
       exportVersion: 1,
       exportedAt: new Date().toISOString(),
       presets,
       userRoles: allRoles.filter((r) => !r.isBuiltIn),
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `flymd-deliberation-roles-and-presets-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const jsonStr = JSON.stringify(data, null, 2);
+    const defaultName = `flymd-deliberation-roles-and-presets-${Date.now()}.json`;
+    await window.electronAPI.saveFileDialog(defaultName, jsonStr, [
+      { name: 'JSON', extensions: ['json'] },
+    ]);
   };
 
   return (
@@ -217,7 +216,7 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={onResetPresetsToDefaults}
+                onClick={() => setShowResetDefaultsConfirm(true)}
                 className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1 transition-colors"
                 title="Restore default presets"
               >
@@ -227,10 +226,10 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
               <button
                 type="button"
                 onClick={onStartCreatePreset}
-                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
               >
                 <Plus size={13} />
-                <span>+ New Preset</span>
+                <span>New Preset</span>
               </button>
             </div>
           )}
@@ -239,10 +238,10 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
             <button
               type="button"
               onClick={() => setShowNewRoleForm((prev) => !prev)}
-              className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+              className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
             >
               <Plus size={13} />
-              <span>+ Define New Role</span>
+              <span>Define New Role</span>
             </button>
           )}
         </div>
@@ -271,7 +270,7 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
                     <button
                       type="button"
                       onClick={onSaveEditingPreset}
-                      className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-sm"
+                      className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-sm"
                     >
                       Save Preset
                     </button>
@@ -636,7 +635,7 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
                     <button
                       type="button"
                       onClick={handleSaveNewRole}
-                      className="px-4 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold transition shadow-sm"
+                      className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-sm"
                     >
                       Save Role to Library
                     </button>
@@ -717,6 +716,39 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
         onConfirmDiscard={handleConfirmDiscard}
         onCancelKeepEditing={() => setShowDiscardAlert(false)}
       />
+
+      {showResetDefaultsConfirm && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 rounded-xl shadow-2xl p-5 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400 mb-2">
+              <RotateCcw size={18} />
+              <h4 className="text-sm font-bold">Restore Default Presets & Roles?</h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              This will reset all action presets and the deliberation roles library back to their built-in defaults. Any custom presets or roles will be permanently removed.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowResetDefaultsConfirm(false)}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResetDefaultsConfirm(false);
+                  onResetPresetsToDefaults();
+                }}
+                className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors"
+              >
+                Restore Defaults
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDeletePresetId && (
         <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
