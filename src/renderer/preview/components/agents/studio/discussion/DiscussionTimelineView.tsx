@@ -257,7 +257,7 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
                 <button
                   type="button"
                   onClick={onResume}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 dark:bg-rose-500 dark:hover:bg-rose-400 text-white dark:text-slate-950 text-xs font-bold transition-all shadow-md shrink-0"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md shrink-0"
                   title="Retry failed turn and resume deliberation"
                 >
                   <RotateCcw size={13} />
@@ -305,7 +305,7 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
                 <button
                   type="button"
                   onClick={onResume}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-sm shrink-0"
                 >
                   <FastForward size={13} />
                   <span>Resume Deliberation</span>
@@ -341,7 +341,7 @@ export const DiscussionTimelineView: React.FC<DiscussionTimelineViewProps> =
                 <button
                   type="button"
                   onClick={onGoToReport}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 text-xs font-bold transition-all shadow-md hover:scale-[1.02]"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-700 hover:to-sky-700 text-white text-xs font-bold transition-all shadow-md hover:scale-[1.02]"
                 >
                   <FileText size={14} />
                   <span>Review &amp; Open Synthesis Report &rarr;</span>

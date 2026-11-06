@@ -323,4 +323,46 @@ mod tests {
         assert!(args.contains(&"--effort".to_string()));
         assert!(args.contains(&"low".to_string())); // thinking_on is false -> effort low
     }
+
+    #[test]
+    fn test_dispatched_pipeline_task_with_tokensaver_includes_tools_list() {
+        let cmd = build_agent_cli_command_with_mode(
+            "claude",
+            "claude-code",
+            "C:\\workspace",
+            "Implement fix",
+            None,
+            false,
+            true,
+            "medium",
+            Some("claude-3-7-sonnet"),
+            false,
+            Some("build"),
+            Some("standard"),
+        );
+        let args: Vec<String> = cmd.get_args().map(|s| s.to_string_lossy().into_owned()).collect();
+        assert!(args.contains(&"--tools".to_string()));
+        let tools_idx = args.iter().position(|a| a == "--tools").unwrap();
+        assert_eq!(&args[tools_idx + 1], "Read,Edit,Write,Grep,Glob,Bash,PowerShell");
+    }
+
+    #[test]
+    fn test_dispatched_pipeline_task_tokensaver_off_omits_tools() {
+        let cmd = build_agent_cli_command_with_mode(
+            "claude",
+            "claude-code",
+            "C:\\workspace",
+            "Implement fix",
+            None,
+            false,
+            true,
+            "medium",
+            Some("claude-3-7-sonnet"),
+            false,
+            Some("build"),
+            Some("off"),
+        );
+        let args: Vec<String> = cmd.get_args().map(|s| s.to_string_lossy().into_owned()).collect();
+        assert!(!args.contains(&"--tools".to_string()));
+    }
 }

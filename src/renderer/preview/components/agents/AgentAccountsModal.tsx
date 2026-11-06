@@ -375,7 +375,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
             <button
               type="button"
               onClick={() => setIsCreatingCustom(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-md transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Custom Agent</span>
@@ -415,7 +415,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
               onClick={() => setIsCreatingCustom(true)}
               className={`w-full p-2.5 rounded-xl border text-left font-bold flex items-center justify-center gap-1.5 transition ${
                 isCreatingCustom
-                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg'
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg'
                   : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
               }`}
             >
@@ -657,7 +657,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-lg shadow-emerald-500/20"
+                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-600/20"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Save &amp; Add Custom Agent</span>
@@ -741,7 +741,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleBrowserWebLogin(selectedProfile)}
-                      className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-lg shadow-emerald-500/20 transition flex items-center gap-2 shrink-0"
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-600/20 transition flex items-center gap-2 shrink-0"
                     >
                       <Globe className="w-4 h-4" />
                       <span>Open {selectedProfile.shortName} in Browser</span>
@@ -898,7 +898,7 @@ export const AgentAccountsModal: React.FC<AgentAccountsModalProps> = ({
                   <div className="flex items-center justify-end pt-2">
                     <button
                       type="submit"
-                      className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl shadow-sm transition"
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-sm transition"
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>Save Agent Settings</span>

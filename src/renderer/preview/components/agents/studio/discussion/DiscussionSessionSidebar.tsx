@@ -53,7 +53,7 @@ export const DiscussionSessionSidebar: React.FC<DiscussionSessionSidebarProps> =
           <button
             type="button"
             onClick={onOpenNewModal}
-            className="p-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 transition-all shadow-xs"
+            className="p-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white transition-all shadow-xs"
             title="Configure and launch new deliberation"
           >
             <Plus size={14} />

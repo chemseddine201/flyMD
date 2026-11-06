@@ -986,7 +986,7 @@ export const AgentProgressInspector: React.FC<AgentProgressInspectorProps> = ({
                                     'continue_from_breakpoint'
                                   )
                                 }
-                                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] shadow-sm transition-colors cursor-pointer"
+                                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] shadow-sm transition-colors cursor-pointer"
                                 title="Keep files modified so far and resume execution from the last breakpoint"
                               >
                                 <Play size={10} fill="currentColor" />

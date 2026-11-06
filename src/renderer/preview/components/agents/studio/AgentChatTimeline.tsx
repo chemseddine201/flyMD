@@ -435,7 +435,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                         <button
                           type="button"
                           onClick={() => onRecoverTask(selectedTask, 'ask')}
-                          className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-extrabold shadow-xs transition-colors cursor-pointer"
+                          className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-extrabold shadow-xs transition-colors cursor-pointer"
                           title="Resume task from last breakpoint or revert modified files and retry"
                         >
                           <RotateCcw size={10} />
@@ -518,7 +518,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                               'continue_from_breakpoint'
                             )
                           }
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer"
                         >
                           <Play size={11} fill="currentColor" />
                           <span>
@@ -767,7 +767,7 @@ export const AgentChatTimeline: React.FC<AgentChatTimelineProps> = ({
                           ? 'Branch relay from paused step'
                           : 'Relay deliverable to next agent'
                       }
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <span>Relay</span>
                       <ArrowRight size={11} />

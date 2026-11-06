@@ -478,7 +478,7 @@ export const SupervisionModal: React.FC<SupervisionModalProps> = ({
             </button>
             <button
               onClick={handleStartSupervision}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg shadow-sm shadow-sky-600/30 transition"
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-lg shadow-sm shadow-sky-600/30 transition"
             >
               <Check className="w-3.5 h-3.5" />
               <span>Apply &amp; Open Folder</span>

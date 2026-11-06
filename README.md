@@ -144,7 +144,7 @@ FlyMD v2.0 introduces a 3-tier Rust architecture (`projects/cache.rs`, `discussi
 
 | Tier | Mechanism | Impact |
 | :--- | :--- | :--- |
-| **Tier 1: Debate Board & Prefix-Pinned KV Cache** | Pins immutable protocol + SHA-256 index at Token 0 (`shared_prefix.md`), utilizes frozen Debate Board claim states (`C1`, `C2`, ...) and position cards, isolates system prompts via `--system-prompt-file` in session sandbox, and sets ephemeral caching where supported. | **~52% measured deliberation token reduction**, fixed turn context reduced from **~4,000 to ~1,000 tokens** on Claude, and **71% smaller handoff reports** via canonical `decision-brief.md`. |
+| **Tier 1: Debate Board & Prefix-Pinned KV Cache** | Pins immutable protocol + SHA-256 index at Token 0 (`shared_prefix.md`), utilizes frozen Debate Board claim states (`C1`, `C2`, ...) and position cards, isolates system prompts via `--system-prompt-file` in session sandbox, and sets ephemeral caching where supported. | Substantially lower deliberation token consumption via structured claim state, isolated system prompt files, and compact canonical `decision-brief.md` handoffs. |
 | **Tier 2: Cross-Model Cognitive Handoff Packet** | Persists `.flymd/cache/cognitive_state.json` containing FIPS 180-4 SHA-256 file hashes, line counts, DOM `#id` contracts, exported code symbols, locked architectural invariants, and a Direct `@Role` Peer Messaging Bus (`peer_bus.json`). | Heterogeneous models (`Claude` ↔ `Ollama` ↔ `Codex` ↔ `Gemini`) inherit structured workspace comprehension without redundant repo re-scans. |
 | **Tier 3: Role-Aware Epistemic Router** | Routes `Implementer` / `build` / `explain` via **`DirectInherit` / `DeltaVerify`** (plus consecutive `claude-code -c` warm session reuse with stateless `-p` fallback), while forcing **`BlindIndependentAudit` / `GroundTruthRebuild`** on `Critic` / `Auditor` / `review` / `fix-bugs` or any of 5 drift/dispute triggers. | Reviewers receive raw disk code slices **without** upstream subjective prose self-summaries and must emit `<independent_resume>` before rendering judgment. |
 
@@ -311,7 +311,7 @@ Compiled release artifacts:
 
 ### 3. نقل الذاكرة المعرفية والتوجيه الإبستمولوجي حسب الدور (3-Tier Cache & Epistemic Handoff)
 يقدم الإصدار الثاني بنية ثلاثية الطبقات لتعزيز التواصل بين النماذج وتقليل التكلفة:
-1. **الطبقة الأولى — لوحة المناظرة (Debate Board) وتثبيت بادئة ذاكرة الـ KV Cache**: تثبيت السياق المشترك وبطاقة الموضوع مع فهرس الملفات، وتوليد بطاقات الادعاءات والمواقف المهيكلة (`C1`, `C2`, ...) وعزل موجه النظام في ملف مستقل، مما حقق **وفراً مقاساً بنسبة 52% في توكنز المناظرات**، وخفض السياق الثابت من نحو **4,000 إلى 1,000 توكن** في Claude، واختصار تقارير التسليم بنسبة **71%** عبر وثيقة `decision-brief.md`.
+1. **الطبقة الأولى — لوحة المناظرة (Debate Board) وتثبيت بادئة ذاكرة الـ KV Cache**: تثبيت السياق المشترك وبطاقة الموضوع مع فهرس الملفات، وتوليد بطاقات الادعاءات والمواقف المهيكلة (`C1`, `C2`, ...) وعزل موجه النظام في ملف مستقل، مما يقلل استهلاك التوكنز في المناظرات ويختصر تقارير التسليم عبر وثيقة `decision-brief.md`.
 2. **الطبقة الثانية — حزمة التسليم المعرفي العابرة للنماذج (`CognitiveHandoffPacket`)**: حفظ حالة الفهم الموثقة ببصمات `SHA-256` والرموز البرمجية وعقود واجهة `DOM` وقناة الرسائل المباشرة `@Role` داخل `.flymd/cache/cognitive_state.json` لنقل الفهم فوراً من نموذج لآخر دون إعادة مسح المجلدات.
 3. **الطبقة الثالثة — الموجّه الإبستمولوجي والمراجعة المستقلة العمياء**:
    - أدوار البناء والتنفيذ (`Implementer` / `build`) ترث الفهم الموثق مباشرة مع دعم استمرار جلسة `claude-code -c` لتوفير الوقت والتكلفة.

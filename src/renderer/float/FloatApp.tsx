@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { HistoryItem, ScannedMdFile, AgentTaskRecord } from '../../shared/types';
 import { CircleHub } from './components/CircleHub';
 import { useIpcEvent } from '../shared/hooks/useIpcEvent';
@@ -8,24 +8,41 @@ export const FloatApp: React.FC = () => {
   const [isPinned, setIsPinned] = useState(true);
   const [hasNewFilesDot, setHasNewFilesDot] = useState(false);
   const [runningAgentsCount, setRunningAgentsCount] = useState(0);
+  const tasksMapRef = useRef<Map<string, AgentTaskRecord>>(new Map());
+
+  const recalculateRunningAgents = useCallback(() => {
+    let count = 0;
+    for (const t of tasksMapRef.current.values()) {
+      if (t.status === 'running') {
+        count++;
+      }
+    }
+    setRunningAgentsCount(count);
+  }, []);
 
   useEffect(() => {
     window.electronAPI.getHistory().then(setHistory);
     window.electronAPI.getFloatAlwaysOnTop().then(setIsPinned);
     window.electronAPI.getAgentTasks?.().then((tasks) => {
       if (Array.isArray(tasks)) {
-        setRunningAgentsCount(tasks.filter((t) => t.status === 'running').length);
+        tasks.forEach((t) => tasksMapRef.current.set(t.id, t));
+        recalculateRunningAgents();
       }
     }).catch(() => {});
-  }, []);
+  }, [recalculateRunningAgents]);
 
   useIpcEvent<HistoryItem[]>(window.electronAPI.onHistoryUpdated, (items) => {
     setHistory(items);
   });
 
-  useIpcEvent<AgentTaskRecord[] | AgentTaskRecord>(window.electronAPI.onAgentTasksUpdated, (tasks) => {
-    if (Array.isArray(tasks)) {
-      setRunningAgentsCount(tasks.filter((t) => t.status === 'running').length);
+  useIpcEvent<AgentTaskRecord[] | AgentTaskRecord>(window.electronAPI.onAgentTasksUpdated, (payload) => {
+    if (Array.isArray(payload)) {
+      tasksMapRef.current.clear();
+      payload.forEach((t) => tasksMapRef.current.set(t.id, t));
+      recalculateRunningAgents();
+    } else if (payload && typeof payload === 'object' && 'id' in payload) {
+      tasksMapRef.current.set(payload.id, payload);
+      recalculateRunningAgents();
     }
   });
 

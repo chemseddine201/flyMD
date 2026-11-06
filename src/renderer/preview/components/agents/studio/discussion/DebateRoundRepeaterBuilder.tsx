@@ -6,7 +6,6 @@ import {
   Trash2,
   RefreshCw,
   KeyRound,
-  Sparkles,
   Check,
   Wand2,
   UserPlus,
@@ -510,7 +509,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
               <button
                 type="button"
                 onClick={() => setShowRoleCreator(false)}
-                className="px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200 text-xs font-semibold"
+                className="px-3 py-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold"
               >
                 Cancel
               </button>
@@ -518,7 +517,7 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
                 type="button"
                 disabled={!newRoleName.trim()}
                 onClick={handleSaveNewRole}
-                className="px-3.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 text-xs font-bold"
+                className="px-3.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-bold"
               >
                 Save Role to Library
               </button>
@@ -1004,4 +1003,3 @@ export const DebateRoundRepeaterBuilder: React.FC<DebateRoundRepeaterBuilderProp
     </div>
   );
 };
-

@@ -152,7 +152,7 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
                   <button
                     type="button"
                     onClick={onResume}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold transition-colors shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-colors shadow-sm"
                     title="Execute the next agent's turn"
                   >
                     <FastForward size={13} />
@@ -203,7 +203,7 @@ export const DiscussionTopToolbar: React.FC<DiscussionTopToolbarProps> = React.m
               <button
                 type="button"
                 onClick={onGoToReport}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
                 title="Deliberation settled. Review full synthesis report."
               >
                 <FileText size={13} />

@@ -180,16 +180,16 @@ export const PreviewApp: React.FC = () => {
 
   useIpcEvent<AgentTaskRecord[] | AgentTaskRecord>(window.electronAPI.onAgentTasksUpdated, (payload) => {
     if (Array.isArray(payload)) {
-      store.setAgentTasks(payload);
+      usePreviewStore.getState().setAgentTasks(payload);
     } else if (payload && typeof payload === 'object' && 'id' in payload) {
-      const existing = store.agentTasks || [];
+      const existing = usePreviewStore.getState().agentTasks || [];
       const idx = existing.findIndex((t) => t.id === payload.id);
       if (idx >= 0) {
         const next = [...existing];
         next[idx] = payload;
-        store.setAgentTasks(next);
+        usePreviewStore.getState().setAgentTasks(next);
       } else {
-        store.setAgentTasks([payload, ...existing]);
+        usePreviewStore.getState().setAgentTasks([payload, ...existing]);
       }
     }
   });

@@ -356,7 +356,13 @@ export function setLiveFetchedModelsForAgent(
   return entries;
 }
 
-export async function fetchAndCacheAgentModels(agentOrProviderId: string): Promise<ModelCatalogEntry[]> {
+export interface FetchAgentModelsResult {
+  models: ModelCatalogEntry[];
+  source: 'live' | 'builtin';
+  error: string | null;
+}
+
+export async function fetchAndCacheAgentModels(agentOrProviderId: string): Promise<FetchAgentModelsResult> {
   const norm = normalizeAgentKey(agentOrProviderId);
   try {
     if (norm.includes('ollama') && typeof window !== 'undefined' && (window as any).electronAPI?.getOllamaModels) {
@@ -370,19 +376,40 @@ export async function fetchAndCacheAgentModels(agentOrProviderId: string): Promi
           defaultEffortLevel: 'medium',
           description: `Local Ollama model (${m})`,
         }));
-        return setLiveFetchedModelsForAgent(agentOrProviderId, mapped);
+        const entries = setLiveFetchedModelsForAgent(agentOrProviderId, mapped);
+        return { models: entries, source: 'live', error: null };
       }
     }
     if (typeof window !== 'undefined' && (window as any).electronAPI?.fetchAgentModels) {
-      const live: FetchedAgentModel[] = await (window as any).electronAPI.fetchAgentModels(agentOrProviderId);
-      if (Array.isArray(live) && live.length > 0) {
-        return setLiveFetchedModelsForAgent(agentOrProviderId, live);
+      const res: any = await (window as any).electronAPI.fetchAgentModels(agentOrProviderId);
+      if (res && typeof res === 'object' && !Array.isArray(res)) {
+        const rawModels: FetchedAgentModel[] = Array.isArray(res.models) ? res.models : [];
+        const source: 'live' | 'builtin' = res.source === 'live' ? 'live' : 'builtin';
+        const error: string | null = res.error || null;
+        if (source === 'live' && rawModels.length > 0) {
+          const entries = setLiveFetchedModelsForAgent(agentOrProviderId, rawModels);
+          return { models: entries, source: 'live', error: null };
+        }
+        const currentOrBuiltin = getAvailableModelsForAgent(agentOrProviderId);
+        return { models: currentOrBuiltin, source: 'builtin', error };
+      } else if (Array.isArray(res) && res.length > 0) {
+        const entries = setLiveFetchedModelsForAgent(agentOrProviderId, res);
+        return { models: entries, source: 'live', error: null };
       }
     }
-  } catch (err) {
-    console.warn('[models] Failed to fetch live models for', agentOrProviderId, err);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    return {
+      models: getAvailableModelsForAgent(agentOrProviderId),
+      source: 'builtin',
+      error: `Could not load models: ${errMsg}`,
+    };
   }
-  return getAvailableModelsForAgent(agentOrProviderId);
+  return {
+    models: getAvailableModelsForAgent(agentOrProviderId),
+    source: 'builtin',
+    error: null,
+  };
 }
 
 export const EFFORT_DESCRIPTIONS: Record<

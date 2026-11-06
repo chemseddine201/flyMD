@@ -66,7 +66,7 @@ export const DiscussionReportView: React.FC<DiscussionReportViewProps> = React.m
             <button
               type="button"
               onClick={onOpenReportInTab}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
               title="Open report in preview tab and focus preview"
             >
               <ExternalLink size={13} />

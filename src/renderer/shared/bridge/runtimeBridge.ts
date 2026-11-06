@@ -658,6 +658,20 @@ export function ensureRuntimeBridge(): void {
       const current = localStorage.getItem(masterKey) || '';
       localStorage.setItem(masterKey, `${current}\n\n### Rollup ${projectId}\n${summary}\n`);
     },
+    fetchAgentModels: async (agentId: string): Promise<any> => {
+      if ((window as any).__mockFetchModelsResult) {
+        return (window as any).__mockFetchModelsResult;
+      }
+      return {
+        models: [
+          { id: 'gemini-4-argon', displayName: 'Gemini 4 Argon', supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high', supportsReasoning: true },
+          { id: 'gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high', supportsReasoning: true },
+          { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high', supportsReasoning: true },
+        ],
+        source: 'live',
+        error: null,
+      };
+    },
   };
 
   (window as any).electronAPI = bridge;

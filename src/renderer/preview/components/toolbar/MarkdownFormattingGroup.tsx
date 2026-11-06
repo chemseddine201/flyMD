@@ -38,13 +38,13 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
   };
 
   return (
-    <div className="relative flex items-center gap-0.5 pl-2 border-l border-slate-800">
+    <div className="relative flex items-center gap-0.5 pl-2 border-l border-slate-200 dark:border-slate-800">
       {/* Undo / Redo */}
       {onUndo && (
         <button
           onClick={onUndo}
           title="Undo (Ctrl+Z)"
-          className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
         >
           <Undo2 className="w-3.5 h-3.5" />
         </button>
@@ -53,19 +53,19 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
         <button
           onClick={onRedo}
           title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
-          className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
         >
           <Redo2 className="w-3.5 h-3.5" />
         </button>
       )}
 
-      {(onUndo || onRedo) && <div className="h-3.5 w-px bg-slate-800 mx-1" />}
+      {(onUndo || onRedo) && <div className="h-3.5 w-px bg-slate-200 dark:bg-slate-800 mx-1" />}
 
       {/* Primary formatting buttons (Always visible) */}
       <button
         onClick={() => onFormat('**', '**', 'bold text')}
         title="Bold (**text**)"
-        className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Bold className="w-3.5 h-3.5" />
       </button>
@@ -73,7 +73,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
       <button
         onClick={() => onFormat('*', '*', 'italic text')}
         title="Italic (*text*)"
-        className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Italic className="w-3.5 h-3.5" />
       </button>
@@ -81,7 +81,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
       <button
         onClick={() => onFormat('`', '`', 'code')}
         title="Inline Code (`code`)"
-        className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Code className="w-3.5 h-3.5" />
       </button>
@@ -89,7 +89,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
       <button
         onClick={() => onFormat('# ', '', 'Heading 1')}
         title="Heading 1 (# Heading)"
-        className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Heading1 className="w-3.5 h-3.5" />
       </button>
@@ -98,7 +98,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
       <button
         onClick={() => onFormat('## ', '', 'Heading 2')}
         title="Heading 2 (## Heading)"
-        className="hidden xl:inline-flex p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="hidden xl:inline-flex p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Heading2 className="w-3.5 h-3.5" />
       </button>
@@ -106,7 +106,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
       <button
         onClick={() => onFormat('~~', '~~', 'strikethrough')}
         title="Strikethrough (~~text~~)"
-        className="hidden xl:inline-flex p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="hidden xl:inline-flex p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Strikethrough className="w-3.5 h-3.5" />
       </button>
@@ -114,7 +114,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
       <button
         onClick={() => onFormat('> ', '', 'Quote')}
         title="Blockquote (> quote)"
-        className="hidden xl:inline-flex p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="hidden xl:inline-flex p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Quote className="w-3.5 h-3.5" />
       </button>
@@ -122,7 +122,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
       <button
         onClick={() => onFormat('- [ ] ', '', 'Task item')}
         title="Task Checklist (- [ ] item)"
-        className="hidden xl:inline-flex p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="hidden xl:inline-flex p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <CheckSquare className="w-3.5 h-3.5" />
       </button>
@@ -130,7 +130,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
       <button
         onClick={() => onFormat('$$\n', '\n$$', 'E = mc^2')}
         title="KaTeX Math Block ($$ math $$)"
-        className="hidden xl:inline-flex p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="hidden xl:inline-flex p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Sigma className="w-3.5 h-3.5" />
       </button>
@@ -144,7 +144,7 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
           )
         }
         title="Insert Markdown Table"
-        className="hidden xl:inline-flex p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded transition"
+        className="hidden xl:inline-flex p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
       >
         <Table className="w-3.5 h-3.5" />
       </button>
@@ -156,8 +156,8 @@ export const MarkdownFormattingGroup: React.FC<MarkdownFormattingGroupProps> = (
           title="More Markdown formatting tools"
           className={`p-1.5 rounded transition flex items-center justify-center ${
             showMoreMenu
-              ? 'text-sky-400 bg-slate-800'
-              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+              ? 'text-sky-600 dark:text-sky-400 bg-slate-200 dark:bg-slate-800'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
           }`}
         >
           <MoreHorizontal className="w-3.5 h-3.5" />

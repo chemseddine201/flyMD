@@ -218,7 +218,7 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
             <button
               type="button"
               onClick={() => draft.setShowNewModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-all shadow-sm"
             >
               <Plus size={14} />
               <span>Launch New Deliberation</span>
@@ -254,6 +254,8 @@ export const DiscussionStudio: React.FC<DiscussionStudioProps> = ({
         setNewDebateMode={draft.setNewDebateMode}
         enableStepModeInNew={draft.enableStepModeInNew}
         setEnableStepModeInNew={draft.setEnableStepModeInNew}
+        contextMode={draft.contextMode}
+        setContextMode={draft.setContextMode}
         presets={draft.presets}
         selectedPreset={draft.selectedPreset}
         onSelectPreset={draft.handleSelectPreset}

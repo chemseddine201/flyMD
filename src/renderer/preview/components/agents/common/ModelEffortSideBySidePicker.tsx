@@ -86,28 +86,38 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
     }
   }, [supportedEfforts, effortLevel, activeModelEntry]);
 
-  const handleFetchModels = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const handleFetchModels = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (isFetchingModels) return;
     setIsFetchingModels(true);
     try {
-      const liveList = await fetchAndCacheAgentModels(agentId);
+      const res = await fetchAndCacheAgentModels(agentId);
       setFetchRevision((r) => r + 1);
-      if (liveList.length > 0) {
-        const currentMatch = liveList.find(
-          (m) => m.id.toLowerCase() === (selectedModel || '').trim().toLowerCase()
-        );
-        const chosen = currentMatch || liveList[0];
-        if (!currentMatch && chosen) {
-          onChangeModel(chosen.id);
-        }
-        if (
-          chosen?.supportedEffortLevels &&
-          chosen.supportedEffortLevels.length > 0 &&
-          !chosen.supportedEffortLevels.includes(effortLevel)
-        ) {
-          onChangeEffortLevel(chosen.defaultEffortLevel || chosen.supportedEffortLevels[0]);
+      if (res.error) {
+        setFetchError(res.error);
+      } else {
+        setFetchError(null);
+        const liveList = res.models;
+        if (liveList.length > 0) {
+          const currentMatch = liveList.find(
+            (m) => m.id.toLowerCase() === (selectedModel || '').trim().toLowerCase()
+          );
+          const chosen = currentMatch || liveList[0];
+          if (!currentMatch && chosen) {
+            onChangeModel(chosen.id);
+          }
+          if (
+            chosen?.supportedEffortLevels &&
+            chosen.supportedEffortLevels.length > 0 &&
+            !chosen.supportedEffortLevels.includes(effortLevel)
+          ) {
+            onChangeEffortLevel(chosen.defaultEffortLevel || chosen.supportedEffortLevels[0]);
+          }
         }
       }
     } finally {
@@ -152,11 +162,12 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
 
   if (compact) {
     return (
-      <div
-        className={`flex items-center gap-2 text-xs bg-slate-100/90 dark:bg-neutral-900/80 border border-slate-300 dark:border-neutral-700/60 rounded-lg p-1.5 ${
-          disabled ? 'opacity-50 pointer-events-none' : ''
-        } ${className}`}
-      >
+      <div className="flex flex-col">
+        <div
+          className={`flex items-center gap-2 text-xs bg-slate-100/90 dark:bg-neutral-900/80 border border-slate-300 dark:border-neutral-700/60 rounded-lg p-1.5 ${
+            disabled ? 'opacity-50 pointer-events-none' : ''
+          } ${className}`}
+        >
         {/* Model Dropdown + Small Fetch Button */}
         <div className="flex items-center gap-1 min-w-[140px]">
           <Cpu className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
@@ -259,7 +270,20 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
           </div>
         )}
       </div>
-    );
+      {fetchError && (
+        <div className="text-[10px] text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mt-1 px-1">
+          <span>{fetchError}. Showing the built-in list.</span>
+          <button
+            type="button"
+            onClick={() => handleFetchModels()}
+            className="underline font-bold hover:text-rose-700 dark:hover:text-rose-300 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+    </div>
+  );
   }
 
   // Expanded / Standard View (Used in Step Editors, Modals, Dispatcher)
@@ -331,6 +355,19 @@ export const ModelEffortSideBySidePicker: React.FC<ModelEffortSideBySidePickerPr
               </option>
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-slate-500 dark:text-neutral-400 absolute right-2.5 top-2.5 pointer-events-none" />
+          </div>
+        )}
+
+        {fetchError && (
+          <div className="text-[10px] text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mt-1">
+            <span>{fetchError}. Showing the built-in list.</span>
+            <button
+              type="button"
+              onClick={() => handleFetchModels()}
+              className="underline font-bold hover:text-rose-700 dark:hover:text-rose-300 cursor-pointer"
+            >
+              Retry
+            </button>
           </div>
         )}
 

@@ -455,7 +455,7 @@ export const AgentChatComposer = React.memo(
                 ? 'Workflow running — manual dispatch locked'
                 : `Send to @${activeAgent?.shortName || 'Agent'}`
             }
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-slate-950 font-bold text-xs shadow-lg shadow-sky-500/20 transition-all shrink-0 cursor-pointer disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-40 text-white font-bold text-xs shadow-lg shadow-sky-600/20 transition-all shrink-0 cursor-pointer disabled:cursor-not-allowed"
           >
             {submitting ? (
               <Loader2 size={14} className="animate-spin" />

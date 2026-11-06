@@ -148,6 +148,7 @@ export function useNewDeliberationDraft({
   const [presetThinkingEnabled, setPresetThinkingEnabled] =
     useState<boolean>(true);
   const [enableStepModeInNew, setEnableStepModeInNew] = useState(false);
+  const [contextMode, setContextMode] = useState<'classic' | 'board'>('classic');
   const [customSkillsDir, setCustomSkillsDir] = useState<string>('');
   const [includeDefaultSkills, setIncludeDefaultSkills] =
     useState<boolean>(true);
@@ -845,8 +846,8 @@ export function useNewDeliberationDraft({
       repeaterMode: effectiveRepeaterMode,
       roundSchedule: finalRoundSchedule,
       attachedFiles: attachedFiles.length > 0 ? attachedFiles : undefined,
-      tokenSaver: 'standard',
-      contextMode: 'board',
+      tokenSaver: usePreviewStore.getState().settings?.tokenSaver || 'standard',
+      contextMode: contextMode, // Defaults to 'classic', experimental 'board' opt-in
     };
 
     setShowNewModal(false);
@@ -937,6 +938,8 @@ export function useNewDeliberationDraft({
     setPresetThinkingEnabled,
     enableStepModeInNew,
     setEnableStepModeInNew,
+    contextMode,
+    setContextMode,
     customSkillsDir,
     setCustomSkillsDir,
     includeDefaultSkills,

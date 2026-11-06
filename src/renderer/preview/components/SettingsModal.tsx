@@ -267,6 +267,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               AI & Translation
             </h3>
+
+            {/* Token Saver Global Policy */}
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-700 dark:text-slate-300">Global Token Saver Policy</label>
+              <select
+                value={formData.tokenSaver || 'standard'}
+                onChange={(e) => {
+                  setFormData({
+                    ...formData,
+                    tokenSaver: e.target.value as 'off' | 'standard' | 'strict',
+                  });
+                }}
+                className="w-full px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-200 focus:outline-none focus:border-sky-500"
+              >
+                <option value="standard">Standard (Default) — intent-specific tools & prompt caching</option>
+                <option value="strict">Strict — strict MCP, disabled slash commands & tight layouts</option>
+                <option value="off">Off — unoptimized baseline (all tools and full frames)</option>
+              </select>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                Sets default tokenSaver for new deliberations and pipeline steps. Can be overridden per task.
+              </span>
+            </div>
+
             <div className="space-y-1">
               <label className="font-semibold text-slate-700 dark:text-slate-300">LLM Provider</label>
               <select
@@ -577,7 +600,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-lg shadow-sm transition"
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-lg shadow-sm transition"
             >
               <Save className="w-3.5 h-3.5" />
               <span>Save Settings</span>

@@ -741,7 +741,7 @@ export const CustomActionsAndRolesModal: React.FC<CustomActionsAndRolesModalProp
                   setShowResetDefaultsConfirm(false);
                   onResetPresetsToDefaults();
                 }}
-                className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors"
+                className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-colors"
               >
                 Restore Defaults
               </button>

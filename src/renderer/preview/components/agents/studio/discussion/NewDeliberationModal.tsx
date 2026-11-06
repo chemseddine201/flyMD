@@ -96,6 +96,8 @@ export interface NewDeliberationModalProps {
   setNewDebateMode: (v: NewDebateModeTab) => void;
   enableStepModeInNew: boolean;
   setEnableStepModeInNew: (v: boolean) => void;
+  contextMode?: 'classic' | 'board';
+  setContextMode?: (v: 'classic' | 'board') => void;
 
   presets: DeliberationPreset[];
   selectedPreset: string;
@@ -173,6 +175,8 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
   setNewDebateMode,
   enableStepModeInNew,
   setEnableStepModeInNew,
+  contextMode = 'classic',
+  setContextMode,
   presets,
   selectedPreset,
   onSelectPreset,
@@ -851,8 +855,8 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
               )}
             </div>
 
-            {/* Section 4: Execution Parameters (AUTO-DERIVED ROUNDS, TIMEOUT, TOKEN BUDGET, STEP MODE) */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+            {/* Section 4: Execution Parameters (AUTO-DERIVED ROUNDS, TIMEOUT, TOKEN BUDGET, STEP MODE, BOARD MODE) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
               {/* Auto-derived Structured Rounds (Replaces manual rounds counter) */}
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -976,6 +980,29 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                   </span>
                 </button>
               </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center gap-1">
+                    <Sparkles size={12} className="text-indigo-500" />
+                    Debate Board (experimental)
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setContextMode && setContextMode(contextMode === 'board' ? 'classic' : 'board')}
+                  className={`w-full p-2.5 rounded-lg border text-xs font-semibold flex items-center justify-between transition-colors ${
+                    contextMode === 'board'
+                      ? 'bg-indigo-500/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300'
+                      : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <span>{contextMode === 'board' ? 'Debate Board' : 'Classic Ledger'}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800">
+                    {contextMode === 'board' ? 'BOARD' : 'CLASSIC'}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -998,7 +1025,7 @@ export const NewDeliberationModal: React.FC<NewDeliberationModalProps> = ({
                 onClick={onLaunch}
                 className={`px-5 py-2 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5 ${
                   effectiveFormValid
-                    ? 'bg-sky-500 hover:bg-sky-400 text-slate-950 cursor-pointer'
+                    ? 'bg-sky-600 hover:bg-sky-700 text-white cursor-pointer'
                     : 'bg-slate-300 dark:bg-slate-800 text-slate-400 dark:text-slate-500 opacity-60 cursor-not-allowed border border-slate-300 dark:border-slate-700'
                 }`}
                 title={

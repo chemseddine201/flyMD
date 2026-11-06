@@ -219,7 +219,7 @@ export const LlmConfigPanel: React.FC<LlmConfigPanelProps> = ({
           <button
             type="button"
             onClick={onSaveAsDefault}
-            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition shadow-sm"
+            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition shadow-sm"
           >
             <Save className="w-3.5 h-3.5" />
             <span>{isSavingDefault ? 'Saved!' : 'Save as Default'}</span>

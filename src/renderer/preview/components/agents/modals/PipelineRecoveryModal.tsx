@@ -121,27 +121,35 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
     }
   }, [supportedEfforts, recoveryEffortLevel, activeModelEntry]);
 
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   const handleFetchSubscriptionModels = async () => {
     if (isFetchingModels) return;
     setIsFetchingModels(true);
     try {
-      const list = await fetchAndCacheAgentModels(activeAgentId);
+      const res = await fetchAndCacheAgentModels(activeAgentId);
       setFetchRev((r) => r + 1);
-      if (list.length > 0 && setRecoveryModelId) {
-        const currentMatch = list.find(
-          (m) => m.id.toLowerCase() === effectiveModelId.toLowerCase()
-        );
-        const chosen = currentMatch || list[0];
-        if (chosen) {
-          setRecoveryModelId(chosen.id);
-          if (
-            chosen.supportedEffortLevels &&
-            chosen.supportedEffortLevels.length > 0 &&
-            !chosen.supportedEffortLevels.includes(recoveryEffortLevel)
-          ) {
-            setRecoveryEffortLevel(
-              chosen.defaultEffortLevel || chosen.supportedEffortLevels[0]
-            );
+      if (res.error) {
+        setFetchError(res.error);
+      } else {
+        setFetchError(null);
+        const list = res.models;
+        if (list.length > 0 && setRecoveryModelId) {
+          const currentMatch = list.find(
+            (m) => m.id.toLowerCase() === effectiveModelId.toLowerCase()
+          );
+          const chosen = currentMatch || list[0];
+          if (chosen) {
+            setRecoveryModelId(chosen.id);
+            if (
+              chosen.supportedEffortLevels &&
+              chosen.supportedEffortLevels.length > 0 &&
+              !chosen.supportedEffortLevels.includes(recoveryEffortLevel)
+            ) {
+              setRecoveryEffortLevel(
+                chosen.defaultEffortLevel || chosen.supportedEffortLevels[0]
+              );
+            }
           }
         }
       }
@@ -498,6 +506,18 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
                   </option>
                 ))}
               </select>
+              {fetchError && (
+                <div className="text-[10px] text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mt-1">
+                  <span>{fetchError}. Showing the built-in list.</span>
+                  <button
+                    type="button"
+                    onClick={handleFetchSubscriptionModels}
+                    className="underline font-bold hover:text-rose-700 dark:hover:text-rose-300 cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -601,7 +621,7 @@ export const PipelineRecoveryModal: React.FC<PipelineRecoveryModalProps> = ({
             <button
               type="button"
               onClick={() => onExecuteDecision('continue_from_breakpoint')}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
               title="Keep modified files on disk and resume execution from the last breakpoint"
             >
               <Play size={13} fill="currentColor" />

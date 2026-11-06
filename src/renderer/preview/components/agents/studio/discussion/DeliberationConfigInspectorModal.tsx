@@ -12,14 +12,11 @@ import {
   Layers,
   Pause,
   Bot,
-  Sparkles,
-  Zap,
   RefreshCw,
 } from 'lucide-react';
 import {
   DiscussionConfig,
   DiscussionMetadata,
-  DiscussionRoundPlan,
   DiscussionRoundSlot,
   DiscussionParticipant,
   AgentEffortLevel,
@@ -64,6 +61,7 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
   const [fetchingAgentKey, setFetchingAgentKey] = useState<string | null>(null);
+  const [fetchErrors, setFetchErrors] = useState<Record<string, string | null>>({});
   const [fetchRev, setFetchRev] = useState(0);
   const [perAgentEditNote, setPerAgentEditNote] = useState<string | null>(null);
 
@@ -71,8 +69,13 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
     if (fetchingAgentKey) return;
     setFetchingAgentKey(providerOrAgentId);
     try {
-      await fetchAndCacheAgentModels(providerOrAgentId);
+      const res = await fetchAndCacheAgentModels(providerOrAgentId);
       setFetchRev((r) => r + 1);
+      if (res.error) {
+        setFetchErrors((prev) => ({ ...prev, [providerOrAgentId]: res.error }));
+      } else {
+        setFetchErrors((prev) => ({ ...prev, [providerOrAgentId]: null }));
+      }
     } finally {
       setFetchingAgentKey(null);
     }
@@ -482,7 +485,7 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                 onClick={handleTogglePauseAtBoundary}
                 className={`mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
                   localConfig.pauseAtRoundBoundary
-                    ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+                    ? 'bg-amber-600 text-white hover:bg-amber-700'
                     : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700'
                 } ${!isEditable ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
@@ -724,6 +727,18 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                                   />
                                 </button>
                               </div>
+                              {fetchErrors[providerKey] && (
+                                <div className="text-[10px] text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mt-1">
+                                  <span>{fetchErrors[providerKey]}. Showing the built-in list.</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleFetchModelsForProvider(providerKey)}
+                                    className="underline font-bold hover:text-rose-700 dark:hover:text-rose-300 cursor-pointer"
+                                  >
+                                    Retry
+                                  </button>
+                                </div>
+                              )}
 
                               {/* Effort level */}
                               <div className="flex items-center rounded bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-300 dark:border-slate-700">
@@ -736,7 +751,7 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                                     }
                                     className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
                                       (p.effortLevel || 'medium') === eff
-                                        ? 'bg-sky-500 text-slate-950'
+                                        ? 'bg-sky-600 text-white'
                                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                                     }`}
                                   >
@@ -823,11 +838,11 @@ export const DeliberationConfigInspectorModal: React.FC<DeliberationConfigInspec
                 type="button"
                 disabled={!isDirty || isSaving}
                 onClick={handleSave}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-400 text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed shadow-md transition-all flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-md transition-all flex items-center gap-1.5"
               >
                 {isSaving ? (
                   <>
-                    <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     <span>Saving...</span>
                   </>
                 ) : (

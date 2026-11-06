@@ -89,7 +89,7 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center ${
                     config.highContrast
-                      ? 'bg-amber-500 border-amber-400 text-slate-950'
+                      ? 'bg-amber-600 border-amber-500 text-white'
                       : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                   }`}
                 >
@@ -122,7 +122,7 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center ${
                     config.dyslexicFont
-                      ? 'bg-sky-500 border-sky-400 text-slate-950'
+                      ? 'bg-sky-600 border-sky-500 text-white'
                       : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                   }`}
                 >
@@ -155,7 +155,7 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center ${
                     config.largePrint
-                      ? 'bg-emerald-500 border-emerald-400 text-slate-950'
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
                       : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                   }`}
                 >
@@ -188,7 +188,7 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center ${
                     config.reducedMotion
-                      ? 'bg-purple-500 border-purple-400 text-slate-950'
+                      ? 'bg-purple-600 border-purple-500 text-white'
                       : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                   }`}
                 >
@@ -221,7 +221,7 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center ${
                     config.colorBlindSafe
-                      ? 'bg-indigo-500 border-indigo-400 text-slate-950'
+                      ? 'bg-indigo-600 border-indigo-500 text-white'
                       : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                   }`}
                 >
@@ -249,7 +249,7 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs shadow-sm shadow-sky-600/30 transition cursor-pointer"
+            className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs shadow-sm shadow-sky-600/30 transition cursor-pointer"
           >
             Done
           </button>

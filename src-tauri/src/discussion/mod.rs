@@ -16,6 +16,8 @@ pub mod skills;
 pub mod storage;
 pub mod types;
 
+pub mod ab_harness;
+
 #[cfg(test)]
 pub mod golden_tests;
 

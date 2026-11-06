@@ -79,12 +79,12 @@ export const ExportMenuButton: React.FC<ExportMenuButtonProps> = ({
         title="Export document (HTML, PDF, Textify, LaTeX)"
         className={`p-1.5 rounded transition flex items-center gap-1 ${
           isOpen
-            ? 'text-sky-300 bg-slate-800 border border-sky-500/40 shadow-sm'
-            : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+            ? 'text-sky-600 dark:text-sky-300 bg-slate-200 dark:bg-slate-800 border border-sky-500/40 shadow-sm'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
         }`}
       >
         <Download className="w-4 h-4" />
-        <ChevronDown className="w-2.5 h-2.5 text-slate-500" />
+        <ChevronDown className="w-2.5 h-2.5 text-slate-500 dark:text-slate-400" />
       </button>
 
       {isOpen &&

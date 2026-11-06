@@ -1021,6 +1021,7 @@ impl DiscussionProvider for HttpProvider {
         let mut reported_prompt: Option<u32> = None;
         let mut reported_completion: Option<u32> = None;
         let mut reported_cache_read: Option<u64> = None;
+        let mut reported_cache_write: Option<u64> = None;
 
         let stream_fut = async {
             let mut stream = response.bytes_stream();
@@ -1055,6 +1056,9 @@ impl DiscussionProvider for HttpProvider {
                     }
                     if let Some(cr) = delta.cache_read_tokens {
                         reported_cache_read = Some(cr);
+                    }
+                    if let Some(cw) = delta.cache_write_tokens {
+                        reported_cache_write = Some(cw);
                     }
                     if let Some(r) = delta.reasoning.filter(|r| !r.is_empty()) {
                         native_thinking.push_str(&r);
@@ -1105,10 +1109,12 @@ impl DiscussionProvider for HttpProvider {
         } else {
             request.messages.iter().map(|m| estimate_tokens(&m.content)).sum()
         };
-        let prompt_tokens = reported_prompt.unwrap_or(prompt_est_total);
+        let cache_write_u32 = reported_cache_write.unwrap_or(0) as u32;
+        let prompt_tokens = reported_prompt.unwrap_or(prompt_est_total) + cache_write_u32;
         let reasoning_tokens = estimate_tokens(&thinking);
         let completion_tokens = reported_completion
             .unwrap_or_else(|| estimate_tokens(&answer));
+        let total_tokens = prompt_tokens + completion_tokens + reasoning_tokens;
 
         let basis = match request.token_saver.as_deref() {
             Some("standard") | Some("strict") => {
@@ -1135,9 +1141,9 @@ impl DiscussionProvider for HttpProvider {
                 prompt_tokens,
                 completion_tokens,
                 reasoning_tokens,
-                total_tokens: prompt_tokens + completion_tokens + reasoning_tokens,
+                total_tokens,
                 cache_read_tokens: reported_cache_read,
-                cache_write_tokens: None,
+                cache_write_tokens: reported_cache_write,
                 cost_usd: None,
                 basis,
             },

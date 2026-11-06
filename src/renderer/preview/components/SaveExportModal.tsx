@@ -287,8 +287,8 @@ export const SaveExportModal: React.FC<SaveExportModalProps> = ({
               type="submit"
               className={`px-5 py-2 rounded-xl font-semibold text-white shadow-lg flex items-center gap-1.5 transition ${
                 mode === 'save-as'
-                  ? 'bg-sky-600 hover:bg-sky-500 shadow-sky-600/30'
-                  : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
+                  ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-600/30'
+                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30'
               }`}
             >
               {mode === 'save-as' ? (

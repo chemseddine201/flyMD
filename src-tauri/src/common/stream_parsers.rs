@@ -8,6 +8,7 @@ pub struct StreamDelta {
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
     pub cache_read_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
 }
 
 /// Parses an OpenAI-compatible SSE line. Supports `reasoning_content` (DeepSeek)
@@ -36,6 +37,13 @@ pub fn parse_openai_sse_line(line: &str) -> Option<StreamDelta> {
         .and_then(|u| {
             u.pointer("/prompt_tokens_details/cached_tokens")
                 .or_else(|| u.get("cached_tokens"))
+                .or_else(|| u.get("cache_read_input_tokens"))
+        })
+        .and_then(|x| x.as_u64());
+    let cache_write = usage
+        .and_then(|u| {
+            u.pointer("/prompt_tokens_details/cache_creation_tokens")
+                .or_else(|| u.get("cache_creation_input_tokens"))
         })
         .and_then(|x| x.as_u64());
 
@@ -45,6 +53,7 @@ pub fn parse_openai_sse_line(line: &str) -> Option<StreamDelta> {
         prompt_tokens: get_u32("prompt_tokens"),
         completion_tokens: get_u32("completion_tokens"),
         cache_read_tokens: cache_read,
+        cache_write_tokens: cache_write,
     })
 }
 
@@ -73,6 +82,7 @@ pub fn parse_ollama_line(line: &str) -> Option<StreamDelta> {
         prompt_tokens: get_u32("prompt_eval_count"),
         completion_tokens: get_u32("eval_count"),
         cache_read_tokens: None,
+        cache_write_tokens: None,
     })
 }
 

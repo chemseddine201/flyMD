@@ -499,6 +499,7 @@ ${projDesc}
         effortLevel?: AgentEffortLevel;
         thinkingEnabled?: boolean;
         modelId?: string;
+        tokenSaver?: 'off' | 'standard' | 'strict';
       }
     ): Promise<AgentTaskRecord | null> => {
       setSubmitting(true);
@@ -530,6 +531,9 @@ ${projDesc}
           effortLevel: overrides?.effortLevel ?? 'medium',
           thinkingEnabled: overrides?.thinkingEnabled ?? true,
           modelId: overrides?.modelId,
+          tokenSaver:
+            overrides?.tokenSaver ??
+            (usePreviewStore.getState().settings?.tokenSaver || 'standard'),
         });
 
         const [tasks, checkpoints] = await Promise.all([

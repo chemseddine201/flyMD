@@ -38,6 +38,7 @@ export interface AppSettings {
   previewWidthMode?: PreviewWidthMode;
   a11yConfig?: AccessibilityConfig;
   defaultAllowedExtensions?: string[];
+  tokenSaver?: 'off' | 'standard' | 'strict';
 }
 
 export interface WindowState {

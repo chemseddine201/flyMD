@@ -65,6 +65,7 @@ export const AgentDispatchModal: React.FC = () => {
   const [effortLevel, setEffortLevel] = useState<AgentEffortLevel>('medium');
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean>(true);
   const [selectedModel, setSelectedModel] = useState<string>('');
+  const [tokenSaverOverride, setTokenSaverOverride] = useState<'default' | 'off' | 'standard' | 'strict'>('default');
   const [submitting, setSubmitting] = useState(false);
   const [showDiscardAlert, setShowDiscardAlert] = useState(false);
 
@@ -228,6 +229,10 @@ export const AgentDispatchModal: React.FC = () => {
         effortLevel,
         thinkingEnabled,
         modelId: selectedModel || undefined,
+        tokenSaver:
+          tokenSaverOverride === 'default'
+            ? usePreviewStore.getState().settings?.tokenSaver || 'standard'
+            : tokenSaverOverride,
       });
 
       const [updatedTasks, updatedCheckpoints] = await Promise.all([
@@ -529,6 +534,26 @@ export const AgentDispatchModal: React.FC = () => {
               onToggleThinking={() => setThinkingEnabled((prev) => !prev)}
               compact={false}
             />
+
+            {/* Token Saver Policy Override */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 text-xs mt-2">
+              <div>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block">Token Saver Policy</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Tool restriction and prompt caching policy for this dispatch
+                </span>
+              </div>
+              <select
+                value={tokenSaverOverride}
+                onChange={(e) => setTokenSaverOverride(e.target.value as any)}
+                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500 font-medium"
+              >
+                <option value="default">Global Default ({usePreviewStore.getState().settings?.tokenSaver || 'standard'})</option>
+                <option value="standard">Standard (intent-specific tools)</option>
+                <option value="strict">Strict (mcp/flags isolation)</option>
+                <option value="off">Off (all tools & unoptimized)</option>
+              </select>
+            </div>
           </div>
 
           {/* Step 5: Safety & Multi-Agent Protection Switches */}
@@ -652,7 +677,7 @@ export const AgentDispatchModal: React.FC = () => {
               type="button"
               disabled={submitting}
               onClick={handleDispatch}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-xs font-bold text-slate-950 shadow-lg shadow-sky-500/20 transition-all"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-xs font-bold text-white shadow-lg shadow-sky-600/20 transition-all"
             >
               <Send size={14} />
               {submitting ? 'Dispatching...' : `Confirm & Send to ${targetAgent?.shortName}`}

@@ -405,7 +405,7 @@ pub struct CouncilBroadcastResponse {
     pub summary: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FetchedAgentModel {
     pub id: String,
     #[serde(rename = "displayName")]
@@ -418,4 +418,11 @@ pub struct FetchedAgentModel {
     pub default_effort_level: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct FetchAgentModelsResult {
+    pub models: Vec<FetchedAgentModel>,
+    pub source: String,
+    pub error: Option<String>,
 }

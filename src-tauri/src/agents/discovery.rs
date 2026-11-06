@@ -1,7 +1,8 @@
 //! Agent discovery, binary detection, and authentication status resolution.
 
-use super::types::{AgentCredentialConfig, AgentProfile, FetchedAgentModel};
+use super::types::{AgentCredentialConfig, AgentProfile, FetchAgentModelsResult, FetchedAgentModel};
 use std::collections::HashMap;
+use std::time::Duration;
 
 pub use crate::common::process::{find_binary_on_system, get_user_home_dir};
 
@@ -526,133 +527,189 @@ pub fn discover_agent_profiles(
     profiles
 }
 
-/// Probes the installed CLI / subscription configuration for the specified agent and returns
-/// only the real available subscription models with their supported effort tiers.
-pub fn fetch_live_agent_models(
-    agent_id: &str,
-    creds: &HashMap<String, AgentCredentialConfig>,
-) -> Vec<FetchedAgentModel> {
-    let norm = agent_id.trim().to_lowercase();
+/// Parses the tab-separated stdout of `agy models` into structured models.
+pub fn parse_agy_models_stdout(stdout: &str) -> Vec<FetchedAgentModel> {
+    let mut order: Vec<String> = Vec::new();
+    let mut name_map: HashMap<String, String> = HashMap::new();
+    let mut efforts_map: HashMap<String, Vec<String>> = HashMap::new();
 
-    if norm == "antigravity" || norm == "gemini-antigravity" || norm == "gemini" || norm == "agy" {
-        let custom_bin = creds
-            .get("antigravity")
-            .and_then(|c| c.custom_binary_path.clone())
-            .filter(|s| !s.trim().is_empty());
-        let bin = custom_bin.or_else(|| find_binary_on_system(&["agy", "antigravity"]));
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        let Some((raw_slug, raw_label)) = trimmed.split_once('\t') else {
+            continue;
+        };
+        let slug = raw_slug.trim();
+        let label = raw_label.trim();
+        if slug.is_empty() {
+            continue;
+        }
 
-        if let Some(bin_path) = bin {
-            let lower_bin = bin_path.to_lowercase();
-            let mut cmd = if lower_bin.ends_with(".cmd") || lower_bin.ends_with(".bat") {
-                let mut c = std::process::Command::new("cmd");
-                c.args(["/C", &bin_path, "models"]);
-                c
-            } else {
-                let mut c = std::process::Command::new(&bin_path);
-                c.arg("models");
-                c
-            };
-
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
-                cmd.creation_flags(CREATE_NO_WINDOW);
-            }
-
-            if let Ok(output) = cmd.output() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let mut order: Vec<String> = Vec::new();
-                let mut name_map: HashMap<String, String> = HashMap::new();
-                let mut efforts_map: HashMap<String, Vec<String>> = HashMap::new();
-
-                for line in stdout.lines() {
-                    let trimmed = line.trim();
-                    let Some((raw_slug, raw_label)) = trimmed.split_once('\t') else {
-                        continue;
-                    };
-                    let slug = raw_slug.trim();
-                    let label = raw_label.trim();
-                    if slug.is_empty() {
-                        continue;
-                    }
-
-                    let mut base_slug = slug.to_string();
-                    let mut parsed_effort: Option<String> = None;
-                    for eff_suffix in ["low", "medium", "high", "xhigh", "max"] {
-                        let pat = format!("-{}", eff_suffix);
-                        if slug.ends_with(&pat) {
-                            base_slug = slug[..slug.len() - pat.len()].to_string();
-                            parsed_effort = Some(eff_suffix.to_string());
-                            break;
-                        }
-                    }
-
-                    let mut clean_label = label.to_string();
-                    for suffix_label in [" (Low)", " (Medium)", " (High)", " (X-High)", " (Max)"] {
-                        if clean_label.ends_with(suffix_label) {
-                            clean_label = clean_label[..clean_label.len() - suffix_label.len()]
-                                .trim()
-                                .to_string();
-                            break;
-                        }
-                    }
-
-                    if !order.contains(&base_slug) {
-                        order.push(base_slug.clone());
-                    }
-                    name_map.entry(base_slug.clone()).or_insert(clean_label);
-                    let entry = efforts_map.entry(base_slug).or_default();
-                    if let Some(eff) = parsed_effort {
-                        if !entry.contains(&eff) {
-                            entry.push(eff);
-                        }
-                    }
-                }
-
-                if !order.is_empty() {
-                    let canonical = ["low", "medium", "high", "xhigh", "max"];
-                    return order
-                        .into_iter()
-                        .map(|id| {
-                            let mut effs = efforts_map.remove(&id).unwrap_or_default();
-                            effs.sort_by_key(|e| {
-                                canonical.iter().position(|c| c == e).unwrap_or(99)
-                            });
-                            if effs.is_empty() {
-                                effs = vec![
-                                    "low".to_string(),
-                                    "medium".to_string(),
-                                    "high".to_string(),
-                                ];
-                            }
-                            let default_effort = if effs.iter().any(|e| e == "high") {
-                                "high".to_string()
-                            } else if effs.iter().any(|e| e == "medium") {
-                                "medium".to_string()
-                            } else {
-                                effs[0].clone()
-                            };
-                            let display_name =
-                                name_map.remove(&id).unwrap_or_else(|| id.clone());
-                            FetchedAgentModel {
-                                id: id.clone(),
-                                display_name: display_name.clone(),
-                                supports_reasoning: true,
-                                supported_effort_levels: effs,
-                                default_effort_level: default_effort,
-                                description: Some(format!(
-                                    "{} (Live Antigravity CLI subscription model)",
-                                    display_name
-                                )),
-                            }
-                        })
-                        .collect();
-                }
+        let mut base_slug = slug.to_string();
+        let mut parsed_effort: Option<String> = None;
+        for eff_suffix in ["low", "medium", "high", "xhigh", "max"] {
+            let pat = format!("-{}", eff_suffix);
+            if slug.ends_with(&pat) {
+                base_slug = slug[..slug.len() - pat.len()].to_string();
+                parsed_effort = Some(eff_suffix.to_string());
+                break;
             }
         }
 
-        return vec![
+        let mut clean_label = label.to_string();
+        for suffix_label in [" (Low)", " (Medium)", " (High)", " (X-High)", " (Max)"] {
+            if clean_label.ends_with(suffix_label) {
+                clean_label = clean_label[..clean_label.len() - suffix_label.len()]
+                    .trim()
+                    .to_string();
+                break;
+            }
+        }
+
+        if !order.contains(&base_slug) {
+            order.push(base_slug.clone());
+        }
+        name_map.entry(base_slug.clone()).or_insert(clean_label);
+        let entry = efforts_map.entry(base_slug).or_default();
+        if let Some(eff) = parsed_effort {
+            if !entry.contains(&eff) {
+                entry.push(eff);
+            }
+        }
+    }
+
+    if order.is_empty() {
+        return Vec::new();
+    }
+
+    let canonical = ["low", "medium", "high", "xhigh", "max"];
+    order
+        .into_iter()
+        .map(|id| {
+            let mut effs = efforts_map.remove(&id).unwrap_or_default();
+            effs.sort_by_key(|e| {
+                canonical.iter().position(|c| c == e).unwrap_or(99)
+            });
+            if effs.is_empty() {
+                effs = vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ];
+            }
+            let default_effort = if effs.iter().any(|e| e == "high") {
+                "high".to_string()
+            } else if effs.iter().any(|e| e == "medium") {
+                "medium".to_string()
+            } else {
+                effs[0].clone()
+            };
+            let display_name = name_map.remove(&id).unwrap_or_else(|| id.clone());
+            FetchedAgentModel {
+                id: id.clone(),
+                display_name: display_name.clone(),
+                supports_reasoning: true,
+                supported_effort_levels: effs,
+                default_effort_level: default_effort,
+                description: Some(format!(
+                    "{} (Live Antigravity CLI subscription model)",
+                    display_name
+                )),
+            }
+        })
+        .collect()
+}
+
+/// Executes an async CLI probe command with a timeout, capturing exit code, stdout, and first line of stderr.
+pub async fn probe_cli_models_async(
+    bin_path: &str,
+    args: &[&str],
+    timeout_duration: Duration,
+) -> Result<Vec<FetchedAgentModel>, String> {
+    let lower_bin = bin_path.to_lowercase();
+    let bin_name = std::path::Path::new(bin_path)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or(bin_path);
+
+    let mut cmd = if lower_bin.ends_with(".cmd") || lower_bin.ends_with(".bat") {
+        let mut c = tokio::process::Command::new("cmd");
+        c.arg("/C").arg(bin_path);
+        for a in args {
+            c.arg(a);
+        }
+        c
+    } else {
+        let mut c = tokio::process::Command::new(bin_path);
+        for a in args {
+            c.arg(a);
+        }
+        c
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    cmd.kill_on_drop(true);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+
+    let child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            return Err(format!("Could not load models: {} is not installed ({})", bin_name, e));
+        }
+    };
+    let child_pid = child.id();
+
+    match tokio::time::timeout(timeout_duration, child.wait_with_output()).await {
+        Ok(Ok(output)) => {
+            if !output.status.success() {
+                let stderr_str = String::from_utf8_lossy(&output.stderr);
+                let first_line = stderr_str
+                    .lines()
+                    .map(|s| s.trim())
+                    .find(|s| !s.is_empty())
+                    .unwrap_or("unknown error");
+                let code_str = output
+                    .status
+                    .code()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "terminated".to_string());
+                return Err(format!(
+                    "Could not load models: {} exited with code {}: {}",
+                    bin_name, code_str, first_line
+                ));
+            }
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let models = parse_agy_models_stdout(&stdout);
+            if models.is_empty() {
+                return Err(format!("Could not load models: {} returned no models", bin_name));
+            }
+            Ok(models)
+        }
+        Ok(Err(e)) => {
+            Err(format!("Could not load models: {} execution error ({})", bin_name, e))
+        }
+        Err(_) => {
+            if let Some(pid) = child_pid {
+                crate::common::process::kill_process_tree(pid);
+            }
+            Err(format!(
+                "Could not load models: {} timed out after {} seconds",
+                bin_name,
+                timeout_duration.as_secs()
+            ))
+        }
+    }
+}
+
+pub fn get_builtin_agent_models(agent_id: &str) -> Vec<FetchedAgentModel> {
+    let norm = agent_id.trim().to_lowercase();
+    if norm == "antigravity" || norm == "gemini-antigravity" || norm == "gemini" || norm == "agy" {
+        vec![
             FetchedAgentModel {
                 id: "gemini-4-argon".to_string(),
                 display_name: "Gemini 4 Argon".to_string(),
@@ -709,74 +766,80 @@ pub fn fetch_live_agent_models(
                 default_effort_level: "medium".to_string(),
                 description: Some("GPT-OSS 120B (Medium effort) via Antigravity CLI.".to_string()),
             },
-        ];
-    }
-
-    if norm == "claude-code" || norm == "claude" || norm == "anthropic" {
-        let mut models: Vec<FetchedAgentModel> = Vec::new();
-        let mut seen: Vec<String> = Vec::new();
-
-        if let Some(home) = get_user_home_dir() {
-            let settings_path = home.join(".claude").join("settings.json");
-            if let Ok(content) = std::fs::read_to_string(&settings_path) {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(ms) = v.get("modelSettings").and_then(|m| m.as_object()) {
-                        for key in ms.keys() {
-                            let k = key.trim().to_string();
-                            if !k.is_empty() && !seen.contains(&k) {
-                                seen.push(k.clone());
-                                let display = match k.as_str() {
-                                    "claude-opus-5-5" => "Claude Opus 5.5".to_string(),
-                                    "claude-sonnet-5-5" => "Claude Sonnet 5.5".to_string(),
-                                    other => other.to_string(),
-                                };
-                                models.push(FetchedAgentModel {
-                                    id: k,
-                                    display_name: display,
-                                    supports_reasoning: true,
-                                    supported_effort_levels: vec![
-                                        "low".to_string(),
-                                        "medium".to_string(),
-                                        "high".to_string(),
-                                        "xhigh".to_string(),
-                                        "max".to_string(),
-                                    ],
-                                    default_effort_level: "high".to_string(),
-                                    description: Some("Configured in ~/.claude/settings.json".to_string()),
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let defaults = [
-            ("claude-opus-5-5", "Claude Opus 5.5", vec!["low", "medium", "high", "xhigh", "max"], "high"),
-            ("claude-sonnet-5-5", "Claude Sonnet 5.5", vec!["low", "medium", "high", "xhigh", "max"], "high"),
-            ("opus", "Claude Opus (Latest Alias)", vec!["low", "medium", "high", "xhigh", "max"], "high"),
-            ("sonnet", "Claude Sonnet (Latest Alias)", vec!["low", "medium", "high", "xhigh", "max"], "high"),
-            ("haiku", "Claude Haiku (Fast Alias)", vec!["low", "medium", "high"], "medium"),
-        ];
-
-        for (id, name, effs, def_eff) in defaults {
-            if !seen.contains(&id.to_string()) {
-                seen.push(id.to_string());
-                models.push(FetchedAgentModel {
-                    id: id.to_string(),
-                    display_name: name.to_string(),
-                    supports_reasoning: true,
-                    supported_effort_levels: effs.into_iter().map(|s| s.to_string()).collect(),
-                    default_effort_level: def_eff.to_string(),
-                    description: Some(format!("{} via Claude Code CLI subscription", name)),
-                });
-            }
-        }
-        return models;
-    }
-
-    if norm == "codex" || norm == "openai" {
-        return vec![
+        ]
+    } else if norm == "claude-code" || norm == "claude" || norm == "anthropic" {
+        vec![
+            FetchedAgentModel {
+                id: "claude-opus-5-5".to_string(),
+                display_name: "Claude Opus 5.5".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "xhigh".to_string(),
+                    "max".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Claude Opus 5.5 via Claude Code CLI subscription".to_string()),
+            },
+            FetchedAgentModel {
+                id: "claude-sonnet-5-5".to_string(),
+                display_name: "Claude Sonnet 5.5".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "xhigh".to_string(),
+                    "max".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Claude Sonnet 5.5 via Claude Code CLI subscription".to_string()),
+            },
+            FetchedAgentModel {
+                id: "opus".to_string(),
+                display_name: "Claude Opus (Latest Alias)".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "xhigh".to_string(),
+                    "max".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Claude Opus (Latest Alias) via Claude Code CLI subscription".to_string()),
+            },
+            FetchedAgentModel {
+                id: "sonnet".to_string(),
+                display_name: "Claude Sonnet (Latest Alias)".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "xhigh".to_string(),
+                    "max".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Claude Sonnet (Latest Alias) via Claude Code CLI subscription".to_string()),
+            },
+            FetchedAgentModel {
+                id: "haiku".to_string(),
+                display_name: "Claude Haiku (Fast Alias)".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+                default_effort_level: "medium".to_string(),
+                description: Some("Claude Haiku (Fast Alias) via Claude Code CLI subscription".to_string()),
+            },
+        ]
+    } else if norm == "codex" || norm == "openai" {
+        vec![
             FetchedAgentModel {
                 id: "o3-mini".to_string(),
                 display_name: "OpenAI o3-mini".to_string(),
@@ -806,45 +869,316 @@ pub fn fetch_live_agent_models(
                 default_effort_level: "medium".to_string(),
                 description: Some("Omni model via OpenAI Codex CLI.".to_string()),
             },
-        ];
+        ]
+    } else {
+        vec![
+            FetchedAgentModel {
+                id: "claude-opus-5-5".to_string(),
+                display_name: "Claude Opus 5.5".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Claude Opus 5.5 frontier model.".to_string()),
+            },
+            FetchedAgentModel {
+                id: "claude-sonnet-5-5".to_string(),
+                display_name: "Claude Sonnet 5.5".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Claude Sonnet 5.5 balanced model.".to_string()),
+            },
+            FetchedAgentModel {
+                id: "gemini-4-argon".to_string(),
+                display_name: "Gemini 4 Argon".to_string(),
+                supports_reasoning: true,
+                supported_effort_levels: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+                default_effort_level: "high".to_string(),
+                description: Some("Gemini 4 Argon reasoning model.".to_string()),
+            },
+        ]
+    }
+}
+
+fn read_claude_settings_models() -> (Vec<FetchedAgentModel>, String) {
+    let mut models: Vec<FetchedAgentModel> = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
+
+    if let Some(home) = get_user_home_dir() {
+        let settings_path = home.join(".claude").join("settings.json");
+        if let Ok(content) = std::fs::read_to_string(&settings_path) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(ms) = v.get("modelSettings").and_then(|m| m.as_object()) {
+                    for key in ms.keys() {
+                        let k = key.trim().to_string();
+                        if !k.is_empty() && !seen.contains(&k) {
+                            seen.push(k.clone());
+                            let display = match k.as_str() {
+                                "claude-opus-5-5" => "Claude Opus 5.5".to_string(),
+                                "claude-sonnet-5-5" => "Claude Sonnet 5.5".to_string(),
+                                other => other.to_string(),
+                            };
+                            models.push(FetchedAgentModel {
+                                id: k,
+                                display_name: display,
+                                supports_reasoning: true,
+                                supported_effort_levels: vec![
+                                    "low".to_string(),
+                                    "medium".to_string(),
+                                    "high".to_string(),
+                                    "xhigh".to_string(),
+                                    "max".to_string(),
+                                ],
+                                default_effort_level: "high".to_string(),
+                                description: Some("Configured in ~/.claude/settings.json".to_string()),
+                            });
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    vec![
-        FetchedAgentModel {
-            id: "claude-opus-5-5".to_string(),
-            display_name: "Claude Opus 5.5".to_string(),
-            supports_reasoning: true,
-            supported_effort_levels: vec![
-                "low".to_string(),
-                "medium".to_string(),
-                "high".to_string(),
+    if !models.is_empty() {
+        return (models, "live".to_string());
+    }
+
+    (get_builtin_agent_models("claude-code"), "builtin".to_string())
+}
+
+/// Probes the installed CLI / subscription configuration for the specified agent asynchronously.
+pub async fn fetch_live_agent_models_async(
+    agent_id: &str,
+    creds: &HashMap<String, AgentCredentialConfig>,
+) -> FetchAgentModelsResult {
+    let norm = agent_id.trim().to_lowercase();
+
+    if norm == "antigravity" || norm == "gemini-antigravity" || norm == "gemini" || norm == "agy" {
+        let custom_bin = creds
+            .get("antigravity")
+            .and_then(|c| c.custom_binary_path.clone())
+            .filter(|s| !s.trim().is_empty());
+        let bin = custom_bin.or_else(|| find_binary_on_system(&["agy", "antigravity"]));
+
+        let Some(bin_path) = bin else {
+            return FetchAgentModelsResult {
+                models: get_builtin_agent_models(&norm),
+                source: "builtin".to_string(),
+                error: Some("Could not load models: agy is not installed".to_string()),
+            };
+        };
+
+        match probe_cli_models_async(&bin_path, &["models"], Duration::from_secs(20)).await {
+            Ok(models) => FetchAgentModelsResult {
+                models,
+                source: "live".to_string(),
+                error: None,
+            },
+            Err(err) => FetchAgentModelsResult {
+                models: get_builtin_agent_models(&norm),
+                source: "builtin".to_string(),
+                error: Some(err),
+            },
+        }
+    } else if norm == "claude-code" || norm == "claude" || norm == "anthropic" {
+        let (models, source) = read_claude_settings_models();
+        FetchAgentModelsResult {
+            models,
+            source,
+            error: None,
+        }
+    } else {
+        FetchAgentModelsResult {
+            models: get_builtin_agent_models(&norm),
+            source: "builtin".to_string(),
+            error: None,
+        }
+    }
+}
+
+/// Synchronous wrapper around `fetch_live_agent_models_async`.
+pub fn fetch_live_agent_models(
+    agent_id: &str,
+    creds: &HashMap<String, AgentCredentialConfig>,
+) -> FetchAgentModelsResult {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        tokio::task::block_in_place(|| {
+            handle.block_on(fetch_live_agent_models_async(agent_id, creds))
+        })
+    } else {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(fetch_live_agent_models_async(agent_id, creds))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_probe_missing_binary() {
+        let res = probe_cli_models_async(
+            "nonexistent_dummy_binary_404_test",
+            &["models"],
+            Duration::from_millis(500),
+        )
+        .await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(
+            err.contains("Could not load models"),
+            "Expected 'Could not load models', got: {}",
+            err
+        );
+        assert!(
+            err.contains("is not installed") || err.contains("not found"),
+            "Expected install/not found error, got: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn test_probe_nonzero_exit() {
+        #[cfg(target_os = "windows")]
+        let (bin, args) = ("cmd", vec!["/C", "echo specific error line 1>&2 & exit 1"]);
+        #[cfg(not(target_os = "windows"))]
+        let (bin, args) = ("sh", vec!["-c", "echo 'specific error line' >&2; exit 1"]);
+
+        let res = probe_cli_models_async(bin, &args, Duration::from_secs(5)).await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(
+            err.contains("exited with code 1"),
+            "Expected 'exited with code 1', got: {}",
+            err
+        );
+        assert!(
+            err.contains("specific error line"),
+            "Expected stderr line, got: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn test_probe_timeout() {
+        #[cfg(target_os = "windows")]
+        let (bin, args) = ("cmd", vec!["/C", "powershell -Command Start-Sleep -Milliseconds 1500"]);
+        #[cfg(not(target_os = "windows"))]
+        let (bin, args) = ("sh", vec!["-c", "sleep 1.5"]);
+
+        let res = probe_cli_models_async(bin, &args, Duration::from_millis(200)).await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(
+            err.contains("timed out after"),
+            "Expected timeout message, got: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn test_probe_empty_output() {
+        #[cfg(target_os = "windows")]
+        let (bin, args) = ("cmd", vec!["/C", "exit 0"]);
+        #[cfg(not(target_os = "windows"))]
+        let (bin, args) = ("sh", vec!["-c", "exit 0"]);
+
+        let res = probe_cli_models_async(bin, &args, Duration::from_secs(5)).await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(
+            err.contains("returned no models"),
+            "Expected 'returned no models', got: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn test_probe_success() {
+        #[cfg(target_os = "windows")]
+        let (bin, args) = (
+            "cmd",
+            vec![
+                "/C",
+                "echo gemini-4-argon-high\tGemini 4 Argon (High)& echo gemini-3.8-flash-low\tGemini 3.8 Flash (Low)",
             ],
-            default_effort_level: "high".to_string(),
-            description: Some("Claude Opus 5.5 frontier model.".to_string()),
-        },
-        FetchedAgentModel {
-            id: "claude-sonnet-5-5".to_string(),
-            display_name: "Claude Sonnet 5.5".to_string(),
-            supports_reasoning: true,
-            supported_effort_levels: vec![
-                "low".to_string(),
-                "medium".to_string(),
-                "high".to_string(),
+        );
+        #[cfg(not(target_os = "windows"))]
+        let (bin, args) = (
+            "sh",
+            vec![
+                "-c",
+                "printf 'gemini-4-argon-high\tGemini 4 Argon (High)\ngemini-3.8-flash-low\tGemini 3.8 Flash (Low)\n'",
             ],
-            default_effort_level: "high".to_string(),
-            description: Some("Claude Sonnet 5.5 balanced model.".to_string()),
-        },
-        FetchedAgentModel {
-            id: "gemini-4-argon".to_string(),
-            display_name: "Gemini 4 Argon".to_string(),
-            supports_reasoning: true,
-            supported_effort_levels: vec![
-                "low".to_string(),
-                "medium".to_string(),
-                "high".to_string(),
-            ],
-            default_effort_level: "high".to_string(),
-            description: Some("Gemini 4 Argon reasoning model.".to_string()),
-        },
-    ]
+        );
+
+        let res = probe_cli_models_async(bin, &args, Duration::from_secs(5)).await;
+        assert!(res.is_ok(), "Expected Ok, got: {:?}", res);
+        let models = res.unwrap();
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].id, "gemini-4-argon");
+        assert_eq!(models[1].id, "gemini-3.8-flash");
+    }
+
+    #[tokio::test]
+    async fn test_probe_timeout_kills_process_tree_for_cmd() {
+        let temp_dir = std::env::temp_dir();
+        #[cfg(target_os = "windows")]
+        let cmd_script = temp_dir.join(format!("flymd_test_ping_{}.cmd", std::process::id()));
+        #[cfg(target_os = "windows")]
+        {
+            std::fs::write(&cmd_script, "@ping -n 15 127.0.0.1 >nul\r\n").unwrap();
+        }
+        #[cfg(not(target_os = "windows"))]
+        let cmd_script = temp_dir.join(format!("flymd_test_sleep_{}.sh", std::process::id()));
+        #[cfg(not(target_os = "windows"))]
+        {
+            std::fs::write(&cmd_script, "#!/bin/sh\nsleep 15\n").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = std::fs::metadata(&cmd_script).unwrap().permissions();
+                perms.set_mode(0o755);
+                std::fs::set_permissions(&cmd_script, perms).unwrap();
+            }
+        }
+
+        let script_str = cmd_script.to_str().unwrap();
+        let res = probe_cli_models_async(script_str, &[], Duration::from_millis(300)).await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(err.contains("timed out after"));
+
+        // Wait a moment for OS process table reconciliation
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::process::Command;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            use std::os::windows::process::CommandExt;
+            let output = Command::new("tasklist")
+                .args(["/FI", "IMAGENAME eq ping.exe", "/FO", "CSV", "/NH"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+            if let Ok(out) = output {
+                let out_str = String::from_utf8_lossy(&out.stdout);
+                assert!(out_str.contains("No tasks") || !out_str.contains("ping.exe"));
+            }
+        }
+
+        let _ = std::fs::remove_file(&cmd_script);
+    }
 }

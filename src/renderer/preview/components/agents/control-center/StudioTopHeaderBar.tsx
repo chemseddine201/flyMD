@@ -238,7 +238,7 @@ export const StudioTopHeaderBar: React.FC<StudioTopHeaderBarProps> = React.memo(
           <button
             type="button"
             onClick={onOpenAgentAccountsModal}
-            className="p-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 transition-colors shadow-xs"
+            className="p-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white transition-colors shadow-xs"
             title="Custom Agents & Logins (API Keys & Profiles)"
           >
             <KeyRound size={14} />

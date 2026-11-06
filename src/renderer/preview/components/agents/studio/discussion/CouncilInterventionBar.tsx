@@ -235,7 +235,7 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                       (!targetedActionQuery.trim() && (!interventionFiles || interventionFiles.length === 0)) ||
                       isDispatchingTargeted
                     }
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm shrink-0"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-sm shrink-0"
                   >
                     {isDispatchingTargeted ? (
                       <>
@@ -326,7 +326,7 @@ export const CouncilInterventionBar: React.FC<CouncilInterventionBarProps> =
                   type="button"
                   onClick={onSendGuidance}
                   disabled={!guidanceInput.trim() && (!interventionFiles || interventionFiles.length === 0)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 disabled:opacity-40 disabled:hover:bg-sky-500 text-slate-950 text-xs font-bold transition-all shadow-sm shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-40 disabled:hover:bg-sky-600 text-white text-xs font-bold transition-all shadow-sm shrink-0"
                 >
                   <Send size={12} />
                   <span>Steer</span>

@@ -630,7 +630,7 @@ export const ProjectTreeNavigator: React.FC<ProjectTreeNavigatorProps> = ({
             <button
               type="button"
               onClick={() => handleOpenCreateModal(null)}
-              className="mt-3 flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 transition-all"
+              className="mt-3 flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-600/30 dark:hover:bg-indigo-600/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 transition-all"
             >
               <Plus className="w-3.5 h-3.5" /> Create Master Project
             </button>

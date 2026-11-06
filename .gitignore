@@ -38,3 +38,5 @@ src-tauri/target
 target/
 *.pdb
 
+scratch/
+

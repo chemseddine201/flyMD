@@ -84,7 +84,7 @@
 - **Full-Width Unsquished Timeline**:
   - Expanded timeline container to 100% full width, preventing narrow docking on wide displays.
 
-### 5. Multi-File Reference Attachments & Deliberation Action Buttons Restoration
+### 8. Multi-File Reference Attachments & Deliberation Action Buttons Restoration
 - **Tauri Bridge Synchronization**:
   - Added missing `getDiscussionConfig` and `updateDiscussionConfig` handlers to `bridge/tauri-bridge.js`.
   - Added resilient fallback synthesis in `useDiscussionStudioController.ts` and an immediate loading skeleton in `DeliberationConfigInspectorModal.tsx`, restoring instant reactivity to the sidebar debate settings button (`<Sliders />`) and the timeline banner's **"Change Model / Config"** and **"Modify Next Rounds"** buttons.
@@ -94,20 +94,49 @@
   - Features extension-based category icons, formatted file sizes, 1-click removal pills, drag-and-drop dropzones, and strict 10-file maximum enforcement with user notifications.
   - Formats attached files directly into the proposal prompt and human intervention payloads so all council agents have immediate access to referenced code and documents.
 
+### 9. Epistemic Token Conservation & Debate Board Engine
+- **Debate Board Architecture**:
+  - Implements shared epistemic invariant tracking across agents with structured status transitions and decision brief generation.
+  - Context window optimization with sliding-window truncation and prefix-pinned cache control headers.
+  - Prevents token bloat on long multi-round deliberations while retaining full decision provenance.
+- **Auto Token Saver & Telemetry**:
+  - Introduced configurable Token Saver modes (`aggressive`, `balanced`, `full`) with live Token Quota HUD.
+  - Real-time token consumption breakdowns distinguishing prompt, completion, and reasoning tokens.
+- **A/B Benchmark Harness**:
+  - Integrated Rust-based offline and dry-run A/B verification harness (`ab_harness.rs`) against golden test fixtures.
+
+### 10. Automated Contrast Compliance & Light-Theme Visual Elevation
+- **Automated Contrast Linter (`npm run lint:contrast`)**:
+  - Integrated automated AST/regex contrast verification enforcing WCAG AA compliance across all JSX/TSX components.
+  - Guarantees zero contrast regressions across all 10 supported themes.
+- **Toolbar & Action Buttons Parity**:
+  - Fixed dark hover state collisions on formatting buttons (`MarkdownFormattingGroup.tsx`), action groups (`FileActionsGroup.tsx`), and export buttons (`ExportMenuButton.tsx`), ensuring clean, subtle hover backgrounds on light themes instead of solid black boxes.
+  - Enforced pure white text and stroke on solid accent/colored buttons (`themes.css`), preventing theme text rules from darkening icons on active controls (such as the manual workflow execution hand button).
+
+### 11. Custom Actions & Deliberation Roles Library Enhancements
+- **Native OS File Dialog Export**:
+  - Replaced browser blob auto-downloads with a native system save dialog (`window.electronAPI.saveFileDialog`), allowing users to choose the target file location when exporting presets and custom specialist roles to JSON.
+- **Restore Defaults Confirmation Guard**:
+  - Added a protective confirmation modal before resetting deliberation presets or roles back to factory defaults, preventing accidental loss of custom team configurations and prompt directives.
+- **Streamlined Button Aesthetics**:
+  - Removed redundant text labels where intuitive icons already communicate action intent (e.g. icon-only plus buttons).
+
 ---
 
 ## 📦 Production Executables & Cryptographic Hashes
 
 | Executable | Architecture | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.1 MB | `F0C371A4ACB328B12B9C43E4C572295E91F891515F95F4AA953E42F4744C5260` |
-| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.1 MB | `F0C371A4ACB328B12B9C43E4C572295E91F891515F95F4AA953E42F4744C5260` |
-| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `C6F5CD410FB5D7F7AD5E7F1686C05A0A264043D0D7A3649E3F73D881DF001D13` |
+| **`FlyMD_2.3.0_x64-portable-latest.exe`** | Windows x64 (Latest Native Standalone) | 16.4 MB | `92F51D72A997C37585C2BFEF7D9418FC8D97EAF5B4D34913A054AF2AB8C46E96` |
+| **`FlyMD_2.3.0_x64-portable.exe`** | Windows x64 (Native Standalone) | 16.4 MB | `92F51D72A997C37585C2BFEF7D9418FC8D97EAF5B4D34913A054AF2AB8C46E96` |
+| **`FlyMD-Portable-Latest.exe`** | Windows x64 (Electron Portable Latest) | 70.4 MB | `2838628F1C6DAA3325C1C622D6D59A9ED3AC200BC43FBAA8A8064D24C8A14DCA` |
 
 ---
 
 ## 🚦 Verification Summary
 
-- **Rust Test Suite**: 72/72 passed (0 failed, including round barrier pause, resume failed discussion, and in-flight config immutability invariants).
-- **TypeScript**: 0 compiler errors (`tsc --noEmit`).
-- **Production Bundler**: Vite + Electron + Tauri release builds completed successfully.
+- **Rust Test Suite**: 105 passed, 0 failed, 1 ignored (`cargo test --lib`).
+- **Round-Plan Parity**: 100% parity verified between Rust and TypeScript plan resolvers (`npm run test:round-plan`).
+- **Contrast Linter**: 0 contrast violations across all components (`npm run lint:contrast`).
+- **TypeScript Typecheck**: 0 compiler errors (`npm run typecheck`).
+- **Production Bundler**: Vite + Electron + Tauri release builds compiled and verified.

@@ -235,7 +235,7 @@ export const TokenQuotaHUD: React.FC = React.memo(() => {
                     }
                     className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                       isSelected
-                        ? 'bg-sky-500 text-slate-950'
+                        ? 'bg-sky-600 text-white'
                         : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >

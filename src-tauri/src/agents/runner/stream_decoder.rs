@@ -309,11 +309,14 @@ fn parse_raw_stdout_line(
                                 .get("cache_creation_input_tokens")
                                 .and_then(|v| v.as_u64());
                             let cost_usd = val.get("total_cost_usd").and_then(|v| v.as_f64());
+                            let cache_write_u32 = cache_write.unwrap_or(0) as u32;
+                            let prompt_tokens = input_tokens + cache_write_u32;
+                            let total_tokens = prompt_tokens + output_tokens;
                             *captured_usage = Some(TokenUsage {
-                                prompt_tokens: input_tokens,
+                                prompt_tokens,
                                 completion_tokens: output_tokens,
                                 reasoning_tokens: 0,
-                                total_tokens: input_tokens + output_tokens,
+                                total_tokens,
                                 cache_read_tokens: cache_read,
                                 cache_write_tokens: cache_write,
                                 cost_usd,
@@ -369,4 +372,26 @@ fn parse_raw_stdout_line(
     collected_md.push_str(line);
     collected_md.push('\n');
     (line.to_string(), None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_claude_result_usage_totals_with_real_session_data() {
+        // Real numbers from ~/.claude/projects/G--xampp-httpdocs-fly-test/0f2c62cd-e7c7-4004-82fe-9d5e02a2b689.jsonl
+        let raw_line = r#"{"type":"result","status":"success","result":"Done.","total_cost_usd":0.0384,"usage":{"input_tokens":2,"cache_creation_input_tokens":8956,"cache_read_input_tokens":15570,"output_tokens":188}}"#;
+        let mut state = StreamDecodeState::new(None, String::new(), &[]);
+        decode_stdout_line(raw_line, &mut state);
+
+        let usage = state.captured_usage.expect("Usage should be captured from result event");
+        assert_eq!(usage.prompt_tokens, 2 + 8956); // 8958: input + cache creation
+        assert_eq!(usage.completion_tokens, 188);
+        assert_eq!(usage.total_tokens, 2 + 8956 + 188); // 9146: input + cache creation + output (cache reads excluded)
+        assert_eq!(usage.cache_read_tokens, Some(15570));
+        assert_eq!(usage.cache_write_tokens, Some(8956));
+        assert_eq!(usage.cost_usd, Some(0.0384));
+        assert_eq!(usage.basis.as_deref(), Some("reported"));
+    }
 }

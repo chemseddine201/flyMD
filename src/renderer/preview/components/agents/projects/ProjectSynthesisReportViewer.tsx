@@ -226,7 +226,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
             <button
               type="button"
               onClick={onRollupToMaster}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors"
             >
               <Award className="w-3.5 h-3.5" />
               <span>Rollup to Master Memory</span>
@@ -239,7 +239,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
             onClick={() => setIsEditing(!isEditing)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               isEditing
-                ? 'bg-amber-500 text-slate-950 font-bold'
+                ? 'bg-amber-600 text-white font-bold'
                 : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
             }`}
           >
@@ -260,7 +260,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
           <button
             type="button"
             onClick={handleBuildPipelineFromReport}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white dark:text-slate-950 shadow-md transition-all hover:scale-[1.02]"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-700 hover:to-indigo-800 text-white shadow-md transition-all hover:scale-[1.02]"
           >
             <Rocket className="w-3.5 h-3.5 fill-current" />
             <span>Assign to Pipeline &rarr;</span>
@@ -357,7 +357,7 @@ export const ProjectSynthesisReportViewer: React.FC<ProjectSynthesisReportViewer
             <button
               type="button"
               onClick={handleBuildPipelineFromReport}
-              className="w-full py-2 rounded-lg text-xs font-bold bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-md flex items-center justify-center gap-1.5 transition-all"
+              className="w-full py-2 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white shadow-md flex items-center justify-center gap-1.5 transition-all"
             >
               <Rocket className="w-3.5 h-3.5 fill-current" />
               <span>Assign to Pipeline &rarr;</span>

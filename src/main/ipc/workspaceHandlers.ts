@@ -75,7 +75,7 @@ export function registerWorkspaceHandlers(container: AppContainer): void {
         }
         if (order.length > 0) {
           const canonical = ['low', 'medium', 'high', 'xhigh', 'max'];
-          return order.map((id) => {
+          const models = order.map((id) => {
             const effs = (effortsMap.get(id) || ['low', 'medium', 'high']).sort(
               (a, b) => canonical.indexOf(a) - canonical.indexOf(b)
             );
@@ -90,39 +90,66 @@ export function registerWorkspaceHandlers(container: AppContainer): void {
               description: `${displayName} (Live Antigravity CLI subscription model)`,
             };
           });
+          return { models, source: 'live', error: null };
         }
-      } catch {
-        // Fallback below
+      } catch (err: any) {
+        return {
+          models: [
+            { id: 'gemini-4-argon', displayName: 'Gemini 4 Argon', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+            { id: 'gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+            { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+            { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+            { id: 'gpt-oss-120b', displayName: 'GPT-OSS 120B', supportsReasoning: true, supportedEffortLevels: ['medium'], defaultEffortLevel: 'medium' },
+          ],
+          source: 'builtin',
+          error: `Could not load models: ${err?.message || 'agy exited with error'}`,
+        };
       }
-      return [
-        { id: 'gemini-4-argon', displayName: 'Gemini 4 Argon', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
-        { id: 'gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
-        { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
-        { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
-        { id: 'gpt-oss-120b', displayName: 'GPT-OSS 120B', supportsReasoning: true, supportedEffortLevels: ['medium'], defaultEffortLevel: 'medium' },
-      ];
+      return {
+        models: [
+          { id: 'gemini-4-argon', displayName: 'Gemini 4 Argon', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+          { id: 'gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+          { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+          { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+          { id: 'gpt-oss-120b', displayName: 'GPT-OSS 120B', supportsReasoning: true, supportedEffortLevels: ['medium'], defaultEffortLevel: 'medium' },
+        ],
+        source: 'builtin',
+        error: 'Could not load models: agy returned no models',
+      };
     }
     if (norm === 'claude-code' || norm === 'claude' || norm === 'anthropic') {
-      return [
-        { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffortLevel: 'high' },
-        { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffortLevel: 'high' },
-        { id: 'opus', displayName: 'Claude Opus (Latest Alias)', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffortLevel: 'high' },
-        { id: 'sonnet', displayName: 'Claude Sonnet (Latest Alias)', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffortLevel: 'high' },
-        { id: 'haiku', displayName: 'Claude Haiku (Fast Alias)', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'medium' },
-      ];
+      return {
+        models: [
+          { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffortLevel: 'high' },
+          { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffortLevel: 'high' },
+          { id: 'opus', displayName: 'Claude Opus (Latest Alias)', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffortLevel: 'high' },
+          { id: 'sonnet', displayName: 'Claude Sonnet (Latest Alias)', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffortLevel: 'high' },
+          { id: 'haiku', displayName: 'Claude Haiku (Fast Alias)', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'medium' },
+        ],
+        source: 'builtin',
+        error: null,
+      };
     }
     if (norm === 'codex' || norm === 'openai') {
-      return [
-        { id: 'o3-mini', displayName: 'OpenAI o3-mini', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
-        { id: 'o3', displayName: 'OpenAI o3', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'], defaultEffortLevel: 'high' },
-        { id: 'gpt-4o', displayName: 'GPT-4o', supportsReasoning: false, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'medium' },
-      ];
+      return {
+        models: [
+          { id: 'o3-mini', displayName: 'OpenAI o3-mini', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+          { id: 'o3', displayName: 'OpenAI o3', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'], defaultEffortLevel: 'high' },
+          { id: 'gpt-4o', displayName: 'GPT-4o', supportsReasoning: false, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'medium' },
+        ],
+        source: 'builtin',
+        error: null,
+      };
     }
-    return [
-      { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
-      { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
-      { id: 'gemini-4-argon', displayName: 'Gemini 4 Argon', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
-    ];
+    return {
+      models: [
+        { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+        { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+        { id: 'gemini-4-argon', displayName: 'Gemini 4 Argon', supportsReasoning: true, supportedEffortLevels: ['low', 'medium', 'high'], defaultEffortLevel: 'high' },
+      ],
+      source: 'builtin',
+      error: null,
+    };
   });
 }
 

@@ -43,4 +43,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   previewWidthMode: 'wide',
   a11yConfig: DEFAULT_A11Y_CONFIG,
   defaultAllowedExtensions: ['.md', '.markdown'],
+  tokenSaver: 'standard',
 };

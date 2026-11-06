@@ -158,7 +158,7 @@ export const AgentDock: React.FC = () => {
           <Bot size={14} className="text-sky-500 dark:text-sky-400" />
           <span className="hidden sm:inline">Agents Dock</span>
           {runningTasks.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-sky-500 text-white dark:text-slate-950 text-[10px] font-extrabold animate-pulse">
+            <span className="px-1.5 py-0.2 rounded-full bg-sky-600 text-white text-[10px] font-extrabold animate-pulse">
               {runningTasks.length}
             </span>
           )}

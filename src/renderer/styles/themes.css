@@ -501,45 +501,101 @@ html.light .text-indigo-300,
 /* 2. SOLID DARKENED BUTTONS LIGHTENING GUARD:
    Only solid, fully-opaque dark/saturated buttons get lighten text.
    Never use broad wildcards that collide with low-opacity/tinted pills (e.g. /10, /15, /20, /80). */
-button.bg-sky-600,
-button.bg-sky-700,
-button.bg-blue-600,
-button.bg-blue-700,
-button.bg-indigo-600,
-button.bg-indigo-700,
-button.bg-purple-600,
-button.bg-purple-700,
-button.bg-emerald-600,
-button.bg-rose-600,
-button.bg-slate-800,
-button.bg-slate-900,
-button.bg-zinc-800,
-button.bg-zinc-900,
-button.bg-black,
-.btn-solid-primary,
-.btn-solid-dark,
-button[class*="from-purple-600"][class*="to-indigo-600"],
-button[class*="from-sky-600"][class*="to-blue-600"] {
+/* 2. UNIVERSAL SOLID COLORED FILL CONTRAST RULE:
+   Any element with a solid, opaque colored background fill gets white text and white icons.
+   Never matches low-opacity/tinted pills (/10, /15, /20, etc.) or dark: gradients on light banners.
+   Keeps slate/zinc/black scoped to button only so panels remain untouched. */
+:is(button, a, div, span, label, input):is(
+  .bg-blue-600, .bg-blue-700, .bg-blue-800, .bg-blue-900,
+  .bg-sky-600, .bg-sky-700, .bg-sky-800, .bg-sky-900,
+  .bg-indigo-600, .bg-indigo-700, .bg-indigo-800, .bg-indigo-900,
+  .bg-violet-600, .bg-violet-700, .bg-violet-800, .bg-violet-900,
+  .bg-purple-600, .bg-purple-700, .bg-purple-800, .bg-purple-900,
+  .bg-fuchsia-600, .bg-fuchsia-700, .bg-fuchsia-800, .bg-fuchsia-900,
+  .bg-pink-600, .bg-pink-700, .bg-pink-800, .bg-pink-900,
+  .bg-rose-600, .bg-rose-700, .bg-rose-800, .bg-rose-900,
+  .bg-red-600, .bg-red-700, .bg-red-800, .bg-red-900,
+  .bg-orange-600, .bg-orange-700, .bg-orange-800, .bg-orange-900,
+  .bg-amber-600, .bg-amber-700, .bg-amber-800, .bg-amber-900,
+  .bg-yellow-600, .bg-yellow-700, .bg-yellow-800, .bg-yellow-900,
+  .bg-lime-600, .bg-lime-700, .bg-lime-800, .bg-lime-900,
+  .bg-green-600, .bg-green-700, .bg-green-800, .bg-green-900,
+  .bg-emerald-600, .bg-emerald-700, .bg-emerald-800, .bg-emerald-900,
+  .bg-teal-600, .bg-teal-700, .bg-teal-800, .bg-teal-900,
+  .bg-cyan-600, .bg-cyan-700, .bg-cyan-800, .bg-cyan-900,
+  .btn-solid-primary, .btn-solid-dark
+),
+button:is(
+  .bg-slate-800, .bg-slate-900, .bg-zinc-800, .bg-zinc-900, .bg-black
+),
+:is(button, a, div, span, label, input):not([class*="dark:bg-gradient"]):is(
+  [class*="from-sky-600"][class*="to-"],
+  [class*="from-blue-600"][class*="to-"],
+  [class*="from-indigo-600"][class*="to-"],
+  [class*="from-purple-600"][class*="to-"],
+  [class*="from-emerald-600"][class*="to-"],
+  [class*="from-rose-600"][class*="to-"]
+):not([class*="/10"]):not([class*="/15"]):not([class*="/20"]):not([class*="/30"]):not([class*="/50"]):not([class*="/60"]) {
   color: #ffffff !important;
 }
 
-button.bg-sky-600 span,
-button.bg-sky-700 span,
-button.bg-blue-600 span,
-button.bg-blue-700 span,
-button.bg-indigo-600 span,
-button.bg-indigo-700 span,
-button.bg-purple-600 span,
-button.bg-purple-700 span,
-button.bg-emerald-600 span,
-button.bg-rose-600 span,
-button.bg-slate-800 span,
-button.bg-slate-900 span,
-button.bg-zinc-800 span,
-button.bg-zinc-900 span,
-button.bg-black span,
-button[class*="from-purple-600"][class*="to-indigo-600"] span,
-button[class*="from-sky-600"][class*="to-blue-600"] span {
+/* Light icons inside solid colored fills */
+:is(button, a, div, span, label):is(
+  .bg-blue-600, .bg-blue-700, .bg-blue-800, .bg-blue-900,
+  .bg-sky-600, .bg-sky-700, .bg-sky-800, .bg-sky-900,
+  .bg-indigo-600, .bg-indigo-700, .bg-indigo-800, .bg-indigo-900,
+  .bg-violet-600, .bg-violet-700, .bg-violet-800, .bg-violet-900,
+  .bg-purple-600, .bg-purple-700, .bg-purple-800, .bg-purple-900,
+  .bg-fuchsia-600, .bg-fuchsia-700, .bg-fuchsia-800, .bg-fuchsia-900,
+  .bg-pink-600, .bg-pink-700, .bg-pink-800, .bg-pink-900,
+  .bg-rose-600, .bg-rose-700, .bg-rose-800, .bg-rose-900,
+  .bg-red-600, .bg-red-700, .bg-red-800, .bg-red-900,
+  .bg-orange-600, .bg-orange-700, .bg-orange-800, .bg-orange-900,
+  .bg-amber-600, .bg-amber-700, .bg-amber-800, .bg-amber-900,
+  .bg-yellow-600, .bg-yellow-700, .bg-yellow-800, .bg-yellow-900,
+  .bg-lime-600, .bg-lime-700, .bg-lime-800, .bg-lime-900,
+  .bg-green-600, .bg-green-700, .bg-green-800, .bg-green-900,
+  .bg-emerald-600, .bg-emerald-700, .bg-emerald-800, .bg-emerald-900,
+  .bg-teal-600, .bg-teal-700, .bg-teal-800, .bg-teal-900,
+  .bg-cyan-600, .bg-cyan-700, .bg-cyan-800, .bg-cyan-900,
+  .btn-solid-primary, .btn-solid-dark
+) svg,
+button:is(.bg-slate-800, .bg-slate-900, .bg-zinc-800, .bg-zinc-900, .bg-black) svg,
+button.text-white svg {
+  stroke: #ffffff !important;
+  color: #ffffff !important;
+}
+
+/* Children inherit light text unless they define their own background or specific colored text */
+:is(button, a, div, span, label):is(
+  .bg-blue-600, .bg-blue-700, .bg-blue-800, .bg-blue-900,
+  .bg-sky-600, .bg-sky-700, .bg-sky-800, .bg-sky-900,
+  .bg-indigo-600, .bg-indigo-700, .bg-indigo-800, .bg-indigo-900,
+  .bg-violet-600, .bg-violet-700, .bg-violet-800, .bg-violet-900,
+  .bg-purple-600, .bg-purple-700, .bg-purple-800, .bg-purple-900,
+  .bg-fuchsia-600, .bg-fuchsia-700, .bg-fuchsia-800, .bg-fuchsia-900,
+  .bg-pink-600, .bg-pink-700, .bg-pink-800, .bg-pink-900,
+  .bg-rose-600, .bg-rose-700, .bg-rose-800, .bg-rose-900,
+  .bg-red-600, .bg-red-700, .bg-red-800, .bg-red-900,
+  .bg-orange-600, .bg-orange-700, .bg-orange-800, .bg-orange-900,
+  .bg-amber-600, .bg-amber-700, .bg-amber-800, .bg-amber-900,
+  .bg-yellow-600, .bg-yellow-700, .bg-yellow-800, .bg-yellow-900,
+  .bg-lime-600, .bg-lime-700, .bg-lime-800, .bg-lime-900,
+  .bg-green-600, .bg-green-700, .bg-green-800, .bg-green-900,
+  .bg-emerald-600, .bg-emerald-700, .bg-emerald-800, .bg-emerald-900,
+  .bg-teal-600, .bg-teal-700, .bg-teal-800, .bg-teal-900,
+  .bg-cyan-600, .bg-cyan-700, .bg-cyan-800, .bg-cyan-900,
+  .btn-solid-primary, .btn-solid-dark
+) :is(
+  .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-800, .text-slate-900, .text-slate-950,
+  .text-gray-500, .text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900, .text-gray-950,
+  .text-zinc-500, .text-zinc-600, .text-zinc-700, .text-zinc-800, .text-zinc-900, .text-zinc-950,
+  .text-neutral-500, .text-neutral-600, .text-neutral-700, .text-neutral-800, .text-neutral-900, .text-neutral-950,
+  .text-black,
+  .text-slate-100, .text-slate-200, .text-slate-300, .text-slate-400,
+  .text-zinc-100, .text-zinc-200, .text-zinc-300, .text-zinc-400,
+  .text-neutral-100, .text-neutral-200, .text-neutral-300, .text-neutral-400
+):not([class*="bg-"]):not([class*="text-emerald-"]):not([class*="text-rose-"]):not([class*="text-amber-"]):not([class*="text-sky-"]):not([class*="text-indigo-"]):not([class*="text-purple-"]):not([class*="text-blue-"]):not([class*="text-teal-"]):not([class*="text-green-"]):not([class*="text-yellow-"]):not([class*="text-red-"]) {
   color: #ffffff !important;
 }
 

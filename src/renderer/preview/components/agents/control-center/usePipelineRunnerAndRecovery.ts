@@ -69,6 +69,7 @@ export interface DispatchChatTaskFn {
       effortLevel?: AgentEffortLevel;
       thinkingEnabled?: boolean;
       modelId?: string;
+      tokenSaver?: 'off' | 'standard' | 'strict';
     }
   ): Promise<AgentTaskRecord | null>;
 }
@@ -329,6 +330,10 @@ export function usePipelineRunnerAndRecovery({
                 activeRecoveryForStep?.overrideThinkingEnabled ??
                 currentStep.thinkingEnabled ??
                 true,
+              tokenSaver:
+                currentStep.tokenSaver ||
+                usePreviewStore.getState().settings?.tokenSaver ||
+                'standard',
               filePath: isFirstStep
                 ? activeTab?.filePath || previousTask?.filePath
                 : resolvedPlanFilePath ||

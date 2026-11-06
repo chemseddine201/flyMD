@@ -228,7 +228,7 @@ export const DiagramPreviewModal: React.FC<DiagramPreviewModalProps> = ({
             onClick={handleDownloadPng}
             disabled={isExportingPng}
             title="Download High-Res PNG"
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs shadow-sm shadow-sky-600/30 transition disabled:opacity-50"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs shadow-sm shadow-sky-600/30 transition disabled:opacity-50"
           >
             <ImageIcon className="w-3.5 h-3.5" />
             <span>{isExportingPng ? 'Saving...' : 'PNG'}</span>

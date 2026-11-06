@@ -176,7 +176,7 @@ export const TranslationWorkspace: React.FC<TranslationWorkspaceProps> = ({
               type="button"
               onClick={onOpenAsNewTab}
               title="Open translated markdown in a new non-saved tab"
-              className="px-2.5 py-1.5 text-white bg-sky-600 hover:bg-sky-500 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition font-medium"
+              className="px-2.5 py-1.5 text-white bg-sky-600 hover:bg-sky-700 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition font-medium"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Open in New Tab</span>
@@ -218,7 +218,7 @@ export const TranslationWorkspace: React.FC<TranslationWorkspaceProps> = ({
               type="button"
               onClick={onSaveAsFile}
               title="Save translated markdown as a new file"
-              className="px-2.5 py-1.5 text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition font-medium"
+              className="px-2.5 py-1.5 text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition font-medium"
             >
               <FileDown className="w-3.5 h-3.5" />
               <span>Save As...</span>

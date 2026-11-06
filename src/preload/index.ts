@@ -172,7 +172,7 @@ const electronAPI = {
   // Multi-Agent Workspace Supervisor
   discoverAgents: (): Promise<AgentProfile[]> =>
     ipcRenderer.invoke('agent:discover'),
-  fetchAgentModels: (agentId: string): Promise<any[]> =>
+  fetchAgentModels: (agentId: string): Promise<any> =>
     ipcRenderer.invoke('agent:fetch-models', agentId),
   saveAgentCredential: (agentId: string, credential: AgentCredentialConfig): Promise<AgentProfile[]> =>
     ipcRenderer.invoke('agent:save-credential', agentId, credential),
