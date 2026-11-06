@@ -1,0 +1,22 @@
+{
+  "name": "quanta-quantum-mechanics-courseware",
+  "version": "1.0.0",
+  "description": "Quanta: Historical Foundations & Epistemic Ruptures of Quantum Mechanics (1895-1980s)",
+  "main": "app.js",
+  "scripts": {
+    "build:pdf": "node scripts/generate-pdf.js",
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "quantum-mechanics",
+    "physics",
+    "simulation",
+    "split-step-fourier",
+    "schrodinger",
+    "bell-chsh",
+    "planck",
+    "matrix-mechanics"
+  ],
+  "author": "Antigravity Theoretical Physics Group",
+  "license": "MIT"
+}
